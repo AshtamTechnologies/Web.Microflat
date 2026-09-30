@@ -62,7 +62,6 @@ export default function UsersPage() {
     statusFilter,
     setStatusFilter,
     resetFilters,
-    toggleStatus,
     deleteUser,
     createUser,
     updateUser,
@@ -164,7 +163,7 @@ export default function UsersPage() {
         },
       }),
 
-      /* 4. STATUS — Tinted pill badge with dot */
+      /* 4. STATUS — Tinted pill badge with dot (read-only, editable in Edit modal) */
       columnHelper.accessor('isActive', {
         header: 'STATUS',
         minSize: 120,
@@ -173,15 +172,12 @@ export default function UsersPage() {
           const row = info.row.original;
           const isActive = row.isActive;
           return (
-            <button
-              type="button"
-              onClick={() => toggleStatus(row.id)}
-              title={`Click to mark as ${isActive ? 'Inactive' : 'Active'}`}
+            <span
               className={[
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors duration-120 select-none',
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none',
                 isActive
-                  ? 'bg-success/10 text-success border border-success/20 hover:bg-success/20'
-                  : 'bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20',
+                  ? 'bg-success/10 text-success border border-success/20'
+                  : 'bg-danger/10 text-danger border border-danger/20',
               ].join(' ')}
             >
               <span
@@ -191,7 +187,7 @@ export default function UsersPage() {
                 aria-hidden="true"
               />
               {isActive ? 'Active' : 'Inactive'}
-            </button>
+            </span>
           );
         },
       }),
@@ -234,7 +230,7 @@ export default function UsersPage() {
         },
       }),
     ],
-    [toggleStatus, deleteUser]
+    [deleteUser]
   );
 
   const table = useReactTable({
@@ -536,15 +532,13 @@ export default function UsersPage() {
                     </span>
                   </div>
 
-                    {/* Status Toggle Badge */}
-                    <button
-                      type="button"
-                      onClick={() => toggleStatus(user.id)}
+                    {/* Status Badge (read-only, editable via Edit) */}
+                    <span
                       className={[
-                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors duration-120 shrink-0',
+                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
                         user.isActive
-                          ? 'bg-success/10 text-success border border-success/20 hover:bg-success/20'
-                          : 'bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20',
+                          ? 'bg-success/10 text-success border border-success/20'
+                          : 'bg-danger/10 text-danger border border-danger/20',
                       ].join(' ')}
                     >
                       <span
@@ -554,7 +548,7 @@ export default function UsersPage() {
                         aria-hidden="true"
                       />
                       {user.isActive ? 'Active' : 'Inactive'}
-                    </button>
+                    </span>
                   </div>
 
                   {/* Contact details */}

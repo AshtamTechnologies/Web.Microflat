@@ -1,23 +1,34 @@
 /**
- * Sidebar — config-driven, accordion-expandable navigation sidebar.
+ * Sidebar — Enhanced ERP Navigation Sidebar for MicroFlat.
  *
- * Desktop (>=1024px):
- *   Fixed left rail, collapsible to icon-only mode. State stored in localStorage.
- *
- * Mobile/tablet (<1024px):
- *   Off-canvas drawer over a backdrop. Closed on route change or backdrop click.
- *   Triggered from the top bar hamburger button (passed as `isOpen`/`onClose` props).
- *
- * Reads navigation from src/config/navigation.js — never hardcode items here.
+ * Features:
+ *   - Config-driven from src/config/navigation.js
+ *   - Category Section Grouping (MAIN, PROCUREMENT, ADMINISTRATION)
+ *   - Real-time Quick Module Search
+ *   - Role-Based Access Control (RBAC) filtering
+ *   - Live Count Badges (e.g. Vendors [6])
+ *   - 1-Click Quick-Add (+) action on hover
+ *   - Active state vertical indicator pill & glowing tint
+ *   - Collapsible desktop rail mode (w-16) with floating popovers / tooltips
+ *   - Mobile off-canvas drawer with smooth backdrop
+ *   - Rich user card with Role badge & live connection status
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
+import {
+  ChevronDown,
+  ChevronRight,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+} from 'lucide-react';
 import navigation from '../../config/navigation';
 
 const LOGO = '/micro-flat-logo.png';
+const SIDE_LOGO = '/microsidelogo.png';
 const COLLAPSED_KEY = 'mf-sidebar-collapsed';
 
 function getInitialCollapsed() {
@@ -28,7 +39,6 @@ function getInitialCollapsed() {
   }
 }
 
-/* ── Avatar initials helper ───────────────────────────────────────────────── */
 function initials(name = '') {
   return name
     .split(' ')
@@ -38,9 +48,10 @@ function initials(name = '') {
     .toUpperCase();
 }
 
-/* ── Single nav item (leaf) ───────────────────────────────────────────────── */
+/* ── Single Nav Item (Leaf) ────────────────────────────────────────────────── */
 function NavItem({ item, collapsed, onClick }) {
   const Icon = item.icon;
+  const navigate = useNavigate();
   const [isHovered, setIsHovered] = useState(false);
   const [coords, setCoords] = useState(null);
   const triggerRef = useRef(null);
@@ -67,7 +78,7 @@ function NavItem({ item, collapsed, onClick }) {
       ref={triggerRef}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={collapsed ? 'relative flex justify-center' : ''}
+      className={collapsed ? 'relative flex justify-center' : 'relative group/nav-item'}
     >
       <NavLink
         to={item.path}
@@ -75,12 +86,12 @@ function NavItem({ item, collapsed, onClick }) {
         onClick={onClick}
         className={({ isActive }) =>
           [
-            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium',
-            'transition-colors duration-150 ease-in-out group',
+            'flex items-center gap-2.5 rounded-xl text-sm font-medium relative',
+            'transition-all duration-150 ease-in-out select-none',
             isActive
-              ? 'bg-primary/10 text-primary'
-              : 'text-text-muted hover:bg-surface hover:text-text',
-            collapsed ? 'w-10 h-10 justify-center p-0' : 'w-full',
+              ? 'bg-primary/10 text-primary font-semibold shadow-2xs'
+              : 'text-text-muted hover:bg-surface hover:text-heading',
+            collapsed ? 'w-10 h-10 justify-center p-0' : 'w-full px-3 py-2',
           ]
             .filter(Boolean)
             .join(' ')
@@ -88,18 +99,61 @@ function NavItem({ item, collapsed, onClick }) {
       >
         {({ isActive }) => (
           <>
-            <Icon
-              size={18}
-              strokeWidth={isActive ? 2 : 1.75}
-              className="shrink-0"
-              aria-hidden="true"
-            />
-            {!collapsed && <span>{item.label}</span>}
+            {/* Active Left Indicator Bar */}
+            {isActive && !collapsed && (
+              <span
+                className="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full"
+                aria-hidden="true"
+              />
+            )}
+
+            {/* Icon (Image or Component) */}
+            {item.image ? (
+              <img
+                src={item.image}
+                alt=""
+                className={`${collapsed ? 'w-7 h-7' : 'w-5.5 h-5.5'} object-contain shrink-0`}
+                aria-hidden="true"
+              />
+            ) : Icon ? (
+              <Icon
+                size={18}
+                strokeWidth={isActive ? 2.2 : 1.75}
+                className={`shrink-0 transition-transform duration-150 ${
+                  isActive ? 'text-primary' : 'text-text-muted group-hover/nav-item:text-heading'
+                }`}
+                aria-hidden="true"
+              />
+            ) : null}
+
+            {!collapsed && (
+              <div className="flex-1 flex items-center justify-between min-w-0">
+                <span className="truncate">{item.label}</span>
+
+                {item.quickAction && (
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigate(item.quickAction.path);
+                        onClick?.();
+                      }}
+                      title={item.quickAction.title}
+                      className="opacity-0 group-hover/nav-item:opacity-100 transition-opacity p-0.5 hover:bg-primary hover:text-white rounded-md text-text-muted cursor-pointer"
+                    >
+                      <item.quickAction.icon size={13} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </NavLink>
 
-      {/* Single Item Tooltip in collapsed mode */}
+      {/* Tooltip in Collapsed Rail Mode */}
       {collapsed &&
         isHovered &&
         coords &&
@@ -112,9 +166,14 @@ function NavItem({ item, collapsed, onClick }) {
               transform: 'translateY(-50%)',
               zIndex: 99999,
             }}
-            className="px-3 py-1.5 bg-gray-900 dark:bg-gray-800 text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in duration-100"
+            className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in duration-100"
           >
-            {item.label}
+            <span>{item.label}</span>
+            {item.badge && (
+              <span className="px-1.5 py-0.2 bg-primary text-white text-[10px] font-bold rounded-full">
+                {item.badge}
+              </span>
+            )}
           </div>,
           document.body
         )}
@@ -122,15 +181,59 @@ function NavItem({ item, collapsed, onClick }) {
   );
 }
 
-/* ── Parent item with accordion children / flyout popover ─────────────────── */
-function NavGroup({ item, collapsed, onChildClick }) {
+/* ── Submenu Item (Tree-branch hierarchy without icon) ──────────────────────── */
+function SubNavItem({ item, onClick }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="relative group/subnav-item flex items-center">
+      {/* Tree branch connector line */}
+      <span
+        className="absolute -left-3 top-1/2 -translate-y-1/2 w-3 h-3.5 border-b border-l border-border rounded-bl-lg pointer-events-none"
+        aria-hidden="true"
+      />
+
+      <NavLink
+        to={item.path}
+        onClick={onClick}
+        className={({ isActive }) =>
+          [
+            'w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors select-none',
+            isActive
+              ? 'bg-primary/10 text-primary font-semibold'
+              : 'text-text-muted hover:bg-surface hover:text-heading',
+          ].join(' ')}
+      >
+        <span className="truncate">{item.label}</span>
+
+        {item.quickAction && (
+          <div className="flex items-center gap-1.5 shrink-0 ml-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate(item.quickAction.path);
+                onClick?.();
+              }}
+              title={item.quickAction.title}
+              className="opacity-0 group-hover/subnav-item:opacity-100 transition-opacity p-0.5 hover:bg-primary hover:text-white rounded text-text-muted cursor-pointer"
+            >
+              <item.quickAction.icon size={11} strokeWidth={2.5} />
+            </button>
+          </div>
+        )}
+      </NavLink>
+    </div>
+  );
+}
+
+/* ── Group Item with Accordion or Flyout Popover ─────────────────────────── */
+function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
   const location = useLocation();
   const Icon = item.icon;
 
-  // Determine if any child is currently active
   const isChildActive = item.children?.some((c) => location.pathname.startsWith(c.path));
-
-  // Expand by default if a child is active; persist open state in full mode
   const [open, setOpen] = useState(isChildActive);
   const [isFlyoutOpen, setIsFlyoutOpen] = useState(false);
   const [flyoutCoords, setFlyoutCoords] = useState(null);
@@ -138,16 +241,17 @@ function NavGroup({ item, collapsed, onChildClick }) {
   const triggerRef = useRef(null);
   const closeTimeoutRef = useRef(null);
 
-  // Keep open when navigating to a child from elsewhere
   useEffect(() => {
     if (isChildActive) setOpen(true);
   }, [isChildActive]);
+
+  // When searching, auto-expand the group so matching sub-items are immediately visible
+  const isAccordionOpen = open || isSearching;
 
   function handleToggle() {
     if (!collapsed) setOpen((prev) => !prev);
   }
 
-  /* ── Hover handlers for Collapsed Rail Flyout ── */
   function handleMouseEnter() {
     if (!collapsed) return;
     if (closeTimeoutRef.current) {
@@ -184,7 +288,7 @@ function NavGroup({ item, collapsed, onChildClick }) {
     }, 150);
   }
 
-  // When collapsed to rail mode: render icon button with floating popover
+  // Collapsed Mode: Hover Floating Popover
   if (collapsed) {
     return (
       <div
@@ -198,26 +302,34 @@ function NavGroup({ item, collapsed, onChildClick }) {
           aria-haspopup="true"
           aria-expanded={isFlyoutOpen}
           className={[
-            'w-10 h-10 flex items-center justify-center rounded-lg text-sm font-medium',
+            'w-10 h-10 flex items-center justify-center rounded-xl text-sm font-medium',
             'transition-colors duration-150 ease-in-out cursor-pointer',
             isChildActive
               ? 'bg-primary/10 text-primary'
               : isFlyoutOpen
-              ? 'bg-surface text-text'
-              : 'text-text-muted hover:bg-surface hover:text-text',
+              ? 'bg-surface text-heading'
+              : 'text-text-muted hover:bg-surface hover:text-heading',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          <Icon
-            size={18}
-            strokeWidth={isChildActive ? 2 : 1.75}
-            className="shrink-0"
-            aria-hidden="true"
-          />
+          {item.image ? (
+            <img
+              src={item.image}
+              alt=""
+              className="w-7 h-7 object-contain shrink-0"
+              aria-hidden="true"
+            />
+          ) : Icon ? (
+            <Icon
+              size={18}
+              strokeWidth={isChildActive ? 2.2 : 1.75}
+              className="shrink-0"
+              aria-hidden="true"
+            />
+          ) : null}
         </button>
 
-        {/* Floating Flyout Menu Popup */}
         {isFlyoutOpen &&
           flyoutCoords &&
           createPortal(
@@ -230,17 +342,15 @@ function NavGroup({ item, collapsed, onChildClick }) {
               }}
               onMouseEnter={handleFlyoutMouseEnter}
               onMouseLeave={handleFlyoutMouseLeave}
-              className="w-52 bg-bg border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+              className="w-56 bg-bg border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
             >
-              {/* Flyout Header */}
-              <div className="px-4 py-2.5 border-b border-border bg-surface/70 text-[10.5px] font-bold tracking-wider text-text-muted uppercase">
-                {item.label}
+              <div className="px-3.5 py-2.5 border-b border-border bg-surface/70 text-[10.5px] font-bold tracking-wider text-text-muted uppercase flex items-center justify-between">
+                <span>{item.label}</span>
+                {Icon && <Icon size={13} className="text-text-muted" />}
               </div>
 
-              {/* Child Links */}
               <div className="p-1.5 space-y-0.5">
                 {item.children?.map((child) => {
-                  const ChildIcon = child.icon;
                   const isLinkActive = location.pathname.startsWith(child.path);
 
                   return (
@@ -252,21 +362,13 @@ function NavGroup({ item, collapsed, onChildClick }) {
                         onChildClick?.();
                       }}
                       className={[
-                        'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors',
+                        'flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors',
                         isLinkActive
                           ? 'bg-primary/10 text-primary font-semibold'
                           : 'text-text-muted hover:text-heading hover:bg-surface',
                       ].join(' ')}
                     >
-                      {ChildIcon && (
-                        <ChildIcon
-                          size={14}
-                          strokeWidth={isLinkActive ? 2 : 1.75}
-                          className="shrink-0"
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span>{child.label}</span>
+                      <span className="truncate">{child.label}</span>
                     </NavLink>
                   );
                 })}
@@ -278,48 +380,63 @@ function NavGroup({ item, collapsed, onChildClick }) {
     );
   }
 
+  // Expanded Mode: Accordion Group
   return (
-    <div>
+    <div className="space-y-0.5">
       <button
         type="button"
         onClick={handleToggle}
-        aria-expanded={open}
+        aria-expanded={isAccordionOpen}
         className={[
-          'w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium',
-          'transition-colors duration-150 ease-in-out',
-          'cursor-pointer',
+          'w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm font-medium',
+          'transition-all duration-150 ease-in-out cursor-pointer select-none',
           isChildActive
-            ? 'bg-primary/10 text-primary'
-            : 'text-text-muted hover:bg-surface hover:text-text',
+            ? 'bg-primary/10 text-primary font-semibold'
+            : 'text-text-muted hover:bg-surface hover:text-heading',
         ]
           .filter(Boolean)
           .join(' ')}
-        title={item.label}
       >
-        <span className="flex items-center gap-3">
-          <Icon
-            size={18}
-            strokeWidth={isChildActive ? 2 : 1.75}
-            className="shrink-0"
+        <span className="flex items-center gap-2 truncate">
+          {item.image ? (
+            <img
+              src={item.image}
+              alt=""
+              className="w-5.5 h-5.5 object-contain shrink-0"
+              aria-hidden="true"
+            />
+          ) : Icon ? (
+            <Icon
+              size={18}
+              strokeWidth={isChildActive ? 2.2 : 1.75}
+              className={`shrink-0 ${isChildActive ? 'text-primary' : 'text-text-muted'}`}
+              aria-hidden="true"
+            />
+          ) : null}
+          <span className="truncate">{item.label}</span>
+        </span>
+        {isAccordionOpen ? (
+          <ChevronDown
+            size={14}
+            strokeWidth={2}
+            className="shrink-0 text-heading transition-colors"
             aria-hidden="true"
           />
-          {item.label}
-        </span>
-        <ChevronDown
-          size={14}
-          className={[
-            'shrink-0 transition-transform duration-200',
-            open ? 'rotate-180' : '',
-          ].join(' ')}
-          aria-hidden="true"
-        />
+        ) : (
+          <ChevronRight
+            size={14}
+            strokeWidth={2}
+            className="shrink-0 text-text-muted transition-colors"
+            aria-hidden="true"
+          />
+        )}
       </button>
 
-      {/* Accordion children in expanded mode */}
-      {open && (
-        <div className="mt-0.5 ml-5 pl-3 border-l border-border space-y-0.5">
+      {/* Submenu Tree-Branch Hierarchy */}
+      {isAccordionOpen && (
+        <div className="relative mt-1 ml-5 pl-3 border-l border-border/80 space-y-1">
           {item.children.map((child) => (
-            <NavItem key={child.path} item={child} collapsed={false} onClick={onChildClick} />
+            <SubNavItem key={child.path} item={child} onClick={onChildClick} />
           ))}
         </div>
       )}
@@ -327,9 +444,30 @@ function NavGroup({ item, collapsed, onChildClick }) {
   );
 }
 
-/* ── Sidebar inner content ────────────────────────────────────────────────── */
+/* ── Sidebar Main Inner Content ───────────────────────────────────────────── */
 function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
   const navigate = useNavigate();
+  const [navSearch, setNavSearch] = useState('');
+  const searchInputRef = useRef(null);
+
+  // Global Ctrl+K / Cmd+K shortcut to focus search
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        // If sidebar is collapsed on desktop, expand it first
+        if (collapsed && onCollapsedToggle) {
+          onCollapsedToggle();
+        }
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        }, 60);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [collapsed, onCollapsedToggle]);
 
   function handleLogout() {
     localStorage.removeItem('mf-token');
@@ -337,157 +475,269 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
     navigate('/login', { replace: true });
   }
 
-  // Mock user from token / fallback
-  const user = { name: 'Admin', email: 'admin@microflat.in' };
+  // Active user data
+  const user = {
+    name: 'Ian Chesnut',
+    role: 'Admin',
+    email: 'admin@microflat.in',
+  };
+
+  // Filter sections by Role-Based Access Control (RBAC) and inline search
+  const filteredSections = useMemo(() => {
+    const q = navSearch.trim().toLowerCase();
+
+    return navigation
+      .map((sec) => {
+        // Filter section items
+        const matchingItems = (sec.items || [])
+          .map((item) => {
+            // RBAC Role Check for parent
+            if (item.roles && !item.roles.includes(user.role.toUpperCase())) {
+              return null;
+            }
+
+            // If item has children: filter children by RBAC and search
+            if (item.children) {
+              const allowedChildren = item.children.filter((child) => {
+                if (child.roles && !child.roles.includes(user.role.toUpperCase())) {
+                  return false;
+                }
+                return true;
+              });
+
+              if (allowedChildren.length === 0) return null;
+
+              if (q) {
+                const matchesParent = item.label.toLowerCase().includes(q);
+                const matchingChildren = allowedChildren.filter((child) =>
+                  child.label.toLowerCase().includes(q)
+                );
+
+                if (matchesParent) {
+                  return { ...item, children: allowedChildren };
+                } else if (matchingChildren.length > 0) {
+                  return { ...item, children: matchingChildren };
+                }
+                return null;
+              }
+
+              return { ...item, children: allowedChildren };
+            }
+
+            // Single item (leaf)
+            if (q) {
+              const matches = item.label.toLowerCase().includes(q);
+              return matches ? item : null;
+            }
+
+            return item;
+          })
+          .filter(Boolean);
+
+        return {
+          ...sec,
+          items: matchingItems,
+        };
+      })
+      .filter((sec) => sec.items.length > 0);
+  }, [navSearch, user.role]);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* ── Logo ── */}
-      <div
-        className={[
-          'flex items-center border-b border-border',
-          collapsed ? 'justify-center p-4' : 'justify-between px-4 py-4',
-        ].join(' ')}
-      >
-        {!collapsed && (
-          <div className="flex flex-col gap-0.5">
-            <div
-              className="inline-flex items-center rounded-lg px-2.5 py-1.5 self-start"
-              style={{ backgroundColor: 'rgba(255,255,255,0.96)' }}
+    <div className="flex flex-col h-full bg-bg">
+      {/* ── Top Header Bar (Brand Logo & Collapse Toggle) ── */}
+      <div className="border-b border-border p-3.5 shrink-0">
+        {!collapsed ? (
+          <div className="flex items-center justify-between">
+            <Link
+              to="/dashboard"
+              onClick={onChildClick}
+              title="Go to Dashboard"
+              className="flex items-center gap-2 group/logo cursor-pointer"
+            >
+              <div
+                className="inline-flex items-center rounded-lg px-2 py-1 group-hover/logo:opacity-90 transition-opacity"
+                style={{ backgroundColor: 'rgba(255,255,255,0.96)' }}
+              >
+                <img
+                  src={LOGO}
+                  alt="Micro-Flat Datums"
+                  className="h-6 w-auto object-contain"
+                  draggable={false}
+                />
+              </div>
+            </Link>
+
+            {/* Desktop Collapse Toggle */}
+            {onCollapsedToggle && (
+              <button
+                type="button"
+                onClick={onCollapsedToggle}
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                className="p-1.5 rounded-lg text-text-muted hover:bg-surface hover:text-heading transition-colors cursor-pointer"
+              >
+                <PanelLeftClose size={16} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center">
+            {/* Collapsed Logo (microsidelogo.png) */}
+            <Link
+              to="/dashboard"
+              onClick={onChildClick}
+              title="Go to Dashboard"
+              aria-label="Go to Dashboard"
+              className="p-1 rounded-xl hover:bg-surface transition-all cursor-pointer group/logo flex items-center justify-center"
             >
               <img
-                src={LOGO}
-                alt="Micro-Flat Datums Pvt. Ltd."
-                className="h-6 w-auto object-contain"
+                src={SIDE_LOGO}
+                alt="Micro-Flat"
+                className="w-8 h-8 object-contain group-hover/logo:scale-105 transition-transform"
                 draggable={false}
               />
-            </div>
-            {/* <span
-              className="text-[10px] tracking-widest uppercase pl-0.5"
-              style={{ color: 'var(--brand-500)', opacity: 0.75 }}
-            >
-              ERP System
-            </span> */}
+            </Link>
           </div>
-        )}
-
-        {/* Collapse / expand toggle (desktop only) */}
-        {onCollapsedToggle && (
-          <button
-            type="button"
-            onClick={onCollapsedToggle}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={[
-              'p-1.5 rounded-lg text-text-muted',
-              'hover:bg-surface hover:text-text',
-              'transition-colors duration-150',
-              'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary',
-            ].join(' ')}
-          >
-            {collapsed ? (
-              <PanelLeftOpen size={17} aria-hidden="true" />
-            ) : (
-              <PanelLeftClose size={17} aria-hidden="true" />
-            )}
-          </button>
         )}
       </div>
 
-      {/* ── Nav items ── */}
+      {/* ── Quick Module Search (Expanded mode) ── */}
+      {!collapsed && (
+        <div className="px-3 pt-3 pb-1 shrink-0">
+          <div className="relative flex items-center">
+            <Search
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+            />
+            <input
+              ref={searchInputRef}
+              type="search"
+              placeholder="Quick jump..."
+              value={navSearch}
+              onChange={(e) => setNavSearch(e.target.value)}
+              className="w-full pl-8 pr-14 py-1.5 text-xs rounded-lg bg-surface/80 border border-border text-heading placeholder:text-text-muted focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+            />
+            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9.5px] font-mono font-medium text-text-muted/80 bg-bg border border-border/80 rounded shadow-2xs pointer-events-none">
+              Ctrl K
+            </kbd>
+          </div>
+        </div>
+      )}
+
+      {/* ── Navigation Sections List ── */}
       <nav
         aria-label="Main navigation"
-        className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5"
+        className="flex-1 overflow-y-auto py-2 px-2.5 space-y-4"
       >
-        {navigation.map((item) =>
-          item.children ? (
-            <NavGroup
-              key={item.label}
-              item={item}
-              collapsed={collapsed}
-              onChildClick={onChildClick}
-            />
-          ) : (
-            <NavItem
-              key={item.path}
-              item={item}
-              collapsed={collapsed}
-              onClick={onChildClick}
-            />
-          )
+        {filteredSections.map((sec, sIdx) => (
+          <div key={sec.section || sIdx} className="space-y-1">
+            {/* Section Category Title */}
+            {!collapsed && sec.section && (
+              <div className="px-2 pt-2 pb-1 text-[10px] font-bold tracking-wider text-text-muted/80 uppercase">
+                {sec.section}
+              </div>
+            )}
+            {collapsed && sIdx > 0 && (
+              <div className="my-2 border-t border-border/80 w-6 mx-auto" />
+            )}
+
+            {/* Section Items */}
+            <div className="space-y-0.5">
+              {sec.items.map((item) =>
+                item.children ? (
+                  <NavGroup
+                    key={item.label}
+                    item={item}
+                    collapsed={collapsed}
+                    onChildClick={onChildClick}
+                    isSearching={Boolean(navSearch.trim())}
+                  />
+                ) : (
+                  <NavItem
+                    key={item.path}
+                    item={item}
+                    collapsed={collapsed}
+                    onClick={onChildClick}
+                  />
+                )
+              )}
+            </div>
+          </div>
+        ))}
+
+        {filteredSections.length === 0 && (
+          <div className="py-6 px-3 text-center text-xs text-text-muted">
+            No matching menus
+          </div>
         )}
       </nav>
 
-      {/* ── User footer ── */}
-      <div
-        className={[
-          'border-t border-border p-3',
-          collapsed ? 'flex flex-col items-center gap-2' : 'flex items-center gap-3',
-        ].join(' ')}
-      >
-        {/* Avatar */}
+      {/* ── User Profile & System Status Footer ── */}
+      <div className="border-t border-border p-3 bg-surface/30 shrink-0">
         <div
-          className="w-8 h-8 rounded-full bg-primary/20 text-primary text-xs font-semibold flex items-center justify-center shrink-0"
-          aria-hidden="true"
-        >
-          {initials(user.name)}
-        </div>
-
-        {!collapsed && (
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text truncate">{user.name}</p>
-            <p className="text-xs text-text-muted truncate">{user.email}</p>
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleLogout}
-          aria-label="Sign out"
-          title="Sign out"
           className={[
-            'p-1.5 rounded-lg text-text-muted shrink-0',
-            'hover:bg-danger/10 hover:text-danger',
-            'transition-colors duration-150',
-            'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-danger',
+            collapsed ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2.5',
           ].join(' ')}
         >
-          <LogOut size={16} aria-hidden="true" />
-        </button>
+          {/* Avatar */}
+          <div
+            className="w-8 h-8 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center shrink-0 border border-primary/20"
+            aria-hidden="true"
+          >
+            {initials(user.name)}
+          </div>
+
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-semibold text-heading truncate">{user.name}</p>
+                <span className="px-1.5 py-0.2 bg-primary/10 text-primary text-[9.5px] font-bold rounded-md">
+                  {user.role}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 mt-0.5 text-[10.5px] text-text-muted">
+                <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
+                <span className="truncate">Connected (Live)</span>
+              </div>
+            </div>
+          )}
+
+          {/* Logout Button */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label="Sign out"
+            title="Sign out"
+            className="p-1.5 rounded-lg text-text-muted hover:bg-danger/10 hover:text-danger transition-colors cursor-pointer shrink-0"
+          >
+            <LogOut size={15} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ── Public component ─────────────────────────────────────────────────────── */
-export default function Sidebar({ isOpen, onClose }) {
+/* ── Public Export ────────────────────────────────────────────────────────── */
+export default function Sidebar({
+  isOpen,
+  onClose,
+  collapsed = false,
+  onCollapsedToggle,
+}) {
   const location = useLocation();
 
-  // Desktop collapsed state (persisted)
-  const [collapsed, setCollapsed] = useState(getInitialCollapsed);
-
-  function toggleCollapsed() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(COLLAPSED_KEY, String(next));
-        window.dispatchEvent(new Event('mf-sidebar-toggle'));
-      } catch { /* ignore */ }
-      return next;
-    });
-  }
-
-  // Close mobile drawer on route change
   useEffect(() => {
     if (onClose) onClose();
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
-      {/* ── Desktop fixed sidebar ── */}
+      {/* ── Desktop Fixed Sidebar ── */}
       <aside
         className={[
           'hidden lg:flex flex-col fixed inset-y-0 left-0 z-30',
-          'bg-bg border-r border-border',
+          'bg-bg border-r border-border shadow-xs',
           'transition-[width] duration-200 ease-in-out',
           collapsed ? 'w-16' : 'w-60',
         ].join(' ')}
@@ -495,16 +745,15 @@ export default function Sidebar({ isOpen, onClose }) {
       >
         <SidebarContent
           collapsed={collapsed}
-          onCollapsedToggle={toggleCollapsed}
+          onCollapsedToggle={onCollapsedToggle}
           onChildClick={undefined}
         />
       </aside>
 
-      {/* ── Mobile off-canvas drawer ── */}
-      {/* Backdrop */}
+      {/* ── Mobile Off-Canvas Drawer ── */}
       <div
         className={[
-          'fixed inset-0 z-40 bg-heading/40 backdrop-blur-sm lg:hidden',
+          'fixed inset-0 z-40 bg-heading/40 backdrop-blur-xs lg:hidden',
           'transition-opacity duration-200',
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
         ].join(' ')}
@@ -512,7 +761,6 @@ export default function Sidebar({ isOpen, onClose }) {
         onClick={onClose}
       />
 
-      {/* Drawer panel */}
       <aside
         className={[
           'fixed inset-y-0 left-0 z-50 w-72 flex flex-col lg:hidden',

@@ -11,8 +11,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Outlet, useLocation, Link } from 'react-router-dom';
+import { Menu, X, PanelLeftOpen } from 'lucide-react';
 import Sidebar from './Sidebar';
 import navigation from '../../config/navigation';
 
@@ -30,10 +30,13 @@ function getInitialCollapsed() {
 function usePageTitle() {
   const { pathname } = useLocation();
   const map = {};
-  navigation.forEach((item) => {
-    if (item.path) map[item.path] = item.label;
-    item.children?.forEach((c) => {
-      map[c.path] = c.label;
+  navigation.forEach((entry) => {
+    const items = entry.items ? entry.items : [entry];
+    items.forEach((item) => {
+      if (item.path) map[item.path] = item.label;
+      item.children?.forEach((c) => {
+        if (c.path) map[c.path] = c.label;
+      });
     });
   });
   return (
@@ -50,6 +53,17 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const title = usePageTitle();
 
+  function toggleCollapsed() {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, String(next));
+      window.dispatchEvent(new Event('mf-sidebar-toggle'));
+    } catch {
+      /* ignore */
+    }
+  }
+
   // Sync collapsed state when Sidebar dispatches 'mf-sidebar-toggle'
   useEffect(() => {
     function syncFromStorage() {
@@ -64,7 +78,12 @@ export default function AppLayout() {
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <Sidebar isOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <Sidebar
+        isOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        collapsed={collapsed}
+        onCollapsedToggle={toggleCollapsed}
+      />
 
       {/*
         Main column.
@@ -100,11 +119,25 @@ export default function AppLayout() {
           {/* ── Top bar ── */}
           <header
             className={[
-              'sticky top-0 z-20 flex items-center gap-4',
+              'sticky top-0 z-20 flex items-center gap-3 sm:gap-4',
               'h-14 px-4 sm:px-6',
               'bg-bg/90 backdrop-blur-md border-b border-border',
             ].join(' ')}
           >
+            {/* Mobile Brand Logo — shown first on mobile */}
+            <Link
+              to="/dashboard"
+              title="Go to Dashboard"
+              className="lg:hidden flex items-center shrink-0 pr-0.5"
+            >
+              <img
+                src="/microsidelogo.png"
+                alt="Micro-Flat Datums"
+                className="w-7 h-7 object-contain"
+                draggable={false}
+              />
+            </Link>
+
             {/* Hamburger — mobile/tablet only */}
             <button
               type="button"
@@ -113,7 +146,7 @@ export default function AppLayout() {
               aria-expanded={mobileOpen}
               onClick={() => setMobileOpen((v) => !v)}
               className={[
-                'lg:hidden p-2 rounded-lg text-text-muted',
+                'lg:hidden p-1.5 rounded-lg text-text-muted',
                 'hover:bg-surface hover:text-text transition-colors duration-150',
                 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary',
               ].join(' ')}
@@ -124,6 +157,19 @@ export default function AppLayout() {
                 <Menu size={20} aria-hidden="true" />
               )}
             </button>
+
+            {/* Desktop Expand Sidebar Button — shown in top bar when collapsed */}
+            {collapsed && (
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                aria-label="Expand sidebar"
+                title="Expand sidebar"
+                className="hidden lg:flex p-1.5 rounded-lg text-text-muted hover:bg-surface hover:text-heading transition-colors cursor-pointer shrink-0"
+              >
+                <PanelLeftOpen size={18} aria-hidden="true" />
+              </button>
+            )}
 
             {/* Page title */}
             <h1 className="text-base font-semibold text-heading truncate">{title}</h1>

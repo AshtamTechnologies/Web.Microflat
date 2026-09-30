@@ -1,39 +1,66 @@
 /**
- * navigation.js — single source of truth for the app sidebar menu.
+ * navigation.js — single source of truth for the MicroFlat ERP sidebar menu.
  *
- * Shape: { label, icon, path?, children?: [{ label, icon, path }] }
- *
- * Adding or removing a menu item = edit this array only.
- * Sidebar.jsx reads this config and never needs to be touched.
+ * Supported item schema:
+ *   - label: string (display title)
+ *   - icon?: React Component (Lucide icon)
+ *   - image?: string (custom icon image path)
+ *   - path?: string (URL route)
+ *   - roles?: string[] (RBAC permission list: 'ADMIN', 'MANAGER', 'USER', etc.)
+ *   - badge?: string | number (live count or status indicator)
+ *   - quickAction?: { icon: React Component, title: string, path: string } (1-click action button on hover)
+ *   - children?: Array<item> (nested submenu links)
  */
 
+import DashboardIconImg from '../assets/menuicon/Dashboardicon.png';
+import UserIconImg from '../assets/menuicon/UserIcon.png';
 import {
-  LayoutDashboard,
-  Users,
   Truck,
-  Building2,
+  Plus,
 } from 'lucide-react';
 
-/** @type {Array<{ label: string, icon: React.ComponentType, path?: string, children?: Array<{label:string,icon:React.ComponentType,path:string}> }>} */
-const navigation = [
+export const navigation = [
   {
-    label: 'Dashboard',
-    icon: LayoutDashboard,
-    path: '/dashboard',
-  },
-  {
-    label: 'Users',
-    icon: Users,
-    path: '/users',
-  },
-  {
-    label: 'Vendor Management',
-    icon: Truck,
-    children: [
+    section: 'MAIN',
+    items: [
       {
-        label: 'Vendors',
-        icon: Building2,
-        path: '/vendors',
+        label: 'Dashboard',
+        image: DashboardIconImg,
+        path: '/dashboard',
+        roles: ['ADMIN', 'MANAGER', 'USER'],
+      },
+    ],
+  },
+  {
+    section: 'PROCUREMENT & VENDORS',
+    items: [
+      {
+        label: 'Vendor Management',
+        icon: Truck,
+        roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+        children: [
+          {
+            label: 'Vendors',
+            path: '/vendors',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+            quickAction: {
+              icon: Plus,
+              title: 'Add Vendor',
+              path: '/vendors/new',
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    section: 'ADMINISTRATION',
+    items: [
+      {
+        label: 'Users & Roles',
+        image: UserIconImg,
+        path: '/users',
+        roles: ['ADMIN'],
       },
     ],
   },
