@@ -5,6 +5,7 @@ import AppLayout from './components/layout/AppLayout';
 import UsersPage from './pages/users/UsersPage';
 import { UsersProvider } from './context/UsersContext';
 import VendorsPage from './pages/vendors/VendorsPage';
+import VendorDashboardPage from './pages/vendors/VendorDashboardPage';
 import VendorFormPage from './pages/vendors/VendorFormPage';
 import VendorViewPage from './pages/vendors/VendorViewPage';
 import { VendorsProvider } from './context/VendorsContext';
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/vendors" element={<VendorsPage />} />
+          <Route path="/vendors/dashboard" element={<VendorDashboardPage />} />
           <Route path="/vendors/new" element={<VendorFormPage />} />
           <Route path="/vendors/:id" element={<VendorViewPage />} />
           <Route path="/vendors/:id/edit" element={<VendorFormPage />} />

@@ -106,6 +106,7 @@ export function useVendors() {
       address1: formData.address1.trim(),
       address2: formData.address2?.trim() || '',
       notes: formData.notes?.trim() || '',
+      attachments: formData.attachments || [],
       isActive: formData.isActive !== undefined ? formData.isActive : true,
       approvalStatus: 'Pending',
       approvedBy: '',

@@ -16,7 +16,7 @@
  */
 
 import { useMemo, useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   useReactTable,
   getCoreRowModel,
@@ -104,6 +104,51 @@ export default function VendorsPage() {
   const [loading] = useState(false);
   const [vendorToDelete, setVendorToDelete] = useState(null);
   const [selectedVendorId, setSelectedVendorId] = useState(null);
+
+  const [searchParams] = useSearchParams();
+
+  // Sync query parameters on mount / route changes (e.g. from Dashboard KPIs or View All links)
+  useEffect(() => {
+    const hasStatus = searchParams.has('status');
+    const hasApproval = searchParams.has('approval') || searchParams.has('approvalStatus');
+    const hasSearch = searchParams.has('search');
+    const resetParam = searchParams.get('reset') || searchParams.get('filter');
+
+    if (resetParam === 'true' || resetParam === 'ALL' || resetParam === 'all') {
+      resetFilters();
+      return;
+    }
+
+    if (hasStatus) {
+      const rawStatus = searchParams.get('status') || '';
+      const upper = rawStatus.toUpperCase();
+      if (upper === 'ACTIVE' || upper === 'TRUE') {
+        setStatusFilter('ACTIVE');
+      } else if (upper === 'INACTIVE' || upper === 'FALSE') {
+        setStatusFilter('INACTIVE');
+      } else if (upper === 'ALL') {
+        setStatusFilter('ALL');
+      }
+    }
+
+    if (hasApproval) {
+      const rawApproval = searchParams.get('approval') || searchParams.get('approvalStatus') || '';
+      const lower = rawApproval.toLowerCase();
+      if (lower === 'approved') {
+        setApprovalFilter('Approved');
+      } else if (lower === 'pending') {
+        setApprovalFilter('Pending');
+      } else if (lower === 'rejected') {
+        setApprovalFilter('Rejected');
+      } else if (lower === 'all') {
+        setApprovalFilter('ALL');
+      }
+    }
+
+    if (hasSearch) {
+      setSearch(searchParams.get('search') || '');
+    }
+  }, [searchParams, setStatusFilter, setApprovalFilter, setSearch, resetFilters]);
 
   // Reset pagination to page 1 when search or filters change
   useEffect(() => {

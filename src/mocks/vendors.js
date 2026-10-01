@@ -116,6 +116,32 @@ export const mockVendors = [
     createdOn: '2024-01-15 10:30 AM',
     lastUpdatedBy: 'Arjun Sharma',
     lastUpdatedOn: '2024-06-10 03:45 PM',
+    attachments: [
+      {
+        id: 'att_v1_1',
+        documentName: 'GST Registration Certificate',
+        fileName: 'apex_gst_certificate_2024.pdf',
+        fileSize: '1.4 MB',
+        fileType: 'application/pdf',
+        uploadedAt: '2024-01-15',
+      },
+      {
+        id: 'att_v1_2',
+        documentName: 'ISO 9001:2015 Quality Certificate',
+        fileName: 'apex_iso_9001_cert.pdf',
+        fileSize: '2.8 MB',
+        fileType: 'application/pdf',
+        uploadedAt: '2024-01-15',
+      },
+      {
+        id: 'att_v1_3',
+        documentName: 'Bank Cancelled Cheque',
+        fileName: 'apex_cancelled_cheque.png',
+        fileSize: '680 KB',
+        fileType: 'image/png',
+        uploadedAt: '2024-01-16',
+      },
+    ],
   },
   {
     id: 'v2',
@@ -143,6 +169,16 @@ export const mockVendors = [
     createdOn: '2024-02-01 11:15 AM',
     lastUpdatedBy: 'Ian Chesnut',
     lastUpdatedOn: '2024-02-05 04:00 PM',
+    attachments: [
+      {
+        id: 'att_v2_1',
+        documentName: 'OEM Calibration Compliance Certificate',
+        fileName: 'zeiss_calibration_spec_v2.pdf',
+        fileSize: '3.2 MB',
+        fileType: 'application/pdf',
+        uploadedAt: '2024-02-01',
+      },
+    ],
   },
   {
     id: 'v3',
@@ -170,6 +206,24 @@ export const mockVendors = [
     createdOn: '2024-03-10 09:00 AM',
     lastUpdatedBy: 'Priya Mehta',
     lastUpdatedOn: '2024-05-12 01:20 PM',
+    attachments: [
+      {
+        id: 'att_v3_1',
+        documentName: 'GST Registration Certificate',
+        fileName: 'kalyani_gst_cert.pdf',
+        fileSize: '1.1 MB',
+        fileType: 'application/pdf',
+        uploadedAt: '2024-03-10',
+      },
+      {
+        id: 'att_v3_2',
+        documentName: 'Material Test Chemical Composition Report',
+        fileName: 'steel_grade_test_sheet.pdf',
+        fileSize: '850 KB',
+        fileType: 'application/pdf',
+        uploadedAt: '2024-03-12',
+      },
+    ],
   },
   {
     id: 'v4',
@@ -197,6 +251,7 @@ export const mockVendors = [
     createdOn: '2024-04-18 02:40 PM',
     lastUpdatedBy: 'Ian Chesnut',
     lastUpdatedOn: '2024-07-01 10:00 AM',
+    attachments: [],
   },
   {
     id: 'v5',
@@ -224,6 +279,7 @@ export const mockVendors = [
     createdOn: '2024-05-01 11:00 AM',
     lastUpdatedBy: 'Priya Mehta',
     lastUpdatedOn: '2024-05-01 11:00 AM',
+    attachments: [],
   },
   {
     id: 'v6',
@@ -251,5 +307,15 @@ export const mockVendors = [
     createdOn: '2024-05-15 03:15 PM',
     lastUpdatedBy: 'Arjun Sharma',
     lastUpdatedOn: '2024-05-22 04:30 PM',
+    attachments: [
+      {
+        id: 'att_v6_1',
+        documentName: 'Surface Flatness Inspection Test Report',
+        fileName: 'inspection_batch4_fail_report.pdf',
+        fileSize: '4.1 MB',
+        fileType: 'application/pdf',
+        uploadedAt: '2024-05-18',
+      },
+    ],
   },
 ];

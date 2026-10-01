@@ -16,6 +16,8 @@ import DashboardIconImg from '../assets/menuicon/Dashboardicon.png';
 import UserIconImg from '../assets/menuicon/UserIcon.png';
 import {
   Truck,
+  LayoutDashboard,
+  ListTree,
   Plus,
 } from 'lucide-react';
 
@@ -35,12 +37,19 @@ export const navigation = [
     section: 'PROCUREMENT & VENDORS',
     items: [
       {
-        label: 'Vendor Management',
+        label: 'Vendors',
         icon: Truck,
         roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
         children: [
           {
-            label: 'Vendors',
+            label: 'Dashboard',
+            icon: LayoutDashboard,
+            path: '/vendors/dashboard',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          },
+          {
+            label: 'All Vendors',
+            icon: ListTree,
             path: '/vendors',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
             quickAction: {

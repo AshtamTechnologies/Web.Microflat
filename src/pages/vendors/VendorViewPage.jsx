@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { Button, Card } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
@@ -13,7 +13,11 @@ import VendorDetailView from './VendorDetailView';
 export default function VendorViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { getVendorById, deleteVendor } = useVendorsContext();
+
+  const backPath = location.state?.from || '/vendors';
+  const backLabel = location.state?.backLabel || (backPath === '/vendors/dashboard' ? 'Back to Vendor Dashboard' : 'Back to Vendors List');
 
   const vendor = useMemo(() => {
     return getVendorById(id);
@@ -30,8 +34,8 @@ export default function VendorViewPage() {
           <p className="text-sm text-text-muted">
             The requested vendor with ID "{id}" could not be located in the database.
           </p>
-          <Button variant="primary" onClick={() => navigate('/vendors')}>
-            Return to Vendors
+          <Button variant="primary" onClick={() => navigate(backPath)}>
+            {backLabel}
           </Button>
         </Card>
       </div>
@@ -44,11 +48,11 @@ export default function VendorViewPage() {
       <div>
         <button
           type="button"
-          onClick={() => navigate('/vendors')}
+          onClick={() => navigate(backPath)}
           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-bg hover:bg-surface text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
         >
           <ArrowLeft size={14} className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform" />
-          <span>Back to Vendors List</span>
+          <span>{backLabel}</span>
         </button>
       </div>
 
@@ -56,7 +60,7 @@ export default function VendorViewPage() {
         vendor={vendor}
         onDelete={(vendorId) => {
           deleteVendor(vendorId);
-          navigate('/vendors');
+          navigate(backPath);
         }}
         isSplitView={false}
       />

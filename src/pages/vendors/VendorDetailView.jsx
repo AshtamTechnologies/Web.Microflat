@@ -18,9 +18,47 @@ import {
   Clock,
   X,
   ExternalLink,
+  Paperclip,
+  Download,
+  Eye,
+  Image as ImageIcon,
 } from 'lucide-react';
-import { Button, Card, Badge, ConfirmModal } from '../../components/ui';
+import { Button, Card, Badge, ConfirmModal, Modal } from '../../components/ui';
 import { getCountryName, getStateName } from '../../mocks/vendors';
+
+function getFileIcon(fileName = '', fileType = '') {
+  const name = fileName.toLowerCase();
+  const type = (fileType || '').toLowerCase();
+
+  if (name.endsWith('.pdf') || type.includes('pdf')) {
+    return <FileText size={16} className="text-danger shrink-0" />;
+  }
+  return <ImageIcon size={16} className="text-primary shrink-0" />;
+}
+
+function handleDownloadAttachment(att) {
+  if (att.fileUrl) {
+    const a = document.createElement('a');
+    a.href = att.fileUrl;
+    a.download = att.fileName || 'attachment';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } else {
+    // Mock download for seed data
+    const blob = new Blob([`MicroFlat ERP Mock Document: ${att.documentName}\nFile: ${att.fileName}`], {
+      type: 'text/plain;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = att.fileName || 'document.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+}
 
 function getApprovalBadgeVariant(status) {
   switch (status) {
@@ -57,11 +95,13 @@ export default function VendorDetailView({
 }) {
   const navigate = useNavigate();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState(null);
 
   if (!vendor) return null;
 
   const countryName = getCountryName(vendor.countryId);
   const stateName = getStateName(vendor.countryId, vendor.stateId);
+  const attachments = vendor.attachments || [];
 
   return (
     <div className="space-y-5">
@@ -245,12 +285,75 @@ export default function VendorDetailView({
         </p>
       </Card>
 
-      {/* ── Section 5: Approval & Audit ── */}
+      {/* ── Section 5: Attachments & Supporting Documents ── */}
+      <Card padding="md" className="bg-bg">
+        <div className="border-b border-border pb-2.5 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-heading font-semibold text-sm">
+            <Paperclip size={16} className="text-primary" />
+            <span>5. Attachments & Supporting Documents</span>
+          </div>
+          <Badge variant="neutral">
+            {attachments.length} {attachments.length === 1 ? 'file' : 'files'}
+          </Badge>
+        </div>
+
+        {attachments.length === 0 ? (
+          <div className="text-xs text-text-muted bg-surface/40 p-4 rounded-lg border border-dashed border-border text-center">
+            No compliance or verification documents attached to this vendor record.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {attachments.map((att) => (
+              <div
+                key={att.id}
+                className="p-3 rounded-lg border border-border bg-surface/40 hover:bg-surface/70 transition-colors flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="p-2 rounded-md bg-bg border border-border shrink-0">
+                    {getFileIcon(att.fileName, att.fileType)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-heading break-words">
+                      {att.documentName}
+                    </p>
+                    <p className="text-[11px] text-text-muted flex items-center gap-1.5 font-mono flex-wrap">
+                      <span className="break-all">{att.fileName}</span>
+                      <span>•</span>
+                      <span>{att.fileSize}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewItem(att)}
+                    title="Preview document"
+                    className="p-1.5 rounded-md text-text-muted hover:text-primary hover:bg-bg border border-border transition-colors cursor-pointer"
+                  >
+                    <Eye size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAttachment(att)}
+                    title="Download document"
+                    className="p-1.5 rounded-md text-text-muted hover:text-success hover:bg-bg border border-border transition-colors cursor-pointer"
+                  >
+                    <Download size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Section 6: Approval & Audit ── */}
       <Card padding="md" className="bg-surface/50 border-border">
         <div className="border-b border-border pb-2.5 mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-sm">
             <ShieldCheck size={16} className="text-primary" />
-            <span>5. Approval & Audit Trail</span>
+            <span>6. Approval & Audit Trail</span>
           </div>
           <Badge variant="neutral">System Managed</Badge>
         </div>
@@ -313,6 +416,75 @@ export default function VendorDetailView({
           onClose?.();
         }}
       />
+
+      {/* Document Preview Modal */}
+      {previewItem && (
+        <Modal
+          isOpen={Boolean(previewItem)}
+          onClose={() => setPreviewItem(null)}
+          title={previewItem.documentName || 'Document Preview'}
+          size="lg"
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-text-muted bg-surface/50 p-3 rounded-lg border border-border">
+              <div>
+                <span className="font-medium text-heading">Filename:</span>{' '}
+                <span className="font-mono">{previewItem.fileName}</span>
+              </div>
+              <div>
+                <span className="font-medium text-heading">Size:</span>{' '}
+                <span className="font-mono">{previewItem.fileSize}</span>
+              </div>
+            </div>
+
+            {previewItem.fileType?.includes('image') && previewItem.fileUrl ? (
+              <div className="max-h-[420px] overflow-auto rounded-lg border border-border bg-surface/30 flex items-center justify-center p-4">
+                <img
+                  src={previewItem.fileUrl}
+                  alt={previewItem.documentName}
+                  className="max-h-[380px] max-w-full rounded object-contain"
+                />
+              </div>
+            ) : (
+              <div className="py-10 px-4 text-center rounded-lg border border-dashed border-border bg-surface/20 space-y-3">
+                <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                  {getFileIcon(previewItem.fileName, previewItem.fileType)}
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-heading">{previewItem.documentName}</h4>
+                  <p className="text-xs text-text-muted mt-1 font-mono">{previewItem.fileName}</p>
+                </div>
+                <p className="text-xs text-text-muted max-w-md mx-auto">
+                  This document format is ready for download or viewing via your device's default reader.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              {previewItem.fileUrl && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => window.open(previewItem.fileUrl, '_blank')}
+                >
+                  <ExternalLink size={14} className="mr-1.5" />
+                  Open in Tab
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => handleDownloadAttachment(previewItem)}
+              >
+                <Download size={14} className="mr-1.5" />
+                Download
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

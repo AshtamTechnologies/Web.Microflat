@@ -14,7 +14,7 @@
  *   - Dirty form detection on Cancel navigation.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -29,7 +29,17 @@ import {
   Calendar,
   UserCheck,
   AlertCircle,
+  Paperclip,
+  UploadCloud,
+  Image as ImageIcon,
+  Trash2,
+  Eye,
+  Download,
+  Plus,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import {
   Button,
@@ -38,6 +48,7 @@ import {
   StatusSwitch,
   Badge,
   Card,
+  Modal,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import {
@@ -46,6 +57,47 @@ import {
   getCountryName,
   getStateName,
 } from '../../mocks/vendors';
+
+const DOCUMENT_TYPE_OPTIONS = [
+  { value: 'GST Registration Certificate', label: 'GST Registration Certificate' },
+  { value: 'PAN Card Copy', label: 'PAN Card Copy' },
+  { value: 'MSME / Udyam Certificate', label: 'MSME / Udyam Certificate' },
+  { value: 'ISO 9001 / Quality Certificate', label: 'ISO 9001 / Quality Certificate' },
+  { value: 'Bank Cancelled Cheque / Mandate', label: 'Bank Cancelled Cheque / Mandate' },
+  { value: 'Vendor Agreement / NDA', label: 'Vendor Agreement / NDA' },
+  { value: 'Company Profile & Brochure', label: 'Company Profile & Brochure' },
+  { value: 'Material Test / Calibration Report', label: 'Material Test / Calibration Report' },
+  { value: 'Purchase Terms & Conditions', label: 'Purchase Terms & Conditions' },
+  { value: 'Other Document', label: 'Other Document' },
+];
+
+const ALLOWED_FILE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
+
+function isAllowedFile(file) {
+  const name = (file?.name || '').toLowerCase();
+  const type = (file?.type || '').toLowerCase();
+  const hasValidExt = ALLOWED_FILE_EXTENSIONS.some((ext) => name.endsWith(ext));
+  const hasValidMime = type === 'application/pdf' || type.startsWith('image/');
+  return hasValidExt || hasValidMime;
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function getFileIcon(fileName = '', fileType = '') {
+  const name = fileName.toLowerCase();
+  const type = fileType.toLowerCase();
+
+  if (name.endsWith('.pdf') || type.includes('pdf')) {
+    return <FileText size={18} className="text-danger shrink-0" />;
+  }
+  return <ImageIcon size={18} className="text-primary shrink-0" />;
+}
 
 const INITIAL_FORM = {
   vendorCode: '',
@@ -63,6 +115,7 @@ const INITIAL_FORM = {
   address1: '',
   address2: '',
   notes: '',
+  attachments: [],
   isActive: true,
 };
 
@@ -172,6 +225,13 @@ export default function VendorFormPage() {
   const [loading, setLoading] = useState(false);
   const [isAuditCollapsed, setIsAuditCollapsed] = useState(true);
 
+  // Attachment upload helper state
+  const [selectedDocType, setSelectedDocType] = useState('');
+  const [attachmentError, setAttachmentError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewItem, setPreviewItem] = useState(null);
+  const fileInputRef = useRef(null);
+
   // Initialize form state
   useEffect(() => {
     if (isEdit) {
@@ -192,6 +252,7 @@ export default function VendorFormPage() {
           address1: existingVendor.address1 || '',
           address2: existingVendor.address2 || '',
           notes: existingVendor.notes || '',
+          attachments: existingVendor.attachments ? [...existingVendor.attachments] : [],
           isActive: existingVendor.isActive !== undefined ? existingVendor.isActive : true,
         };
         setForm(data);
@@ -253,6 +314,126 @@ export default function VendorFormPage() {
     }
     const err = validateField(name, value);
     if (err) setErrors((prev) => ({ ...prev, [name]: err }));
+  }
+
+  // Attachment upload and management handlers
+  function handleFilesAdded(files) {
+    if (!files || files.length === 0) return;
+    setAttachmentError('');
+
+    const rawList = Array.from(files);
+    const validFiles = rawList.filter(isAllowedFile);
+    const rejectedCount = rawList.length - validFiles.length;
+
+    if (rejectedCount > 0) {
+      toast.error(
+        `${rejectedCount} file(s) ignored. Only PDF documents and image files (PNG, JPG, JPEG, WEBP) are allowed.`
+      );
+    }
+
+    if (validFiles.length === 0) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    const activeDocName = selectedDocType;
+
+    const newAttachments = validFiles.map((file, idx) => {
+      const docName =
+        validFiles.length === 1
+          ? activeDocName || file.name.replace(/\.[^/.]+$/, '')
+          : `${activeDocName || 'Document'} (${idx + 1})`;
+
+      let fileUrl = '';
+      try {
+        fileUrl = URL.createObjectURL(file);
+      } catch {
+        fileUrl = '';
+      }
+
+      return {
+        id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${idx}`,
+        documentName: docName,
+        fileName: file.name,
+        fileSize: formatFileSize(file.size),
+        fileSizeBytes: file.size,
+        fileType: file.type || 'application/octet-stream',
+        fileUrl,
+        uploadedAt: new Date().toISOString().slice(0, 10),
+      };
+    });
+
+    setForm((prev) => ({
+      ...prev,
+      attachments: [...(prev.attachments || []), ...newAttachments],
+    }));
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setSelectedDocType('');
+  }
+
+  function handleFileInputChange(e) {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleFilesAdded(files);
+    }
+  }
+
+  function handleRemoveAttachment(id) {
+    setForm((prev) => ({
+      ...prev,
+      attachments: (prev.attachments || []).filter((att) => att.id !== id),
+    }));
+  }
+
+  function handleDownloadAttachment(att) {
+    if (att.fileUrl) {
+      const a = document.createElement('a');
+      a.href = att.fileUrl;
+      a.download = att.fileName || 'attachment';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      // Mock download for seed data
+      const blob = new Blob([`MicroFlat ERP Mock Document: ${att.documentName}\nFile: ${att.fileName}`], {
+        type: 'text/plain;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = att.fileName || 'document.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      handleFilesAdded(files);
+    }
   }
 
   function handleCancel() {
@@ -685,7 +866,173 @@ export default function VendorFormPage() {
         </div>
       </Card>
 
-      {/* ── SECTION 5 (EDIT MODE ONLY): READ-ONLY APPROVAL & AUDIT PANEL ── */}
+      {/* ── SECTION 5: ATTACHMENTS & SUPPORTING DOCUMENTS ── */}
+      <Card padding="md" className="bg-bg">
+        <div className="border-b border-border pb-3 mb-5 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-heading font-semibold text-base">
+            <Paperclip size={18} className="text-primary" aria-hidden="true" />
+            <span>5. Attachments & Supporting Documents</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-text-muted font-normal">
+              Upload commercial, tax, and quality compliance files
+            </span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+              {form.attachments?.length || 0} {form.attachments?.length === 1 ? 'file' : 'files'}
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {/* Uploader Control Box */}
+          <div className="p-4 sm:p-5 rounded-xl border border-border bg-surface/40 space-y-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Add New Attachment
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Document Name / Category Selection */}
+              <div className="space-y-2">
+                <SearchableSelect
+                  id="attachmentDocType"
+                  name="attachmentDocType"
+                  label="Document Name / Type"
+                  placeholder="Select document name / type..."
+                  searchPlaceholder="Search document types..."
+                  emptyText="No matching document types found"
+                  options={DOCUMENT_TYPE_OPTIONS}
+                  value={selectedDocType}
+                  onChange={(e) => setSelectedDocType(e.target.value)}
+                />
+              </div>
+
+              {/* Drag & Drop Zone and File Browser */}
+              <div className="flex flex-col justify-between">
+                <label className="text-sm font-medium text-heading block leading-none mb-2">
+                  Select File(s)
+                </label>
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 ${
+                    isDragging
+                      ? 'border-primary bg-primary/10 scale-[0.99]'
+                      : 'border-border hover:border-primary/60 bg-bg hover:bg-surface/60'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp,application/pdf"
+                    onChange={handleFileInputChange}
+                    className="hidden"
+                  />
+                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+                    <UploadCloud size={20} />
+                  </div>
+                  <p className="text-xs font-medium text-heading">
+                    <span className="text-primary hover:underline font-semibold">Click to choose files</span> or drag & drop here
+                  </p>
+                  <p className="text-[11px] text-text-muted mt-1">
+                    Allowed formats: <strong className="text-heading font-medium">Images (PNG, JPG, WEBP)</strong> & <strong className="text-heading font-medium">PDF documents</strong> only (Max 15MB each)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* List of Attached Documents */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                Attached Documents ({form.attachments?.length || 0})
+              </h4>
+            </div>
+
+            {(!form.attachments || form.attachments.length === 0) ? (
+              <div className="border border-border/80 rounded-xl p-8 text-center bg-surface/20">
+                <div className="w-10 h-10 rounded-full bg-border/50 text-text-muted flex items-center justify-center mx-auto mb-2.5">
+                  <Paperclip size={18} />
+                </div>
+                <p className="text-xs font-medium text-heading">No documents attached yet</p>
+                <p className="text-[11px] text-text-muted mt-0.5 max-w-sm mx-auto">
+                  Select a document name above and upload vendor credentials, GST certificates, MSME documents, or bank details.
+                </p>
+              </div>
+            ) : (
+              <div className="border border-border rounded-xl overflow-hidden divide-y divide-border bg-bg">
+                {form.attachments.map((att, index) => (
+                  <div
+                    key={att.id || index}
+                    className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-surface/40 transition-colors"
+                  >
+                    {/* Left: Icon and Document / File Details */}
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div className="p-2.5 rounded-lg bg-surface border border-border shrink-0 mt-0.5">
+                        {getFileIcon(att.fileName, att.fileType)}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <h4 className="text-xs sm:text-sm font-semibold text-heading break-words">
+                          {att.documentName}
+                        </h4>
+                        <p className="text-xs text-text-muted flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-[11px] text-text break-all">{att.fileName}</span>
+                          <span>•</span>
+                          <span className="font-mono text-[11px]">{att.fileSize || 'Unknown size'}</span>
+                          {att.uploadedAt && (
+                            <>
+                              <span>•</span>
+                              <span className="text-[11px] font-mono text-text-muted">Added: {att.uploadedAt}</span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right: Actions (Preview, Download, Delete) */}
+                    <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewItem(att)}
+                        title="Preview attachment"
+                        className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface border border-border transition-colors cursor-pointer"
+                        aria-label={`Preview ${att.documentName}`}
+                      >
+                        <Eye size={14} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadAttachment(att)}
+                        title="Download attachment"
+                        className="p-1.5 rounded-lg text-text-muted hover:text-success hover:bg-surface border border-border transition-colors cursor-pointer"
+                        aria-label={`Download ${att.documentName}`}
+                      >
+                        <Download size={14} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(att.id)}
+                        title="Remove attachment"
+                        className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 border border-border hover:border-danger/30 transition-colors cursor-pointer"
+                        aria-label={`Remove ${att.documentName}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* ── SECTION 6 (EDIT MODE ONLY): READ-ONLY APPROVAL & AUDIT PANEL ── */}
       {isEdit && existingVendor && (
         <Card padding="md" className="bg-surface/50 border-border/80">
           <button
@@ -808,6 +1155,76 @@ export default function VendorFormPage() {
           </Button>
         </div>
       </div>
+
+      {/* ── Document Preview Modal ── */}
+      {previewItem && (
+        <Modal
+          isOpen={Boolean(previewItem)}
+          onClose={() => setPreviewItem(null)}
+          title={previewItem.documentName || 'Document Preview'}
+          size="lg"
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-text-muted bg-surface/50 p-3 rounded-lg border border-border">
+              <div>
+                <span className="font-medium text-heading">Filename:</span>{' '}
+                <span className="font-mono">{previewItem.fileName}</span>
+              </div>
+              <div>
+                <span className="font-medium text-heading">Size:</span>{' '}
+                <span className="font-mono">{previewItem.fileSize}</span>
+              </div>
+            </div>
+
+            {previewItem.fileType?.includes('image') && previewItem.fileUrl ? (
+              <div className="max-h-[420px] overflow-auto rounded-lg border border-border bg-surface/30 flex items-center justify-center p-4">
+                <img
+                  src={previewItem.fileUrl}
+                  alt={previewItem.documentName}
+                  className="max-h-[380px] max-w-full rounded object-contain"
+                />
+              </div>
+            ) : (
+              <div className="py-10 px-4 text-center rounded-lg border border-dashed border-border bg-surface/20 space-y-3">
+                <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                  {getFileIcon(previewItem.fileName, previewItem.fileType)}
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-heading">{previewItem.documentName}</h4>
+                  <p className="text-xs text-text-muted mt-1 font-mono">{previewItem.fileName}</p>
+                </div>
+                <p className="text-xs text-text-muted max-w-md mx-auto">
+                  This document format is ready for download or viewing via your device's default reader.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              {previewItem.fileUrl && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => window.open(previewItem.fileUrl, '_blank')}
+                >
+                  <ExternalLink size={14} className="mr-1.5" />
+                  Open in Tab
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => handleDownloadAttachment(previewItem)}
+              >
+                <Download size={14} className="mr-1.5" />
+                Download
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </form>
   );
 }
+

@@ -181,9 +181,10 @@ function NavItem({ item, collapsed, onClick }) {
   );
 }
 
-/* ── Submenu Item (Tree-branch hierarchy without icon) ──────────────────────── */
+/* ── Submenu Item (Tree-branch hierarchy) ──────────────────────── */
 function SubNavItem({ item, onClick }) {
   const navigate = useNavigate();
+  const Icon = item.icon;
 
   return (
     <div className="relative group/subnav-item flex items-center">
@@ -195,6 +196,7 @@ function SubNavItem({ item, onClick }) {
 
       <NavLink
         to={item.path}
+        end={item.path === '/vendors' || item.path === '/vendors/dashboard'}
         onClick={onClick}
         className={({ isActive }) =>
           [
@@ -204,7 +206,10 @@ function SubNavItem({ item, onClick }) {
               : 'text-text-muted hover:bg-surface hover:text-heading',
           ].join(' ')}
       >
-        <span className="truncate">{item.label}</span>
+        <span className="flex items-center gap-2 min-w-0 truncate">
+          {Icon && <Icon size={14} className="shrink-0 opacity-80" aria-hidden="true" />}
+          <span className="truncate">{item.label}</span>
+        </span>
 
         {item.quickAction && (
           <div className="flex items-center gap-1.5 shrink-0 ml-1">
@@ -351,7 +356,11 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
 
               <div className="p-1.5 space-y-0.5">
                 {item.children?.map((child) => {
-                  const isLinkActive = location.pathname.startsWith(child.path);
+                  const ChildIcon = child.icon;
+                  const isLinkActive =
+                    child.path === '/vendors'
+                      ? location.pathname === '/vendors'
+                      : location.pathname.startsWith(child.path);
 
                   return (
                     <NavLink
@@ -362,12 +371,13 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
                         onChildClick?.();
                       }}
                       className={[
-                        'flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors',
+                        'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors',
                         isLinkActive
                           ? 'bg-primary/10 text-primary font-semibold'
                           : 'text-text-muted hover:text-heading hover:bg-surface',
                       ].join(' ')}
                     >
+                      {ChildIcon && <ChildIcon size={14} className="shrink-0 opacity-80" aria-hidden="true" />}
                       <span className="truncate">{child.label}</span>
                     </NavLink>
                   );
