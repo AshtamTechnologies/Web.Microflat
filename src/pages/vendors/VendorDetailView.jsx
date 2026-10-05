@@ -192,11 +192,10 @@ export default function VendorDetailView({
             label="Account Status"
             value={
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none ${
-                  vendor.isActive
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none ${vendor.isActive
                     ? 'bg-success/10 text-success border border-success/20'
                     : 'bg-danger/10 text-danger border border-danger/20'
-                }`}
+                  }`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${vendor.isActive ? 'bg-success' : 'bg-danger'}`} />
                 {vendor.isActive ? 'Active' : 'Inactive'}

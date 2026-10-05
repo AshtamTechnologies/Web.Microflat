@@ -5,47 +5,56 @@
  *   - First Name *
  *   - Last Name *
  *   - Email *
- *   - Mobile Number *
- *   - Role * (Select)
+ *   - Mobile Number (Primary) *
+ *   - Secondary Phone
+ *   - Roles * (Multi-select)
+ *   - Address (Textarea/Input)
  *   - Status (Custom Pill StatusSwitch button)
  *
  * Fully responsive and uses design tokens for styling.
  */
 
 import { useState, useEffect } from 'react';
-import { Modal, Input, SearchableSelect, Button, StatusSwitch } from '../../components/ui';
+import { Modal, Input, SearchableMultiSelect, Button, StatusSwitch } from '../../components/ui';
 import { ROLE_OPTIONS } from '../../mocks/users';
-
 
 const INITIAL_FORM = {
   firstName: '',
   lastName: '',
   email: '',
   mobile: '',
-  role: 'Admin',
+  secondaryPhone: '',
+  roles: [],
+  address: '',
   isActive: true,
 };
 
 function validateField(name, value) {
   switch (name) {
     case 'firstName':
-      if (!value.trim()) return 'First name is required.';
+      if (!value || !value.trim()) return 'First name is required.';
       return '';
     case 'lastName':
-      if (!value.trim()) return 'Last name is required.';
+      if (!value || !value.trim()) return 'Last name is required.';
       return '';
     case 'email':
-      if (!value.trim()) return 'Email is required.';
+      if (!value || !value.trim()) return 'Email is required.';
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
         return 'Enter a valid email address.';
       return '';
     case 'mobile':
-      if (!value.trim()) return 'Mobile number is required.';
+      if (!value || !value.trim()) return 'Mobile number is required.';
       if (!/^\d+$/.test(value)) return 'Mobile must contain digits only.';
       if (value.length < 10) return 'Mobile must be at least 10 digits.';
       return '';
-    case 'role':
-      if (!value) return 'Role is required.';
+    case 'secondaryPhone':
+      if (value && value.trim()) {
+        if (!/^\d+$/.test(value.trim())) return 'Secondary phone must contain digits only.';
+        if (value.trim().length < 10) return 'Secondary phone must be at least 10 digits.';
+      }
+      return '';
+    case 'roles':
+      if (!Array.isArray(value) || value.length === 0) return 'Please select at least one role.';
       return '';
     default:
       return '';
@@ -54,7 +63,7 @@ function validateField(name, value) {
 
 function validateAll(form) {
   const errors = {};
-  ['firstName', 'lastName', 'email', 'mobile', 'role'].forEach((field) => {
+  ['firstName', 'lastName', 'email', 'mobile', 'secondaryPhone', 'roles'].forEach((field) => {
     const err = validateField(field, form[field]);
     if (err) errors[field] = err;
   });
@@ -75,12 +84,20 @@ export default function UserFormModal({
   useEffect(() => {
     if (isOpen) {
       if (user) {
+        const userRoles = Array.isArray(user.roles) && user.roles.length > 0
+          ? user.roles
+          : user.role
+          ? [user.role]
+          : [];
+
         setForm({
           firstName: user.firstName || '',
           lastName: user.lastName || '',
           email: user.email || '',
           mobile: user.mobile || '',
-          role: user.role || 'Admin',
+          secondaryPhone: user.secondaryPhone || '',
+          roles: userRoles,
+          address: user.address || '',
           isActive: user.isActive !== undefined ? user.isActive : true,
         });
       } else {
@@ -120,7 +137,10 @@ export default function UserFormModal({
         lastName: form.lastName.trim(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
-        role: form.role,
+        secondaryPhone: form.secondaryPhone ? form.secondaryPhone.trim() : '',
+        roles: form.roles,
+        role: form.roles[0] || '',
+        address: form.address ? form.address.trim() : '',
         isActive: form.isActive,
       };
 
@@ -138,10 +158,10 @@ export default function UserFormModal({
       isOpen={isOpen}
       onClose={onClose}
       title={isEdit ? 'Edit User' : 'Add New User'}
-      maxWidth="max-w-xl"
+      maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
-        {/* Form fields in 2-column responsive layout */}
+        {/* Form fields in responsive grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* First Name */}
           <Input
@@ -178,7 +198,7 @@ export default function UserFormModal({
             id="user-email"
             name="email"
             type="email"
-            label="Email"
+            label="Email Address"
             placeholder="user@example.com"
             required
             value={form.email}
@@ -188,12 +208,12 @@ export default function UserFormModal({
             autoComplete="email"
           />
 
-          {/* Mobile */}
+          {/* Primary Mobile */}
           <Input
             id="user-mobile"
             name="mobile"
             type="tel"
-            label="Mobile Number"
+            label="Primary Mobile"
             placeholder="9876543210"
             required
             maxLength={10}
@@ -204,28 +224,65 @@ export default function UserFormModal({
             autoComplete="tel"
           />
 
-          {/* Role */}
+          {/* Secondary Phone */}
+          <Input
+            id="user-secondary-phone"
+            name="secondaryPhone"
+            type="tel"
+            label="Secondary Phone"
+            placeholder="9876543211 (Optional)"
+            maxLength={10}
+            value={form.secondaryPhone}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.secondaryPhone}
+            autoComplete="tel"
+          />
+
+          {/* Roles Multi-Select */}
           <div>
-            <SearchableSelect
-              id="user-role"
-              name="role"
-              label="Role"
-              placeholder="Select a role..."
+            <SearchableMultiSelect
+              id="user-roles"
+              name="roles"
+              label="Roles"
+              placeholder="Select user roles..."
               searchPlaceholder="Search roles..."
               required
-              value={form.role}
+              value={form.roles}
               onChange={handleChange}
               onBlur={handleBlur}
-              error={errors.role}
+              error={errors.roles}
               options={ROLE_OPTIONS}
             />
           </div>
 
+          {/* Address (Spans 2 columns on desktop) */}
+          <div className="sm:col-span-2">
+            <label
+              htmlFor="user-address"
+              className="text-sm font-medium text-heading block leading-none mb-1.5"
+            >
+              Address
+            </label>
+            <textarea
+              id="user-address"
+              name="address"
+              rows={2}
+              value={form.address}
+              onChange={handleChange}
+              placeholder="Enter full address, street, city, state, postal code..."
+              className={[
+                'w-full rounded-lg border bg-bg text-heading text-sm px-3 py-2',
+                'border-border placeholder:text-text-muted transition-all duration-150',
+                'focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none resize-none',
+              ].join(' ')}
+            />
+          </div>
 
           {/* Status Switch Button */}
-          <div className="flex flex-col justify-between">
+          <div className="sm:col-span-2 flex flex-col justify-between pt-1">
             <label className="text-sm font-medium text-heading block leading-none mb-1.5">
-              Status <span className="text-danger" aria-hidden="true">*</span>
+              Account Status <span className="text-danger" aria-hidden="true">*</span>
             </label>
             <div className="flex items-center h-[42px]">
               <StatusSwitch
@@ -236,7 +293,6 @@ export default function UserFormModal({
             </div>
           </div>
         </div>
-
 
         {/* Modal Footer Actions */}
         <div className="flex items-center justify-end gap-3 pt-5 mt-6 border-t border-border">
@@ -256,7 +312,7 @@ export default function UserFormModal({
             loading={loading}
             disabled={loading}
           >
-            {isEdit ? 'Save Changes' : 'Create'}
+            {isEdit ? 'Save Changes' : 'Create User'}
           </Button>
         </div>
       </form>

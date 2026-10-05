@@ -1,5 +1,5 @@
 /**
- * users.js — mock user seed data with group/role support.
+ * users.js — mock user seed data with role support.
  */
 
 export const ROLE_OPTIONS = [
@@ -19,16 +19,7 @@ export const ROLE_OPTIONS = [
   { value: 'Viewer',            label: 'Viewer' },
 ];
 
-export const GROUP_OPTIONS = [
-  { value: 'Falcons, Stallions',   label: 'Falcons, Stallions' },
-  { value: 'Operations, Quality',  label: 'Operations, Quality' },
-  { value: 'Production, Assembly', label: 'Production, Assembly' },
-  { value: 'Executive Team',       label: 'Executive Team' },
-  { value: 'Sales, Marketing',     label: 'Sales, Marketing' },
-  { value: 'Regional Operations',  label: 'Regional Operations' },
-];
-
-/** @type {Array<{id:string, firstName:string, lastName:string, email:string, mobile:string, role:string, groups:string, isActive:boolean}>} */
+/** @type {Array<{id:string, firstName:string, lastName:string, email:string, mobile:string, secondaryPhone?:string, address?:string, roles:string[], role?:string, isActive:boolean}>} */
 export const mockUsers = [
   {
     id: 'u1',
@@ -36,8 +27,10 @@ export const mockUsers = [
     lastName: 'Chesnut',
     email: 'ian.chesnut@gmail.com',
     mobile: '9876543210',
+    secondaryPhone: '9876543219',
+    address: 'Plot 42, GIDC Industrial Estate, Vatva, Ahmedabad, Gujarat 382445',
+    roles: ['Super Admin', 'Admin'],
     role: 'Super Admin',
-    groups: 'Falcons, Stallions',
     isActive: true,
   },
   {
@@ -46,8 +39,10 @@ export const mockUsers = [
     lastName: 'Mokharzada',
     email: 'zeki@gmail.com',
     mobile: '9823456789',
+    secondaryPhone: '9823456780',
+    address: '104 Sunrise Park, Opp. Himalaya Mall, Drive-In Road, Ahmedabad, Gujarat 380052',
+    roles: ['Admin', 'Manager'],
     role: 'Admin',
-    groups: 'Falcons, Stallions',
     isActive: false,
   },
   {
@@ -56,8 +51,10 @@ export const mockUsers = [
     lastName: 'Robinson',
     email: 'faith@gmail.com',
     mobile: '9712345678',
+    secondaryPhone: '',
+    address: 'B-202 Silicon Valley Complex, Bandra Kurla Complex, Mumbai, Maharashtra 400051',
+    roles: ['Contributor', 'Inspector'],
     role: 'Contributor',
-    groups: 'Falcons, Stallions',
     isActive: true,
   },
   {
@@ -66,8 +63,10 @@ export const mockUsers = [
     lastName: 'Walter',
     email: 'scott987@gmail.com',
     mobile: '9654321098',
+    secondaryPhone: '9654321090',
+    address: '78 Industrial Area Phase II, Peenya, Bengaluru, Karnataka 560058',
+    roles: ['Supervisor', 'Inspector'],
     role: 'Supervisor',
-    groups: 'Falcons, Stallions',
     isActive: true,
   },
   {
@@ -76,8 +75,10 @@ export const mockUsers = [
     lastName: 'Bowen',
     email: 'chris.bowen@gmail.com',
     mobile: '9543210987',
+    secondaryPhone: '',
+    address: 'Tower 3, Cyber City, DLF Phase 2, Gurugram, Haryana 122002',
+    roles: ['Client'],
     role: 'Client',
-    groups: 'Falcons, Stallions',
     isActive: false,
   },
   {
@@ -86,8 +87,10 @@ export const mockUsers = [
     lastName: 'Aksam',
     email: 'tracy.aksam@gmail.com',
     mobile: '9432109876',
+    secondaryPhone: '9432109870',
+    address: 'A-12 Logistics Hub, Alkapuri, Vadodara, Gujarat 390007',
+    roles: ['Regional Manager', 'Continent Manager'],
     role: 'Regional Manager',
-    groups: 'Falcons, Stallions',
     isActive: false,
   },
   {
@@ -96,8 +99,10 @@ export const mockUsers = [
     lastName: 'Emanuel',
     email: 'natali@gmail.com',
     mobile: '9321098765',
+    secondaryPhone: '9321098760',
+    address: '402 Trade Centre, Connaught Place, New Delhi 110001',
+    roles: ['Country Manager', 'Regional Manager'],
     role: 'Country Manager',
-    groups: 'Falcons, Stallions',
     isActive: true,
   },
   {
@@ -106,8 +111,10 @@ export const mockUsers = [
     lastName: 'Spanser',
     email: 'dan@gmail.com',
     mobile: '9210987654',
+    secondaryPhone: '',
+    address: 'Unit 501, Technopark Campus, Trivandrum, Kerala 695581',
+    roles: ['Continent Manager'],
     role: 'Continent Manager',
-    groups: 'Falcons, Stallions',
     isActive: false,
   },
   {
@@ -116,8 +123,10 @@ export const mockUsers = [
     lastName: 'Gabril',
     email: 'tonye@gmail.com',
     mobile: '9109876543',
+    secondaryPhone: '9109876540',
+    address: 'Plot 15, Sector 62, Noida, Uttar Pradesh 201309',
+    roles: ['Sales rep', 'Marketing Manager'],
     role: 'Sales rep',
-    groups: 'Falcons, Stallions',
     isActive: true,
   },
   {
@@ -126,8 +135,10 @@ export const mockUsers = [
     lastName: 'Holland',
     email: 'erin@gmail.com',
     mobile: '9098765432',
+    secondaryPhone: '',
+    address: 'Floor 7, Express Towers, Nariman Point, Mumbai, Maharashtra 400021',
+    roles: ['Marketing Manager'],
     role: 'Marketing Manager',
-    groups: 'Falcons, Stallions',
     isActive: true,
   },
   {
@@ -136,8 +147,10 @@ export const mockUsers = [
     lastName: 'Sharma',
     email: 'arjun.sharma@microflat.in',
     mobile: '9876501234',
+    secondaryPhone: '9876501230',
+    address: 'Survey No. 34/2, Microflat Manufacturing Works, GIDC Naroda, Ahmedabad, Gujarat 382330',
+    roles: ['Admin', 'Supervisor', 'Operator'],
     role: 'Admin',
-    groups: 'Operations, Quality',
     isActive: true,
   },
   {
@@ -146,8 +159,10 @@ export const mockUsers = [
     lastName: 'Mehta',
     email: 'priya.mehta@microflat.in',
     mobile: '9823405678',
+    secondaryPhone: '9823405670',
+    address: '88 Precision Way, MIDC Bhosari, Pune, Maharashtra 411026',
+    roles: ['Manager', 'Inspector'],
     role: 'Manager',
-    groups: 'Production, Assembly',
     isActive: true,
   },
 ];

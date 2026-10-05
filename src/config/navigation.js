@@ -19,6 +19,8 @@ import {
   LayoutDashboard,
   ListTree,
   Plus,
+  CheckSquare,
+  Building2,
 } from 'lucide-react';
 
 export const navigation = [
@@ -57,6 +59,19 @@ export const navigation = [
               title: 'Add Vendor',
               path: '/vendors/new',
             },
+          },
+        ],
+      },
+      {
+        label: 'Approval',
+        icon: CheckSquare,
+        roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+        children: [
+          {
+            label: 'Vendor Approval',
+            icon: Building2,
+            path: '/approvals/vendors',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
           },
         ],
       },

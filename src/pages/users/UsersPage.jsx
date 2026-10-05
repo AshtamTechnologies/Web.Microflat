@@ -4,11 +4,12 @@
  * Visual Improvements:
  *   1. Container: Whole table (toolbar + table + pagination) in a single unified Card.
  *   2. Header: Contrasting bg-surface, clean hover sort indicator & solid active chevron, hover resize bar.
- *   3. Rows: 36px circular avatar with brand-100/brand-700 initials, py-4 px-6 breathing room,
- *      divide-y border-border, 120ms hover transition, proper pill status & role badges.
- *   4. Actions: Icon-only ghost buttons (Edit & Delete) with tooltips.
+ *   3. Rows: 36px circular avatar with brand initials, py-4 px-6 breathing room,
+ *      divide-y border-border, 120ms hover transition, proper pill status & multi-role badges.
+ *   4. Actions: Icon-only ghost buttons (View, Edit & Delete) with tooltips.
  *   5. Pagination: Filled bg-primary pill for active page, ghost buttons for others, disabled Prev/Next.
  *   6. Empty & Loading States: 5 pulsing skeleton rows during load, centered empty state with "Clear search".
+ *   7. Modals: Direct User View Modal, Add/Edit User Form modal, and Delete confirmation.
  */
 
 import { useMemo, useState } from 'react';
@@ -27,13 +28,18 @@ import {
   ChevronDown,
   Trash2,
   Pencil,
+  Eye,
   Mail,
   Phone,
+  Smartphone,
+  MapPin,
+  ShieldCheck,
+  Hash,
   SearchX,
   RotateCcw,
 } from 'lucide-react';
 
-import { Button, Input, SearchableSelect, ConfirmModal, TableContainer, Th, Td } from '../../components/ui';
+import { Button, Input, Modal, SearchableSelect, ConfirmModal, TableContainer, Th, Td } from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
 import { ROLE_OPTIONS } from '../../mocks/users';
 import UserFormModal from './UserFormModal';
@@ -52,7 +58,6 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 export default function UsersPage() {
-
   const {
     users,
     search,
@@ -82,6 +87,7 @@ export default function UsersPage() {
   /* Modal state */
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [userToView, setUserToView] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
 
   function handleOpenAdd() {
@@ -114,60 +120,98 @@ export default function UsersPage() {
       columnHelper.accessor((row) => `${row.firstName} ${row.lastName}`, {
         id: 'name',
         header: 'NAME',
-        minSize: 200,
+        minSize: 210,
         size: 260,
         cell: (info) => {
           const row = info.row.original;
+          const initials = `${(row.firstName || '')[0] || ''}${(row.lastName || '')[0] || ''}`.toUpperCase() || 'U';
 
           return (
-            <div className="flex flex-col py-0.5">
-              <span className="font-semibold text-heading text-sm leading-snug">
-                {row.firstName} {row.lastName}
-              </span>
-              <span className="text-text-muted text-xs leading-normal">
-                {row.email}
-              </span>
+            <div className="flex items-center gap-3 py-0.5">
+              <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+                {initials}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="font-semibold text-heading text-sm leading-snug truncate">
+                  {row.firstName} {row.lastName}
+                </span>
+                <span className="text-text-muted text-xs leading-normal truncate">
+                  {row.email}
+                </span>
+              </div>
             </div>
           );
         },
       }),
 
-
       /* 2. MOBILE */
       columnHelper.accessor('mobile', {
         header: 'MOBILE',
-        minSize: 130,
-        size: 160,
+        minSize: 140,
+        size: 170,
         cell: (info) => {
-          const mobile = info.getValue();
+          const row = info.row.original;
           return (
-            <span className="font-mono tabular-nums text-xs text-text-muted">
-              {mobile || '—'}
-            </span>
+            <div className="flex flex-col py-0.5">
+              <span className="font-mono tabular-nums text-xs text-heading font-medium">
+                {row.mobile || '—'}
+              </span>
+              {row.secondaryPhone && (
+                <span className="font-mono tabular-nums text-[11px] text-text-muted">
+                  Sec: {row.secondaryPhone}
+                </span>
+              )}
+            </div>
           );
         },
       }),
 
-      /* 3. ROLE — Neutral pill badge */
-      columnHelper.accessor('role', {
-        header: 'ROLE',
-        minSize: 130,
-        size: 160,
+      /* 3. ROLES — Multi-role pill badges */
+      columnHelper.accessor((row) => {
+        if (Array.isArray(row.roles) && row.roles.length > 0) return row.roles.join(', ');
+        return row.role || 'Viewer';
+      }, {
+        id: 'roles',
+        header: 'ROLES',
+        minSize: 180,
+        size: 220,
         cell: (info) => {
-          const role = info.getValue() || 'Viewer';
+          const row = info.row.original;
+          const roles = Array.isArray(row.roles) && row.roles.length > 0
+            ? row.roles
+            : row.role
+            ? [row.role]
+            : ['Viewer'];
+
           return (
-            <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-border/60 text-text-muted border border-border">
-              {role}
-            </span>
+            <div className="flex flex-wrap gap-1 items-center py-0.5">
+              {roles.slice(0, 2).map((r, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-border/60 text-text-muted border border-border truncate max-w-[130px]"
+                  title={r}
+                >
+                  {r}
+                </span>
+              ))}
+              {roles.length > 2 && (
+                <span
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-primary/10 text-primary border border-primary/20 cursor-default"
+                  title={roles.slice(2).join(', ')}
+                >
+                  +{roles.length - 2}
+                </span>
+              )}
+            </div>
           );
         },
       }),
 
-      /* 4. STATUS — Tinted pill badge with dot (read-only, editable in Edit modal) */
+      /* 4. STATUS — Tinted pill badge with dot */
       columnHelper.accessor('isActive', {
         header: 'STATUS',
-        minSize: 120,
-        size: 150,
+        minSize: 110,
+        size: 130,
         cell: (info) => {
           const row = info.row.original;
           const isActive = row.isActive;
@@ -192,18 +236,29 @@ export default function UsersPage() {
         },
       }),
 
-      /* 5. ACTIONS — Icon-only ghost buttons */
+      /* 5. ACTIONS — View, Edit & Delete Ghost buttons */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 110,
-        size: 120,
+        minSize: 130,
+        size: 140,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
           const row = info.row.original;
           return (
             <div className="flex items-center justify-end gap-1">
+              {/* View Ghost Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setUserToView(row)}
+                title="View user details"
+                className="text-text-muted hover:text-primary hover:bg-surface"
+              >
+                <Eye size={15} aria-hidden="true" />
+              </Button>
+
               {/* Edit Ghost Button */}
               <Button
                 variant="ghost"
@@ -230,7 +285,7 @@ export default function UsersPage() {
         },
       }),
     ],
-    [deleteUser]
+    []
   );
 
   const table = useReactTable({
@@ -259,6 +314,19 @@ export default function UsersPage() {
     return users.slice(start, start + pagination.pageSize);
   }, [users, currentPage, pagination.pageSize]);
 
+  // Roles array for user currently viewed
+  const viewUserRoles = useMemo(() => {
+    if (!userToView) return [];
+    if (Array.isArray(userToView.roles) && userToView.roles.length > 0) return userToView.roles;
+    if (userToView.role) return [userToView.role];
+    return ['Viewer'];
+  }, [userToView]);
+
+  const viewUserInitials = useMemo(() => {
+    if (!userToView) return 'U';
+    return `${(userToView.firstName || '')[0] || ''}${(userToView.lastName || '')[0] || ''}`.toUpperCase() || 'U';
+  }, [userToView]);
+
   return (
     <div className="space-y-6">
       {/* ── Page Header with Add User Button Outside the Card ── */}
@@ -268,7 +336,7 @@ export default function UsersPage() {
             User Management
           </h1>
           <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-            Manage system users, role assignments, and active account statuses.
+            Manage system users, role assignments, address details, and active account statuses.
           </p>
         </div>
 
@@ -295,7 +363,7 @@ export default function UsersPage() {
               <Input
                 id="users-search"
                 type="search"
-                placeholder="Search users by name, email, phone..."
+                placeholder="Search by name, email, phone, address..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 leftIcon={<Search size={16} aria-hidden="true" />}
@@ -376,7 +444,7 @@ export default function UsersPage() {
                               )}
                             </span>
 
-                            {/* Sort indicator: visible dual chevrons when unsorted, highlighted single chevron when sorted */}
+                            {/* Sort indicator */}
                             <span className="shrink-0 ml-1 inline-flex items-center">
                               {sorted === 'asc' ? (
                                 <ChevronUp size={14} className="text-primary stroke-[2.5]" aria-hidden="true" />
@@ -407,7 +475,7 @@ export default function UsersPage() {
 
             <tbody className="divide-y divide-border bg-bg">
               {loading ? (
-                /* ── Skeleton Loading Rows ── */
+                /* Skeleton Loading Rows */
                 Array.from({ length: 5 }).map((_, idx) => (
                   <tr key={`skeleton-${idx}`} className="bg-bg">
                     <Td>
@@ -429,12 +497,13 @@ export default function UsersPage() {
                       <div className="flex items-center justify-end gap-1">
                         <div className="w-8 h-8 rounded-md bg-surface animate-pulse" />
                         <div className="w-8 h-8 rounded-md bg-surface animate-pulse" />
+                        <div className="w-8 h-8 rounded-md bg-surface animate-pulse" />
                       </div>
                     </Td>
                   </tr>
                 ))
               ) : table.getRowModel().rows.length === 0 ? (
-                /* ── Centered Empty State ── */
+                /* Centered Empty State */
                 <tr>
                   <td colSpan={columns.length} className="text-center py-16 px-6">
                     <div className="flex flex-col items-center justify-center max-w-xs mx-auto text-center">
@@ -461,7 +530,7 @@ export default function UsersPage() {
                   </td>
                 </tr>
               ) : (
-                /* ── Data Rows with 120ms hover transition ── */
+                /* Data Rows */
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
@@ -516,23 +585,37 @@ export default function UsersPage() {
               )}
             </div>
           ) : (
-            paginatedMobileUsers.map((user) => (
-              <div
-                key={user.id}
-                className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3"
-              >
-                {/* Header: Name, Role, Status */}
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-heading leading-tight">
-                      {user.firstName} {user.lastName}
-                    </h3>
-                    <span className="inline-block mt-1 text-[11px] font-medium text-text-muted bg-border/50 px-2 py-0.5 rounded-full">
-                      {user.role || 'Viewer'}
-                    </span>
-                  </div>
+            paginatedMobileUsers.map((user) => {
+              const roles = Array.isArray(user.roles) && user.roles.length > 0
+                ? user.roles
+                : user.role
+                ? [user.role]
+                : ['Viewer'];
 
-                    {/* Status Badge (read-only, editable via Edit) */}
+              return (
+                <div
+                  key={user.id}
+                  className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3"
+                >
+                  {/* Header: Name, Roles, Status */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-semibold text-heading leading-tight">
+                        {user.firstName} {user.lastName}
+                      </h3>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {roles.map((r, i) => (
+                          <span
+                            key={i}
+                            className="inline-block text-[11px] font-medium text-text-muted bg-border/50 px-2 py-0.5 rounded-full"
+                          >
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Status Badge */}
                     <span
                       className={[
                         'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
@@ -561,10 +644,32 @@ export default function UsersPage() {
                       <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
                       <span className="font-mono tabular-nums">{user.mobile || '—'}</span>
                     </div>
+                    {user.secondaryPhone && (
+                      <div className="flex items-center gap-2">
+                        <Smartphone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                        <span className="font-mono tabular-nums">Sec: {user.secondaryPhone}</span>
+                      </div>
+                    )}
+                    {user.address && (
+                      <div className="flex items-start gap-2">
+                        <MapPin size={13} className="shrink-0 text-text-muted/70 mt-0.5" aria-hidden="true" />
+                        <span className="line-clamp-2">{user.address}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Action buttons footer */}
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setUserToView(user)}
+                      className="flex-1 text-xs"
+                    >
+                      <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                      View
+                    </Button>
+
                     <Button
                       variant="secondary"
                       size="sm"
@@ -586,13 +691,13 @@ export default function UsersPage() {
                     </Button>
                   </div>
                 </div>
-              ))
+              );
+            })
           )}
         </div>
 
         {/* ── PAGINATION FOOTER STRIP ── */}
         <div className="px-6 py-4 bg-bg border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
-          {/* Showing X-Y of Z */}
           <p className="text-xs text-text-muted">
             Showing <span className="font-medium text-heading">{startRow}-{endRow}</span> of <span className="font-medium text-heading">{totalRows}</span> users
           </p>
@@ -644,6 +749,141 @@ export default function UsersPage() {
           </div>
         </div>
       </div>
+
+      {/* ── View User Details Modal using generic Modal component ── */}
+      <Modal
+        isOpen={Boolean(userToView)}
+        onClose={() => setUserToView(null)}
+        title="User Details"
+        maxWidth="max-w-xl"
+      >
+        {userToView && (
+          <div className="space-y-5">
+            {/* Header Profile Card */}
+            <div className="flex items-start gap-4 p-4 rounded-xl bg-surface/60 border border-border">
+              <div className="w-13 h-13 rounded-full bg-primary/15 border-2 border-primary/20 text-primary font-bold text-base flex items-center justify-center shrink-0 shadow-2xs">
+                {viewUserInitials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-heading truncate">
+                    {userToView.firstName} {userToView.lastName}
+                  </h3>
+                  <span
+                    className={[
+                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none shrink-0',
+                      userToView.isActive
+                        ? 'bg-success/10 text-success border border-success/20'
+                        : 'bg-danger/10 text-danger border border-danger/20',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        userToView.isActive ? 'bg-success' : 'bg-danger'
+                      }`}
+                      aria-hidden="true"
+                    />
+                    {userToView.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-text-muted mt-0.5 flex items-center gap-1.5">
+                  <Mail size={13} className="shrink-0 text-text-muted/70" />
+                  <span className="truncate">{userToView.email || '—'}</span>
+                </p>
+                {userToView.id && (
+                  <div className="mt-2 flex items-center gap-1 text-[11px] font-mono text-text-muted bg-bg/80 border border-border px-2 py-0.5 rounded-md w-fit">
+                    <Hash size={11} className="shrink-0 text-text-muted/60" />
+                    <span>ID: {userToView.id}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Contact Details */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                <Phone size={13} className="text-primary" />
+                Contact Details
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="p-3 bg-bg border border-border rounded-lg space-y-1">
+                  <span className="text-[11px] font-medium text-text-muted block">Primary Mobile</span>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
+                    <Phone size={14} className="text-text-muted/70 shrink-0" />
+                    <span>{userToView.mobile || '—'}</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-bg border border-border rounded-lg space-y-1">
+                  <span className="text-[11px] font-medium text-text-muted block">Secondary Phone</span>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
+                    <Smartphone size={14} className="text-text-muted/70 shrink-0" />
+                    <span>{userToView.secondaryPhone || 'Not provided'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Assigned Roles */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck size={13} className="text-primary" />
+                Assigned Roles ({viewUserRoles.length})
+              </h4>
+              <div className="p-3 bg-bg border border-border rounded-lg flex flex-wrap gap-1.5">
+                {viewUserRoles.map((r, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                  >
+                    <ShieldCheck size={12} className="shrink-0" />
+                    {r}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                <MapPin size={13} className="text-primary" />
+                Address
+              </h4>
+              <div className="p-3 bg-bg border border-border rounded-lg flex items-start gap-2.5">
+                <MapPin size={15} className="text-text-muted/80 shrink-0 mt-0.5" />
+                <p className="text-sm text-heading leading-relaxed">
+                  {userToView.address || <span className="text-text-muted italic">No address provided</span>}
+                </p>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                onClick={() => setUserToView(null)}
+              >
+                Close
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  const target = userToView;
+                  setUserToView(null);
+                  handleOpenEdit(target);
+                }}
+                className="flex items-center gap-1.5"
+              >
+                <Pencil size={15} />
+                Edit User
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* ── Add / Edit User Modal ── */}
       <UserFormModal

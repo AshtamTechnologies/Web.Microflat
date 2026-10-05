@@ -916,11 +916,10 @@ export default function VendorFormPage() {
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 ${
-                    isDragging
+                  className={`border-2 border-dashed rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 ${isDragging
                       ? 'border-primary bg-primary/10 scale-[0.99]'
                       : 'border-border hover:border-primary/60 bg-bg hover:bg-surface/60'
-                  }`}
+                    }`}
                 >
                   <input
                     ref={fileInputRef}

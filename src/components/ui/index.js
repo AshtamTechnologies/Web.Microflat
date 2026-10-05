@@ -9,6 +9,7 @@ export { default as Badge }           from './Badge';
 export { default as Modal }           from './Modal';
 export { default as StatusSwitch }    from './StatusSwitch';
 export { default as SearchableSelect } from './SearchableSelect';
+export { default as SearchableMultiSelect } from './SearchableMultiSelect';
 export { default as ConfirmModal }     from './ConfirmModal';
 export { TableContainer, Th, Td }     from './Table';
 

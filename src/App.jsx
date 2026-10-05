@@ -8,6 +8,7 @@ import VendorsPage from './pages/vendors/VendorsPage';
 import VendorDashboardPage from './pages/vendors/VendorDashboardPage';
 import VendorFormPage from './pages/vendors/VendorFormPage';
 import VendorViewPage from './pages/vendors/VendorViewPage';
+import VendorApprovalPage from './pages/approvals/VendorApprovalPage';
 import { VendorsProvider } from './context/VendorsContext';
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/vendors/new" element={<VendorFormPage />} />
           <Route path="/vendors/:id" element={<VendorViewPage />} />
           <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
+          <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
         </Route>
 
         {/* Default: redirect root to login */}

@@ -19,6 +19,7 @@ export default function Input({
   hint,
   leftIcon,
   rightElement,
+  required = false,
   className = '',
   ...rest
 }) {
@@ -32,6 +33,11 @@ export default function Input({
           className="text-sm font-medium text-text leading-none"
         >
           {label}
+          {required && (
+            <span className="text-danger ml-0.5" aria-hidden="true">
+              *
+            </span>
+          )}
         </label>
       )}
 
