@@ -21,6 +21,8 @@ import {
   Plus,
   CheckSquare,
   Building2,
+  FileText,
+  ClipboardList,
 } from 'lucide-react';
 
 export const navigation = [
@@ -38,6 +40,30 @@ export const navigation = [
   {
     section: 'PROCUREMENT & VENDORS',
     items: [
+      {
+        label: 'Purchase Requisition',
+        icon: ClipboardList,
+        roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+        children: [
+          {
+            label: 'All Requisitions',
+            icon: ListTree,
+            path: '/purchase-requisition',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+            quickAction: {
+              icon: Plus,
+              title: 'Create PR',
+              path: '/purchase-requisition/create',
+            },
+          },
+          {
+            label: 'Create Requisition',
+            icon: Plus,
+            path: '/purchase-requisition/create',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          },
+        ],
+      },
       {
         label: 'Vendors',
         icon: Truck,

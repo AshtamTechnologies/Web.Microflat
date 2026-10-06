@@ -180,8 +180,8 @@ export default function UsersPage() {
           const roles = Array.isArray(row.roles) && row.roles.length > 0
             ? row.roles
             : row.role
-            ? [row.role]
-            : ['Viewer'];
+              ? [row.role]
+              : ['Viewer'];
 
           return (
             <div className="flex flex-wrap gap-1 items-center py-0.5">
@@ -225,9 +225,8 @@ export default function UsersPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isActive ? 'bg-success' : 'bg-danger'
-                }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                 aria-hidden="true"
               />
               {isActive ? 'Active' : 'Inactive'}
@@ -589,8 +588,8 @@ export default function UsersPage() {
               const roles = Array.isArray(user.roles) && user.roles.length > 0
                 ? user.roles
                 : user.role
-                ? [user.role]
-                : ['Viewer'];
+                  ? [user.role]
+                  : ['Viewer'];
 
               return (
                 <div
@@ -625,9 +624,8 @@ export default function UsersPage() {
                       ].join(' ')}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          user.isActive ? 'bg-success' : 'bg-danger'
-                        }`}
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${user.isActive ? 'bg-success' : 'bg-danger'
+                          }`}
                         aria-hidden="true"
                       />
                       {user.isActive ? 'Active' : 'Inactive'}
@@ -778,9 +776,8 @@ export default function UsersPage() {
                     ].join(' ')}
                   >
                     <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        userToView.isActive ? 'bg-success' : 'bg-danger'
-                      }`}
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${userToView.isActive ? 'bg-success' : 'bg-danger'
+                        }`}
                       aria-hidden="true"
                     />
                     {userToView.isActive ? 'Active' : 'Inactive'}

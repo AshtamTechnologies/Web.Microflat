@@ -21,10 +21,16 @@ import {
   Paperclip,
   Download,
   Eye,
+  Globe,
   Image as ImageIcon,
 } from 'lucide-react';
 import { Button, Card, Badge, ConfirmModal, Modal } from '../../components/ui';
 import { getCountryName, getStateName } from '../../mocks/vendors';
+import {
+  getEffectiveDateStatus,
+  formatDateDisplay,
+} from '../../utils/effectiveDateUtils';
+import VendorEffectiveDatesGrid from './VendorEffectiveDatesGrid';
 
 function getFileIcon(fileName = '', fileType = '') {
   const name = fileName.toLowerCase();
@@ -45,7 +51,6 @@ function handleDownloadAttachment(att) {
     a.click();
     document.body.removeChild(a);
   } else {
-    // Mock download for seed data
     const blob = new Blob([`MicroFlat ERP Mock Document: ${att.documentName}\nFile: ${att.fileName}`], {
       type: 'text/plain;charset=utf-8',
     });
@@ -60,38 +65,40 @@ function handleDownloadAttachment(att) {
   }
 }
 
-function getApprovalBadgeVariant(status) {
-  switch (status) {
-    case 'Approved':
-      return 'approved';
-    case 'Pending':
-      return 'pending';
-    case 'Rejected':
-      return 'rejected';
-    default:
-      return 'neutral';
-  }
-}
-
-function DetailItem({ label, value, mono = false, icon: Icon = null, fullWidth = false }) {
+function DetailItem({ label, value, mono = false, fullWidth = false }) {
   return (
-    <div className={`space-y-1 ${fullWidth ? 'col-span-full' : ''}`}>
-      <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-        {Icon && <Icon size={12} className="text-text-muted" aria-hidden="true" />}
+    <div className={`space-y-1 ${fullWidth ? 'sm:col-span-2' : ''}`}>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted block">
         {label}
       </span>
-      <div className={`text-sm font-medium text-heading break-words ${mono ? 'font-mono tabular-nums' : ''}`}>
-        {value || <span className="text-text-muted font-normal">—</span>}
+      <div
+        className={`text-xs text-text ${
+          mono ? 'font-mono text-heading font-medium' : 'font-medium text-heading'
+        }`}
+      >
+        {value || '—'}
       </div>
     </div>
   );
 }
 
+function getApprovalBadgeVariant(status) {
+  switch (status?.toLowerCase()) {
+    case 'approved':
+      return 'approved';
+    case 'rejected':
+      return 'rejected';
+    case 'pending':
+    default:
+      return 'pending';
+  }
+}
+
 export default function VendorDetailView({
   vendor,
-  onClose,
   onDelete,
-  isSplitView = false,
+  onClose,
+  showFullPageLink = false,
 }) {
   const navigate = useNavigate();
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -102,6 +109,7 @@ export default function VendorDetailView({
   const countryName = getCountryName(vendor.countryId);
   const stateName = getStateName(vendor.countryId, vendor.stateId);
   const attachments = vendor.attachments || [];
+  const effectiveStatus = getEffectiveDateStatus(vendor.effectiveDate);
 
   return (
     <div className="space-y-5">
@@ -113,6 +121,9 @@ export default function VendorDetailView({
               <span className="font-mono text-xs font-bold px-2 py-0.5 bg-primary/10 text-primary rounded-md border border-primary/20">
                 {vendor.vendorCode}
               </span>
+              <Badge variant={effectiveStatus.badgeVariant}>
+                {effectiveStatus.label}
+              </Badge>
               <Badge variant={vendor.isActive ? 'active' : 'inactive'}>
                 {vendor.isActive ? 'Active' : 'Inactive'}
               </Badge>
@@ -180,14 +191,14 @@ export default function VendorDetailView({
         <div className="border-b border-border pb-2.5 mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-sm">
             <Truck size={16} className="text-primary" />
-            <span>1. Commercial & General</span>
+            <span>1. Vendor Master Details</span>
           </div>
-          <span className="text-[11px] text-text-muted">Master Info</span>
+          <span className="text-[11px] text-text-muted">Master Classification</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
           <DetailItem label="Vendor Code" value={vendor.vendorCode} mono />
-          <DetailItem label="Effective Date" value={vendor.effectiveDate} mono />
+          <DetailItem label="Vendor / Company Name" value={vendor.vendorName} />
           <DetailItem
             label="Account Status"
             value={
@@ -205,12 +216,30 @@ export default function VendorDetailView({
         </div>
       </Card>
 
-      {/* ── Section 2: Contact Information ── */}
+      {/* ── Section 2: ERP Effective Dates & Master Revisions Grid ── */}
+      <Card padding="md" className="bg-bg">
+        <div className="border-b border-border pb-2.5 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-heading font-semibold text-sm">
+            <Clock size={16} className="text-primary" />
+            <span>2. ERP Effective Dates & Revisions History</span>
+          </div>
+          <span className="text-[11px] text-text-muted">Temporal Version Log</span>
+        </div>
+
+        <VendorEffectiveDatesGrid
+          history={vendor.effectiveDateHistory}
+          currentEffectiveDate={vendor.effectiveDate}
+          editable={false}
+          vendorCode={vendor.vendorCode}
+        />
+      </Card>
+
+      {/* ── Section 3: Contact Information ── */}
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-2.5 mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-sm">
             <Contact size={16} className="text-primary" />
-            <span>2. Contact Details</span>
+            <span>3. Contact Details</span>
           </div>
           <span className="text-[11px] text-text-muted">Direct Reach</span>
         </div>
@@ -248,15 +277,34 @@ export default function VendorDetailView({
           />
           <DetailItem label="Alternate Phone" value={vendor.alternatePhoneNo || '—'} mono />
           <DetailItem label="GSTIN / Tax ID" value={vendor.gstNo || '—'} mono />
+          <DetailItem
+            label="Website / Company URL"
+            value={
+              vendor.website ? (
+                <a
+                  href={vendor.website.startsWith('http') ? vendor.website : `https://${vendor.website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1 break-all max-w-full"
+                >
+                  <Globe size={12} className="shrink-0" />
+                  <span className="break-all">{vendor.website}</span>
+                  <ExternalLink size={11} className="shrink-0 opacity-70" />
+                </a>
+              ) : (
+                '—'
+              )
+            }
+          />
         </div>
       </Card>
 
-      {/* ── Section 3: Address & Location ── */}
+      {/* ── Section 4: Address & Location ── */}
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-2.5 mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-sm">
             <MapPin size={16} className="text-primary" />
-            <span>3. Address & Dispatch Location</span>
+            <span>4. Address & Dispatch Location</span>
           </div>
           <span className="text-[11px] text-text-muted">Premises</span>
         </div>
@@ -271,12 +319,12 @@ export default function VendorDetailView({
         </div>
       </Card>
 
-      {/* ── Section 4: Notes ── */}
+      {/* ── Section 5: Notes ── */}
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-2.5 mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-sm">
             <FileText size={16} className="text-primary" />
-            <span>4. Procurement & Quality Notes</span>
+            <span>5. Procurement & Quality Notes</span>
           </div>
         </div>
         <p className="text-xs sm:text-sm text-text bg-surface/60 p-3.5 rounded-lg border border-border leading-relaxed">
@@ -284,59 +332,57 @@ export default function VendorDetailView({
         </p>
       </Card>
 
-      {/* ── Section 5: Attachments & Supporting Documents ── */}
+      {/* ── Section 6: Attachments ── */}
       <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-2.5 mb-4 flex items-center justify-between">
+        <div className="border-b border-border pb-2.5 mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-sm">
             <Paperclip size={16} className="text-primary" />
-            <span>5. Attachments & Supporting Documents</span>
+            <span>6. Attached Supporting Documents</span>
           </div>
-          <Badge variant="neutral">
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
             {attachments.length} {attachments.length === 1 ? 'file' : 'files'}
-          </Badge>
+          </span>
         </div>
 
         {attachments.length === 0 ? (
-          <div className="text-xs text-text-muted bg-surface/40 p-4 rounded-lg border border-dashed border-border text-center">
-            No compliance or verification documents attached to this vendor record.
-          </div>
+          <p className="text-xs text-text-muted py-3">No compliance or legal files attached.</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {attachments.map((att) => (
+          <div className="divide-y divide-border border border-border rounded-xl overflow-hidden bg-bg">
+            {attachments.map((att, idx) => (
               <div
-                key={att.id}
-                className="p-3 rounded-lg border border-border bg-surface/40 hover:bg-surface/70 transition-colors flex items-center justify-between gap-3"
+                key={att.id || idx}
+                className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-surface/50 transition-colors"
               >
-                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <div className="p-2 rounded-md bg-bg border border-border shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 rounded-lg bg-surface border border-border shrink-0">
                     {getFileIcon(att.fileName, att.fileType)}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-heading break-words">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-heading truncate">
                       {att.documentName}
                     </p>
-                    <p className="text-[11px] text-text-muted flex items-center gap-1.5 font-mono flex-wrap">
-                      <span className="break-all">{att.fileName}</span>
+                    <p className="text-[11px] text-text-muted flex items-center gap-1.5">
+                      <span className="font-mono">{att.fileName}</span>
                       <span>•</span>
                       <span>{att.fileSize}</span>
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
                   <button
                     type="button"
                     onClick={() => setPreviewItem(att)}
-                    title="Preview document"
-                    className="p-1.5 rounded-md text-text-muted hover:text-primary hover:bg-bg border border-border transition-colors cursor-pointer"
+                    title="Preview attachment"
+                    className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface border border-border transition-colors cursor-pointer"
                   >
                     <Eye size={13} />
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDownloadAttachment(att)}
-                    title="Download document"
-                    className="p-1.5 rounded-md text-text-muted hover:text-success hover:bg-bg border border-border transition-colors cursor-pointer"
+                    title="Download attachment"
+                    className="p-1.5 rounded-lg text-text-muted hover:text-success hover:bg-surface border border-border transition-colors cursor-pointer"
                   >
                     <Download size={13} />
                   </button>
@@ -347,76 +393,54 @@ export default function VendorDetailView({
         )}
       </Card>
 
-      {/* ── Section 6: Approval & Audit ── */}
-      <Card padding="md" className="bg-surface/50 border-border">
-        <div className="border-b border-border pb-2.5 mb-4 flex items-center justify-between">
+      {/* ── Section 7: Audit & Approval Info ── */}
+      <Card padding="md" className="bg-surface/50">
+        <div className="border-b border-border pb-2.5 mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-sm">
             <ShieldCheck size={16} className="text-primary" />
-            <span>6. Approval & Audit Trail</span>
+            <span>7. Verification & Audit Trail</span>
           </div>
-          <Badge variant="neutral">System Managed</Badge>
+          <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
+            {vendor.approvalStatus}
+          </Badge>
         </div>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-bg p-3.5 rounded-xl border border-border text-xs">
-            <div className="space-y-1">
-              <span className="text-[10.5px] font-semibold text-text-muted uppercase tracking-wider block">
-                Approval Status
-              </span>
-              <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
-                {vendor.approvalStatus}
-              </Badge>
-            </div>
-            {vendor.approvalStatus !== 'Pending' ? (
-              <>
-                <DetailItem label="Reviewed By" value={vendor.approvedBy || 'Super Admin'} />
-                <DetailItem label="Approval Date" value={vendor.approvedOn || '—'} mono />
-              </>
-            ) : (
-              <div className="text-xs text-text-muted flex items-center gap-1.5">
-                <Clock size={13} className="text-warning shrink-0" />
-                <span>Pending initial QA review</span>
-              </div>
-            )}
-          </div>
-
-          {vendor.approvedByComments && (
-            <div className="bg-bg p-3 rounded-xl border border-border text-xs space-y-1">
-              <span className="text-[10.5px] font-semibold text-text-muted uppercase tracking-wider block">
-                Reviewer Comments
-              </span>
-              <p className="text-text">{vendor.approvedByComments}</p>
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <DetailItem label="Approval Status" value={vendor.approvalStatus} />
+          {vendor.approvalStatus !== 'Pending' && (
+            <DetailItem label="Approved By" value={vendor.approvedBy || 'System Admin'} />
           )}
-
-          <div className="bg-bg/60 px-3.5 py-2.5 rounded-lg border border-border text-[11px] text-text-muted flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <span>Created by <strong className="text-heading">{vendor.createdBy || 'Admin'}</strong> on <span className="font-mono">{vendor.createdOn || '—'}</span></span>
-            <span>Updated: <span className="font-mono">{vendor.lastUpdatedOn || '—'}</span></span>
-          </div>
+          {vendor.approvalStatus !== 'Pending' && (
+            <DetailItem label="Approved On" value={vendor.approvedOn || '—'} mono />
+          )}
+          <DetailItem label="Created By" value={vendor.createdBy || 'Ian Chesnut'} />
+          <DetailItem label="Created On" value={vendor.createdOn || '—'} mono />
+          <DetailItem label="Last Updated" value={vendor.lastUpdatedOn || '—'} mono />
         </div>
+
+        {vendor.approvedByComments && (
+          <div className="mt-3 p-3 bg-bg rounded-lg border border-border text-xs">
+            <span className="font-semibold text-text-muted block mb-1">Approval Comments:</span>
+            <p className="text-text">{vendor.approvedByComments}</p>
+          </div>
+        )}
       </Card>
 
-      {/* Delete Confirmation Modal */}
+      {/* ── Confirm Delete Modal ── */}
       <ConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
-        title="Delete Vendor"
-        confirmText="Delete Vendor"
-        variant="danger"
-        message={
-          <p>
-            Are you sure you want to permanently delete{' '}
-            <strong className="text-heading font-semibold">{vendor.vendorName}</strong> ({vendor.vendorCode})?
-          </p>
-        }
         onConfirm={() => {
-          onDelete?.(vendor.id);
           setIsDeleteModalOpen(false);
-          onClose?.();
+          onDelete?.(vendor);
         }}
+        title="Delete Vendor"
+        message={`Are you sure you want to delete "${vendor.vendorName}" (${vendor.vendorCode})? This action cannot be undone.`}
+        confirmText="Delete Vendor"
+        confirmVariant="danger"
       />
 
-      {/* Document Preview Modal */}
+      {/* ── Document Preview Modal ── */}
       {previewItem && (
         <Modal
           isOpen={Boolean(previewItem)}

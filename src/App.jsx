@@ -11,6 +11,12 @@ import VendorViewPage from './pages/vendors/VendorViewPage';
 import VendorApprovalPage from './pages/approvals/VendorApprovalPage';
 import { VendorsProvider } from './context/VendorsContext';
 
+import PurchaseRequisition from './pages/PurchaseRequisition/PurchaseRequisition';
+import PurchaseRequisitionCreate from './pages/PurchaseRequisition/PurchaseRequisitionCreate';
+import PurchaseRequisitionView from './pages/PurchaseRequisition/PurchaseRequisitionView';
+import PurchaseRequisitionEdit from './pages/PurchaseRequisition/PurchaseRequisitionEdit';
+import { PurchaseRequisitionProvider } from './context/PurchaseRequisitionContext';
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -25,7 +31,9 @@ export default function App() {
           element={
             <UsersProvider>
               <VendorsProvider>
-                <AppLayout />
+                <PurchaseRequisitionProvider>
+                  <AppLayout />
+                </PurchaseRequisitionProvider>
               </VendorsProvider>
             </UsersProvider>
           }
@@ -38,6 +46,12 @@ export default function App() {
           <Route path="/vendors/:id" element={<VendorViewPage />} />
           <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
           <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
+
+          {/* Purchase Requisition Routes */}
+          <Route path="/purchase-requisition" element={<PurchaseRequisition />} />
+          <Route path="/purchase-requisition/create" element={<PurchaseRequisitionCreate />} />
+          <Route path="/purchase-requisition/:id" element={<PurchaseRequisitionView />} />
+          <Route path="/purchase-requisition/:id/edit" element={<PurchaseRequisitionEdit />} />
         </Route>
 
         {/* Default: redirect root to login */}

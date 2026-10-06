@@ -45,6 +45,10 @@ import {
 import { Button, Input, SearchableSelect, Badge, ConfirmModal, TableContainer, Th, Td } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { getStateName } from '../../mocks/vendors';
+import {
+  getEffectiveDateStatus,
+  formatDateDisplay,
+} from '../../utils/effectiveDateUtils';
 import VendorDetailView from './VendorDetailView';
 
 const columnHelper = createColumnHelper();
@@ -241,7 +245,31 @@ export default function VendorsPage() {
         },
       }),
 
-      /* 5. STATUS — Tinted pill badge (read-only, editable in Edit mode) */
+      /* 5. EFFECTIVE DATE — ERP temporal validity column */
+      columnHelper.accessor((row) => row.effectiveDate || '', {
+        id: 'effectiveDate',
+        header: 'EFFECTIVE DATE',
+        minSize: 145,
+        size: 165,
+        cell: (info) => {
+          const row = info.row.original;
+          const statusInfo = getEffectiveDateStatus(row.effectiveDate);
+          return (
+            <div className="flex flex-col py-0.5 gap-1">
+              <span className="font-mono text-xs text-heading font-medium">
+                {formatDateDisplay(row.effectiveDate)}
+              </span>
+              <div>
+                <Badge variant={statusInfo.badgeVariant} className="text-[10px] px-1.5 py-0">
+                  {statusInfo.label}
+                </Badge>
+              </div>
+            </div>
+          );
+        },
+      }),
+
+      /* 6. STATUS — Tinted pill badge (read-only, editable in Edit mode) */
       columnHelper.accessor('isActive', {
         header: 'STATUS',
         minSize: 120,
@@ -503,8 +531,12 @@ export default function VendorsPage() {
                           <h3 className="text-sm font-bold text-heading leading-tight mt-1 truncate group-hover:text-primary transition-colors">
                             {vendor.vendorName}
                           </h3>
-                          <p className="text-xs text-text-muted mt-0.5 truncate">
-                            Contact: {vendor.contactPersonName}
+                          <p className="text-xs text-text-muted mt-0.5 truncate flex items-center gap-1.5">
+                            <span>Contact: {vendor.contactPersonName}</span>
+                            <span>•</span>
+                            <span className="font-mono text-[11px] text-text-muted font-medium">
+                              Eff: {formatDateDisplay(vendor.effectiveDate)}
+                            </span>
                           </p>
                         </div>
 
@@ -924,8 +956,12 @@ export default function VendorsPage() {
                     >
                       {vendor.vendorName}
                     </Link>
-                    <p className="text-xs text-text-muted mt-0.5">
-                      Contact: {vendor.contactPersonName}
+                    <p className="text-xs text-text-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span>Contact: {vendor.contactPersonName}</span>
+                      <span>•</span>
+                      <span className="font-mono text-[11px] font-medium text-heading">
+                        Eff: {formatDateDisplay(vendor.effectiveDate)}
+                      </span>
                     </p>
                   </div>
 

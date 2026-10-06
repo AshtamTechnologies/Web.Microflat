@@ -2,7 +2,7 @@
  * useVendors — encapsulates all CRUD and state logic for the Vendor Management module.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { mockVendors } from '../../mocks/vendors';
 
@@ -64,40 +64,59 @@ export function useVendors() {
   }, [vendors, search, statusFilter, approvalFilter]);
 
   /* ── Reset all filters ── */
-  function resetFilters() {
+  const resetFilters = useCallback(() => {
     setSearch('');
     setStatusFilter('ALL');
     setApprovalFilter('ALL');
-  }
+  }, []);
 
   /* ── Get single vendor by id ── */
-  function getVendorById(id) {
+  const getVendorById = useCallback((id) => {
     return vendors.find((v) => v.id === id);
-  }
+  }, [vendors]);
 
   /* ── Auto-generate next vendor code ── */
-  function getNextVendorCode() {
+  const getNextVendorCode = useCallback(() => {
     const code = `VEN-${String(nextSeqNumber).padStart(4, '0')}`;
     return code;
-  }
+  }, []);
 
   /* ── Create Vendor (mock async) ── */
-  async function createVendor(formData) {
+  const createVendor = useCallback(async (formData) => {
     await new Promise((r) => setTimeout(r, 700));
 
     const now = formatAuditTimestamp();
-    const vendorCode = formData.vendorCode?.trim() || getNextVendorCode();
+    const vendorCode = formData.vendorCode?.trim() || `VEN-${String(nextSeqNumber).padStart(4, '0')}`;
     nextSeqNumber += 1;
+
+    const effectiveDate = formData.effectiveDate || new Date().toISOString().slice(0, 10);
+
+    // Initialize effectiveDateHistory if not provided
+    const initialHistory = formData.effectiveDateHistory && formData.effectiveDateHistory.length > 0
+      ? formData.effectiveDateHistory
+      : [
+          {
+            id: `eff_${Date.now()}`,
+            revisionNo: 'REV-001',
+            effectiveDate,
+            status: 'ACTIVE',
+            reason: 'Initial Vendor Registration & Master Setup',
+            updatedBy: 'Ian Chesnut',
+            updatedOn: now,
+          },
+        ];
 
     const newVendor = {
       id: `v${nextIdNumber++}`,
       vendorCode,
-      effectiveDate: formData.effectiveDate || new Date().toISOString().slice(0, 10),
+      effectiveDate,
+      effectiveDateHistory: initialHistory,
       vendorName: formData.vendorName.trim(),
       contactPersonName: formData.contactPersonName.trim(),
       phoneNo: formData.phoneNo.trim(),
       alternatePhoneNo: formData.alternatePhoneNo?.trim() || '',
       gstNo: formData.gstNo?.trim().toUpperCase() || '',
+      website: formData.website?.trim() || '',
       email: formData.email.trim(),
       countryId: formData.countryId,
       stateId: formData.stateId,
@@ -121,10 +140,10 @@ export function useVendors() {
     setVendors((prev) => [newVendor, ...prev]);
     toast.success('Vendor created successfully.');
     return { ok: true, vendor: newVendor };
-  }
+  }, []);
 
   /* ── Update Vendor (mock async) ── */
-  async function updateUserVendor(id, formData) {
+  const updateUserVendor = useCallback(async (id, formData) => {
     await new Promise((r) => setTimeout(r, 700));
 
     const now = formatAuditTimestamp();
@@ -136,7 +155,10 @@ export function useVendors() {
         updatedRecord = {
           ...v,
           ...formData,
-          gstNo: formData.gstNo ? formData.gstNo.trim().toUpperCase() : v.gstNo,
+          effectiveDate: formData.effectiveDate || v.effectiveDate,
+          effectiveDateHistory: formData.effectiveDateHistory || v.effectiveDateHistory || [],
+          gstNo: formData.gstNo !== undefined ? formData.gstNo.trim().toUpperCase() : v.gstNo,
+          website: formData.website !== undefined ? formData.website.trim() : v.website,
           lastUpdatedBy: 'Ian Chesnut',
           lastUpdatedOn: now,
         };
@@ -146,10 +168,10 @@ export function useVendors() {
 
     toast.success('Vendor updated successfully.');
     return { ok: true, vendor: updatedRecord };
-  }
+  }, []);
 
   /* ── Toggle isActive ── */
-  function toggleStatus(id) {
+  const toggleStatus = useCallback((id) => {
     setVendors((prev) =>
       prev.map((v) => {
         if (v.id !== id) return v;
@@ -160,16 +182,16 @@ export function useVendors() {
         return next;
       })
     );
-  }
+  }, []);
 
   /* ── Delete Vendor ── */
-  function deleteVendor(id) {
+  const deleteVendor = useCallback((id) => {
     const vendor = vendors.find((v) => v.id === id);
     setVendors((prev) => prev.filter((v) => v.id !== id));
     if (vendor) {
       toast.success(`${vendor.vendorName} deleted.`);
     }
-  }
+  }, [vendors]);
 
   return {
     vendors: filteredVendors,

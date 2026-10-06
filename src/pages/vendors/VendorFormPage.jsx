@@ -4,11 +4,13 @@
  * Replaces modal pattern with structured full-page flow:
  *   - Route: /vendors/new (Add mode) & /vendors/:id/edit (Edit mode)
  *   - Grouped sections inside Cards:
- *       1. Vendor Details (VendorCode, EffectiveDate, VendorName, Status)
- *       2. Contact Information (ContactPersonName, PhoneNo, AlternatePhoneNo, Email, GSTNO)
- *       3. Address (CountryId, StateId [cascading], City, ZipCode, Address1, Address2)
- *       4. Notes (Notes textarea)
- *       5. [Edit Mode Only] Approval & Audit info panel (read-only collapsed/muted card)
+ *       1. Vendor Details (VendorCode, VendorName, Account Status)
+ *       2. ERP Effective Dates & Master Revisions (VendorEffectiveDatesGrid)
+ *       3. Contact Information (ContactPersonName, Email, PhoneNo, AlternatePhoneNo, GSTIN, Website)
+ *       4. Address (CountryId, StateId [cascading], City, ZipCode, Address1, Address2)
+ *       5. Procurement & Quality Notes
+ *       6. Attachments & Supporting Documents
+ *       7. [Edit Mode Only] Approval & Audit info panel (read-only collapsed/muted card)
  *   - Dual action controls: Top header bar + Sticky bottom save bar.
  *   - On-blur and on-submit validation with inline error messaging.
  *   - Dirty form detection on Cancel navigation.
@@ -26,8 +28,7 @@ import {
   MapPin,
   FileText,
   ShieldCheck,
-  Calendar,
-  UserCheck,
+  Clock,
   AlertCircle,
   Paperclip,
   UploadCloud,
@@ -35,11 +36,8 @@ import {
   Trash2,
   Eye,
   Download,
-  Plus,
-  Check,
   ExternalLink,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
 
 import {
   Button,
@@ -54,9 +52,11 @@ import { useVendorsContext } from '../../context/VendorsContext';
 import {
   COUNTRY_OPTIONS,
   STATE_OPTIONS,
-  getCountryName,
-  getStateName,
 } from '../../mocks/vendors';
+import {
+  getTodayIsoDate,
+} from '../../utils/effectiveDateUtils';
+import VendorEffectiveDatesGrid from './VendorEffectiveDatesGrid';
 
 const DOCUMENT_TYPE_OPTIONS = [
   { value: 'GST Registration Certificate', label: 'GST Registration Certificate' },
@@ -102,12 +102,14 @@ function getFileIcon(fileName = '', fileType = '') {
 const INITIAL_FORM = {
   vendorCode: '',
   effectiveDate: new Date().toISOString().slice(0, 10),
+  effectiveDateHistory: [],
   vendorName: '',
   contactPersonName: '',
   phoneNo: '',
   alternatePhoneNo: '',
   email: '',
   gstNo: '',
+  website: '',
   countryId: 'IN',
   stateId: '',
   city: '',
@@ -125,9 +127,6 @@ function validateField(name, value) {
   switch (name) {
     case 'vendorCode':
       if (!str) return 'Vendor code is required.';
-      return '';
-    case 'effectiveDate':
-      if (!str) return 'Effective date is required.';
       return '';
     case 'vendorName':
       if (!str) return 'Vendor name is required.';
@@ -156,6 +155,11 @@ function validateField(name, value) {
         return 'GST number must be 15 alphanumeric characters.';
       }
       return '';
+    case 'website':
+      if (str && !/^https?:\/\/.+/i.test(str) && !/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(str)) {
+        return 'Enter a valid URL (e.g. https://www.company.com).';
+      }
+      return '';
     case 'countryId':
       if (!value) return 'Country is required.';
       return '';
@@ -181,13 +185,10 @@ function validateAll(form) {
   const errors = {};
   const requiredFields = [
     'vendorCode',
-    'effectiveDate',
     'vendorName',
     'contactPersonName',
     'phoneNo',
-    'alternatePhoneNo',
     'email',
-    'gstNo',
     'countryId',
     'stateId',
     'city',
@@ -199,6 +200,19 @@ function validateAll(form) {
     const err = validateField(field, form[field]);
     if (err) errors[field] = err;
   });
+
+  if (form.alternatePhoneNo) {
+    const err = validateField('alternatePhoneNo', form.alternatePhoneNo);
+    if (err) errors.alternatePhoneNo = err;
+  }
+  if (form.gstNo) {
+    const err = validateField('gstNo', form.gstNo);
+    if (err) errors.gstNo = err;
+  }
+  if (form.website) {
+    const err = validateField('website', form.website);
+    if (err) errors.website = err;
+  }
 
   return errors;
 }
@@ -232,19 +246,39 @@ export default function VendorFormPage() {
   const [previewItem, setPreviewItem] = useState(null);
   const fileInputRef = useRef(null);
 
-  // Initialize form state
+  const initializedIdRef = useRef(null);
+
+  // Initialize form state once per record / route
   useEffect(() => {
     if (isEdit) {
-      if (existingVendor) {
+      if (existingVendor && initializedIdRef.current !== id) {
+        initializedIdRef.current = id;
+        const initialHistory =
+          existingVendor.effectiveDateHistory && existingVendor.effectiveDateHistory.length > 0
+            ? [...existingVendor.effectiveDateHistory]
+            : [
+                {
+                  id: 'eff_init',
+                  revisionNo: 'REV-001',
+                  effectiveDate: existingVendor.effectiveDate || getTodayIsoDate(),
+                  status: 'ACTIVE',
+                  reason: 'Initial Vendor Registration & Master Setup',
+                  updatedBy: existingVendor.createdBy || 'Ian Chesnut',
+                  updatedOn: existingVendor.createdOn || `${getTodayIsoDate()} 10:00 AM`,
+                },
+              ];
+
         const data = {
           vendorCode: existingVendor.vendorCode || '',
-          effectiveDate: existingVendor.effectiveDate || '',
+          effectiveDate: existingVendor.effectiveDate || getTodayIsoDate(),
+          effectiveDateHistory: initialHistory,
           vendorName: existingVendor.vendorName || '',
           contactPersonName: existingVendor.contactPersonName || '',
           phoneNo: existingVendor.phoneNo || '',
           alternatePhoneNo: existingVendor.alternatePhoneNo || '',
           email: existingVendor.email || '',
           gstNo: existingVendor.gstNo || '',
+          website: existingVendor.website || '',
           countryId: existingVendor.countryId || 'IN',
           stateId: existingVendor.stateId || '',
           city: existingVendor.city || '',
@@ -257,19 +291,37 @@ export default function VendorFormPage() {
         };
         setForm(data);
         setInitialSnapshot(data);
+        setErrors({});
       }
     } else {
-      const generatedCode = getNextVendorCode();
-      const data = {
-        ...INITIAL_FORM,
-        vendorCode: generatedCode,
-        effectiveDate: new Date().toISOString().slice(0, 10),
-      };
-      setForm(data);
-      setInitialSnapshot(data);
+      if (initializedIdRef.current !== 'new') {
+        initializedIdRef.current = 'new';
+        const generatedCode = getNextVendorCode();
+        const today = getTodayIsoDate();
+        const initialHistory = [
+          {
+            id: `eff_${Date.now()}`,
+            revisionNo: 'REV-001',
+            effectiveDate: today,
+            status: 'ACTIVE',
+            reason: 'Initial Vendor Registration & Master Setup',
+            updatedBy: 'Ian Chesnut',
+            updatedOn: `${today} 10:00 AM`,
+          },
+        ];
+
+        const data = {
+          ...INITIAL_FORM,
+          vendorCode: generatedCode,
+          effectiveDate: today,
+          effectiveDateHistory: initialHistory,
+        };
+        setForm(data);
+        setInitialSnapshot(data);
+        setErrors({});
+      }
     }
-    setErrors({});
-  }, [isEdit, existingVendor, getNextVendorCode]);
+  }, [isEdit, id, existingVendor, getNextVendorCode]);
 
   // Cascading state options based on selected country
   const stateOptions = useMemo(() => {
@@ -281,6 +333,15 @@ export default function VendorFormPage() {
   const isDirty = useMemo(() => {
     return JSON.stringify(form) !== JSON.stringify(initialSnapshot);
   }, [form, initialSnapshot]);
+
+  function handleEffectiveGridChange({ effectiveDateHistory, effectiveDate }) {
+    setForm((prev) => ({
+      ...prev,
+      effectiveDateHistory,
+      effectiveDate: effectiveDate || prev.effectiveDate,
+    }));
+    setErrors((prev) => ({ ...prev, effectiveDate: '' }));
+  }
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -316,42 +377,24 @@ export default function VendorFormPage() {
     if (err) setErrors((prev) => ({ ...prev, [name]: err }));
   }
 
-  // Attachment upload and management handlers
+  // ── Attachment handling ──
   function handleFilesAdded(files) {
-    if (!files || files.length === 0) return;
-    setAttachmentError('');
-
-    const rawList = Array.from(files);
-    const validFiles = rawList.filter(isAllowedFile);
-    const rejectedCount = rawList.length - validFiles.length;
-
-    if (rejectedCount > 0) {
-      toast.error(
-        `${rejectedCount} file(s) ignored. Only PDF documents and image files (PNG, JPG, JPEG, WEBP) are allowed.`
-      );
-    }
-
+    const validFiles = Array.from(files).filter(isAllowedFile);
     if (validFiles.length === 0) {
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setAttachmentError('Only PDF and image files (PNG, JPG, WEBP) are allowed.');
       return;
     }
 
-    const activeDocName = selectedDocType;
+    setAttachmentError('');
 
     const newAttachments = validFiles.map((file, idx) => {
       const docName =
-        validFiles.length === 1
-          ? activeDocName || file.name.replace(/\.[^/.]+$/, '')
-          : `${activeDocName || 'Document'} (${idx + 1})`;
-
-      let fileUrl = '';
-      try {
-        fileUrl = URL.createObjectURL(file);
-      } catch {
-        fileUrl = '';
-      }
+        selectedDocType ||
+        file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') ||
+        'Vendor Document';
+      const fileUrl = file.type?.startsWith('image/')
+        ? URL.createObjectURL(file)
+        : null;
 
       return {
         id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${idx}`,
@@ -399,7 +442,6 @@ export default function VendorFormPage() {
       a.click();
       document.body.removeChild(a);
     } else {
-      // Mock download for seed data
       const blob = new Blob([`MicroFlat ERP Mock Document: ${att.documentName}\nFile: ${att.fileName}`], {
         type: 'text/plain;charset=utf-8',
       });
@@ -517,11 +559,6 @@ export default function VendorFormPage() {
             <Building2 className="h-6 w-6 text-primary" aria-hidden="true" />
             {isEdit ? `Edit Vendor: ${existingVendor?.vendorName}` : 'Add New Vendor'}
           </h1>
-          {/* <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-            {isEdit
-              ? `Update profile, commercial registration, and address details for ${existingVendor?.vendorCode}.`
-              : 'Enter supplier details, primary contact, billing address, and procurement notes.'}
-          </p> */}
         </div>
 
         {/* Top Action Buttons */}
@@ -554,61 +591,49 @@ export default function VendorFormPage() {
         <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-base">
             <Truck size={18} className="text-primary" aria-hidden="true" />
-            <span>1. Vendor Details</span>
+            <span>1. Vendor Master Details</span>
           </div>
           <span className="text-xs text-text-muted font-normal">
-            Basic classification & active status
+            Basic classification & active account status
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-          {/* Vendor Code */}
-          <Input
-            id="vendorCode"
-            name="vendorCode"
-            type="text"
-            label="Vendor Code"
-            placeholder="e.g. VEN-0007"
-            required
-            value={form.vendorCode}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.vendorCode}
-            hint="System-suggested sequence code (editable if needed)"
-            className="font-mono text-sm uppercase"
-          />
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            {/* Vendor Code */}
+            <Input
+              id="vendorCode"
+              name="vendorCode"
+              type="text"
+              label="Vendor Code"
+              placeholder="e.g. VEN-0007"
+              required
+              value={form.vendorCode}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              error={errors.vendorCode}
+              hint="System-suggested sequence code (editable if needed)"
+              className="font-mono text-sm uppercase"
+            />
 
-          {/* Effective Date */}
-          <Input
-            id="effectiveDate"
-            name="effectiveDate"
-            type="date"
-            label="Effective Date"
-            required
-            value={form.effectiveDate}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.effectiveDate}
-            hint="Date when vendor contract or onboarding takes effect"
-          />
-
-          {/* Vendor Name */}
-          <Input
-            id="vendorName"
-            name="vendorName"
-            type="text"
-            label="Vendor / Company Name"
-            placeholder="e.g. Apex Precision Castings Pvt Ltd"
-            required
-            value={form.vendorName}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.vendorName}
-            autoComplete="organization"
-          />
+            {/* Vendor Name */}
+            <Input
+              id="vendorName"
+              name="vendorName"
+              type="text"
+              label="Vendor / Company Name"
+              placeholder="e.g. Apex Precision Castings Pvt Ltd"
+              required
+              value={form.vendorName}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              error={errors.vendorName}
+              autoComplete="organization"
+            />
+          </div>
 
           {/* Status Switch */}
-          <div className="flex flex-col justify-between">
+          <div className="flex flex-col justify-between pt-2 border-t border-border/70">
             <label className="text-sm font-medium text-heading block leading-none mb-2">
               Account Status <span className="text-danger" aria-hidden="true">*</span>
             </label>
@@ -620,7 +645,7 @@ export default function VendorFormPage() {
               />
               <span className="text-xs text-text-muted">
                 {form.isActive
-                  ? 'Vendor is active and eligible for new purchase orders.'
+                  ? 'Vendor is active and eligible for new purchase orders and quotes.'
                   : 'Vendor is inactive and temporarily blocked from PO creation.'}
               </span>
             </div>
@@ -628,15 +653,36 @@ export default function VendorFormPage() {
         </div>
       </Card>
 
-      {/* ── SECTION 2: CONTACT INFORMATION ── */}
+      {/* ── SECTION 2: ERP EFFECTIVE DATES & MASTER REVISIONS GRID ── */}
+      <Card padding="md" className="bg-bg">
+        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-heading font-semibold text-base">
+            <Clock size={18} className="text-primary" aria-hidden="true" />
+            <span>2. ERP Effective Dates & Master Revisions</span>
+          </div>
+          <span className="text-xs text-text-muted font-normal">
+            Temporal effective date management & version history
+          </span>
+        </div>
+
+        <VendorEffectiveDatesGrid
+          history={form.effectiveDateHistory}
+          currentEffectiveDate={form.effectiveDate}
+          onChange={handleEffectiveGridChange}
+          editable={true}
+          vendorCode={form.vendorCode}
+        />
+      </Card>
+
+      {/* ── SECTION 3: CONTACT INFORMATION ── */}
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-base">
             <Contact size={18} className="text-primary" aria-hidden="true" />
-            <span>2. Contact Information</span>
+            <span>3. Contact Information</span>
           </div>
           <span className="text-xs text-text-muted font-normal">
-            Key personnel & communication details
+            Primary communication channel & tax identifier
           </span>
         </div>
 
@@ -706,31 +752,43 @@ export default function VendorFormPage() {
           />
 
           {/* GST Number */}
-          <div className="md:col-span-2">
-            <Input
-              id="gstNo"
-              name="gstNo"
-              type="text"
-              label="GST Identification Number (GSTIN)"
-              placeholder="e.g. 24AABCA1234F1Z5"
-              maxLength={15}
-              value={form.gstNo}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              error={errors.gstNo}
-              hint="15-character alphanumeric tax identifier (auto-capitalized)"
-              className="font-mono uppercase max-w-md"
-            />
-          </div>
+          <Input
+            id="gstNo"
+            name="gstNo"
+            type="text"
+            label="GST Identification Number (GSTIN)"
+            placeholder="e.g. 24AABCA1234F1Z5"
+            maxLength={15}
+            value={form.gstNo}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.gstNo}
+            hint="15-character alphanumeric tax identifier (auto-capitalized)"
+            className="font-mono uppercase"
+          />
+
+          {/* Website Link (Optional) */}
+          <Input
+            id="website"
+            name="website"
+            type="url"
+            label="Website / Company URL"
+            placeholder="https://www.company.com (optional)"
+            value={form.website}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.website}
+            hint="Optional company website or vendor portal link"
+          />
         </div>
       </Card>
 
-      {/* ── SECTION 3: ADDRESS ── */}
+      {/* ── SECTION 4: ADDRESS ── */}
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-base">
             <MapPin size={18} className="text-primary" aria-hidden="true" />
-            <span>3. Address & Location</span>
+            <span>4. Address & Location</span>
           </div>
           <span className="text-xs text-text-muted font-normal">
             Billing & dispatch registered location
@@ -759,17 +817,22 @@ export default function VendorFormPage() {
             id="stateId"
             name="stateId"
             label="State / Province"
-            placeholder={form.countryId ? 'Select state/province...' : 'Select country first'}
+            placeholder={
+              !form.countryId
+                ? 'Select country first...'
+                : stateOptions.length === 0
+                  ? 'No states available'
+                  : 'Select state...'
+            }
             searchPlaceholder="Search states..."
-            emptyText="No states found for selected country"
+            emptyText="No states found"
             required
-            disabled={!form.countryId || stateOptions.length === 0}
             options={stateOptions}
             value={form.stateId}
             onChange={handleChange}
             onBlur={handleBlur}
             error={errors.stateId}
-            hint={!form.countryId ? 'Choose a country to enable states' : undefined}
+            disabled={!form.countryId || stateOptions.length === 0}
           />
 
           {/* City */}
@@ -777,8 +840,8 @@ export default function VendorFormPage() {
             id="city"
             name="city"
             type="text"
-            label="City / Town"
-            placeholder="e.g. Vallabh Vidyanagar"
+            label="City"
+            placeholder="e.g. Ahmedabad"
             required
             value={form.city}
             onChange={handleChange}
@@ -787,19 +850,20 @@ export default function VendorFormPage() {
             autoComplete="address-level2"
           />
 
-          {/* Zip / Postal Code */}
+          {/* Postal / Zip Code */}
           <Input
             id="zipCode"
             name="zipCode"
             type="text"
             label="Postal / Zip Code"
-            placeholder="e.g. 388120"
+            placeholder="e.g. 380015"
             required
+            maxLength={6}
             value={form.zipCode}
             onChange={handleChange}
             onBlur={handleBlur}
             error={errors.zipCode}
-            className="font-mono"
+            className="font-mono tabular-nums"
             autoComplete="postal-code"
           />
 
@@ -810,7 +874,7 @@ export default function VendorFormPage() {
               name="address1"
               type="text"
               label="Address Line 1"
-              placeholder="Building, street, plot number, industrial area"
+              placeholder="e.g. Plot No. 42, GIDC Phase II"
               required
               value={form.address1}
               onChange={handleChange}
@@ -827,7 +891,7 @@ export default function VendorFormPage() {
               name="address2"
               type="text"
               label="Address Line 2 (Optional)"
-              placeholder="Landmark, suite, unit, floor"
+              placeholder="e.g. Near ABC Circle, Vatva Industrial Estate"
               value={form.address2}
               onChange={handleChange}
               onBlur={handleBlur}
@@ -838,12 +902,12 @@ export default function VendorFormPage() {
         </div>
       </Card>
 
-      {/* ── SECTION 4: NOTES ── */}
+      {/* ── SECTION 5: PROCUREMENT & QUALITY NOTES ── */}
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-base">
             <FileText size={18} className="text-primary" aria-hidden="true" />
-            <span>4. Procurement & Quality Notes</span>
+            <span>5. Procurement & Quality Notes</span>
           </div>
           <span className="text-xs text-text-muted font-normal">
             Optional supplier remarks
@@ -866,12 +930,12 @@ export default function VendorFormPage() {
         </div>
       </Card>
 
-      {/* ── SECTION 5: ATTACHMENTS & SUPPORTING DOCUMENTS ── */}
+      {/* ── SECTION 6: ATTACHMENTS & SUPPORTING DOCUMENTS ── */}
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-3 mb-5 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-heading font-semibold text-base">
             <Paperclip size={18} className="text-primary" aria-hidden="true" />
-            <span>5. Attachments & Supporting Documents</span>
+            <span>6. Attachments & Supporting Documents</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-text-muted font-normal">
@@ -1031,7 +1095,7 @@ export default function VendorFormPage() {
         </div>
       </Card>
 
-      {/* ── SECTION 6 (EDIT MODE ONLY): READ-ONLY APPROVAL & AUDIT PANEL ── */}
+      {/* ── SECTION 7 (EDIT MODE ONLY): READ-ONLY APPROVAL & AUDIT PANEL ── */}
       {isEdit && existingVendor && (
         <Card padding="md" className="bg-surface/50 border-border/80">
           <button
@@ -1226,4 +1290,3 @@ export default function VendorFormPage() {
     </form>
   );
 }
-
