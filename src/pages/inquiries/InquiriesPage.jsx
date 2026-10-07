@@ -1,5 +1,7 @@
 /**
- * VendorsPage — Vendor management dashboard for MicroFlat ERP.
+ * InquiriesPage.jsx — Inquiry management dashboard for MicroFlat ERP.
+ *
+ * Route: /inquiries
  */
 
 import { useMemo, useState, useEffect } from 'react';
@@ -17,13 +19,14 @@ import {
   Plus,
   ChevronUp,
   ChevronDown,
-  Trash2,
-  Pencil,
-  Phone,
-  MapPin,
+  Eye,
+  UserPlus,
   SearchX,
   RotateCcw,
-  Truck,
+  Inbox,
+  Calendar,
+  Building2,
+  Trash2,
 } from 'lucide-react';
 
 import {
@@ -36,60 +39,55 @@ import {
   Th,
   Td,
 } from '../../components/ui';
-import { useVendorsContext } from '../../context/VendorsContext';
-import { getStateName } from '../../mocks/vendors';
+import { useInquiriesContext } from '../../context/InquiriesContext';
+import { useUsersContext } from '../../context/UsersContext';
 import {
-  getEffectiveDateStatus,
-  formatDateDisplay,
-} from '../../utils/effectiveDateUtils';
+  REGION_OPTIONS,
+  STATUS_OPTIONS,
+  PRIORITY_OPTIONS,
+  getRegionName,
+  getStatusOption,
+  getPriorityBadgeVariant,
+} from '../../mocks/inquiries';
+import AssignInquiryModal from './components/AssignInquiryModal';
 
 const columnHelper = createColumnHelper();
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'INACTIVE', label: 'Inactive' },
+  ...STATUS_OPTIONS.map((s) => ({ value: s.id, label: s.name })),
 ];
 
-const APPROVAL_FILTER_OPTIONS = [
-  { value: 'ALL', label: 'All Approvals' },
-  { value: 'Approved', label: 'Approved' },
-  { value: 'Pending', label: 'Pending' },
-  { value: 'Rejected', label: 'Rejected' },
+const PRIORITY_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Priorities' },
+  ...PRIORITY_OPTIONS.map((p) => ({ value: p.value, label: p.label })),
 ];
 
-function getApprovalBadgeVariant(status) {
-  switch (status) {
-    case 'Approved':
-      return 'approved';
-    case 'Pending':
-      return 'pending';
-    case 'Rejected':
-      return 'rejected';
-    default:
-      return 'neutral';
-  }
-}
-
-export default function VendorsPage() {
+export default function InquiriesPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const {
-    vendors,
+    inquiries,
+    allInquiries,
     search,
     setSearch,
     statusFilter,
     setStatusFilter,
-    approvalFilter,
-    setApprovalFilter,
+    priorityFilter,
+    setPriorityFilter,
     resetFilters,
-    deleteVendor,
-  } = useVendorsContext();
+    deleteInquiry,
+  } = useInquiriesContext();
 
-  const hasActiveFilters = Boolean(
-    search.trim() || statusFilter !== 'ALL' || approvalFilter !== 'ALL'
-  );
+  const { allUsers = [], users = [] } = useUsersContext();
+  const userList = allUsers.length > 0 ? allUsers : users;
 
+  // Modals state
+  const [assignModalInquiry, setAssignModalInquiry] = useState(null);
+  const [inquiryToDelete, setInquiryToDelete] = useState(null);
+
+  // TanStack table state
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
   const [pagination, setPagination] = useState({
@@ -97,209 +95,188 @@ export default function VendorsPage() {
     pageSize: 10,
   });
   const [loading] = useState(false);
-  const [vendorToDelete, setVendorToDelete] = useState(null);
 
-  const [searchParams] = useSearchParams();
+  // Helper to resolve user names from user IDs
+  const resolveUserName = (userId) => {
+    if (!userId) return 'Unassigned';
+    const found = userList.find((u) => u.id === userId);
+    return found ? `${found.firstName} ${found.lastName}` : 'Unassigned';
+  };
 
-  // Sync query parameters on mount / route changes
+  const hasActiveFilters = Boolean(
+    search.trim() || statusFilter !== 'ALL' || priorityFilter !== 'ALL'
+  );
+
+  // Sync search parameters from URL if any
   useEffect(() => {
-    const hasStatus = searchParams.has('status');
-    const hasApproval = searchParams.has('approval') || searchParams.has('approvalStatus');
-    const hasSearch = searchParams.has('search');
-    const resetParam = searchParams.get('reset') || searchParams.get('filter');
+    const s = searchParams.get('status');
+    const q = searchParams.get('search');
+    if (s) setStatusFilter(s);
+    if (q) setSearch(q);
+  }, [searchParams, setStatusFilter, setSearch]);
 
-    if (resetParam === 'true' || resetParam === 'ALL' || resetParam === 'all') {
-      resetFilters();
-      return;
-    }
-
-    if (hasStatus) {
-      const rawStatus = searchParams.get('status') || '';
-      const upper = rawStatus.toUpperCase();
-      if (upper === 'ACTIVE' || upper === 'TRUE') {
-        setStatusFilter('ACTIVE');
-      } else if (upper === 'INACTIVE' || upper === 'FALSE') {
-        setStatusFilter('INACTIVE');
-      } else if (upper === 'ALL') {
-        setStatusFilter('ALL');
-      }
-    }
-
-    if (hasApproval) {
-      const rawApproval = searchParams.get('approval') || searchParams.get('approvalStatus') || '';
-      const lower = rawApproval.toLowerCase();
-      if (lower === 'approved') {
-        setApprovalFilter('Approved');
-      } else if (lower === 'pending') {
-        setApprovalFilter('Pending');
-      } else if (lower === 'rejected') {
-        setApprovalFilter('Rejected');
-      } else if (lower === 'all') {
-        setApprovalFilter('ALL');
-      }
-    }
-
-    if (hasSearch) {
-      setSearch(searchParams.get('search') || '');
-    }
-  }, [searchParams, setStatusFilter, setApprovalFilter, setSearch, resetFilters]);
-
-  // Reset pagination to page 1 when search or filters change
+  // Reset pagination on filter changes
   useEffect(() => {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-  }, [search, statusFilter, approvalFilter]);
+  }, [search, statusFilter, priorityFilter]);
 
-  /* ── Column definitions for desktop table ── */
+  /* ── Column Definitions for TanStack Table ── */
   const columns = useMemo(
     () => [
-      /* 1. VENDOR CODE */
-      columnHelper.accessor('vendorCode', {
-        header: 'VENDOR CODE',
+      /* 1. INQUIRY NO */
+      columnHelper.accessor('InquiryNo', {
+        header: 'INQUIRY NO',
         minSize: 140,
-        size: 150,
+        size: 155,
         cell: (info) => {
           const row = info.row.original;
           return (
             <Link
-              to={`/vendors/${row.id}/effective-dates`}
-              className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
+              to={`/inquiries/${row.id || row.InquiryId}`}
+              className="font-mono text-xs font-bold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
             >
-              {row.vendorCode}
+              {row.InquiryNo}
             </Link>
           );
         },
       }),
 
-      /* 2. VENDOR NAME & CONTACT PERSON */
-      columnHelper.accessor((row) => `${row.vendorName} ${row.contactPersonName}`, {
-        id: 'vendorName',
-        header: 'VENDOR & CONTACT',
-        minSize: 240,
-        size: 280,
+      /* 2. CUSTOMER / CONTACT */
+      columnHelper.accessor(
+        (row) => `${row.CustomerName} ${row.ContactPerson} ${row.Email}`,
+        {
+          id: 'customerContact',
+          header: 'CUSTOMER / CONTACT',
+          minSize: 220,
+          size: 260,
+          cell: (info) => {
+            const row = info.row.original;
+            return (
+              <div className="flex flex-col py-0.5 max-w-xs">
+                <Link
+                  to={`/inquiries/${row.id || row.InquiryId}`}
+                  className="font-semibold text-heading text-sm leading-snug hover:text-primary transition-colors truncate"
+                >
+                  {row.CustomerName}
+                </Link>
+                <span className="text-text-muted text-xs leading-normal truncate">
+                  {row.ContactPerson || '—'} {row.Email ? `• ${row.Email}` : ''}
+                </span>
+              </div>
+            );
+          },
+        }
+      ),
+
+      /* 3. SUBJECT */
+      columnHelper.accessor('Subject', {
+        header: 'SUBJECT',
+        minSize: 200,
+        size: 250,
         cell: (info) => {
-          const row = info.row.original;
+          const subject = info.getValue();
           return (
-            <div className="flex flex-col py-0.5">
-              <Link
-                to={`/vendors/${row.id}/effective-dates`}
-                className="font-semibold text-heading text-sm leading-snug hover:text-primary transition-colors truncate text-left cursor-pointer"
-              >
-                {row.vendorName}
-              </Link>
-              <span className="text-text-muted text-xs leading-normal truncate">
-                {row.contactPersonName} {row.email ? `• ${row.email}` : ''}
-              </span>
-            </div>
+            <span
+              className="text-xs text-text font-medium line-clamp-1"
+              title={subject}
+            >
+              {subject || '—'}
+            </span>
           );
         },
       }),
 
-      /* 3. PHONE NO */
-      columnHelper.accessor('phoneNo', {
-        header: 'PHONE NO',
+      /* 4. REGION */
+      columnHelper.accessor('RegionId', {
+        header: 'REGION',
         minSize: 130,
         size: 150,
         cell: (info) => {
-          const phone = info.getValue();
+          const regionId = info.getValue();
+          const regionLabel = getRegionName(regionId);
           return (
-            <span className="font-mono tabular-nums text-xs text-text-muted">
-              {phone || '—'}
+            <span className="text-xs text-text-muted truncate block" title={regionLabel}>
+              {regionLabel}
             </span>
           );
         },
       }),
 
-      /* 4. CITY / STATE */
-      columnHelper.accessor((row) => `${row.city}, ${getStateName(row.countryId, row.stateId)}`, {
-        id: 'cityState',
-        header: 'CITY / STATE',
-        minSize: 150,
-        size: 180,
+      /* 5. PRIORITY */
+      columnHelper.accessor('Priority', {
+        header: 'PRIORITY',
+        minSize: 105,
+        size: 115,
         cell: (info) => {
-          const row = info.row.original;
-          const state = getStateName(row.countryId, row.stateId);
+          const priority = info.getValue() || 'Medium';
           return (
-            <span className="text-xs text-text truncate block">
-              {row.city ? `${row.city}, ${state}` : state || '—'}
-            </span>
-          );
-        },
-      }),
-
-      /* 5. EFFECTIVE DATE */
-      columnHelper.accessor((row) => row.effectiveDate || '', {
-        id: 'effectiveDate',
-        header: 'EFFECTIVE DATE',
-        minSize: 145,
-        size: 165,
-        cell: (info) => {
-          const row = info.row.original;
-          const statusInfo = getEffectiveDateStatus(row.effectiveDate);
-          return (
-            <div className="flex flex-col py-0.5 gap-1">
-              <span className="font-mono text-xs text-heading font-medium">
-                {formatDateDisplay(row.effectiveDate)}
-              </span>
-              <div>
-                <Badge variant={statusInfo.badgeVariant} className="text-[10px] px-1.5 py-0">
-                  {statusInfo.label}
-                </Badge>
-              </div>
-            </div>
-          );
-        },
-      }),
-
-      /* 6. STATUS */
-      columnHelper.accessor('isActive', {
-        header: 'STATUS',
-        minSize: 120,
-        size: 140,
-        cell: (info) => {
-          const row = info.row.original;
-          const isActive = row.isActive;
-          return (
-            <span
-              className={[
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none',
-                isActive
-                  ? 'bg-success/10 text-success border border-success/20'
-                  : 'bg-danger/10 text-danger border border-danger/20',
-              ].join(' ')}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isActive ? 'bg-success' : 'bg-danger'
-                }`}
-                aria-hidden="true"
-              />
-              {isActive ? 'Active' : 'Inactive'}
-            </span>
-          );
-        },
-      }),
-
-      /* 7. APPROVAL STATUS */
-      columnHelper.accessor('approvalStatus', {
-        header: 'APPROVAL',
-        minSize: 120,
-        size: 130,
-        cell: (info) => {
-          const status = info.getValue() || 'Pending';
-          return (
-            <Badge variant={getApprovalBadgeVariant(status)}>
-              {status}
+            <Badge variant={getPriorityBadgeVariant(priority)} className="text-[11px] px-2 py-0.5">
+              {priority}
             </Badge>
           );
         },
       }),
 
-      /* 8. ACTIONS */
+      /* 6. STATUS */
+      columnHelper.accessor('StatusId', {
+        header: 'STATUS',
+        minSize: 125,
+        size: 140,
+        cell: (info) => {
+          const statusId = info.getValue() || 'New';
+          const statusInfo = getStatusOption(statusId);
+          return (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border ${statusInfo.badgeClass}`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`} aria-hidden="true" />
+              {statusInfo.name}
+            </span>
+          );
+        },
+      }),
+
+      /* 7. ASSIGNED TO */
+      columnHelper.accessor('AssignedTo', {
+        header: 'ASSIGNED TO',
+        minSize: 140,
+        size: 160,
+        cell: (info) => {
+          const assignedId = info.getValue();
+          const resolvedName = resolveUserName(assignedId);
+          const isUnassigned = !assignedId || resolvedName === 'Unassigned';
+
+          return isUnassigned ? (
+            <span className="text-xs text-text-muted italic">Unassigned</span>
+          ) : (
+            <span className="text-xs font-medium text-heading">
+              {resolvedName}
+            </span>
+          );
+        },
+      }),
+
+      /* 8. CREATED ON */
+      columnHelper.accessor('CreatedOn', {
+        header: 'CREATED ON',
+        minSize: 140,
+        size: 150,
+        cell: (info) => {
+          const createdOn = info.getValue() || '—';
+          return (
+            <span className="font-mono tabular-nums text-xs text-text-muted whitespace-nowrap">
+              {createdOn}
+            </span>
+          );
+        },
+      }),
+
+      /* 9. ACTIONS */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 110,
-        size: 120,
+        minSize: 100,
+        size: 110,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -307,38 +284,38 @@ export default function VendorsPage() {
 
           return (
             <div className="flex items-center justify-end gap-1">
-              {/* Edit Ghost Button */}
+              {/* View Button */}
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => navigate(`/vendors/${row.id}/effective-dates`)}
-                title="Edit vendor"
+                onClick={() => navigate(`/inquiries/${row.id || row.InquiryId}`)}
+                title="View Inquiry Details"
                 className="text-text-muted hover:text-primary hover:bg-surface"
               >
-                <Pencil size={15} aria-hidden="true" />
+                <Eye size={15} aria-hidden="true" />
               </Button>
 
-              {/* Delete Ghost Button */}
+              {/* Assign / Reassign Button */}
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setVendorToDelete(row)}
-                title="Delete vendor"
-                className="text-text-muted hover:text-danger hover:bg-surface"
+                onClick={() => setAssignModalInquiry(row)}
+                title={row.AssignedTo ? 'Reassign Inquiry' : 'Assign Inquiry'}
+                className="text-text-muted hover:text-primary hover:bg-surface"
               >
-                <Trash2 size={15} aria-hidden="true" />
+                <UserPlus size={15} aria-hidden="true" />
               </Button>
             </div>
           );
         },
       }),
     ],
-    [navigate]
+    [navigate, userList]
   );
 
   /* ── React Table Instance ── */
   const table = useReactTable({
-    data: vendors,
+    data: inquiries,
     columns,
     state: {
       sorting,
@@ -355,18 +332,17 @@ export default function VendorsPage() {
     getPaginationRowModel: getPaginationRowModel(),
   });
 
-  const totalRows = vendors.length;
+  const totalRows = inquiries.length;
   const currentPage = pagination.pageIndex;
   const pageSize = pagination.pageSize;
   const startRow = totalRows === 0 ? 0 : currentPage * pageSize + 1;
   const endRow = Math.min((currentPage + 1) * pageSize, totalRows);
   const pageCount = table.getPageCount();
 
-  /* ── Delete Handler ── */
   function handleDeleteConfirm() {
-    if (!vendorToDelete) return;
-    deleteVendor(vendorToDelete.id);
-    setVendorToDelete(null);
+    if (!inquiryToDelete) return;
+    deleteInquiry(inquiryToDelete.id || inquiryToDelete.InquiryId);
+    setInquiryToDelete(null);
   }
 
   return (
@@ -375,51 +351,40 @@ export default function VendorsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <Truck className="h-6 w-6 text-primary" aria-hidden="true" />
-            Vendor Management
+            <Inbox className="h-6 w-6 text-primary" aria-hidden="true" />
+            Inquiry Management
           </h1>
           <p className="text-xs text-text-muted mt-1">
-            Directory of approved suppliers, subcontractors, and material vendors.
+            Track customer RFQs, precision manufacturing enquiries, assignments & conversion status.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <Button
             variant="primary"
-            onClick={() => navigate('/vendors/new')}
+            onClick={() => navigate('/inquiries/new')}
             className="shadow-sm text-xs font-semibold"
           >
             <Plus size={16} className="mr-1.5" aria-hidden="true" />
-            Add Vendor
+            New Inquiry
           </Button>
         </div>
       </div>
 
-      {/* ── DESKTOP VIEW (md+): Full Table ── */}
+      {/* ── DESKTOP VIEW (md+): Table ── */}
       <div className="hidden md:block">
         <div className="bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
           {/* Toolbar */}
           <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3 flex-wrap">
-              <div className="w-full sm:w-72">
+              <div className="w-full sm:w-80">
                 <Input
-                  id="vendors-search"
+                  id="inquiries-search"
                   type="search"
-                  placeholder="Search by name, code, contact, city..."
+                  placeholder="Search by customer, inquiry no, subject, email..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   leftIcon={<Search size={16} aria-hidden="true" />}
-                />
-              </div>
-
-              <div className="w-full sm:w-48">
-                <SearchableSelect
-                  id="filter-approval"
-                  placeholder="All Approvals"
-                  searchPlaceholder="Search approvals..."
-                  options={APPROVAL_FILTER_OPTIONS}
-                  value={approvalFilter}
-                  onChange={(e) => setApprovalFilter(e.target.value)}
                 />
               </div>
 
@@ -427,10 +392,21 @@ export default function VendorsPage() {
                 <SearchableSelect
                   id="filter-status"
                   placeholder="All Statuses"
-                  searchPlaceholder="Search statuses..."
+                  searchPlaceholder="Search status..."
                   options={STATUS_FILTER_OPTIONS}
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
+                />
+              </div>
+
+              <div className="w-full sm:w-44">
+                <SearchableSelect
+                  id="filter-priority"
+                  placeholder="All Priorities"
+                  searchPlaceholder="Search priority..."
+                  options={PRIORITY_FILTER_OPTIONS}
+                  value={priorityFilter}
+                  onChange={(e) => setPriorityFilter(e.target.value)}
                 />
               </div>
 
@@ -461,7 +437,7 @@ export default function VendorsPage() {
                       <Th
                         key={header.id}
                         style={{ width: header.getSize() }}
-                        className={`relative py-3.5 px-6 select-none ${
+                        className={`relative py-3.5 px-5 select-none ${
                           canSort ? 'cursor-pointer hover:bg-surface' : ''
                         }`}
                       >
@@ -509,9 +485,9 @@ export default function VendorsPage() {
             <tbody className="divide-y divide-border bg-bg">
               {loading ? (
                 Array.from({ length: 5 }).map((_, rIdx) => (
-                  <tr key={`skeleton-${rIdx}`} className="animate-pulse">
+                  <tr key={`skel-${rIdx}`} className="animate-pulse">
                     {columns.map((_, cIdx) => (
-                      <td key={`skel-cell-${cIdx}`} className="py-4 px-6">
+                      <td key={`skel-c-${cIdx}`} className="py-4 px-5">
                         <div className="h-4 bg-surface rounded w-3/4" />
                       </td>
                     ))}
@@ -524,11 +500,11 @@ export default function VendorsPage() {
                       <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center text-text-muted mb-3">
                         <SearchX size={24} className="opacity-60" aria-hidden="true" />
                       </div>
-                      <h4 className="text-sm font-semibold text-heading">No vendors match your search</h4>
+                      <h4 className="text-sm font-semibold text-heading">No inquiries match your criteria</h4>
                       <p className="text-xs text-text-muted mt-1 mb-4">
                         {hasActiveFilters
-                          ? 'Try clearing or changing your search filters to find what you are looking for.'
-                          : 'No vendors have been added yet.'}
+                          ? 'Try clearing or modifying your search and status filter chips.'
+                          : 'No inquiries have been registered yet.'}
                       </p>
                       {hasActiveFilters && (
                         <Button
@@ -550,7 +526,7 @@ export default function VendorsPage() {
                     className="hover:bg-surface/50 transition-colors duration-120 group"
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <Td key={cell.id} style={{ width: cell.column.getSize() }}>
+                      <Td key={cell.id} style={{ width: cell.column.getSize() }} className="px-5">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </Td>
                     ))}
@@ -563,7 +539,7 @@ export default function VendorsPage() {
           {/* Desktop Pagination */}
           <div className="px-6 py-4 bg-bg border-t border-border flex items-center justify-between">
             <p className="text-xs text-text-muted">
-              Showing <span className="font-medium text-heading">{startRow}-{endRow}</span> of <span className="font-medium text-heading">{totalRows}</span> vendors
+              Showing <span className="font-medium text-heading">{startRow}-{endRow}</span> of <span className="font-medium text-heading">{totalRows}</span> inquiries
             </p>
 
             <div className="flex items-center gap-2">
@@ -616,12 +592,12 @@ export default function VendorsPage() {
 
       {/* ── MOBILE VIEW (< md): Card List ── */}
       <div className="block md:hidden space-y-4">
-        {/* Mobile Filters */}
+        {/* Mobile Search & Filters */}
         <div className="bg-surface border border-border rounded-xl p-3.5 space-y-3 shadow-2xs">
           <Input
-            id="mobile-vendors-search"
+            id="mobile-inquiries-search"
             type="search"
-            placeholder="Search vendors..."
+            placeholder="Search inquiries..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             leftIcon={<Search size={16} aria-hidden="true" />}
@@ -629,18 +605,18 @@ export default function VendorsPage() {
 
           <div className="grid grid-cols-2 gap-2">
             <SearchableSelect
-              id="mobile-filter-approval"
-              placeholder="Approval"
-              options={APPROVAL_FILTER_OPTIONS}
-              value={approvalFilter}
-              onChange={(e) => setApprovalFilter(e.target.value)}
-            />
-            <SearchableSelect
               id="mobile-filter-status"
               placeholder="Status"
               options={STATUS_FILTER_OPTIONS}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
+            />
+            <SearchableSelect
+              id="mobile-filter-priority"
+              placeholder="Priority"
+              options={PRIORITY_FILTER_OPTIONS}
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
             />
           </div>
 
@@ -657,99 +633,95 @@ export default function VendorsPage() {
           )}
         </div>
 
-        {/* Mobile Cards List */}
+        {/* Mobile Cards */}
         <div className="space-y-3">
           {table.getRowModel().rows.length === 0 ? (
             <div className="p-8 text-center bg-surface border border-border rounded-xl">
               <SearchX size={24} className="mx-auto text-text-muted opacity-60 mb-2" />
-              <p className="text-xs font-semibold text-heading">No vendors found</p>
-              <p className="text-[11px] text-text-muted mt-0.5">Try changing your search terms</p>
+              <p className="text-xs font-semibold text-heading">No inquiries found</p>
+              <p className="text-[11px] text-text-muted mt-0.5">Try altering your search or status chip</p>
             </div>
           ) : (
             table.getRowModel().rows.map((row) => {
-              const vendor = row.original;
+              const inq = row.original;
+              const statusInfo = getStatusOption(inq.StatusId);
+              const assigneeName = resolveUserName(inq.AssignedTo);
+
               return (
                 <div
-                  key={vendor.id}
+                  key={inq.id || inq.InquiryId}
                   className="bg-surface border border-border rounded-xl p-4 shadow-2xs space-y-3"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs font-bold text-primary">
-                          {vendor.vendorCode}
+                          {inq.InquiryNo}
                         </span>
-                        <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
-                          {vendor.approvalStatus}
+                        <Badge variant={getPriorityBadgeVariant(inq.Priority)} className="text-[10px] px-1.5 py-0">
+                          {inq.Priority}
                         </Badge>
                       </div>
+
                       <Link
-                        to={`/vendors/${vendor.id}/effective-dates`}
+                        to={`/inquiries/${inq.id || inq.InquiryId}`}
                         className="block text-sm font-semibold text-heading leading-tight mt-1 hover:text-primary"
                       >
-                        {vendor.vendorName}
+                        {inq.CustomerName}
                       </Link>
-                      <p className="text-xs text-text-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
-                        <span>Contact: {vendor.contactPersonName}</span>
-                        <span>•</span>
-                        <span className="font-mono text-[11px] font-medium text-heading">
-                          Eff: {formatDateDisplay(vendor.effectiveDate)}
-                        </span>
+                      <p className="text-xs text-text font-medium mt-1 line-clamp-1">
+                        {inq.Subject}
                       </p>
                     </div>
 
                     <span
-                      className={[
-                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
-                        vendor.isActive
-                          ? 'bg-success/10 text-success border border-success/20'
-                          : 'bg-danger/10 text-danger border border-danger/20',
-                      ].join(' ')}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border shrink-0 ${statusInfo.badgeClass}`}
                     >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          vendor.isActive ? 'bg-success' : 'bg-danger'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {vendor.isActive ? 'Active' : 'Inactive'}
+                      <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`} />
+                      {statusInfo.name}
                     </span>
                   </div>
 
-                  {/* Contact & Location details */}
-                  <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
-                    <div className="flex items-center gap-2">
-                      <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                      <span className="font-mono tabular-nums">{vendor.phoneNo || '—'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                      <span className="truncate">
-                        {vendor.city ? `${vendor.city}, ${getStateName(vendor.countryId, vendor.stateId)}` : '—'}
+                  {/* Details summary */}
+                  <div className="space-y-1 text-xs text-text-muted pt-2 border-t border-border/50">
+                    <div className="flex items-center justify-between">
+                      <span>Assigned:</span>
+                      <span className="font-medium text-heading">
+                        {assigneeName}
                       </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Region:</span>
+                      <span className="truncate max-w-[180px]">
+                        {getRegionName(inq.RegionId)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between font-mono tabular-nums text-[11px]">
+                      <span>Date:</span>
+                      <span>{inq.InquiryDate}</span>
                     </div>
                   </div>
 
-                  {/* Action buttons footer */}
+                  {/* Actions footer */}
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`)}
+                      onClick={() => navigate(`/inquiries/${inq.id || inq.InquiryId}`)}
                       className="flex-1 text-xs"
                     >
-                      <Pencil size={13} className="mr-1.5" aria-hidden="true" />
-                      Edit
+                      <Eye size={13} className="mr-1.5" />
+                      View Details
                     </Button>
 
                     <Button
-                      variant="danger"
+                      variant="ghost"
                       size="sm"
-                      onClick={() => setVendorToDelete(vendor)}
-                      className="flex-1 text-xs"
+                      onClick={() => setAssignModalInquiry(inq)}
+                      className="flex-1 text-xs text-primary hover:bg-primary/10"
                     >
-                      <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
-                      Delete
+                      <UserPlus size={13} className="mr-1.5" />
+                      Assign
                     </Button>
                   </div>
                 </div>
@@ -784,26 +756,11 @@ export default function VendorsPage() {
         </div>
       </div>
 
-      {/* ── Delete Vendor Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={Boolean(vendorToDelete)}
-        onClose={() => setVendorToDelete(null)}
-        title="Delete Vendor"
-        confirmText="Delete Vendor"
-        variant="danger"
-        message={
-          vendorToDelete ? (
-            <p>
-              Are you sure you want to permanently delete{' '}
-              <strong className="text-heading font-semibold">{vendorToDelete.vendorName}</strong>{' '}
-              <span className="font-mono text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                {vendorToDelete.vendorCode}
-              </span>
-              ? This action cannot be undone.
-            </p>
-          ) : null
-        }
-        onConfirm={handleDeleteConfirm}
+      {/* ── Assign Inquiry Modal ── */}
+      <AssignInquiryModal
+        isOpen={Boolean(assignModalInquiry)}
+        onClose={() => setAssignModalInquiry(null)}
+        inquiry={assignModalInquiry}
       />
     </div>
   );

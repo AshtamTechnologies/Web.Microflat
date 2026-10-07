@@ -508,8 +508,8 @@ export default function VendorDashboardPage() {
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
                         <Link
-                          to={`/vendors/${vendor.id}`}
-                          state={{ from: '/vendors/dashboard', backLabel: 'Back to Vendor Dashboard' }}
+                          to={`/vendors/${vendor.id}/effective-dates`}
+                          state={{ from: '/vendors/dashboard', backLabel: 'Vendor Dashboard', readOnly: true }}
                           className="text-xs sm:text-sm font-semibold text-heading hover:text-primary transition-colors truncate"
                           title={vendor.vendorName}
                         >
@@ -591,7 +591,11 @@ export default function VendorDashboardPage() {
                 {recentlyAddedVendors.map((vendor) => (
                   <div
                     key={vendor.id}
-                    onClick={() => navigate(`/vendors/${vendor.id}`, { state: { from: '/vendors/dashboard', backLabel: 'Back to Vendor Dashboard' } })}
+                    onClick={() =>
+                      navigate(`/vendors/${vendor.id}/effective-dates`, {
+                        state: { from: '/vendors/dashboard', backLabel: 'Vendor Dashboard', readOnly: true },
+                      })
+                    }
                     className="px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between gap-2.5 sm:gap-3 hover:bg-surface/60 transition-colors cursor-pointer group"
                   >
                     <div className="min-w-0 flex-1 space-y-0.5">

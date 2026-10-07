@@ -1,10 +1,7 @@
-/**
- * useVendors — encapsulates all CRUD and state logic for the Vendor Management module.
- */
-
 import { useState, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { mockVendors } from '../../mocks/vendors';
+import { getActiveVendorVersion } from '../../utils/vendorVersions';
 
 let nextSeqNumber = mockVendors.length + 1;
 let nextIdNumber = mockVendors.length + 1;
@@ -28,11 +25,43 @@ export function useVendors() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [approvalFilter, setApprovalFilter] = useState('ALL');
 
+  /* ── Augmented vendors list with activeVersion spread ── */
+  const augmentedVendors = useMemo(() => {
+    return vendors.map((v) => {
+      const activeVersion = getActiveVendorVersion(v);
+      return {
+        ...v,
+        ...(activeVersion
+          ? {
+              effectiveDate: activeVersion.effectiveDate,
+              contactPersonName: activeVersion.contactPersonName,
+              phoneNo: activeVersion.phoneNo,
+              alternatePhoneNo: activeVersion.alternatePhoneNo,
+              gstNo: activeVersion.gstNo,
+              website: activeVersion.website,
+              email: activeVersion.email,
+              countryId: activeVersion.countryId,
+              stateId: activeVersion.stateId,
+              city: activeVersion.city,
+              zipCode: activeVersion.zipCode,
+              address1: activeVersion.address1,
+              address2: activeVersion.address2,
+              notes: activeVersion.notes,
+              attachments: activeVersion.attachments || v.attachments || [],
+            }
+          : {}),
+        activeVersion,
+        effectiveVersions: v.effectiveVersions || (activeVersion ? [activeVersion] : []),
+        id: v.id, // Preserve vendor header ID
+      };
+    });
+  }, [vendors]);
+
   /* ── Filtered vendors list ── */
   const filteredVendors = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    return vendors.filter((v) => {
+    return augmentedVendors.filter((v) => {
       // 1. Text Search Filter (VendorName, VendorCode, ContactPersonName, Email, City)
       if (q) {
         const matchesQuery =
@@ -61,7 +90,7 @@ export function useVendors() {
 
       return true;
     });
-  }, [vendors, search, statusFilter, approvalFilter]);
+  }, [augmentedVendors, search, statusFilter, approvalFilter]);
 
   /* ── Reset all filters ── */
   const resetFilters = useCallback(() => {
@@ -72,8 +101,8 @@ export function useVendors() {
 
   /* ── Get single vendor by id ── */
   const getVendorById = useCallback((id) => {
-    return vendors.find((v) => v.id === id);
-  }, [vendors]);
+    return augmentedVendors.find((v) => v.id === id);
+  }, [augmentedVendors]);
 
   /* ── Auto-generate next vendor code ── */
   const getNextVendorCode = useCallback(() => {
@@ -91,41 +120,35 @@ export function useVendors() {
 
     const effectiveDate = formData.effectiveDate || new Date().toISOString().slice(0, 10);
 
-    // Initialize effectiveDateHistory if not provided
-    const initialHistory = formData.effectiveDateHistory && formData.effectiveDateHistory.length > 0
-      ? formData.effectiveDateHistory
-      : [
-          {
-            id: `eff_${Date.now()}`,
-            revisionNo: 'REV-001',
-            effectiveDate,
-            status: 'ACTIVE',
-            reason: 'Initial Vendor Registration & Master Setup',
-            updatedBy: 'Ian Chesnut',
-            updatedOn: now,
-          },
-        ];
+    const initialVersion = {
+      id: `ver_${Date.now()}`,
+      effectiveDate,
+      contactPersonName: formData.contactPersonName?.trim() || '',
+      phoneNo: formData.phoneNo?.trim() || '',
+      alternatePhoneNo: formData.alternatePhoneNo?.trim() || '',
+      gstNo: formData.gstNo?.trim().toUpperCase() || '',
+      website: formData.website?.trim() || '',
+      email: formData.email?.trim() || '',
+      countryId: formData.countryId || 'IN',
+      stateId: formData.stateId || '',
+      city: formData.city?.trim() || '',
+      zipCode: formData.zipCode?.trim() || '',
+      address1: formData.address1?.trim() || '',
+      address2: formData.address2?.trim() || '',
+      notes: formData.notes?.trim() || '',
+      attachments: formData.attachments || [],
+      createdOn: now,
+      createdBy: 'Ian Chesnut',
+    };
+
+    const effectiveVersions = formData.effectiveVersions && formData.effectiveVersions.length > 0
+      ? formData.effectiveVersions
+      : [initialVersion];
 
     const newVendor = {
       id: `v${nextIdNumber++}`,
       vendorCode,
-      effectiveDate,
-      effectiveDateHistory: initialHistory,
       vendorName: formData.vendorName.trim(),
-      contactPersonName: formData.contactPersonName.trim(),
-      phoneNo: formData.phoneNo.trim(),
-      alternatePhoneNo: formData.alternatePhoneNo?.trim() || '',
-      gstNo: formData.gstNo?.trim().toUpperCase() || '',
-      website: formData.website?.trim() || '',
-      email: formData.email.trim(),
-      countryId: formData.countryId,
-      stateId: formData.stateId,
-      city: formData.city.trim(),
-      zipCode: formData.zipCode.trim(),
-      address1: formData.address1.trim(),
-      address2: formData.address2?.trim() || '',
-      notes: formData.notes?.trim() || '',
-      attachments: formData.attachments || [],
       isActive: formData.isActive !== undefined ? formData.isActive : true,
       approvalStatus: 'Pending',
       approvedBy: '',
@@ -135,6 +158,8 @@ export function useVendors() {
       createdOn: now,
       lastUpdatedBy: 'Ian Chesnut',
       lastUpdatedOn: now,
+      attachments: formData.attachments || [],
+      effectiveVersions,
     };
 
     setVendors((prev) => [newVendor, ...prev]);
@@ -155,10 +180,7 @@ export function useVendors() {
         updatedRecord = {
           ...v,
           ...formData,
-          effectiveDate: formData.effectiveDate || v.effectiveDate,
-          effectiveDateHistory: formData.effectiveDateHistory || v.effectiveDateHistory || [],
-          gstNo: formData.gstNo !== undefined ? formData.gstNo.trim().toUpperCase() : v.gstNo,
-          website: formData.website !== undefined ? formData.website.trim() : v.website,
+          effectiveVersions: formData.effectiveVersions || v.effectiveVersions || [],
           lastUpdatedBy: 'Ian Chesnut',
           lastUpdatedOn: now,
         };
@@ -168,6 +190,24 @@ export function useVendors() {
 
     toast.success('Vendor updated successfully.');
     return { ok: true, vendor: updatedRecord };
+  }, []);
+
+  /* ── Update Vendor Versions ── */
+  const updateVendorVersions = useCallback(async (vendorId, newVersionsArray, extraFields = {}) => {
+    const now = formatAuditTimestamp();
+    setVendors((prev) =>
+      prev.map((v) => {
+        if (v.id !== vendorId) return v;
+        return {
+          ...v,
+          ...extraFields,
+          effectiveVersions: newVersionsArray,
+          lastUpdatedBy: 'Ian Chesnut',
+          lastUpdatedOn: now,
+        };
+      })
+    );
+    return { ok: true };
   }, []);
 
   /* ── Toggle isActive ── */
@@ -195,7 +235,7 @@ export function useVendors() {
 
   return {
     vendors: filteredVendors,
-    allVendors: vendors,
+    allVendors: augmentedVendors,
     search,
     setSearch,
     statusFilter,
@@ -207,6 +247,7 @@ export function useVendors() {
     getNextVendorCode,
     createVendor,
     updateVendor: updateUserVendor,
+    updateVendorVersions,
     toggleStatus,
     deleteVendor,
   };

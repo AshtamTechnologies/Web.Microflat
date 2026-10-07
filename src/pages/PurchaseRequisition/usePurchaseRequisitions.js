@@ -70,7 +70,7 @@ export function usePurchaseRequisitions() {
         requiredDate: formData.requiredDate || '',
         priority: formData.priority || 'Normal',
         remarks: formData.remarks || '',
-        status: formData.status || 'Draft',
+        status: formData.status || 'Pending Approval',
         createdBy: formData.requestedBy || 'Current User',
         createdDate: now,
         modifiedBy: formData.requestedBy || 'Current User',
@@ -128,6 +128,72 @@ export function usePurchaseRequisitions() {
                   status: item.status || 'Pending',
                 }))
               : pr.items,
+          };
+          return updatedRecord;
+        }
+        return pr;
+      })
+    );
+
+    return updatedRecord;
+  }, []);
+
+  // Approve PR
+  const approvePR = useCallback((id, meta = {}) => {
+    const now = new Date().toISOString();
+    let updatedRecord = null;
+
+    setRequisitions((prev) =>
+      prev.map((pr) => {
+        if (
+          String(pr.prId).toLowerCase() === String(id).toLowerCase() ||
+          String(pr.prNumber).toLowerCase() === String(id).toLowerCase()
+        ) {
+          updatedRecord = {
+            ...pr,
+            status: 'Approved',
+            approvedBy: meta.approvedBy || 'Ian Chesnut',
+            approvedDate: now,
+            approvalRemarks: meta.remarks || '',
+            modifiedBy: meta.approvedBy || 'Ian Chesnut',
+            modifiedDate: now,
+            items: (pr.items || []).map((it) => ({
+              ...it,
+              status: 'Approved',
+            })),
+          };
+          return updatedRecord;
+        }
+        return pr;
+      })
+    );
+
+    return updatedRecord;
+  }, []);
+
+  // Reject PR
+  const rejectPR = useCallback((id, meta = {}) => {
+    const now = new Date().toISOString();
+    let updatedRecord = null;
+
+    setRequisitions((prev) =>
+      prev.map((pr) => {
+        if (
+          String(pr.prId).toLowerCase() === String(id).toLowerCase() ||
+          String(pr.prNumber).toLowerCase() === String(id).toLowerCase()
+        ) {
+          updatedRecord = {
+            ...pr,
+            status: 'Rejected',
+            rejectedBy: meta.rejectedBy || 'Ian Chesnut',
+            rejectedDate: now,
+            rejectionReason: meta.rejectionReason || '',
+            modifiedBy: meta.rejectedBy || 'Ian Chesnut',
+            modifiedDate: now,
+            items: (pr.items || []).map((it) => ({
+              ...it,
+              status: 'Rejected',
+            })),
           };
           return updatedRecord;
         }
@@ -222,6 +288,8 @@ export function usePurchaseRequisitions() {
     getNextPRNumber,
     createPR,
     updatePR,
+    approvePR,
+    rejectPR,
     deletePR,
   };
 }

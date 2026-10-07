@@ -10,7 +10,7 @@
  *   - Strictly theme tokens.
  */
 
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search, Check, X } from 'lucide-react';
 
@@ -45,9 +45,13 @@ export default function SearchableSelect({
   const hasError = Boolean(error);
 
   // Filter options based on search query
-  const filteredOptions = options.filter((opt) =>
-    opt.label.toLowerCase().includes(searchQuery.trim().toLowerCase())
-  );
+  const filteredOptions = useMemo(() => {
+    if (!searchQuery.trim()) return options;
+    const q = searchQuery.trim().toLowerCase();
+    return options.filter((opt) =>
+      String(opt.label || '').toLowerCase().includes(q)
+    );
+  }, [options, searchQuery]);
 
   // Measure trigger element and update fixed coordinates synchronously
   const updateCoords = useCallback(() => {
@@ -68,13 +72,12 @@ export default function SearchableSelect({
     }
   }, [isOpen, updateCoords]);
 
-  // Sync coords on window resize or scroll
+  // Handle open state lifecycle (reset search, auto-focus, attach scroll/resize listeners)
   useEffect(() => {
     if (isOpen) {
       setSearchQuery('');
-      setHighlightedIndex(
-        filteredOptions.findIndex((opt) => opt.value === value)
-      );
+      const selectedIdx = options.findIndex((opt) => opt.value === value);
+      setHighlightedIndex(selectedIdx >= 0 ? selectedIdx : 0);
 
       const handleScrollResize = () => updateCoords();
       window.addEventListener('resize', handleScrollResize);
@@ -93,7 +96,7 @@ export default function SearchableSelect({
     } else {
       setCoords(null);
     }
-  }, [isOpen, updateCoords, filteredOptions, value]);
+  }, [isOpen, updateCoords, options, value]);
 
   // Click outside to close
   useEffect(() => {
@@ -252,7 +255,10 @@ export default function SearchableSelect({
                 ref={searchInputRef}
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setHighlightedIndex(0);
+                }}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={searchPlaceholder}
                 className="w-full bg-transparent text-sm text-heading placeholder:text-text-muted outline-none py-0.5"
@@ -260,7 +266,10 @@ export default function SearchableSelect({
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchInputRef.current?.focus();
+                  }}
                   className="p-1 rounded text-text-muted hover:text-text cursor-pointer"
                   title="Clear search"
                 >

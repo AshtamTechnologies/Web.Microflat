@@ -7,8 +7,9 @@ import { UsersProvider } from './context/UsersContext';
 import VendorsPage from './pages/vendors/VendorsPage';
 import VendorDashboardPage from './pages/vendors/VendorDashboardPage';
 import VendorFormPage from './pages/vendors/VendorFormPage';
-import VendorViewPage from './pages/vendors/VendorViewPage';
 import VendorApprovalPage from './pages/approvals/VendorApprovalPage';
+import PurchaseRequisitionApprovalPage from './pages/approvals/PurchaseRequisitionApprovalPage';
+import VendorEffectiveDatesPage from './pages/vendors/VendorEffectiveDatesPage';
 import { VendorsProvider } from './context/VendorsContext';
 
 import PurchaseRequisition from './pages/PurchaseRequisition/PurchaseRequisition';
@@ -16,6 +17,12 @@ import PurchaseRequisitionCreate from './pages/PurchaseRequisition/PurchaseRequi
 import PurchaseRequisitionView from './pages/PurchaseRequisition/PurchaseRequisitionView';
 import PurchaseRequisitionEdit from './pages/PurchaseRequisition/PurchaseRequisitionEdit';
 import { PurchaseRequisitionProvider } from './context/PurchaseRequisitionContext';
+
+import InquiriesPage from './pages/inquiries/InquiriesPage';
+import InquiryFormPage from './pages/inquiries/InquiryFormPage';
+import InquiryViewPage from './pages/inquiries/InquiryViewPage';
+import { InquiriesProvider } from './context/InquiriesContext';
+import { InquiryDocumentsProvider } from './context/InquiryDocumentsContext';
 
 export default function App() {
   return (
@@ -32,7 +39,11 @@ export default function App() {
             <UsersProvider>
               <VendorsProvider>
                 <PurchaseRequisitionProvider>
-                  <AppLayout />
+                  <InquiriesProvider>
+                    <InquiryDocumentsProvider>
+                      <AppLayout />
+                    </InquiryDocumentsProvider>
+                  </InquiriesProvider>
                 </PurchaseRequisitionProvider>
               </VendorsProvider>
             </UsersProvider>
@@ -43,15 +54,23 @@ export default function App() {
           <Route path="/vendors" element={<VendorsPage />} />
           <Route path="/vendors/dashboard" element={<VendorDashboardPage />} />
           <Route path="/vendors/new" element={<VendorFormPage />} />
-          <Route path="/vendors/:id" element={<VendorViewPage />} />
+          <Route path="/vendors/:id" element={<VendorEffectiveDatesPage />} />
           <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
+          <Route path="/vendors/:id/effective-dates" element={<VendorEffectiveDatesPage />} />
           <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
+          <Route path="/approvals/purchase-requisitions" element={<PurchaseRequisitionApprovalPage />} />
 
           {/* Purchase Requisition Routes */}
           <Route path="/purchase-requisition" element={<PurchaseRequisition />} />
           <Route path="/purchase-requisition/create" element={<PurchaseRequisitionCreate />} />
           <Route path="/purchase-requisition/:id" element={<PurchaseRequisitionView />} />
           <Route path="/purchase-requisition/:id/edit" element={<PurchaseRequisitionEdit />} />
+
+          {/* Inquiry Routes */}
+          <Route path="/inquiries" element={<InquiriesPage />} />
+          <Route path="/inquiries/new" element={<InquiryFormPage />} />
+          <Route path="/inquiries/:id" element={<InquiryViewPage />} />
+          <Route path="/inquiries/:id/edit" element={<InquiryFormPage />} />
         </Route>
 
         {/* Default: redirect root to login */}

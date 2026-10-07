@@ -5,7 +5,7 @@
  */
 
 import { useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Pencil,
@@ -39,7 +39,15 @@ import {
 export default function PurchaseRequisitionView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { getPRById } = usePurchaseRequisitionContext();
+
+  const backPath = location.state?.from || '/purchase-requisition';
+  const backLabel = location.state?.backLabel || 'Back to Purchase Requisition';
+  const isReadOnly = Boolean(
+    location.state?.readOnly ||
+    location.state?.from === '/approvals/purchase-requisitions'
+  );
 
   const pr = useMemo(() => {
     return getPRById(id);
@@ -60,9 +68,9 @@ export default function PurchaseRequisitionView() {
           </p>
           <Button
             variant="primary"
-            onClick={() => navigate('/purchase-requisition')}
+            onClick={() => navigate(backPath)}
           >
-            Back to Requisition List
+            {backLabel}
           </Button>
         </Card>
       </div>
@@ -78,14 +86,14 @@ export default function PurchaseRequisitionView() {
       <div>
         <button
           type="button"
-          onClick={() => navigate('/purchase-requisition')}
+          onClick={() => navigate(backPath)}
           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-bg hover:bg-surface text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
         >
           <ArrowLeft
             size={14}
             className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
           />
-          <span>Back to Purchase Requisition</span>
+          <span>{backLabel}</span>
         </button>
       </div>
 
@@ -111,19 +119,21 @@ export default function PurchaseRequisitionView() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() =>
-              navigate(`/purchase-requisition/${pr.prNumber || pr.prId}/edit`)
-            }
-            className="font-semibold shadow-sm"
-          >
-            <Pencil size={15} className="mr-1.5" />
-            Edit Requisition
-          </Button>
-        </div>
+        {!isReadOnly && (
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() =>
+                navigate(`/purchase-requisition/${pr.prNumber || pr.prId}/edit`)
+              }
+              className="font-semibold shadow-sm"
+            >
+              <Pencil size={15} className="mr-1.5" />
+              Edit Requisition
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* ── Section 1: PR Information Card ── */}
@@ -196,18 +206,8 @@ export default function PurchaseRequisitionView() {
             </Badge>
           </div>
 
-          {/* Status */}
-          <div>
-            <span className="text-xs font-medium text-text-muted uppercase tracking-wider block mb-1">
-              Status
-            </span>
-            <Badge variant={statusVariant}>
-              {pr.status || 'Draft'}
-            </Badge>
-          </div>
-
           {/* Remarks */}
-          <div className="sm:col-span-2 md:col-span-2">
+          <div className="sm:col-span-2 md:col-span-3">
             <span className="text-xs font-medium text-text-muted uppercase tracking-wider block">
               Remarks
             </span>
@@ -236,88 +236,59 @@ export default function PurchaseRequisitionView() {
           <thead>
             <tr className="bg-surface border-b border-border">
               <Th className="w-[50px] text-center">#</Th>
-              <Th className="w-[150px]">Item Code</Th>
-              <Th className="w-[180px]">Item Name</Th>
-              <Th className="w-[220px]">Specification</Th>
-              <Th className="w-[100px] text-right">Quantity</Th>
-              <Th className="w-[80px]">UOM</Th>
-              <Th className="w-[120px]">Required Date</Th>
-              <Th className="w-[180px]">Remarks</Th>
-              <Th className="w-[110px] text-center">Status</Th>
+              <Th className="w-[160px]">Item Code</Th>
+              <Th className="w-[200px]">Item Name</Th>
+              <Th className="w-[260px]">Specification</Th>
+              <Th className="w-[120px] text-right">Quantity</Th>
+              <Th className="w-[100px]">UOM</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border bg-surface">
             {!pr.items || pr.items.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-8 text-center text-sm text-text-muted">
+                <td colSpan={6} className="py-8 text-center text-sm text-text-muted">
                   No items listed for this purchase requisition.
                 </td>
               </tr>
             ) : (
-              pr.items.map((item, index) => {
-                const itemStatusVariant =
-                  item.status?.toLowerCase() === 'approved'
-                    ? 'success'
-                    : item.status?.toLowerCase() === 'rejected'
-                    ? 'danger'
-                    : 'warning';
+              pr.items.map((item, index) => (
+                <tr
+                  key={item.prItemId || index}
+                  className="hover:bg-bg/50 transition-colors"
+                >
+                  {/* Index */}
+                  <Td className="text-center font-semibold text-text-muted">
+                    {index + 1}
+                  </Td>
 
-                return (
-                  <tr
-                    key={item.prItemId || index}
-                    className="hover:bg-bg/50 transition-colors"
-                  >
-                    {/* Index */}
-                    <Td className="text-center font-semibold text-text-muted">
-                      {index + 1}
-                    </Td>
+                  {/* Item Code */}
+                  <Td className="font-medium text-text">
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-bg border border-border">
+                      {item.itemCode || '--'}
+                    </span>
+                  </Td>
 
-                    {/* Item Code */}
-                    <Td className="font-medium text-text">
-                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-bg border border-border">
-                        {item.itemCode || '--'}
-                      </span>
-                    </Td>
+                  {/* Item Name */}
+                  <Td className="font-semibold text-heading">
+                    {item.itemName || '--'}
+                  </Td>
 
-                    {/* Item Name */}
-                    <Td className="font-semibold text-heading">
-                      {item.itemName || '--'}
-                    </Td>
+                  {/* Specification */}
+                  <Td className="text-text-muted text-xs">
+                    {item.specification || '--'}
+                  </Td>
 
-                    {/* Specification */}
-                    <Td className="text-text-muted text-xs">
-                      {item.specification || '--'}
-                    </Td>
+                  {/* Quantity */}
+                  <Td className="text-right font-bold text-heading font-mono tabular-nums">
+                    {Number(item.quantity).toLocaleString()}
+                  </Td>
 
-                    {/* Quantity */}
-                    <Td className="text-right font-bold text-heading">
-                      {item.quantity}
-                    </Td>
-
-                    {/* UOM */}
-                    <Td className="text-text-muted text-xs">
-                      {item.uom || 'Nos'}
-                    </Td>
-
-                    {/* Required Date */}
-                    <Td className="text-text-muted text-xs">
-                      {formatPRDate(item.requiredDate || pr.requiredDate)}
-                    </Td>
-
-                    {/* Remarks */}
-                    <Td className="text-text-muted text-xs">
-                      {item.remarks || '--'}
-                    </Td>
-
-                    {/* Status */}
-                    <Td className="text-center">
-                      <Badge variant={itemStatusVariant} className="text-[11px]">
-                        {item.status || 'Pending'}
-                      </Badge>
-                    </Td>
-                  </tr>
-                );
-              })
+                  {/* UOM */}
+                  <Td className="text-text-muted text-xs">
+                    {item.uom || 'Nos'}
+                  </Td>
+                </tr>
+              ))
             )}
           </tbody>
         </TableContainer>

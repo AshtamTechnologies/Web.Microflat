@@ -70,7 +70,6 @@ export const PRIORITY_OPTIONS = [
 ];
 
 export const STATUS_OPTIONS = [
-  { value: 'Draft', label: 'Draft' },
   { value: 'Pending Approval', label: 'Pending Approval' },
   { value: 'Approved', label: 'Approved' },
   { value: 'Rejected', label: 'Rejected' },
@@ -197,7 +196,7 @@ export const mockPurchaseRequisitions = [
     requiredDate: '2026-09-30',
     priority: 'Normal',
     remarks: 'Routine shop floor spares and electrical cabling stock replenishment.',
-    status: 'Draft',
+    status: 'Pending Approval',
     createdBy: 'Rahul Patel',
     createdDate: '2026-09-13T11:45:00',
     modifiedBy: 'Rahul Patel',

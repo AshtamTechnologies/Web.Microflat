@@ -23,6 +23,7 @@ import {
   Card,
   Input,
   Select,
+  SearchableSelect,
   Badge,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
@@ -32,7 +33,7 @@ import {
   REQUESTED_BY_OPTIONS,
   MOCK_MATERIALS,
 } from '../../mocks/purchaseRequisitions';
-import PRItemsEditor from './PRItemsEditor';
+import ItemsEditor from './components/ItemsEditor';
 
 export default function PurchaseRequisitionCreate() {
   const navigate = useNavigate();
@@ -49,25 +50,12 @@ export default function PurchaseRequisitionCreate() {
     department: DEPARTMENT_OPTIONS[0]?.value || 'Purchase',
     requiredDate: '',
     priority: 'Normal',
-    status: 'Draft',
+    status: 'Pending Approval',
     remarks: '',
   });
 
-  // Items State (initially one item with blank fields)
-  const [items, setItems] = useState([
-    {
-      prItemId: Date.now(),
-      itemId: '',
-      itemCode: '',
-      itemName: '',
-      specification: '',
-      quantity: '',
-      uom: 'Nos',
-      requiredDate: '',
-      remarks: '',
-      status: 'Pending',
-    },
-  ]);
+  // Items State (managed via ItemsEditor)
+  const [items, setItems] = useState([]);
 
   const [errors, setErrors] = useState({});
 
@@ -157,8 +145,8 @@ export default function PurchaseRequisitionCreate() {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Badge variant="neutral" className="px-3 py-1 text-xs">
-            Status: Draft
+          <Badge variant="warning" className="px-3 py-1 text-xs">
+            Pending Approval
           </Badge>
           <Badge variant="role" className="px-3 py-1 text-xs">
             {formData.prNumber}
@@ -190,9 +178,9 @@ export default function PurchaseRequisitionCreate() {
           </div>
         </div>
 
-        {/* Form Fields Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* PR Number */}
+        {/* Form Fields Grid: 3 columns per row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Row 1, Col 1: PR Number */}
           <div>
             <Input
               id="pr-number"
@@ -204,7 +192,7 @@ export default function PurchaseRequisitionCreate() {
             />
           </div>
 
-          {/* PR Date */}
+          {/* Row 1, Col 2: PR Date */}
           <div>
             <Input
               id="pr-date"
@@ -216,33 +204,35 @@ export default function PurchaseRequisitionCreate() {
             />
           </div>
 
-          {/* Requested By */}
+          {/* Row 1, Col 3: Requested By */}
           <div>
-            <Select
+            <SearchableSelect
               id="pr-requested-by"
               label="Requested By"
               required
               options={REQUESTED_BY_OPTIONS}
               value={formData.requestedBy}
               error={errors.requestedBy}
+              placeholder="Select requester..."
               onChange={(e) => handleFieldChange('requestedBy', e.target.value)}
             />
           </div>
 
-          {/* Department */}
+          {/* Row 2, Col 1: Department */}
           <div>
-            <Select
+            <SearchableSelect
               id="pr-department"
               label="Department"
               required
               options={DEPARTMENT_OPTIONS}
               value={formData.department}
               error={errors.department}
+              placeholder="Select department..."
               onChange={(e) => handleFieldChange('department', e.target.value)}
             />
           </div>
 
-          {/* Required Date */}
+          {/* Row 2, Col 2: Required Date */}
           <div>
             <Input
               id="pr-required-date"
@@ -255,32 +245,20 @@ export default function PurchaseRequisitionCreate() {
             />
           </div>
 
-          {/* Priority */}
+          {/* Row 2, Col 3: Priority */}
           <div>
-            <Select
+            <SearchableSelect
               id="pr-priority"
               label="Priority"
               options={PRIORITY_OPTIONS}
               value={formData.priority}
+              placeholder="Select priority..."
               onChange={(e) => handleFieldChange('priority', e.target.value)}
             />
           </div>
 
-          {/* Status (Read-only Draft) */}
-          <div className="md:col-span-2">
-            <label className="text-sm font-medium text-text leading-none block mb-1.5">
-              Initial Status
-            </label>
-            <div className="flex items-center gap-2 p-2.5 rounded-lg border border-border bg-border/20 text-sm">
-              <Badge variant="neutral">Draft</Badge>
-              <span className="text-xs text-text-muted">
-                Will be saved as Draft or set to Pending Approval when submitted.
-              </span>
-            </div>
-          </div>
-
-          {/* Remarks */}
-          <div className="md:col-span-2">
+          {/* Row 3: Remarks (Spans all 3 columns) */}
+          <div className="md:col-span-3">
             <label
               htmlFor="pr-remarks"
               className="text-sm font-medium text-text leading-none block mb-1.5"
@@ -300,10 +278,9 @@ export default function PurchaseRequisitionCreate() {
       </Card>
 
       {/* ── Section 2: Purchase Requisition Items ── */}
-      <PRItemsEditor
+      <ItemsEditor
         items={items}
-        onChangeItems={setItems}
-        defaultRequiredDate={formData.requiredDate}
+        onChange={setItems}
       />
 
       {/* ── Section 3: Bottom Form Actions ── */}

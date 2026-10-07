@@ -489,7 +489,11 @@ export default function VendorApprovalPage() {
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    onClick={() => navigate(`/vendors/${row.original.id}`)}
+                    onClick={() =>
+                      navigate(`/vendors/${row.original.id}/effective-dates`, {
+                        state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
+                      })
+                    }
                     className="hover:bg-surface/80 cursor-pointer transition-colors duration-120 bg-bg group/row"
                     title="Click row to view full vendor details"
                   >
@@ -529,7 +533,11 @@ export default function VendorApprovalPage() {
               return (
                 <div
                   key={vendor.id}
-                  onClick={() => navigate(`/vendors/${vendor.id}`)}
+                  onClick={() =>
+                    navigate(`/vendors/${vendor.id}/effective-dates`, {
+                      state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
+                    })
+                  }
                   className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3 hover:border-primary/40 cursor-pointer transition-colors"
                 >
                   <div className="flex items-start justify-between gap-2">

@@ -19,17 +19,17 @@ import {
   Card,
   Input,
   Select,
+  SearchableSelect,
   Badge,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
   DEPARTMENT_OPTIONS,
   PRIORITY_OPTIONS,
-  STATUS_OPTIONS,
   REQUESTED_BY_OPTIONS,
   getPRStatusBadgeVariant,
 } from '../../mocks/purchaseRequisitions';
-import PRItemsEditor from './PRItemsEditor';
+import ItemsEditor from './components/ItemsEditor';
 
 export default function PurchaseRequisitionEdit() {
   const { id } = useParams();
@@ -48,7 +48,7 @@ export default function PurchaseRequisitionEdit() {
     department: '',
     requiredDate: '',
     priority: 'Normal',
-    status: 'Draft',
+    status: 'Pending Approval',
     remarks: '',
   });
 
@@ -65,7 +65,7 @@ export default function PurchaseRequisitionEdit() {
         department: originalPR.department || '',
         requiredDate: originalPR.requiredDate ? originalPR.requiredDate.split('T')[0] : '',
         priority: originalPR.priority || 'Normal',
-        status: originalPR.status || 'Draft',
+        status: originalPR.status || 'Pending Approval',
         remarks: originalPR.remarks || '',
       });
       setItems(
@@ -74,20 +74,7 @@ export default function PurchaseRequisitionEdit() {
               ...it,
               requiredDate: it.requiredDate ? it.requiredDate.split('T')[0] : '',
             }))
-          : [
-              {
-                prItemId: Date.now(),
-                itemId: '',
-                itemCode: '',
-                itemName: '',
-                specification: '',
-                quantity: 1,
-                uom: 'Nos',
-                requiredDate: '',
-                remarks: '',
-                status: 'Pending',
-              },
-            ]
+          : []
       );
     }
   }, [originalPR]);
@@ -241,9 +228,9 @@ export default function PurchaseRequisitionEdit() {
           </div>
         </div>
 
-        {/* Form Fields Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* PR Number (Read Only) */}
+        {/* Form Fields Grid: 3 columns per row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Row 1, Col 1: PR Number (Read Only) */}
           <div>
             <Input
               id="edit-pr-number"
@@ -255,7 +242,7 @@ export default function PurchaseRequisitionEdit() {
             />
           </div>
 
-          {/* PR Date */}
+          {/* Row 1, Col 2: PR Date */}
           <div>
             <Input
               id="edit-pr-date"
@@ -267,33 +254,35 @@ export default function PurchaseRequisitionEdit() {
             />
           </div>
 
-          {/* Requested By */}
+          {/* Row 1, Col 3: Requested By */}
           <div>
-            <Select
+            <SearchableSelect
               id="edit-pr-requested-by"
               label="Requested By"
               required
               options={REQUESTED_BY_OPTIONS}
               value={formData.requestedBy}
               error={errors.requestedBy}
+              placeholder="Select requester..."
               onChange={(e) => handleFieldChange('requestedBy', e.target.value)}
             />
           </div>
 
-          {/* Department */}
+          {/* Row 2, Col 1: Department */}
           <div>
-            <Select
+            <SearchableSelect
               id="edit-pr-department"
               label="Department"
               required
               options={DEPARTMENT_OPTIONS}
               value={formData.department}
               error={errors.department}
+              placeholder="Select department..."
               onChange={(e) => handleFieldChange('department', e.target.value)}
             />
           </div>
 
-          {/* Required Date */}
+          {/* Row 2, Col 2: Required Date */}
           <div>
             <Input
               id="edit-pr-required-date"
@@ -306,30 +295,20 @@ export default function PurchaseRequisitionEdit() {
             />
           </div>
 
-          {/* Priority */}
+          {/* Row 2, Col 3: Priority */}
           <div>
-            <Select
+            <SearchableSelect
               id="edit-pr-priority"
               label="Priority"
               options={PRIORITY_OPTIONS}
               value={formData.priority}
+              placeholder="Select priority..."
               onChange={(e) => handleFieldChange('priority', e.target.value)}
             />
           </div>
 
-          {/* Status Selector */}
-          <div className="md:col-span-2">
-            <Select
-              id="edit-pr-status"
-              label="Requisition Status"
-              options={STATUS_OPTIONS}
-              value={formData.status}
-              onChange={(e) => handleFieldChange('status', e.target.value)}
-            />
-          </div>
-
-          {/* Remarks */}
-          <div className="md:col-span-2">
+          {/* Row 3: Remarks (Spans all 3 columns) */}
+          <div className="md:col-span-3">
             <label
               htmlFor="edit-pr-remarks"
               className="text-sm font-medium text-text leading-none block mb-1.5"
@@ -349,10 +328,9 @@ export default function PurchaseRequisitionEdit() {
       </Card>
 
       {/* ── Section 2: Purchase Requisition Items ── */}
-      <PRItemsEditor
+      <ItemsEditor
         items={items}
-        onChangeItems={setItems}
-        defaultRequiredDate={formData.requiredDate}
+        onChange={setItems}
       />
 
       {/* ── Section 3: Bottom Form Actions ── */}

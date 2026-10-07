@@ -23,6 +23,8 @@ import {
   Building2,
   FileText,
   ClipboardList,
+  ClipboardCheck,
+  Inbox,
 } from 'lucide-react';
 
 export const navigation = [
@@ -34,6 +36,12 @@ export const navigation = [
         image: DashboardIconImg,
         path: '/dashboard',
         roles: ['ADMIN', 'MANAGER', 'USER'],
+      },
+      {
+        label: 'Inquiry',
+        icon: Inbox,
+        path: '/inquiries',
+        roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
       },
     ],
   },
@@ -56,12 +64,12 @@ export const navigation = [
               path: '/purchase-requisition/create',
             },
           },
-          {
-            label: 'Create Requisition',
-            icon: Plus,
-            path: '/purchase-requisition/create',
-            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
-          },
+          // {
+          //   label: 'Create Requisition',
+          //   icon: Plus,
+          //   path: '/purchase-requisition/create',
+          //   roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          // },
         ],
       },
       {
@@ -97,6 +105,12 @@ export const navigation = [
             label: 'Vendor Approval',
             icon: Building2,
             path: '/approvals/vendors',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          },
+          {
+            label: 'PR Approval',
+            icon: ClipboardCheck,
+            path: '/approvals/purchase-requisitions',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
           },
         ],

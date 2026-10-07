@@ -106,7 +106,7 @@ export default function PurchaseRequisition() {
       total: requisitions.length,
       pending: requisitions.filter((r) => r.status === 'Pending Approval').length,
       approved: requisitions.filter((r) => r.status === 'Approved').length,
-      draft: requisitions.filter((r) => r.status === 'Draft').length,
+      rejected: requisitions.filter((r) => r.status === 'Rejected').length,
     };
   }, [requisitions]);
 
@@ -201,7 +201,7 @@ export default function PurchaseRequisition() {
         minSize: 130,
         size: 150,
         cell: (info) => {
-          const status = info.getValue() || 'Draft';
+          const status = info.getValue() || 'Pending Approval';
           const statusVariant = getPRStatusBadgeVariant(status);
           return <Badge variant={statusVariant}>{status}</Badge>;
         },
@@ -369,20 +369,20 @@ export default function PurchaseRequisition() {
 
         <Card
           padding="sm"
-          className="flex items-center gap-3.5 border-border/80 bg-surface shadow-xs cursor-pointer hover:border-border transition-colors"
+          className="flex items-center gap-3.5 border-border/80 bg-surface shadow-xs cursor-pointer hover:border-danger/40 transition-colors"
           onClick={() => {
-            setStatusFilter('Draft');
+            setStatusFilter('Rejected');
           }}
         >
-          <div className="w-10 h-10 rounded-lg bg-border/60 text-text-muted flex items-center justify-center shrink-0">
-            <FileText size={20} />
+          <div className="w-10 h-10 rounded-lg bg-danger/10 text-danger flex items-center justify-center shrink-0">
+            <XCircle size={20} />
           </div>
           <div>
             <div className="text-xs font-medium text-text-muted uppercase tracking-wider">
-              Drafts
+              Rejected
             </div>
-            <div className="text-xl font-bold text-heading mt-0.5">
-              {metrics.draft}
+            <div className="text-xl font-bold text-danger mt-0.5">
+              {metrics.rejected}
             </div>
           </div>
         </Card>
