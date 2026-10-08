@@ -425,18 +425,26 @@ export default function InquiriesPage() {
           </div>
 
           {/* Table Container */}
-          <TableContainer>
+          <TableContainer
+            tableStyle={{
+              width: '100%',
+              minWidth: table.getCenterTotalSize(),
+            }}
+          >
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="bg-surface/60 border-b border-border">
                   {headerGroup.headers.map((header) => {
                     const canSort = header.column.getCanSort();
                     const sorted = header.column.getIsSorted();
+                    const canResize = header.column.getCanResize();
 
                     return (
                       <Th
                         key={header.id}
                         style={{ width: header.getSize() }}
+                        isResizing={header.column.getIsResizing()}
+                        resizeHandler={canResize ? header.getResizeHandler() : undefined}
                         className={`relative py-3.5 px-5 select-none ${
                           canSort ? 'cursor-pointer hover:bg-surface' : ''
                         }`}

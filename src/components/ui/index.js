@@ -11,6 +11,8 @@ export { default as StatusSwitch }    from './StatusSwitch';
 export { default as SearchableSelect } from './SearchableSelect';
 export { default as SearchableMultiSelect } from './SearchableMultiSelect';
 export { default as ConfirmModal }     from './ConfirmModal';
+export { default as RichTextEditor }   from './RichTextEditor';
+export { default as TagInput }         from './TagInput';
 export { TableContainer, Th, Td }     from './Table';
 
 

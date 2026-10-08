@@ -25,6 +25,10 @@ import {
   ClipboardList,
   ClipboardCheck,
   Inbox,
+  Settings,
+  Hash,
+  FileCheck,
+  FolderTree,
 } from 'lucide-react';
 
 export const navigation = [
@@ -125,6 +129,31 @@ export const navigation = [
         image: UserIconImg,
         path: '/users',
         roles: ['ADMIN'],
+      },
+      {
+        label: 'Configuration',
+        icon: Settings,
+        roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+        children: [
+          {
+            label: 'Series Setup',
+            icon: Hash,
+            path: '/configuration/series',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Inquiry Document Types',
+            icon: FileCheck,
+            path: '/configuration/document-types',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Product Categories',
+            icon: FolderTree,
+            path: '/configuration/product-categories',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+        ],
       },
     ],
   },

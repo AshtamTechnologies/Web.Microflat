@@ -24,6 +24,15 @@ import InquiryViewPage from './pages/inquiries/InquiryViewPage';
 import { InquiriesProvider } from './context/InquiriesContext';
 import { InquiryDocumentsProvider } from './context/InquiryDocumentsContext';
 
+import SeriesSetupPage from './pages/configuration/SeriesSetupPage';
+import { SeriesProvider } from './context/SeriesContext';
+
+import DocumentTypesPage from './pages/configuration/DocumentTypesPage';
+import { DocumentTypesProvider } from './context/DocumentTypesContext';
+
+import ProductCategoriesPage from './pages/configuration/ProductCategoriesPage';
+import { ProductCategoriesProvider } from './context/ProductCategoriesContext';
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -41,7 +50,13 @@ export default function App() {
                 <PurchaseRequisitionProvider>
                   <InquiriesProvider>
                     <InquiryDocumentsProvider>
-                      <AppLayout />
+                      <DocumentTypesProvider>
+                        <ProductCategoriesProvider>
+                          <SeriesProvider>
+                            <AppLayout />
+                          </SeriesProvider>
+                        </ProductCategoriesProvider>
+                      </DocumentTypesProvider>
                     </InquiryDocumentsProvider>
                   </InquiriesProvider>
                 </PurchaseRequisitionProvider>
@@ -71,6 +86,12 @@ export default function App() {
           <Route path="/inquiries/new" element={<InquiryFormPage />} />
           <Route path="/inquiries/:id" element={<InquiryViewPage />} />
           <Route path="/inquiries/:id/edit" element={<InquiryFormPage />} />
+
+          {/* Configuration Routes */}
+          <Route path="/configuration/series" element={<Navigate to="/configuration/series/po" replace />} />
+          <Route path="/configuration/series/:docType" element={<SeriesSetupPage />} />
+          <Route path="/configuration/document-types" element={<DocumentTypesPage />} />
+          <Route path="/configuration/product-categories" element={<ProductCategoriesPage />} />
         </Route>
 
         {/* Default: redirect root to login */}

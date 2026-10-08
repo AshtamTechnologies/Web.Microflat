@@ -117,6 +117,17 @@ export function useInquiries(usersList = mockUsers) {
         },
       ];
 
+      if (formData.initialComment?.trim()) {
+        initialActivity.unshift({
+          id: `act_${Date.now()}_initial_comment`,
+          type: 'comment',
+          title: 'Initial Handover Note',
+          timestamp: now,
+          changedBy: 'Ian Chesnut',
+          remarks: formData.initialComment.trim(),
+        });
+      }
+
       const newInquiry = {
         id: `inq-${nextIdNumber++}`,
         InquiryId: `inq-${nextIdNumber}`,
@@ -126,11 +137,18 @@ export function useInquiries(usersList = mockUsers) {
         ContactPerson: formData.ContactPerson?.trim() || '',
         Email: formData.Email?.trim() || '',
         Phone: formData.Phone?.trim() || '',
+        AlternativePhone: formData.AlternativePhone?.trim() || '',
+        AddressLine1: formData.AddressLine1?.trim() || '',
+        AddressLine2: formData.AddressLine2?.trim() || '',
+        City: formData.City?.trim() || '',
+        State: formData.State?.trim() || '',
+        Country: formData.Country?.trim() || 'India',
         RegionId: formData.RegionId || '',
         CategoryId: formData.CategoryId || '',
         Subject: formData.Subject?.trim() || '',
         Description: formData.Description?.trim() || '',
         Source: formData.Source || 'Website',
+        DistributorName: formData.Source === 'Distributor' ? (formData.DistributorName?.trim() || '') : '',
         Priority: formData.Priority || 'Medium',
         Quantity: formData.Quantity ? Number(formData.Quantity) : 1,
         UOM: formData.UOM || 'PCS',
@@ -266,6 +284,40 @@ export function useInquiries(usersList = mockUsers) {
     [inquiries]
   );
 
+  /* ── Add Comment / Note to Inquiry ── */
+  const addInquiryComment = useCallback(
+    (id, commentText, author = 'Ian Chesnut') => {
+      const target = inquiries.find((inq) => inq.id === id || inq.InquiryId === id);
+      if (!target || !commentText?.trim()) return { ok: false };
+
+      const now = formatAuditTimestamp();
+      const activityEntry = {
+        id: `act_${Date.now()}_comment`,
+        type: 'comment',
+        title: 'Comment Added',
+        timestamp: now,
+        changedBy: author,
+        remarks: commentText.trim(),
+      };
+
+      setInquiries((prev) =>
+        prev.map((inq) => {
+          if (inq.id !== id && inq.InquiryId !== id) return inq;
+          return {
+            ...inq,
+            ModifiedBy: author,
+            ModifiedOn: now,
+            activity: [activityEntry, ...(inq.activity || [])],
+          };
+        })
+      );
+
+      toast.success('Comment added successfully.');
+      return { ok: true, activity: activityEntry };
+    },
+    [inquiries]
+  );
+
   /* ── Delete Inquiry ── */
   const deleteInquiry = useCallback(
     (id) => {
@@ -294,6 +346,7 @@ export function useInquiries(usersList = mockUsers) {
     updateInquiry,
     reassignInquiry,
     changeInquiryStatus,
+    addInquiryComment,
     deleteInquiry,
     resolveUserName: (userId) => resolveUserName(userId, usersList),
   };

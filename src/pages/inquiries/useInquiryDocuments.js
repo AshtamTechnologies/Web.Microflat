@@ -4,10 +4,8 @@
 
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import {
-  mockInquiryDocuments,
-  DOCUMENT_TYPE_OPTIONS,
-} from '../../mocks/inquiryDocuments';
+import { mockInquiryDocuments } from '../../mocks/inquiryDocuments';
+import { INITIAL_DOCUMENT_TYPES } from '../../mocks/documentTypes';
 
 function formatAuditTimestamp(date = new Date()) {
   const yyyy = date.getFullYear();
@@ -38,12 +36,14 @@ export function useInquiryDocuments() {
 
   /* ── Get missing mandatory document types for an inquiry ── */
   const getMissingMandatoryDocumentTypes = useCallback(
-    (inquiryId) => {
+    (inquiryId, docTypesList = INITIAL_DOCUMENT_TYPES) => {
       const inqDocs = getDocumentsByInquiryId(inquiryId);
       const attachedTypeIds = new Set(inqDocs.map((d) => d.documentTypeId));
 
-      return DOCUMENT_TYPE_OPTIONS.filter(
-        (dt) => dt.isMandatory && !attachedTypeIds.has(dt.id)
+      return (docTypesList || []).filter(
+        (dt) =>
+          dt.isMandatory &&
+          !attachedTypeIds.has(dt.documentTypeId || dt.id)
       );
     },
     [getDocumentsByInquiryId]

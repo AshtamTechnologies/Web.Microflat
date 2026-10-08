@@ -41,6 +41,7 @@ import {
   Badge,
   Card,
   Modal,
+  ConfirmModal,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import {
@@ -233,6 +234,7 @@ export default function VendorFormPage() {
   const [initialSnapshot, setInitialSnapshot] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [isAuditCollapsed, setIsAuditCollapsed] = useState(true);
 
   // Attachment upload helper state
@@ -438,11 +440,14 @@ export default function VendorFormPage() {
 
   function handleCancel() {
     if (isDirty) {
-      const discard = window.confirm(
-        'You have unsaved changes. Are you sure you want to discard them?'
-      );
-      if (!discard) return;
+      setShowDiscardConfirm(true);
+      return;
     }
+    navigate('/vendors');
+  }
+
+  function handleConfirmDiscard() {
+    setShowDiscardConfirm(false);
     navigate('/vendors');
   }
 
@@ -558,20 +563,18 @@ export default function VendorFormPage() {
 
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-            {/* Vendor Code */}
+            {/* Vendor Code (System Generated & Disabled) */}
             <Input
               id="vendorCode"
               name="vendorCode"
               type="text"
               label="Vendor Code"
-              placeholder="e.g. VEN-0007"
-              required
+              placeholder="Auto-generated"
               value={form.vendorCode}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              error={errors.vendorCode}
-              hint="System sequence code"
-              className="font-mono text-sm uppercase"
+              disabled
+              readOnly
+              hint="System auto-generated"
+              className="font-mono text-sm uppercase bg-surface/70 text-text-muted cursor-not-allowed opacity-90 select-none"
             />
 
             {/* Vendor Name */}
@@ -1238,6 +1241,18 @@ export default function VendorFormPage() {
           </div>
         </Modal>
       )}
+
+      {/* ── Discard Changes Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={showDiscardConfirm}
+        onClose={() => setShowDiscardConfirm(false)}
+        onConfirm={handleConfirmDiscard}
+        title="Discard Unsaved Changes?"
+        message="You have unsaved changes in this vendor form. Are you sure you want to discard them? All entered details will be lost."
+        confirmText="Discard Changes"
+        cancelText="Keep Editing"
+        variant="danger"
+      />
     </form>
   );
 }

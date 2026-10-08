@@ -1,19 +1,24 @@
 /**
- * InquiryFormPage.jsx — Full-page Add and Edit inquiry form for MicroFlat ERP.
+ * InquiryFormPage.jsx — Multi-step Add and Edit inquiry form for MicroFlat ERP.
  *
  * Route: /inquiries/new (Add mode) & /inquiries/:id/edit (Edit mode)
- * Grouped sections inside Cards:
- *   1. Inquiry Details (InquiryNo, InquiryDate, Subject, Description, Source, Priority)
- *   2. Customer Information (CustomerName, ContactPerson, Email, Phone)
- *   3. Classification & Value (RegionId, CategoryId, Quantity, UOM, EstimatedValue, RequiredByDate)
- *   4. Assignment & Routing (AssignedTo, StatusId)
- *   5. Documents & Attachments (RFQ, Drawings, Specs, Quotations with real-time extension & size validation)
+ *
+ * 2-Step Workflow:
+ *   Step 1: Inquiry & Customer Details
+ *     - 1. Inquiry Details (InquiryNo, InquiryDate, Subject, Description, Source, Priority)
+ *     - 2. Customer Information (CustomerName, ContactPerson, Email, Phone, AlternativePhone, AddressLine1, AddressLine2, City, State, Country)
+ *     - 3. Classification & Value (RegionId, CategoryId, Quantity, UOM, EstimatedValue, RequiredByDate)
+ *
+ *   Step 2: Assignment & Documents
+ *     - 4. Assignment & Initial Status (AssignedTo without unassigned option, StatusId, Initial Handover Comment)
+ *     - 5. Documents & Attachments (RFQ, Drawings, Specs, Quotations with real-time extension & size validation)
  */
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  ArrowRight,
   Save,
   X,
   Inbox,
@@ -30,8 +35,13 @@ import {
   Layers,
   File,
   Plus,
+  Pencil,
+  Check,
+  Package,
   Eye,
   ExternalLink,
+  MessageSquare,
+  CheckCircle2,
 } from 'lucide-react';
 
 import {
@@ -41,6 +51,8 @@ import {
   Card,
   Badge,
   Modal,
+  ConfirmModal,
+  RichTextEditor,
   TableContainer,
   Th,
   Td,
@@ -48,39 +60,67 @@ import {
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useUsersContext } from '../../context/UsersContext';
 import { useInquiryDocumentsContext } from '../../context/InquiryDocumentsContext';
+import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
+import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
+import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/categoryTree';
 import {
   REGION_OPTIONS,
-  CATEGORY_OPTIONS,
   SOURCE_OPTIONS,
   PRIORITY_OPTIONS,
   STATUS_OPTIONS,
   UOM_OPTIONS,
 } from '../../mocks/inquiries';
-import {
-  DOCUMENT_TYPE_OPTIONS,
-  getDocumentType,
-  formatFileSizeKB,
-} from '../../mocks/inquiryDocuments';
+import { MOCK_MATERIALS } from '../../mocks/purchaseRequisitions';
+import { formatFileSizeKB } from '../../mocks/inquiryDocuments';
+
+const PRODUCT_SELECT_OPTIONS = [
+  { value: '', label: '-- Select Product from Catalog --' },
+  ...MOCK_MATERIALS.map((m) => ({
+    value: String(m.itemId),
+    label: `${m.itemName} (${m.itemCode})`,
+  })),
+];
+
+const INITIAL_ITEM_ENTRY = {
+  prItemId: null,
+  itemId: '',
+  itemCode: '',
+  itemName: '',
+  specification: '',
+  quantity: '1',
+  uom: 'Nos',
+  categoryId: '',
+  categoryName: '',
+};
 
 const INITIAL_FORM = {
   InquiryNo: '',
   InquiryDate: new Date().toISOString().slice(0, 10),
+  RegionId: '',
   Subject: '',
   Description: '',
   Source: 'Website',
+  DistributorName: '',
   Priority: 'Medium',
   CustomerName: '',
   ContactPerson: '',
   Email: '',
   Phone: '',
-  RegionId: '',
+  AlternativePhone: '',
+  AddressLine1: '',
+  AddressLine2: '',
+  City: '',
+  State: '',
+  Country: 'India',
   CategoryId: '',
   Quantity: '1',
   UOM: 'PCS',
   EstimatedValue: '',
   RequiredByDate: '',
+  items: [],
   AssignedTo: '',
   StatusId: 'New',
+  initialComment: '',
   attachments: [],
 };
 
@@ -112,18 +152,31 @@ function validateField(name, value) {
         if (digitsOnly.length < 10) return 'Phone number must be at least 10 digits.';
       }
       return '';
+    case 'AlternativePhone':
+      if (str) {
+        if (!/^\+?[\d\s-]+$/.test(str)) return 'Alternative phone must contain digits only.';
+        const digitsOnly = str.replace(/\D/g, '');
+        if (digitsOnly.length < 10) return 'Alternative phone must be at least 10 digits.';
+      }
+      return '';
     case 'RegionId':
       if (!value) return 'Sales region is required.';
       return '';
     case 'CategoryId':
       if (!value) return 'Product / service category is required.';
       return '';
+    case 'DistributorName':
+      if (!str) return 'Distributor name is required.';
+      return '';
+    case 'AssignedTo':
+      if (!value) return 'Please select an internal team member to assign.';
+      return '';
     default:
       return '';
   }
 }
 
-function validateAll(form) {
+function validateStep1(form) {
   const errors = {};
   const requiredFields = [
     'InquiryNo',
@@ -131,7 +184,6 @@ function validateAll(form) {
     'Subject',
     'CustomerName',
     'RegionId',
-    'CategoryId',
   ];
 
   requiredFields.forEach((field) => {
@@ -147,7 +199,22 @@ function validateAll(form) {
     const err = validateField('Phone', form.Phone);
     if (err) errors.Phone = err;
   }
+  if (form.AlternativePhone) {
+    const err = validateField('AlternativePhone', form.AlternativePhone);
+    if (err) errors.AlternativePhone = err;
+  }
+  if (form.Source === 'Distributor') {
+    const err = validateField('DistributorName', form.DistributorName);
+    if (err) errors.DistributorName = err;
+  }
 
+  return errors;
+}
+
+function validateAll(form) {
+  const errors = validateStep1(form);
+  const assignErr = validateField('AssignedTo', form.AssignedTo);
+  if (assignErr) errors.AssignedTo = assignErr;
   return errors;
 }
 
@@ -161,10 +228,13 @@ export default function InquiryFormPage() {
     getNextInquiryNo,
     addInquiry,
     updateInquiry,
+    addInquiryComment,
   } = useInquiriesContext();
 
   const { allUsers = [], users = [] } = useUsersContext();
-  const { addDocument, getDocumentsByInquiryId } = useInquiryDocumentsContext();
+  const { addDocument } = useInquiryDocumentsContext();
+  const { documentTypes = [], getDocumentTypeById } = useDocumentTypesContext();
+  const { categories = [] } = useProductCategoriesContext();
 
   const userList = allUsers.length > 0 ? allUsers : users;
 
@@ -172,10 +242,156 @@ export default function InquiryFormPage() {
     return isEdit ? getInquiryById(id) : null;
   }, [isEdit, id, getInquiryById]);
 
+  const [currentStep, setCurrentStep] = useState(1);
   const [form, setForm] = useState(INITIAL_FORM);
   const [initialSnapshot, setInitialSnapshot] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  // Line item adding/editing form state
+  const [itemFormState, setItemFormState] = useState(INITIAL_ITEM_ENTRY);
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [itemFieldErrors, setItemFieldErrors] = useState({});
+
+  const handleItemFieldChange = (field, value) => {
+    if (field === 'itemId') {
+      const selectedMat = MOCK_MATERIALS.find(
+        (m) => String(m.itemId) === String(value)
+      );
+      if (selectedMat) {
+        setItemFormState((prev) => ({
+          ...prev,
+          itemId: selectedMat.itemId,
+          itemCode: selectedMat.itemCode,
+          itemName: selectedMat.itemName,
+          specification: selectedMat.specification,
+          uom: selectedMat.uom || prev.uom || 'Nos',
+        }));
+      } else {
+        setItemFormState((prev) => ({
+          ...prev,
+          itemId: '',
+        }));
+      }
+    } else {
+      setItemFormState((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    }
+
+    if (itemFieldErrors[field]) {
+      setItemFieldErrors((prev) => ({ ...prev, [field]: null }));
+    }
+  };
+
+  const resetItemForm = () => {
+    setEditingItemId(null);
+    setItemFieldErrors({});
+    setItemFormState(INITIAL_ITEM_ENTRY);
+  };
+
+  const handleAddOrUpdateItem = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const selectedCatId = itemFormState.categoryId || '';
+    const currentCatName = getCategoryPathName(selectedCatId, categories);
+    const selectedMat = MOCK_MATERIALS.find(
+      (m) => String(m.itemId) === String(itemFormState.itemId)
+    );
+    const resolvedItemCode = itemFormState.itemCode?.trim() || (selectedMat ? selectedMat.itemCode : '') || '—';
+    const resolvedItemName = itemFormState.itemName?.trim() || (selectedMat ? selectedMat.itemName : '') || resolvedItemCode;
+    const resolvedQty =
+      itemFormState.quantity !== '' && !isNaN(Number(itemFormState.quantity)) && Number(itemFormState.quantity) > 0
+        ? Number(itemFormState.quantity)
+        : 1;
+    const resolvedUom = itemFormState.uom || 'Nos';
+    const resolvedSpec = itemFormState.specification?.trim() || (selectedMat ? selectedMat.specification : '') || '';
+
+    if (editingItemId) {
+      const updated = (form.items || []).map((it) => {
+        if ((it.prItemId || it.id) === editingItemId) {
+          return {
+            ...it,
+            itemId: itemFormState.itemId || '',
+            itemCode: resolvedItemCode,
+            itemName: resolvedItemName,
+            specification: resolvedSpec,
+            quantity: resolvedQty,
+            uom: resolvedUom,
+            categoryId: selectedCatId,
+            categoryName: currentCatName !== '—' ? currentCatName : (it.categoryName || '—'),
+          };
+        }
+        return it;
+      });
+      const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+      setForm((prev) => ({
+        ...prev,
+        items: updated,
+        CategoryId: selectedCatId || prev.CategoryId,
+        Quantity: String(totalQty || 1),
+        UOM: updated[0]?.uom || prev.UOM || 'PCS',
+      }));
+      toast.success('Item updated');
+      resetItemForm();
+    } else {
+      const newItem = {
+        prItemId: Date.now() + Math.floor(Math.random() * 1000),
+        itemId: itemFormState.itemId || '',
+        itemCode: resolvedItemCode,
+        itemName: resolvedItemName,
+        specification: resolvedSpec,
+        quantity: resolvedQty,
+        uom: resolvedUom,
+        categoryId: selectedCatId,
+        categoryName: currentCatName !== '—' ? currentCatName : '—',
+      };
+      const nextItems = [...(form.items || []), newItem];
+      const totalQty = nextItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+      setForm((prev) => ({
+        ...prev,
+        items: nextItems,
+        CategoryId: selectedCatId || prev.CategoryId,
+        Quantity: String(totalQty || 1),
+        UOM: nextItems[0]?.uom || prev.UOM || 'PCS',
+      }));
+      toast.success('Item added to inquiry');
+      resetItemForm();
+    }
+  };
+
+  const handleStartEditItem = (item) => {
+    const itemId = item.prItemId || item.id;
+    setEditingItemId(itemId);
+    setItemFieldErrors({});
+    setItemFormState({
+      prItemId: itemId,
+      itemId: item.itemId ? String(item.itemId) : '',
+      itemCode: item.itemCode && item.itemCode !== '—' ? item.itemCode : '',
+      itemName: item.itemName || '',
+      specification: item.specification || '',
+      quantity: item.quantity !== undefined && item.quantity !== null ? String(item.quantity) : '1',
+      uom: item.uom || 'Nos',
+      categoryId: item.categoryId || '',
+      categoryName: item.categoryName || getCategoryPathName(item.categoryId, categories) || '—',
+    });
+  };
+
+  const handleRemoveItem = (index) => {
+    const updated = (form.items || []).filter((_, i) => i !== index);
+    const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+    setForm((prev) => ({
+      ...prev,
+      items: updated,
+      Quantity: String(totalQty || 1),
+    }));
+    toast.success('Item removed');
+    if (editingItemId) {
+      resetItemForm();
+    }
+  };
 
   // Attachment Staging State
   const [stageDocTypeId, setStageDocTypeId] = useState('dt_rfq');
@@ -192,33 +408,73 @@ export default function InquiryFormPage() {
 
   // Active document type metadata for staging
   const activeStagedDocType = useMemo(() => {
-    return getDocumentType(stageDocTypeId);
-  }, [stageDocTypeId]);
+    return getDocumentTypeById(stageDocTypeId);
+  }, [stageDocTypeId, getDocumentTypeById]);
+
+  // Dynamic Product Category dropdown options with hierarchy
+  const categoryOptions = useMemo(() => {
+    return getCategoryDropdownOptions(categories, {
+      activeOnly: true,
+      currentSelectedId: form.CategoryId || existingInquiry?.CategoryId || null,
+    });
+  }, [categories, form.CategoryId, existingInquiry]);
+
+  // Build assignee options from UsersContext (No "Leave unassigned" option)
+  const userOptions = useMemo(() => {
+    return userList.map((u) => ({
+      value: u.id,
+      label: `${u.firstName} ${u.lastName} (${Array.isArray(u.roles) ? u.roles.join(', ') : u.role || 'Staff'})`,
+    }));
+  }, [userList]);
 
   // Initialize form state
   useEffect(() => {
     if (isEdit) {
       if (existingInquiry && initializedIdRef.current !== id) {
         initializedIdRef.current = id;
+        const mappedItems = Array.isArray(existingInquiry.items)
+          ? existingInquiry.items
+          : existingInquiry.Quantity
+          ? [
+              {
+                prItemId: 1,
+                itemCode: existingInquiry.ItemCode || 'MAT-CAT-001',
+                itemName: existingInquiry.Subject || 'Main Product Requirement',
+                specification: existingInquiry.Specification || '',
+                quantity: Number(existingInquiry.Quantity) || 1,
+                uom: existingInquiry.UOM || 'Nos',
+              },
+            ]
+          : [];
+
         const data = {
           InquiryNo: existingInquiry.InquiryNo || '',
           InquiryDate: existingInquiry.InquiryDate || new Date().toISOString().slice(0, 10),
           Subject: existingInquiry.Subject || '',
           Description: existingInquiry.Description || '',
           Source: existingInquiry.Source || 'Website',
+          DistributorName: existingInquiry.DistributorName || '',
           Priority: existingInquiry.Priority || 'Medium',
           CustomerName: existingInquiry.CustomerName || '',
           ContactPerson: existingInquiry.ContactPerson || '',
           Email: existingInquiry.Email || '',
           Phone: existingInquiry.Phone || '',
+          AlternativePhone: existingInquiry.AlternativePhone || '',
+          AddressLine1: existingInquiry.AddressLine1 || '',
+          AddressLine2: existingInquiry.AddressLine2 || '',
+          City: existingInquiry.City || '',
+          State: existingInquiry.State || '',
+          Country: existingInquiry.Country || 'India',
           RegionId: existingInquiry.RegionId || '',
           CategoryId: existingInquiry.CategoryId || '',
           Quantity: existingInquiry.Quantity !== undefined ? String(existingInquiry.Quantity) : '1',
           UOM: existingInquiry.UOM || 'PCS',
           EstimatedValue: existingInquiry.EstimatedValue !== undefined ? String(existingInquiry.EstimatedValue) : '',
-          RequiredByDate: existingInquiry.RequiredByDate || '',
-          AssignedTo: existingInquiry.AssignedTo || '',
+          RequiredByDate: existingInquiry.RequiredByDate || existingInquiry.EstimateDate || '',
+          items: mappedItems,
+          AssignedTo: existingInquiry.AssignedTo || (userList.length > 0 ? userList[0].id : ''),
           StatusId: existingInquiry.StatusId || 'New',
+          initialComment: '',
           attachments: [],
         };
         setForm(data);
@@ -229,9 +485,11 @@ export default function InquiryFormPage() {
       if (initializedIdRef.current !== 'new') {
         initializedIdRef.current = 'new';
         const generatedNo = getNextInquiryNo();
+        const defaultAssignee = userList.length > 0 ? userList[0].id : '';
         const data = {
           ...INITIAL_FORM,
           InquiryNo: generatedNo,
+          AssignedTo: defaultAssignee,
           attachments: [],
         };
         setForm(data);
@@ -239,26 +497,19 @@ export default function InquiryFormPage() {
         setErrors({});
       }
     }
-  }, [isEdit, id, existingInquiry, getNextInquiryNo]);
-
-  // Build assignee options from UsersContext
-  const userOptions = useMemo(() => {
-    return [
-      { value: '', label: 'Leave unassigned' },
-      ...userList.map((u) => ({
-        value: u.id,
-        label: `${u.firstName} ${u.lastName} (${Array.isArray(u.roles) ? u.roles.join(', ') : u.role || 'Staff'})`,
-      })),
-    ];
-  }, [userList]);
+  }, [isEdit, id, existingInquiry, getNextInquiryNo, userList]);
 
   // Document type options for Select
   const docTypeOptions = useMemo(() => {
-    return DOCUMENT_TYPE_OPTIONS.map((dt) => ({
-      value: dt.id,
-      label: `${dt.typeName}${dt.isMandatory ? ' (Required)' : ''} [${dt.allowedExtensions.join(', ')}]`,
-    }));
-  }, []);
+    return documentTypes.map((dt) => {
+      const id = dt.documentTypeId || dt.id;
+      const exts = Array.isArray(dt.allowedExtensions) ? dt.allowedExtensions.join(', ') : '';
+      return {
+        value: id,
+        label: `${dt.typeName}${dt.isMandatory ? ' (Required)' : ''} [${exts}]`,
+      };
+    });
+  }, [documentTypes]);
 
   // Check if form is dirty
   const isDirty = useMemo(() => {
@@ -271,6 +522,9 @@ export default function InquiryFormPage() {
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
+    if (name === 'Source' && value !== 'Distributor' && errors.DistributorName) {
+      setErrors((prev) => ({ ...prev, DistributorName: '' }));
+    }
   }
 
   function handleBlur(e) {
@@ -281,12 +535,37 @@ export default function InquiryFormPage() {
 
   function handleCancel() {
     if (isDirty) {
-      const discard = window.confirm(
-        'You have unsaved changes. Are you sure you want to discard them?'
-      );
-      if (!discard) return;
+      setShowDiscardConfirm(true);
+      return;
     }
     navigate(isEdit && existingInquiry ? `/inquiries/${existingInquiry.id || existingInquiry.InquiryId}` : '/inquiries');
+  }
+
+  function handleConfirmDiscard() {
+    setShowDiscardConfirm(false);
+    navigate(isEdit && existingInquiry ? `/inquiries/${existingInquiry.id || existingInquiry.InquiryId}` : '/inquiries');
+  }
+
+  function handleNextStep() {
+    const step1Errors = validateStep1(form);
+    if (Object.keys(step1Errors).length > 0) {
+      setErrors(step1Errors);
+      const firstErrorField = Object.keys(step1Errors)[0];
+      const el = document.getElementById(firstErrorField);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus?.();
+      }
+      return;
+    }
+    setErrors({});
+    setCurrentStep(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function handlePrevStep() {
+    setCurrentStep(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   // ── Attachment Validation & Addition ──
@@ -382,12 +661,29 @@ export default function InquiryFormPage() {
     const fieldErrors = validateAll(form);
     if (Object.keys(fieldErrors).length > 0) {
       setErrors(fieldErrors);
-      const firstErrorField = Object.keys(fieldErrors)[0];
-      const el = document.getElementById(firstErrorField);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.focus?.();
+      const step1Fields = [
+        'InquiryNo',
+        'InquiryDate',
+        'Subject',
+        'CustomerName',
+        'Email',
+        'Phone',
+        'AlternativePhone',
+        'RegionId',
+        'CategoryId',
+      ];
+      const hasStep1Error = Object.keys(fieldErrors).some((k) => step1Fields.includes(k));
+      if (hasStep1Error && currentStep !== 1) {
+        setCurrentStep(1);
       }
+      setTimeout(() => {
+        const firstErrorField = Object.keys(fieldErrors)[0];
+        const el = document.getElementById(firstErrorField);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus?.();
+        }
+      }, 50);
       return;
     }
 
@@ -397,6 +693,9 @@ export default function InquiryFormPage() {
         const inquiryId = existingInquiry.id || existingInquiry.InquiryId;
         const res = await updateInquiry(inquiryId, form);
         if (res.ok) {
+          if (form.initialComment?.trim()) {
+            addInquiryComment(inquiryId, form.initialComment.trim());
+          }
           // Add any newly staged attachments
           if (form.attachments && form.attachments.length > 0) {
             for (const att of form.attachments) {
@@ -455,645 +754,1151 @@ export default function InquiryFormPage() {
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-6 pb-20">
       {/* ── Top Page Header & Navigation ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-5">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border-b border-border pb-4 sm:pb-5">
+        <div className="min-w-0">
           <button
             type="button"
             onClick={handleCancel}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer mb-3"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer mb-2 sm:mb-3"
           >
             <ArrowLeft
               size={14}
-              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform duration-150"
+              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform duration-150 shrink-0"
               aria-hidden="true"
             />
             <span>Back to Inquiries</span>
           </button>
-          <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <Inbox className="h-6 w-6 text-primary" aria-hidden="true" />
-            {isEdit ? `Edit Inquiry: ${existingInquiry?.InquiryNo}` : 'New Inquiry / RFQ Registration'}
+          <h1 className="text-xl sm:text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
+            <Inbox className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" aria-hidden="true" />
+            <span className="truncate">{isEdit ? `Edit Inquiry: ${existingInquiry?.InquiryNo}` : 'New Inquiry / RFQ Registration'}</span>
           </h1>
         </div>
 
-        {/* Top Action Buttons */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Top Action Buttons (Responsive for Steps & Mobile) */}
+        <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
           <Button
             type="button"
             variant="secondary"
             size="md"
             onClick={handleCancel}
             disabled={loading}
+            className="flex-1 sm:flex-initial"
           >
             <X size={16} className="mr-1.5" aria-hidden="true" />
             Cancel
           </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            loading={loading}
-            disabled={loading}
-          >
-            <Save size={16} className="mr-1.5" aria-hidden="true" />
-            {isEdit ? 'Save Changes' : 'Create Inquiry'}
-          </Button>
+
+          {currentStep === 1 ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={handleNextStep}
+              className="flex-1 sm:flex-initial justify-center"
+            >
+              <span className="hidden sm:inline">Next: Assignment & Documents</span>
+              <span className="sm:hidden">Next Step</span>
+              <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              loading={loading}
+              disabled={loading}
+              className="flex-1 sm:flex-initial justify-center"
+            >
+              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
+              {isEdit ? 'Save Changes' : 'Create Inquiry'}
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* ── SECTION 1: INQUIRY DETAILS ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <FileText size={18} className="text-primary" aria-hidden="true" />
-            <span>1. Inquiry Details</span>
-          </div>
-          <span className="text-xs text-text-muted font-normal">
-            Reference code, date, subject title & priority
-          </span>
-        </div>
-
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 sm:gap-6">
-            {/* Inquiry No */}
-            <Input
-              id="InquiryNo"
-              name="InquiryNo"
-              type="text"
-              label="Inquiry Number"
-              placeholder="e.g. INQ-2026-000123"
-              required
-              value={form.InquiryNo}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              error={errors.InquiryNo}
-              hint="System auto-sequence reference"
-              className="font-mono text-sm uppercase"
-            />
-
-            {/* Inquiry Date */}
-            <Input
-              id="InquiryDate"
-              name="InquiryDate"
-              type="date"
-              label="Inquiry Date"
-              required
-              value={form.InquiryDate}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              error={errors.InquiryDate}
-              hint="Date customer request was received"
-              className="font-mono tabular-nums text-sm"
-            />
-
-            {/* Source */}
-            <SearchableSelect
-              id="Source"
-              name="Source"
-              label="Inquiry Source"
-              options={SOURCE_OPTIONS}
-              value={form.Source}
-              onChange={handleChange}
-            />
-
-            {/* Priority */}
-            <SearchableSelect
-              id="Priority"
-              name="Priority"
-              label="Priority Level"
-              options={PRIORITY_OPTIONS}
-              value={form.Priority}
-              onChange={handleChange}
-            />
-          </div>
-
-          {/* Subject */}
-          <Input
-            id="Subject"
-            name="Subject"
-            type="text"
-            label="Inquiry Subject / Item Description Title"
-            placeholder="e.g. Custom Cast Iron Surface Plate 2000x1000mm Grade 0"
-            required
-            value={form.Subject}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.Subject}
-          />
-
-          {/* Description */}
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="Description"
-              className="text-sm font-medium text-heading leading-none"
+      {/* ── 2-STEP PROGRESS STEPPER ── */}
+      <div className="bg-surface/60 border border-border rounded-xl p-2.5 sm:p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+          {/* Step 1 Button/Tab */}
+          <button
+            type="button"
+            onClick={() => handlePrevStep()}
+            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer ${
+              currentStep === 1
+                ? 'bg-primary/10 border-primary/50 ring-1 ring-primary/20 shadow-2xs'
+                : 'bg-surface border-border hover:bg-surface/80'
+            }`}
+          >
+            <div
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-colors ${
+                currentStep === 1
+                  ? 'bg-primary text-white shadow-xs'
+                  : currentStep > 1
+                  ? 'bg-success/15 text-success border border-success/30'
+                  : 'bg-surface text-text-muted border border-border'
+              }`}
             >
-              Detailed Specifications & Requirement Notes
-            </label>
-            <textarea
-              id="Description"
-              name="Description"
-              rows={4}
-              value={form.Description}
-              onChange={handleChange}
-              placeholder="Provide technical specifications, tolerances, material grade, delivery expectations, drawing numbers, or testing requirements..."
-              className="w-full rounded-lg border border-border bg-bg text-text text-sm p-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-text-muted/60"
-            />
-          </div>
-        </div>
-      </Card>
-
-      {/* ── SECTION 2: CUSTOMER INFORMATION ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <User size={18} className="text-primary" aria-hidden="true" />
-            <span>2. Customer Information</span>
-          </div>
-          <span className="text-xs text-text-muted font-normal">
-            Company credentials & primary contact person
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-          {/* Customer Name */}
-          <Input
-            id="CustomerName"
-            name="CustomerName"
-            type="text"
-            label="Customer / Company Name"
-            placeholder="e.g. Precision AutoWorks India Ltd"
-            required
-            value={form.CustomerName}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.CustomerName}
-            autoComplete="organization"
-          />
-
-          {/* Contact Person */}
-          <Input
-            id="ContactPerson"
-            name="ContactPerson"
-            type="text"
-            label="Contact Person Name"
-            placeholder="e.g. Rajesh Nair"
-            value={form.ContactPerson}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            autoComplete="name"
-          />
-
-          {/* Email */}
-          <Input
-            id="Email"
-            name="Email"
-            type="email"
-            label="Email Address"
-            placeholder="contact@customer.com"
-            value={form.Email}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.Email}
-            autoComplete="email"
-          />
-
-          {/* Phone */}
-          <Input
-            id="Phone"
-            name="Phone"
-            type="tel"
-            label="Phone / Mobile Number"
-            placeholder="9823012345"
-            value={form.Phone}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.Phone}
-            className="font-mono tabular-nums"
-            autoComplete="tel"
-          />
-        </div>
-      </Card>
-
-      {/* ── SECTION 3: CLASSIFICATION & VALUE ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <Tags size={18} className="text-primary" aria-hidden="true" />
-            <span>3. Classification & Commercial Value</span>
-          </div>
-          <span className="text-xs text-text-muted font-normal">
-            Sales territory, product category & estimated value
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-          {/* Region */}
-          <SearchableSelect
-            id="RegionId"
-            name="RegionId"
-            label="Sales Region"
-            placeholder="Select sales region..."
-            searchPlaceholder="Search regions..."
-            required
-            options={REGION_OPTIONS}
-            value={form.RegionId}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.RegionId}
-          />
-
-          {/* Category */}
-          <SearchableSelect
-            id="CategoryId"
-            name="CategoryId"
-            label="Product Category"
-            placeholder="Select product category..."
-            searchPlaceholder="Search categories..."
-            required
-            options={CATEGORY_OPTIONS}
-            value={form.CategoryId}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.CategoryId}
-          />
-
-          {/* Required By Date */}
-          <Input
-            id="RequiredByDate"
-            name="RequiredByDate"
-            type="date"
-            label="Required By Date"
-            value={form.RequiredByDate}
-            onChange={handleChange}
-            className="font-mono tabular-nums text-sm"
-            hint="Target delivery deadline requested by client"
-          />
-
-          {/* Quantity */}
-          <Input
-            id="Quantity"
-            name="Quantity"
-            type="number"
-            min="1"
-            label="Quantity"
-            placeholder="1"
-            value={form.Quantity}
-            onChange={handleChange}
-            className="font-mono tabular-nums"
-          />
-
-          {/* UOM */}
-          <SearchableSelect
-            id="UOM"
-            name="UOM"
-            label="Unit of Measure (UOM)"
-            options={UOM_OPTIONS}
-            value={form.UOM}
-            onChange={handleChange}
-          />
-
-          {/* Estimated Value */}
-          <Input
-            id="EstimatedValue"
-            name="EstimatedValue"
-            type="number"
-            min="0"
-            label="Estimated Commercial Value (INR)"
-            placeholder="e.g. 450000"
-            value={form.EstimatedValue}
-            onChange={handleChange}
-            className="font-mono tabular-nums"
-            hint="Estimated revenue potential in INR"
-          />
-        </div>
-      </Card>
-
-      {/* ── SECTION 4: ASSIGNMENT ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <UserCheck size={18} className="text-primary" aria-hidden="true" />
-            <span>4. Assignment & Initial Status</span>
-          </div>
-          <span className="text-xs text-text-muted font-normal">
-            Assign to an internal team member for follow-up
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-          {/* Assigned To (SearchableSelect from UsersContext) */}
-          <SearchableSelect
-            id="AssignedTo"
-            name="AssignedTo"
-            label="Assign To Team Member"
-            placeholder="Leave unassigned..."
-            searchPlaceholder="Search team members by name..."
-            options={userOptions}
-            value={form.AssignedTo}
-            onChange={handleChange}
-            hint="Select an internal user responsible for quoting and technical review."
-          />
-
-          {/* Status */}
-          {isEdit ? (
-            <SearchableSelect
-              id="StatusId"
-              name="StatusId"
-              label="Inquiry Status"
-              options={STATUS_OPTIONS.map((s) => ({ value: s.id, label: s.name }))}
-              value={form.StatusId}
-              onChange={handleChange}
-            />
-          ) : (
-            <div className="flex flex-col justify-center pt-2">
-              <span className="text-xs font-medium text-text-muted block mb-1">
-                Initial Pipeline Stage
-              </span>
-              <div className="p-2.5 rounded-lg border border-border bg-surface flex items-center gap-2 text-xs text-text">
-                <Clock size={15} className="text-primary shrink-0" />
-                <span>New inquiry will start at stage <strong className="text-heading">"New"</strong> and progress through Quoting and Won/Lost.</span>
-              </div>
+              {currentStep > 1 ? <CheckCircle2 size={16} /> : '1'}
             </div>
-          )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[11px] sm:text-xs uppercase font-bold tracking-wider text-text-muted">
+                  Step 1
+                </span>
+                {currentStep > 1 && (
+                  <Badge variant="success" className="text-[10px] py-0 px-1.5 font-semibold">
+                    Completed
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm font-semibold text-heading truncate">
+                Inquiry & Customer Details
+              </p>
+              <p className="text-[11px] text-text-muted truncate">
+                Inquiry info, Customer profile & Requirements
+              </p>
+            </div>
+          </button>
+
+          {/* Step 2 Button/Tab */}
+          <button
+            type="button"
+            onClick={() => {
+              if (currentStep === 1) {
+                handleNextStep();
+              }
+            }}
+            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer ${
+              currentStep === 2
+                ? 'bg-primary/10 border-primary/50 ring-1 ring-primary/20 shadow-2xs'
+                : 'bg-surface border-border hover:bg-surface/80'
+            }`}
+          >
+            <div
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-colors ${
+                currentStep === 2
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'bg-surface text-text-muted border border-border'
+              }`}
+            >
+              2
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[11px] sm:text-xs uppercase font-bold tracking-wider text-text-muted">
+                  Step 2
+                </span>
+                {currentStep === 2 && (
+                  <Badge variant="primary" className="text-[10px] py-0 px-1.5 font-semibold">
+                    Active Step
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm font-semibold text-heading truncate">
+                Assignment, Notes & Documents
+              </p>
+              <p className="text-[11px] text-text-muted truncate">
+                Team assignment, Initial comments & Attachments
+              </p>
+            </div>
+          </button>
         </div>
-      </Card>
+      </div>
 
-      {/* ── SECTION 5: DOCUMENTS & ATTACHMENTS ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <Paperclip size={18} className="text-primary" aria-hidden="true" />
-            <span>5. Documents & Attachments</span>
-          </div>
-          <span className="text-xs text-text-muted font-normal">
-            Attach RFQs, 2D/3D blueprints, specifications or client PO files
-          </span>
-        </div>
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── STEP 1 CONTENT: INQUIRY & CUSTOMER DETAILS ── */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {currentStep === 1 && (
+        <div className="space-y-6">
+          {/* ── SECTION 1: INQUIRY DETAILS ── */}
+          <Card padding="md" className="bg-bg">
+            <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
+              <div className="flex items-center gap-2 text-heading font-semibold text-base">
+                <FileText size={18} className="text-primary shrink-0" aria-hidden="true" />
+                <span>1. Inquiry Details</span>
+              </div>
+              <span className="text-xs text-text-muted font-normal">
+                Reference code, date, estimate date, subject title & priority
+              </span>
+            </div>
 
-        <div className="space-y-5">
-          {/* Staging Form Controls */}
-          <div className="p-4 bg-surface/50 border border-border rounded-xl space-y-4">
-            <span className="text-xs font-bold text-heading block">
-              Add New Document Attachment
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Document Type */}
-              <div className="space-y-1">
-                <SearchableSelect
-                  id="stageDocTypeId"
-                  name="stageDocTypeId"
-                  label="Document Type"
-                  options={docTypeOptions}
-                  value={stageDocTypeId}
-                  onChange={(e) => {
-                    setStageDocTypeId(e.target.value);
-                    if (stageDocFile) {
-                      const err = validateFile(stageDocFile, getDocumentType(e.target.value));
-                      setStageFileError(err);
-                    }
-                  }}
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+                {/* Inquiry No (System Generated & Disabled) */}
+                <Input
+                  id="InquiryNo"
+                  name="InquiryNo"
+                  type="text"
+                  label="Inquiry Number"
+                  placeholder="Auto-generated"
+                  value={form.InquiryNo}
+                  disabled
+                  readOnly
+                  hint="System auto-generated"
+                  className="font-mono text-sm uppercase bg-surface/70 text-text-muted cursor-not-allowed opacity-90 select-none"
                 />
-                {activeStagedDocType && (
-                  <p className="text-[11px] text-text-muted pt-0.5">
-                    Allowed: <strong className="font-mono text-heading">{activeStagedDocType.allowedExtensions.join(', ')}</strong> • Max: <strong className="font-mono text-heading">{activeStagedDocType.maxSizeMB}MB</strong>
-                  </p>
+
+                {/* Inquiry Date */}
+                <Input
+                  id="InquiryDate"
+                  name="InquiryDate"
+                  type="date"
+                  label="Inquiry Date"
+                  required
+                  value={form.InquiryDate}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.InquiryDate}
+                  hint="Date request received"
+                  className="font-mono tabular-nums text-sm"
+                />
+
+                {/* Estimate Date */}
+                <Input
+                  id="RequiredByDate"
+                  name="RequiredByDate"
+                  type="date"
+                  label="Estimate Date"
+                  value={form.RequiredByDate}
+                  onChange={handleChange}
+                  hint="Target estimated delivery date"
+                  className="font-mono tabular-nums text-sm"
+                />
+
+                {/* Sales Region */}
+                <SearchableSelect
+                  id="RegionId"
+                  name="RegionId"
+                  label="Sales Region"
+                  placeholder="Select region..."
+                  searchPlaceholder="Search regions..."
+                  required
+                  options={REGION_OPTIONS}
+                  value={form.RegionId}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.RegionId}
+                />
+
+                {/* Source */}
+                <SearchableSelect
+                  id="Source"
+                  name="Source"
+                  label="Inquiry Source"
+                  options={SOURCE_OPTIONS}
+                  value={form.Source}
+                  onChange={handleChange}
+                />
+
+                {/* Priority */}
+                <SearchableSelect
+                  id="Priority"
+                  name="Priority"
+                  label="Priority Level"
+                  options={PRIORITY_OPTIONS}
+                  value={form.Priority}
+                  onChange={handleChange}
+                />
+
+                {/* Distributor Name (conditionally shown when Source is Distributor) */}
+                {form.Source === 'Distributor' && (
+                  <div className="md:col-span-3">
+                    <Input
+                      id="DistributorName"
+                      name="DistributorName"
+                      type="text"
+                      label="Distributor Name"
+                      placeholder="e.g. Apex Industrial Solutions"
+                      required
+                      value={form.DistributorName}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={errors.DistributorName}
+                      hint="Associated distributor"
+                    />
+                  </div>
                 )}
               </div>
 
-              {/* Document Title */}
+              {/* Subject */}
               <Input
-                id="stageDocTitle"
-                name="stageDocTitle"
+                id="Subject"
+                name="Subject"
                 type="text"
-                label="Document Title"
-                placeholder="e.g. Customer Drawing Rev 0"
-                value={stageDocTitle}
-                onChange={(e) => {
-                  setStageDocTitle(e.target.value);
-                  if (stageTitleError) setStageTitleError('');
-                }}
-                error={stageTitleError}
+                label="Inquiry Subject / Item Description Title"
+                placeholder="e.g. Custom Cast Iron Surface Plate 2000x1000mm Grade 0"
+                required
+                value={form.Subject}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                error={errors.Subject}
+              />
+
+              {/* Description (Rich Text Editor) */}
+              <RichTextEditor
+                id="Description"
+                name="Description"
+                label="Detailed Specifications & Requirement Notes"
+                value={form.Description}
+                onChange={handleChange}
+                placeholder="Provide technical specifications, tolerances, material grade, delivery expectations, drawing numbers, or testing requirements..."
+                hint="Use the formatting toolbar for lists, bold specifications, headings, and quotes."
               />
             </div>
+          </Card>
 
-            {/* File Drag & Drop Box */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-heading block">
-                Select File
-              </label>
+          {/* ── SECTION 2: CUSTOMER INFORMATION ── */}
+          <Card padding="md" className="bg-bg">
+            <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
+              <div className="flex items-center gap-2 text-heading font-semibold text-base">
+                <User size={18} className="text-primary shrink-0" aria-hidden="true" />
+                <span>2. Customer Information</span>
+              </div>
+              <span className="text-xs text-text-muted font-normal">
+                Company profile, contact persons & address details
+              </span>
+            </div>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleFileSelected(f);
-                }}
-                accept={activeStagedDocType?.allowedExtensions?.join(',') || undefined}
-                className="hidden"
-                id="inquiry-form-file-picker"
-              />
+            <div className="space-y-4 sm:space-y-5">
+              {/* Row 1: Company Name & Contact Person */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                <Input
+                  id="CustomerName"
+                  name="CustomerName"
+                  type="text"
+                  label="Customer / Company Name"
+                  placeholder="e.g. Precision AutoWorks India Ltd"
+                  required
+                  value={form.CustomerName}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.CustomerName}
+                  autoComplete="organization"
+                />
 
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(true);
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(false);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(false);
-                  const f = e.dataTransfer.files?.[0];
-                  if (f) handleFileSelected(f);
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                className={[
-                  'border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all',
-                  isDragging
-                    ? 'border-primary bg-primary/10'
-                    : stageFileError
-                    ? 'border-danger/60 bg-danger/5'
-                    : stageDocFile
-                    ? 'border-primary/40 bg-primary/5'
-                    : 'border-border hover:border-primary/50 bg-bg',
-                ].join(' ')}
-              >
-                {stageDocFile ? (
-                  <div className="flex items-center justify-between gap-3 text-left">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                        <FileCheck size={20} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-heading font-mono truncate">
-                          {stageDocFile.name}
-                        </p>
-                        <p className="text-[11px] text-text-muted font-mono tabular-nums">
-                          {formatFileSizeKB(Math.round(stageDocFile.size / 1024))}
-                        </p>
-                      </div>
-                    </div>
+                <Input
+                  id="ContactPerson"
+                  name="ContactPerson"
+                  type="text"
+                  label="Contact Person Name"
+                  placeholder="e.g. Rajesh Nair"
+                  value={form.ContactPerson}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  autoComplete="name"
+                />
+              </div>
 
+              {/* Row 2: Email, Phone & Alternative Phone */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+                <Input
+                  id="Email"
+                  name="Email"
+                  type="email"
+                  label="Email Address"
+                  placeholder="contact@customer.com"
+                  value={form.Email}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.Email}
+                  autoComplete="email"
+                />
+
+                <Input
+                  id="Phone"
+                  name="Phone"
+                  type="tel"
+                  label="Phone / Mobile Number"
+                  placeholder="9823012345"
+                  value={form.Phone}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.Phone}
+                  className="font-mono tabular-nums"
+                  autoComplete="tel"
+                />
+
+                <Input
+                  id="AlternativePhone"
+                  name="AlternativePhone"
+                  type="tel"
+                  label="Alternative Phone"
+                  placeholder="9823098765"
+                  value={form.AlternativePhone}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.AlternativePhone}
+                  className="font-mono tabular-nums"
+                  autoComplete="tel"
+                />
+              </div>
+
+              {/* Row 3: Address Line 1 & Address Line 2 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 pt-1">
+                <Input
+                  id="AddressLine1"
+                  name="AddressLine1"
+                  type="text"
+                  label="Address Line 1"
+                  placeholder="e.g. Plot No. 42, GIDC Industrial Estate"
+                  value={form.AddressLine1}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  autoComplete="address-line1"
+                />
+
+                <Input
+                  id="AddressLine2"
+                  name="AddressLine2"
+                  type="text"
+                  label="Address Line 2"
+                  placeholder="e.g. Phase II, Near Express Highway"
+                  value={form.AddressLine2}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  autoComplete="address-line2"
+                />
+              </div>
+
+              {/* Row 4: City, State, Country */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                <Input
+                  id="City"
+                  name="City"
+                  type="text"
+                  label="City"
+                  placeholder="e.g. Vadodara"
+                  value={form.City}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  autoComplete="address-level2"
+                />
+
+                <Input
+                  id="State"
+                  name="State"
+                  type="text"
+                  label="State / Province"
+                  placeholder="e.g. Gujarat"
+                  value={form.State}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  autoComplete="address-level1"
+                />
+
+                <Input
+                  id="Country"
+                  name="Country"
+                  type="text"
+                  label="Country"
+                  placeholder="e.g. India"
+                  value={form.Country}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  autoComplete="country-name"
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* ── SECTION 3: PRODUCT SELECTION ── */}
+          <Card padding="md" className="bg-bg space-y-6">
+            <div className="border-b border-border pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
+              <div className="flex items-center gap-2 text-heading font-semibold text-base">
+                <Package size={18} className="text-primary shrink-0" aria-hidden="true" />
+                <span>3. Product Selection</span>
+              </div>
+              <span className="text-xs text-text-muted font-normal">
+                Category classification & multiple item specifications
+              </span>
+            </div>
+
+            {/* ── Sub-Card: Add Item to Inquiry ── */}
+            <div
+              className={`p-4 sm:p-5 rounded-xl border bg-surface/50 space-y-4 transition-all duration-200 ${
+                editingItemId
+                  ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
+                  : 'border-border'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-border/70">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                      editingItemId
+                        ? 'bg-primary text-white'
+                        : 'bg-primary/10 text-primary'
+                    }`}
+                  >
+                    {editingItemId ? <Pencil size={15} /> : <Package size={16} />}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-heading">
+                      {editingItemId ? 'Edit Inquiry Product Item' : 'Add Item to Inquiry'}
+                    </h4>
+                    <p className="text-[11px] text-text-muted">
+                      Select product category, catalog item or enter specifications, quantity and unit below.
+                    </p>
+                  </div>
+                </div>
+
+                {editingItemId && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetItemForm}
+                    className="text-xs text-text-muted hover:text-text self-start sm:self-auto h-7 px-2"
+                  >
+                    <X size={13} className="mr-1" />
+                    Cancel Edit
+                  </Button>
+                )}
+              </div>
+
+              {/* 3 columns per row layout */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Product Category */}
+                  <div>
+                    <SearchableSelect
+                      id="item-form-category"
+                      label="Product Category"
+                      options={categoryOptions}
+                      value={itemFormState.categoryId}
+                      placeholder="-- Select Product Category --"
+                      searchPlaceholder="Search categories..."
+                      onChange={(e) => handleItemFieldChange('categoryId', e.target.value)}
+                    />
+                  </div>
+
+                  {/* Product (was Material Catalog Preset) */}
+                  <div>
+                    <SearchableSelect
+                      id="item-catalog-preset"
+                      label="Product"
+                      options={PRODUCT_SELECT_OPTIONS}
+                      value={itemFormState.itemId ? String(itemFormState.itemId) : ''}
+                      placeholder="-- Select Product from Catalog --"
+                      searchPlaceholder="Search catalog..."
+                      onChange={(e) => handleItemFieldChange('itemId', e.target.value)}
+                    />
+                  </div>
+
+                  {/* Item Code */}
+                  <div>
+                    <Input
+                      id="item-form-code"
+                      label="Item Code"
+                      placeholder="e.g. MAT-FST-M6-125"
+                      value={itemFormState.itemCode}
+                      onChange={(e) => handleItemFieldChange('itemCode', e.target.value)}
+                    />
+                  </div>
+
+                  {/* Specification */}
+                  <div>
+                    <Input
+                      id="item-form-spec"
+                      label="Specification"
+                      placeholder="e.g. M6 × 125 MM High Tensile Zinc Plated"
+                      value={itemFormState.specification}
+                      onChange={(e) => handleItemFieldChange('specification', e.target.value)}
+                    />
+                  </div>
+
+                  {/* Quantity */}
+                  <div>
+                    <Input
+                      id="item-form-qty"
+                      label="Quantity"
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={itemFormState.quantity}
+                      onChange={(e) => handleItemFieldChange('quantity', e.target.value)}
+                    />
+                  </div>
+
+                  {/* UOM */}
+                  <div>
+                    <SearchableSelect
+                      id="item-form-uom"
+                      label="UOM"
+                      options={UOM_OPTIONS}
+                      value={itemFormState.uom || 'Nos'}
+                      placeholder="Select UOM..."
+                      searchPlaceholder="Search unit of measure..."
+                      onChange={(e) => handleItemFieldChange('uom', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Form Action Buttons */}
+                <div className="flex items-center justify-end gap-2.5 pt-1">
+                  {editingItemId && (
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="secondary"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setStageDocFile(null);
-                        setStageFileError('');
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                      }}
-                      className="text-xs text-danger hover:bg-danger/10 h-7 px-2"
+                      onClick={resetItemForm}
+                      className="cursor-pointer text-xs"
                     >
-                      <X size={13} className="mr-1" />
-                      Remove
+                      <X size={14} className="mr-1" />
+                      Cancel
                     </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-1">
-                    <UploadCloud size={24} className="text-primary/70 mb-1" />
-                    <p className="text-xs font-semibold text-heading">
-                      Click to choose file or drag & drop here
-                    </p>
-                    <p className="text-[11px] text-text-muted mt-0.5">
-                      {activeStagedDocType
-                        ? `Allowed formats: ${activeStagedDocType.allowedExtensions.join(', ')} (Max ${activeStagedDocType.maxSizeMB}MB)`
-                        : 'Select document type above'}
-                    </p>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleAddOrUpdateItem}
+                    className="font-semibold shadow-xs cursor-pointer text-xs"
+                  >
+                    {editingItemId ? (
+                      <>
+                        <Check size={14} className="mr-1.5" />
+                        Update Item
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={14} className="mr-1.5" />
+                        Add Item
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Sub-Card: Items Grid Table ── */}
+            <div className="rounded-xl border border-border overflow-hidden bg-bg">
+              <div className="p-3.5 bg-surface/80 border-b border-border flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-heading uppercase tracking-wider">
+                    Selected Inquiry Products
+                  </span>
+                  <Badge variant="role" className="text-[11px] px-2 py-0.5 font-mono">
+                    {(form.items || []).length} { (form.items || []).length === 1 ? 'Item' : 'Items' }
+                  </Badge>
+                </div>
+
+                {(form.items || []).length > 0 && (
+                  <div className="text-xs text-text-muted font-mono flex items-center gap-1.5">
+                    <span>Total Qty:</span>
+                    <strong className="text-heading font-semibold">
+                      {(form.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)}
+                    </strong>
                   </div>
                 )}
               </div>
 
-              {stageFileError && (
-                <p className="text-xs text-danger flex items-center gap-1 mt-0.5">
-                  <AlertCircle size={13} />
-                  <span>{stageFileError}</span>
-                </p>
+              {(form.items || []).length > 0 ? (
+                <TableContainer>
+                  <thead>
+                    <tr>
+                      <Th className="w-12 text-center">#</Th>
+                      <Th>PRODUCT CATEGORY</Th>
+                      <Th>ITEM CODE</Th>
+                      <Th>SPECIFICATION</Th>
+                      <Th className="text-right">QTY</Th>
+                      <Th>UOM</Th>
+                      <Th className="text-right w-24">ACTIONS</Th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {(form.items || []).map((item, idx) => (
+                      <tr key={item.prItemId || item.id || idx} className="hover:bg-surface/50 transition-colors">
+                        <Td className="text-center font-mono text-xs text-text-muted">
+                          {idx + 1}
+                        </Td>
+                        <Td className="text-xs font-medium text-heading">
+                          {item.categoryName || getCategoryPathName(item.categoryId || form.CategoryId, categories) || '—'}
+                        </Td>
+                        <Td>
+                          <span className="font-mono text-xs font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
+                            {item.itemCode || '—'}
+                          </span>
+                        </Td>
+                        <Td className="text-xs text-text-muted max-w-xs truncate" title={item.specification}>
+                          {item.specification || '—'}
+                        </Td>
+                        <Td className="text-right font-mono tabular-nums text-xs font-bold text-heading">
+                          {item.quantity}
+                        </Td>
+                        <Td className="text-xs text-text-muted font-mono">
+                          {item.uom}
+                        </Td>
+                        <Td className="text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditItem(item)}
+                              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
+                              title="Edit item"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(idx)}
+                              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 transition-all cursor-pointer shadow-2xs"
+                              title="Remove item"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </TableContainer>
+              ) : (
+                <div className="py-8 text-center text-text-muted text-xs space-y-1">
+                  <Package size={24} className="mx-auto text-text-muted/40 mb-1" />
+                  <p className="font-medium text-heading">No items added to inquiry yet</p>
+                  <p>Fill in the item details above and click &quot;+ Add Item&quot; to include products.</p>
+                </div>
               )}
             </div>
+          </Card>
 
-            {/* Remarks and Add Button */}
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-2">
-              <div className="flex-1">
-                <label
-                  htmlFor="stageDocRemarks"
-                  className="text-xs font-medium text-heading block mb-1"
-                >
-                  Document Remarks (Optional)
-                </label>
-                <input
-                  id="stageDocRemarks"
-                  type="text"
-                  value={stageDocRemarks}
-                  onChange={(e) => setStageDocRemarks(e.target.value)}
-                  placeholder="e.g. Initial customer specification copy..."
-                  className="w-full rounded-lg border border-border bg-bg text-text text-xs px-3 py-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+          {/* ── Step 1 Bottom Action Controls ── */}
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-3 border-t border-border">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={handleCancel}
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
+              <X size={16} className="mr-1.5" aria-hidden="true" />
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={handleNextStep}
+              className="w-full sm:w-auto justify-center"
+            >
+              <span className="hidden sm:inline">Continue to Assignment & Documents</span>
+              <span className="sm:hidden">Next: Assignment & Documents</span>
+              <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── STEP 2 CONTENT: ASSIGNMENT, NOTES & DOCUMENTS ── */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {currentStep === 2 && (
+        <div className="space-y-6">
+          {/* ── SECTION 4: ASSIGNMENT & INITIAL STATUS ── */}
+          <Card padding="md" className="bg-bg">
+            <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
+              <div className="flex items-center gap-2 text-heading font-semibold text-base">
+                <UserCheck size={18} className="text-primary shrink-0" aria-hidden="true" />
+                <span>4. Assignment & Initial Status</span>
+              </div>
+              <span className="text-xs text-text-muted font-normal">
+                Assign internal owner & add handover remarks
+              </span>
+            </div>
+
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                {/* Assigned To (SearchableSelect without "Leave unassigned") */}
+                <SearchableSelect
+                  id="AssignedTo"
+                  name="AssignedTo"
+                  label="Assign To Team Member"
+                  placeholder="Select a team member..."
+                  searchPlaceholder="Search team members by name..."
+                  required
+                  options={userOptions}
+                  value={form.AssignedTo}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.AssignedTo}
+                  hint="Select an internal team member responsible for technical review and quotation."
                 />
+
+                {/* Status */}
+                {isEdit ? (
+                  <SearchableSelect
+                    id="StatusId"
+                    name="StatusId"
+                    label="Inquiry Status"
+                    options={STATUS_OPTIONS.map((s) => ({ value: s.id, label: s.name }))}
+                    value={form.StatusId}
+                    onChange={handleChange}
+                  />
+                ) : (
+                  <div className="flex flex-col justify-center pt-2">
+                    <span className="text-xs font-medium text-text-muted block mb-1">
+                      Initial Pipeline Stage
+                    </span>
+                    <div className="p-2.5 rounded-lg border border-border bg-surface flex items-center gap-2 text-xs text-text">
+                      <Clock size={15} className="text-primary shrink-0" />
+                      <span>New inquiry will start at stage <strong className="text-heading">"New"</strong> and progress through Quoting and Won/Lost.</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* Initial Handover Note / Comment Area */}
+              <div className="mt-4 pt-4 border-t border-border/70 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <label
+                    htmlFor="initialComment"
+                    className="text-xs font-semibold text-heading flex items-center gap-1.5"
+                  >
+                    <MessageSquare size={14} className="text-primary shrink-0" />
+                    <span>Initial Comment / Handover Note (Optional)</span>
+                  </label>
+                  <span className="text-[11px] text-text-muted font-normal">
+                    Automatically logged into inquiry activity upon saving
+                  </span>
+                </div>
+
+                <textarea
+                  id="initialComment"
+                  name="initialComment"
+                  rows={3}
+                  value={form.initialComment}
+                  onChange={handleChange}
+                  placeholder="Add internal notes, customer communication summary, or handover instructions for the assigned team member..."
+                  className="w-full rounded-lg border border-border bg-bg text-text text-sm p-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-text-muted/60"
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* ── SECTION 5: DOCUMENTS & ATTACHMENTS ── */}
+          <Card padding="md" className="bg-bg">
+            <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
+              <div className="flex items-center gap-2 text-heading font-semibold text-base">
+                <Paperclip size={18} className="text-primary shrink-0" aria-hidden="true" />
+                <span>5. Documents & Attachments</span>
+              </div>
+              <span className="text-xs text-text-muted font-normal">
+                Attach RFQs, 2D/3D blueprints, specifications or client PO files
+              </span>
+            </div>
+
+            <div className="space-y-5">
+              {/* Staging Form Controls */}
+              <div className="p-3.5 sm:p-4 bg-surface/50 border border-border rounded-xl space-y-4">
+                <span className="text-xs font-bold text-heading block">
+                  Add New Document Attachment
+                </span>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Document Type */}
+                  <div className="space-y-1">
+                    <SearchableSelect
+                      id="stageDocTypeId"
+                      name="stageDocTypeId"
+                      label="Document Type"
+                      options={docTypeOptions}
+                      value={stageDocTypeId}
+                      onChange={(e) => {
+                        setStageDocTypeId(e.target.value);
+                        if (stageDocFile) {
+                          const err = validateFile(stageDocFile, getDocumentType(e.target.value));
+                          setStageFileError(err);
+                        }
+                      }}
+                    />
+                    {activeStagedDocType && (
+                      <p className="text-[11px] text-text-muted pt-0.5">
+                        Allowed: <strong className="font-mono text-heading">{activeStagedDocType.allowedExtensions.join(', ')}</strong> • Max: <strong className="font-mono text-heading">{activeStagedDocType.maxSizeMB}MB</strong>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Document Title */}
+                  <Input
+                    id="stageDocTitle"
+                    name="stageDocTitle"
+                    type="text"
+                    label="Document Title"
+                    placeholder="e.g. Customer Drawing Rev 0"
+                    value={stageDocTitle}
+                    onChange={(e) => {
+                      setStageDocTitle(e.target.value);
+                      if (stageTitleError) setStageTitleError('');
+                    }}
+                    error={stageTitleError}
+                  />
+                </div>
+
+                {/* File Drag & Drop Box */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-heading block">
+                    Select File
+                  </label>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleFileSelected(f);
+                    }}
+                    accept={activeStagedDocType?.allowedExtensions?.join(',') || undefined}
+                    className="hidden"
+                    id="inquiry-form-file-picker"
+                  />
+
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsDragging(false);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsDragging(false);
+                      const f = e.dataTransfer.files?.[0];
+                      if (f) handleFileSelected(f);
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={[
+                      'border-2 border-dashed rounded-xl p-3.5 sm:p-4 text-center cursor-pointer transition-all',
+                      isDragging
+                        ? 'border-primary bg-primary/10'
+                        : stageFileError
+                        ? 'border-danger/60 bg-danger/5'
+                        : stageDocFile
+                        ? 'border-primary/40 bg-primary/5'
+                        : 'border-border hover:border-primary/50 bg-bg',
+                    ].join(' ')}
+                  >
+                    {stageDocFile ? (
+                      <div className="flex items-center justify-between gap-3 text-left">
+                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <FileCheck size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-heading font-mono truncate">
+                              {stageDocFile.name}
+                            </p>
+                            <p className="text-[11px] text-text-muted font-mono tabular-nums">
+                              {formatFileSizeKB(Math.round(stageDocFile.size / 1024))}
+                            </p>
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStageDocFile(null);
+                            setStageFileError('');
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                          }}
+                          className="text-xs text-danger hover:bg-danger/10 h-7 px-2 shrink-0"
+                        >
+                          <X size={13} className="mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-1">
+                        <UploadCloud size={24} className="text-primary/70 mb-1" />
+                        <p className="text-xs font-semibold text-heading">
+                          Click to choose file or drag & drop here
+                        </p>
+                        <p className="text-[11px] text-text-muted mt-0.5">
+                          {activeStagedDocType
+                            ? `Allowed formats: ${activeStagedDocType.allowedExtensions.join(', ')} (Max ${activeStagedDocType.maxSizeMB}MB)`
+                            : 'Select document type above'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {stageFileError && (
+                    <p className="text-xs text-danger flex items-center gap-1 mt-0.5">
+                      <AlertCircle size={13} />
+                      <span>{stageFileError}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Remarks and Add Button */}
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-2">
+                  <div className="flex-1">
+                    <label
+                      htmlFor="stageDocRemarks"
+                      className="text-xs font-medium text-heading block mb-1"
+                    >
+                      Document Remarks (Optional)
+                    </label>
+                    <input
+                      id="stageDocRemarks"
+                      type="text"
+                      value={stageDocRemarks}
+                      onChange={(e) => setStageDocRemarks(e.target.value)}
+                      placeholder="e.g. Initial customer specification copy..."
+                      className="w-full rounded-lg border border-border bg-bg text-text text-xs px-3 py-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    onClick={handleAddAttachment}
+                    className="text-xs font-semibold shrink-0 h-9 w-full sm:w-auto justify-center"
+                  >
+                    <Plus size={15} className="mr-1.5 text-primary shrink-0" />
+                    Add to Attachments List
+                  </Button>
+                </div>
+              </div>
+
+              {/* List of Attached Documents */}
+              {form.attachments && form.attachments.length > 0 ? (
+                <div className="border border-border rounded-xl overflow-x-auto bg-bg">
+                  <div className="px-4 py-2.5 bg-surface/60 border-b border-border flex items-center justify-between">
+                    <span className="text-xs font-bold text-heading">
+                      Queued Attachments ({form.attachments.length})
+                    </span>
+                    <span className="text-[11px] text-text-muted">
+                      Will be uploaded upon inquiry creation
+                    </span>
+                  </div>
+
+                  <table className="w-full min-w-[540px] text-xs text-left">
+                    <thead>
+                      <tr className="bg-surface/30 border-b border-border/70 text-[11px] font-semibold text-text-muted">
+                        <th className="py-2.5 px-4 w-28">TYPE</th>
+                        <th className="py-2.5 px-4 min-w-[140px]">DOCUMENT TITLE</th>
+                        <th className="py-2.5 px-4 min-w-[180px]">FILE NAME</th>
+                        <th className="py-2.5 px-4 w-24">SIZE</th>
+                        <th className="py-2.5 px-4 min-w-[140px]">REMARKS</th>
+                        <th className="py-2.5 px-4 w-24 text-center">ACTION</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {form.attachments.map((att) => {
+                        const docType = getDocumentType(att.documentTypeId);
+                        return (
+                          <tr key={att.id} className="hover:bg-surface/30 transition-colors">
+                            <td className="py-2.5 px-4">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${docType.badgeClass}`}
+                              >
+                                {docType.typeName}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-4 font-semibold text-heading">
+                              {att.documentTitle}
+                            </td>
+                            <td className="py-2.5 px-4 font-mono text-heading">
+                              <div className="flex items-center gap-1.5">
+                                {renderFileExtIcon(att.fileName)}
+                                <span className="truncate max-w-[200px]" title={att.fileName}>{att.fileName}</span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4 font-mono tabular-nums text-text-muted">
+                              {formatFileSizeKB(att.fileSizeKB)}
+                            </td>
+                            <td className="py-2.5 px-4 text-text">
+                              {att.remarks || '—'}
+                            </td>
+                            <td className="py-2.5 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewAttachment(att)}
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 border border-border/50 hover:border-primary/30 transition-all cursor-pointer"
+                                  title="View attachment details"
+                                >
+                                  <Eye size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAttachment(att.id)}
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 border border-border/50 hover:border-danger/30 transition-all cursor-pointer"
+                                  title="Remove attachment"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-5 text-center text-xs text-text-muted border border-dashed border-border rounded-xl bg-surface/10">
+                  No attachments queued yet. Use the selector above to attach RFQs, drawings, or specifications.
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* ── Step 2 Bottom Action Controls ── */}
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-3 border-t border-border">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={handlePrevStep}
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
+              <ArrowLeft size={16} className="mr-1.5 shrink-0" />
+              <span>Back to Inquiry Details</span>
+            </Button>
+
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
               <Button
                 type="button"
                 variant="secondary"
                 size="md"
-                onClick={handleAddAttachment}
-                className="text-xs font-semibold shrink-0 h-9"
+                onClick={handleCancel}
+                disabled={loading}
+                className="flex-1 sm:flex-initial"
               >
-                <Plus size={15} className="mr-1.5 text-primary" />
-                Add to Attachments List
+                <X size={16} className="mr-1.5" aria-hidden="true" />
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                loading={loading}
+                disabled={loading}
+                className="flex-1 sm:flex-initial justify-center"
+              >
+                <Save size={16} className="mr-1.5 shrink-0" />
+                {isEdit ? 'Save Changes' : 'Create Inquiry'}
               </Button>
             </div>
           </div>
-
-          {/* List of Attached Documents */}
-          {form.attachments && form.attachments.length > 0 ? (
-            <div className="border border-border rounded-xl overflow-hidden bg-bg">
-              <div className="px-4 py-2.5 bg-surface/60 border-b border-border flex items-center justify-between">
-                <span className="text-xs font-bold text-heading">
-                  Queued Attachments ({form.attachments.length})
-                </span>
-                <span className="text-[11px] text-text-muted">
-                  Will be uploaded upon inquiry creation
-                </span>
-              </div>
-
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="bg-surface/30 border-b border-border/70 text-[11px] font-semibold text-text-muted">
-                    <th className="py-2.5 px-4 w-28">TYPE</th>
-                    <th className="py-2.5 px-4 min-w-[140px]">DOCUMENT TITLE</th>
-                    <th className="py-2.5 px-4 min-w-[180px]">FILE NAME</th>
-                    <th className="py-2.5 px-4 w-24">SIZE</th>
-                    <th className="py-2.5 px-4 min-w-[140px]">REMARKS</th>
-                    <th className="py-2.5 px-4 w-24 text-center">ACTION</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {form.attachments.map((att) => {
-                    const docType = getDocumentType(att.documentTypeId);
-                    return (
-                      <tr key={att.id} className="hover:bg-surface/30 transition-colors">
-                        <td className="py-2.5 px-4">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${docType.badgeClass}`}
-                          >
-                            {docType.typeName}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-4 font-semibold text-heading">
-                          {att.documentTitle}
-                        </td>
-                        <td className="py-2.5 px-4 font-mono text-heading">
-                          <div className="flex items-center gap-1.5">
-                            {renderFileExtIcon(att.fileName)}
-                            <span className="truncate max-w-[200px]" title={att.fileName}>{att.fileName}</span>
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-4 font-mono tabular-nums text-text-muted">
-                          {formatFileSizeKB(att.fileSizeKB)}
-                        </td>
-                        <td className="py-2.5 px-4 text-text italic">
-                          {att.remarks ? `"${att.remarks}"` : '—'}
-                        </td>
-                        <td className="py-2.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewAttachment(att)}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 border border-border/50 hover:border-primary/30 transition-all cursor-pointer"
-                              title="View attachment details"
-                            >
-                              <Eye size={15} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveAttachment(att.id)}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 border border-border/50 hover:border-danger/30 transition-all cursor-pointer"
-                              title="Remove attachment"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="py-5 text-center text-xs text-text-muted border border-dashed border-border rounded-xl bg-surface/10">
-              No attachments queued yet. Use the selector above to attach RFQs, drawings, or specifications.
-            </div>
-          )}
         </div>
-      </Card>
+      )}
 
       {/* ── Document Preview Modal ── */}
       {previewAttachment && (
@@ -1127,7 +1932,7 @@ export default function InquiryFormPage() {
             {previewAttachment.remarks && (
               <div className="p-3 bg-bg rounded-lg border border-border text-xs text-text">
                 <span className="text-text-muted block text-[11px] font-medium mb-0.5">Remarks</span>
-                <p className="italic text-heading">"{previewAttachment.remarks}"</p>
+                <p className="text-heading">{previewAttachment.remarks}</p>
               </div>
             )}
 
@@ -1161,6 +1966,18 @@ export default function InquiryFormPage() {
           </div>
         </Modal>
       )}
+
+      {/* ── Discard Changes Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={showDiscardConfirm}
+        onClose={() => setShowDiscardConfirm(false)}
+        onConfirm={handleConfirmDiscard}
+        title="Discard Unsaved Changes?"
+        message="You have unsaved changes in this inquiry form. Are you sure you want to discard them? All entered details will be lost."
+        confirmText="Discard Changes"
+        cancelText="Keep Editing"
+        variant="danger"
+      />
     </form>
   );
 }

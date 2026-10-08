@@ -17,11 +17,8 @@ import {
 } from 'lucide-react';
 import { Modal, Button, Input, SearchableSelect } from '../../../components/ui';
 import { useInquiryDocumentsContext } from '../../../context/InquiryDocumentsContext';
-import {
-  DOCUMENT_TYPE_OPTIONS,
-  getDocumentType,
-  formatFileSizeKB,
-} from '../../../mocks/inquiryDocuments';
+import { useDocumentTypesContext } from '../../../context/DocumentTypesContext';
+import { formatFileSizeKB } from '../../../mocks/inquiryDocuments';
 
 export default function UploadDocumentModal({
   isOpen,
@@ -32,6 +29,7 @@ export default function UploadDocumentModal({
   defaultDocumentTypeId = '',
 }) {
   const { addDocument, addDocumentVersion } = useInquiryDocumentsContext();
+  const { documentTypes = [], getDocumentTypeById } = useDocumentTypesContext();
 
   const isNewVersion = mode === 'new_version' && Boolean(targetDocument);
 
@@ -47,11 +45,11 @@ export default function UploadDocumentModal({
 
   const fileInputRef = useRef(null);
 
-  // Active document type metadata
+  // Active document type metadata from context
   const activeDocType = useMemo(() => {
     const typeId = isNewVersion ? targetDocument?.documentTypeId : documentTypeId;
-    return typeId ? getDocumentType(typeId) : null;
-  }, [isNewVersion, targetDocument, documentTypeId]);
+    return typeId ? getDocumentTypeById(typeId) : null;
+  }, [isNewVersion, targetDocument, documentTypeId, getDocumentTypeById]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -78,11 +76,15 @@ export default function UploadDocumentModal({
 
   // Document type options for Select
   const typeOptions = useMemo(() => {
-    return DOCUMENT_TYPE_OPTIONS.map((dt) => ({
-      value: dt.id,
-      label: `${dt.typeName}${dt.isMandatory ? ' (Required)' : ''} [${dt.allowedExtensions.join(', ')}]`,
-    }));
-  }, []);
+    return documentTypes.map((dt) => {
+      const id = dt.documentTypeId || dt.id;
+      const exts = Array.isArray(dt.allowedExtensions) ? dt.allowedExtensions.join(', ') : '';
+      return {
+        value: id,
+        label: `${dt.typeName}${dt.isMandatory ? ' (Required)' : ''} [${exts}]`,
+      };
+    });
+  }, [documentTypes]);
 
   // Validate selected file against active DocumentType
   function validateSelectedFile(file, docType) {

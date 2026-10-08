@@ -85,7 +85,7 @@ export default function ConfirmModal({
           </Button>
           <Button
             type="button"
-            variant={variant}
+            variant={variant === 'primary' ? 'primary' : 'danger'}
             size="md"
             loading={loading}
             disabled={loading}

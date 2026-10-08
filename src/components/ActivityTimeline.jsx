@@ -44,6 +44,14 @@ function getActivityConfig(type = '') {
         bgDot: 'bg-primary/10 border-primary/30',
         defaultTitle: 'Assigned / Reassigned',
       };
+    case 'comment':
+    case 'note':
+      return {
+        icon: <MessageSquare size={14} className="text-primary" />,
+        badgeVariant: 'info',
+        bgDot: 'bg-primary/10 border-primary/30',
+        defaultTitle: 'Comment Added',
+      };
     default:
       return {
         icon: <Clock size={14} className="text-text-muted" />,

@@ -4,7 +4,7 @@
  * Route: /inquiries/:id
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -35,6 +35,13 @@ import {
   FileCode,
   Layers,
   File,
+  Send,
+  MessageSquare,
+  Eye,
+  ShieldCheck,
+  FileCheck,
+  MapPin,
+  Package,
 } from 'lucide-react';
 
 import {
@@ -45,22 +52,22 @@ import {
   TableContainer,
   Th,
   Td,
+  Modal,
 } from '../../components/ui';
 import ActivityTimeline from '../../components/ActivityTimeline';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useUsersContext } from '../../context/UsersContext';
 import { useInquiryDocumentsContext } from '../../context/InquiryDocumentsContext';
+import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
+import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
+import { getCategoryPathName } from '../../utils/categoryTree';
 import {
   getRegionName,
-  getCategoryName,
   getStatusOption,
   getPriorityBadgeVariant,
   formatCurrencyINR,
 } from '../../mocks/inquiries';
-import {
-  getDocumentType,
-  formatFileSizeKB,
-} from '../../mocks/inquiryDocuments';
+import { formatFileSizeKB } from '../../mocks/inquiryDocuments';
 import AssignInquiryModal from './components/AssignInquiryModal';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import UploadDocumentModal from './components/UploadDocumentModal';
@@ -69,9 +76,11 @@ export default function InquiryViewPage() {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  const { getInquiryById } = useInquiriesContext();
+  const { getInquiryById, addInquiryComment } = useInquiriesContext();
   const { allUsers = [], users = [] } = useUsersContext();
   const { getDocumentsByInquiryId, getMissingMandatoryDocumentTypes } = useInquiryDocumentsContext();
+  const { documentTypes = [], getDocumentTypeById } = useDocumentTypesContext();
+  const { categories = [] } = useProductCategoriesContext();
 
   const userList = allUsers.length > 0 ? allUsers : users;
 
@@ -85,6 +94,11 @@ export default function InquiryViewPage() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadModalMode, setUploadModalMode] = useState('add');
   const [selectedDocForVersion, setSelectedDocForVersion] = useState(null);
+  const [previewItem, setPreviewItem] = useState(null);
+
+  // Comment state
+  const [commentText, setCommentText] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   // Accordion state for document version history
   const [expandedDocIds, setExpandedDocIds] = useState(new Set());
@@ -94,10 +108,12 @@ export default function InquiryViewPage() {
     return inquiry ? getDocumentsByInquiryId(inquiry.id || inquiry.InquiryId) : [];
   }, [inquiry, getDocumentsByInquiryId]);
 
-  // Missing mandatory document types
+  // Missing mandatory document types computed dynamically against configuration
   const missingMandatoryTypes = useMemo(() => {
-    return inquiry ? getMissingMandatoryDocumentTypes(inquiry.id || inquiry.InquiryId) : [];
-  }, [inquiry, getMissingMandatoryDocumentTypes]);
+    return inquiry
+      ? getMissingMandatoryDocumentTypes(inquiry.id || inquiry.InquiryId, documentTypes)
+      : [];
+  }, [inquiry, getMissingMandatoryDocumentTypes, documentTypes]);
 
   // Helper to resolve user name
   const resolveUserName = (userId) => {
@@ -116,6 +132,83 @@ export default function InquiryViewPage() {
       }
       return next;
     });
+  };
+
+  const handleAddComment = () => {
+    const trimmed = commentText.trim();
+    if (!trimmed || isSubmittingComment) return;
+
+    setIsSubmittingComment(true);
+    try {
+      const result = addInquiryComment(inquiry.id || inquiry.InquiryId, trimmed);
+      if (result?.ok) {
+        setCommentText('');
+      }
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
+  const handleDownloadAttachment = (item) => {
+    if (!item) return;
+
+    try {
+      const fileName = item.fileName || 'attachment.pdf';
+      const fileUrl = item.fileUrl;
+
+      if (fileUrl) {
+        const a = document.createElement('a');
+        a.href = fileUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        const fileContent = [
+          `================================================================`,
+          ` MICROFLAT ERP - ATTACHMENT EXPORT`,
+          `================================================================`,
+          `Document Title   : ${item.documentTitle || item.fileName}`,
+          `File Name        : ${fileName}`,
+          `Revision         : v${item.versionNo || 1} ${item.isCurrent ? '(Current Active)' : '(Archived)'}`,
+          `Document Type    : ${getDocumentTypeById(item.documentTypeId)?.typeName || 'Attachment'}`,
+          `File Size        : ${formatFileSizeKB(item.fileSizeKB || 1024)}`,
+          `Inquiry No       : ${inquiry.InquiryNo}`,
+          `Requirement      : ${inquiry.Subject || 'N/A'}`,
+          `Customer         : ${inquiry.CustomerName}`,
+          `Uploaded By      : ${item.uploadedBy || 'Ian Chesnut'}`,
+          `Uploaded Date    : ${item.uploadedOn || 'N/A'}`,
+          `Revision Remarks : ${item.changeRemarks || 'N/A'}`,
+          `================================================================`,
+          `Exported On      : ${new Date().toLocaleString()}`,
+          `Status           : Verified ERP Record Attachment`,
+          `================================================================\n`,
+        ].join('\n');
+
+        const mimeType = fileName.toLowerCase().endsWith('.pdf')
+          ? 'application/pdf'
+          : fileName.toLowerCase().endsWith('.docx')
+          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : fileName.toLowerCase().endsWith('.dwg')
+          ? 'application/acad'
+          : 'text/plain;charset=utf-8';
+
+        const blob = new Blob([fileContent], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      toast.success(`Downloaded ${fileName}`);
+    } catch (err) {
+      console.error('Download error:', err);
+      toast.error('Failed to download document attachment.');
+    }
   };
 
   const renderFileExtIcon = (ext = '') => {
@@ -267,9 +360,29 @@ export default function InquiryViewPage() {
             </div>
 
             <div>
+              <span className="text-text-muted block mb-0.5">Estimate Date</span>
+              <span className="font-mono tabular-nums font-medium text-heading text-sm flex items-center gap-1.5">
+                <Calendar size={14} className="text-text-muted" />
+                {inquiry.RequiredByDate || inquiry.EstimateDate || 'Not specified'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-text-muted block mb-0.5">Sales Region</span>
+              <span className="font-medium text-heading text-sm">
+                {getRegionName(inquiry.RegionId)}
+              </span>
+            </div>
+
+            <div>
               <span className="text-text-muted block mb-0.5">Source Channel</span>
               <span className="font-medium text-heading text-sm">
                 {inquiry.Source || 'Website'}
+                {inquiry.Source === 'Distributor' && inquiry.DistributorName ? (
+                  <span className="text-text-muted font-normal text-xs block">
+                    Distributor: <strong className="text-heading font-medium">{inquiry.DistributorName}</strong>
+                  </span>
+                ) : null}
               </span>
             </div>
 
@@ -283,9 +396,16 @@ export default function InquiryViewPage() {
             {inquiry.Description && (
               <div className="sm:col-span-2 pt-2 border-t border-border/60">
                 <span className="text-text-muted block mb-1">Specifications & Notes</span>
-                <p className="text-text bg-surface/40 p-3 rounded-lg border border-border leading-relaxed whitespace-pre-line">
-                  {inquiry.Description}
-                </p>
+                {inquiry.Description.includes('<') ? (
+                  <div
+                    className="rich-text-content text-text bg-surface/40 p-3.5 rounded-lg border border-border leading-relaxed text-sm overflow-x-auto"
+                    dangerouslySetInnerHTML={{ __html: inquiry.Description }}
+                  />
+                ) : (
+                  <p className="text-text bg-surface/40 p-3 rounded-lg border border-border leading-relaxed whitespace-pre-line text-sm">
+                    {inquiry.Description}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -344,66 +464,115 @@ export default function InquiryViewPage() {
               )}
             </div>
 
+            {inquiry.AlternativePhone ? (
+              <div>
+                <span className="text-text-muted block mb-0.5">Alternative Phone</span>
+                <span className="font-mono tabular-nums font-medium text-heading text-sm flex items-center gap-1.5">
+                  <Phone size={14} className="text-text-muted" />
+                  {inquiry.AlternativePhone}
+                </span>
+              </div>
+            ) : null}
+
             <div>
               <span className="text-text-muted block mb-0.5">Sales Territory</span>
               <span className="font-medium text-heading text-sm">
                 {getRegionName(inquiry.RegionId)}
               </span>
             </div>
+
+            {(inquiry.AddressLine1 || inquiry.AddressLine2 || inquiry.City || inquiry.State || inquiry.Country) && (
+              <div className="sm:col-span-2 pt-2 border-t border-border/60">
+                <span className="text-text-muted block mb-1">Customer Address</span>
+                <div className="flex items-start gap-1.5 text-heading text-xs">
+                  <MapPin size={14} className="text-primary mt-0.5 shrink-0" />
+                  <span>
+                    {[
+                      inquiry.AddressLine1,
+                      inquiry.AddressLine2,
+                      inquiry.City,
+                      inquiry.State,
+                      inquiry.Country,
+                    ]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
 
-        {/* 3. Classification & Commercials */}
-        <Card padding="md" className="bg-bg">
-          <div className="border-b border-border pb-3 mb-4 flex items-center justify-between">
+        {/* 3. Product Selection Card (Full Width) */}
+        <Card padding="md" className="lg:col-span-2 bg-bg space-y-4">
+          <div className="border-b border-border pb-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-              <Tags size={17} className="text-primary" />
-              <span>3. Classification & Commercial Scope</span>
+              <Package size={17} className="text-primary" />
+              <span>3. Product Selection</span>
             </div>
-            <span className="text-xs text-text-muted">Manufacturing Specs</span>
+            <span className="text-xs text-text-muted">Scope & Line Items</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="sm:col-span-2">
-              <span className="text-text-muted block mb-0.5">Product Category</span>
-              <span className="font-medium text-heading text-sm">
-                {getCategoryName(inquiry.CategoryId)}
-              </span>
+          {/* Line Items Table if multiple items exist */}
+          {Array.isArray(inquiry.items) && inquiry.items.length > 0 ? (
+            <div className="rounded-xl border border-border overflow-hidden bg-surface/40">
+              <div className="px-4 py-2.5 bg-surface border-b border-border flex items-center justify-between text-xs font-semibold text-heading">
+                <span>Inquiry Items ({inquiry.items.length})</span>
+                <span className="font-mono text-text-muted text-xs">
+                  Total Qty: <strong className="text-heading">{inquiry.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)}</strong>
+                </span>
+              </div>
+              <TableContainer>
+                <thead>
+                  <tr>
+                    <Th className="w-12 text-center text-xs py-2.5">#</Th>
+                    <Th className="text-xs py-2.5">PRODUCT CATEGORY</Th>
+                    <Th className="text-xs py-2.5">ITEM CODE</Th>
+                    <Th className="text-xs py-2.5">SPECIFICATION</Th>
+                    <Th className="text-right text-xs py-2.5">QTY</Th>
+                    <Th className="text-xs py-2.5">UOM</Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border text-xs">
+                  {inquiry.items.map((item, idx) => (
+                    <tr key={item.prItemId || item.id || idx} className="hover:bg-surface/60 transition-colors">
+                      <Td className="text-center font-mono text-text-muted py-2.5">{idx + 1}</Td>
+                      <Td className="font-medium text-heading text-xs py-2.5">
+                        {item.categoryName || getCategoryPathName(item.categoryId || inquiry.CategoryId, categories) || '—'}
+                      </Td>
+                      <Td className="py-2.5">
+                        <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-xs">
+                          {item.itemCode || '—'}
+                        </span>
+                      </Td>
+                      <Td className="text-text-muted py-2.5">{item.specification || '—'}</Td>
+                      <Td className="text-right font-mono font-bold text-heading text-xs py-2.5">{item.quantity}</Td>
+                      <Td className="text-text-muted font-mono text-xs py-2.5">{item.uom}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableContainer>
             </div>
-
-            <div>
-              <span className="text-text-muted block mb-0.5">Quantity & UOM</span>
-              <span className="font-mono tabular-nums font-bold text-heading text-sm">
-                {inquiry.Quantity} {inquiry.UOM}
-              </span>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div>
+                <span className="text-text-muted block mb-0.5">Product Category</span>
+                <span className="font-medium text-heading text-sm block">
+                  {getCategoryPathName(inquiry.CategoryId, categories)}
+                </span>
+              </div>
+              <div>
+                <span className="text-text-muted block mb-0.5">Quantity & UOM</span>
+                <span className="font-mono tabular-nums font-bold text-heading text-sm">
+                  {inquiry.Quantity || '1'} {inquiry.UOM || 'PCS'}
+                </span>
+              </div>
             </div>
-
-            <div>
-              <span className="text-text-muted block mb-0.5">Estimated Commercial Value</span>
-              <span className="font-mono tabular-nums font-bold text-primary text-sm flex items-center gap-0.5">
-                {formatCurrencyINR(inquiry.EstimatedValue)}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-text-muted block mb-0.5">Required By Date</span>
-              <span className="font-mono tabular-nums font-medium text-heading text-sm flex items-center gap-1.5">
-                <Calendar size={14} className="text-text-muted" />
-                {inquiry.RequiredByDate || 'Not specified'}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-text-muted block mb-0.5">Priority Classification</span>
-              <Badge variant={getPriorityBadgeVariant(inquiry.Priority)} className="text-[11px] px-2 py-0.5">
-                {inquiry.Priority}
-              </Badge>
-            </div>
-          </div>
+          )}
         </Card>
 
-        {/* 4. Assignment & Audit Card */}
-        <Card padding="md" className="bg-bg">
+        {/* 4. Assignment & Audit Card (Full Width) */}
+        <Card padding="md" className="lg:col-span-2 bg-bg">
           <div className="border-b border-border pb-3 mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
               <UserCheck size={17} className="text-primary" />
@@ -467,22 +636,79 @@ export default function InquiryViewPage() {
         </Card>
       </div>
 
-      {/* ── SECTION 5: ACTIVITY TIMELINE HISTORY ── */}
+      {/* ── SECTION 5: ACTIVITY TIMELINE HISTORY & COMMENTS ── */}
       <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
+        <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
             <ActivityIcon size={18} className="text-primary" />
-            <span>Activity & Audit Trail</span>
+            <h3 className="text-heading font-semibold text-base">Activity & Audit Trail</h3>
+            <Badge variant="neutral" className="text-xs font-mono px-2 py-0.5">
+              {(inquiry.activity || []).length}
+            </Badge>
           </div>
           <span className="text-xs text-text-muted">
-            Chronological history of status shifts, reassignments & remarks
+            Chronological history of status shifts, reassignments, comments & remarks
           </span>
         </div>
 
-        <ActivityTimeline
-          activities={inquiry.activity || []}
-          emptyMessage="No activity events logged for this inquiry yet."
-        />
+        {/* ── Add Comment Section ── */}
+        <div className="mb-6 p-4 rounded-xl bg-surface/50 border border-border space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <label
+              htmlFor="inquiry-comment-input"
+              className="text-xs font-semibold text-heading flex items-center gap-1.5"
+            >
+              <MessageSquare size={14} className="text-primary" />
+              <span>Add Comment / Internal Note</span>
+            </label>
+            <span className="text-[11px] text-text-muted">
+              Posting as <strong className="text-heading font-medium">Ian Chesnut</strong>
+            </span>
+          </div>
+
+          <textarea
+            id="inquiry-comment-input"
+            rows={3}
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
+            placeholder="Write a note, client communication summary, or internal remark..."
+            className="w-full text-xs bg-bg border border-border rounded-lg p-3 text-heading placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all resize-none shadow-2xs"
+          />
+
+          <div className="flex items-center justify-between gap-3 pt-0.5">
+            <div>
+              {commentText.length > 0 ? (
+                <span className="font-mono text-[11px] text-text-muted tabular-nums">
+                  {commentText.length} chars
+                </span>
+              ) : (
+                <span className="text-[11px] text-text-muted">
+                  Add remarks or updates to the inquiry audit history
+                </span>
+              )}
+            </div>
+
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleAddComment}
+              disabled={!commentText.trim() || isSubmittingComment}
+              className="text-xs font-semibold shadow-2xs"
+            >
+              <Send size={13} className="mr-1.5" />
+              {isSubmittingComment ? 'Posting...' : 'Post Comment'}
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Scrollable Activity Timeline History ── */}
+        <div className="max-h-[460px] overflow-y-auto pr-1 sm:pr-2 overscroll-contain">
+          <ActivityTimeline
+            activities={inquiry.activity || []}
+            emptyMessage="No activity events or comments logged for this inquiry yet."
+          />
+        </div>
       </Card>
 
       {/* ── SECTION 6: MANDATORY DOCUMENTS WARNING BANNER & ATTACHMENTS CARD ── */}
@@ -550,191 +776,249 @@ export default function InquiryViewPage() {
               <TableContainer>
                 <thead>
                   <tr className="bg-surface/60 border-b border-border text-left">
-                    <Th className="py-3 px-4 w-10 text-center"></Th>
-                    <Th className="py-3 px-4">DOCUMENT TYPE</Th>
-                    <Th className="py-3 px-4">DOCUMENT TITLE</Th>
-                    <Th className="py-3 px-4">CURRENT REVISION</Th>
-                    <Th className="py-3 px-4">FILE SIZE</Th>
-                    <Th className="py-3 px-4">UPLOADED BY / DATE</Th>
-                    <Th className="py-3 px-4 text-right">ACTIONS</Th>
+                    <Th className="py-3 px-3 w-12 text-center"></Th>
+                    <Th className="py-3 px-4 w-40">DOCUMENT TYPE</Th>
+                    <Th className="py-3 px-4 min-w-[220px]">DOCUMENT TITLE</Th>
+                    <Th className="py-3 px-4 min-w-[220px]">CURRENT REVISION</Th>
+                    <Th className="py-3 px-4 w-28">FILE SIZE</Th>
+                    <Th className="py-3 px-4 w-48">UPLOADED BY / DATE</Th>
+                    <Th className="py-3 px-4 w-28 text-right">ACTIONS</Th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-border bg-bg">
                   {inquiryDocuments.map((doc) => {
-                    const docType = getDocumentType(doc.documentTypeId);
+                    const docType = getDocumentTypeById(doc.documentTypeId);
                     const isExpanded = expandedDocIds.has(doc.documentId);
                     const versions = doc.versions || [];
                     const currentVersion = versions.find((v) => v.isCurrent) || versions[0] || {};
 
                     return (
-                      <tr key={doc.documentId} className="group">
-                        <td colSpan={7} className="p-0">
-                          {/* Main Row */}
-                          <div className="flex items-center hover:bg-surface/50 transition-colors py-3 px-4 border-b border-border/50 text-xs">
-                            {/* Expand / Collapse Button */}
-                            <div className="w-10 flex justify-center shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => toggleDocExpanded(doc.documentId)}
-                                className="p-1 rounded-lg text-text-muted hover:text-heading hover:bg-surface transition-colors cursor-pointer"
-                                title={isExpanded ? 'Collapse version history' : 'Expand version history'}
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown size={16} className="text-primary" />
-                                ) : (
-                                  <ChevronRight size={16} />
-                                )}
-                              </button>
-                            </div>
+                      <Fragment key={doc.documentId}>
+                        <tr className="hover:bg-surface/50 transition-colors group">
+                          {/* Expand / Collapse Button */}
+                          <Td className="py-3 px-3 w-12 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleDocExpanded(doc.documentId)}
+                              className="p-1 rounded-lg text-text-muted hover:text-heading hover:bg-surface transition-colors cursor-pointer inline-flex items-center justify-center"
+                              title={isExpanded ? 'Collapse version history' : 'Expand version history'}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown size={16} className="text-primary" />
+                              ) : (
+                                <ChevronRight size={16} />
+                              )}
+                            </button>
+                          </Td>
 
-                            {/* Document Type */}
-                            <div className="w-36 shrink-0 px-2">
-                              <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${docType.badgeClass}`}
-                              >
-                                {docType.typeName}
-                              </span>
-                            </div>
+                          {/* Document Type */}
+                          <Td className="py-3 px-4 w-40">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${docType.badgeClass}`}
+                            >
+                              {docType.typeName}
+                            </span>
+                          </Td>
 
-                            {/* Document Title */}
-                            <div className="flex-1 min-w-[180px] px-2">
-                              <span className="font-semibold text-heading text-sm block truncate">
-                                {doc.documentTitle}
-                              </span>
-                              <span className="text-[11px] text-text-muted font-mono">
-                                {versions.length} revision{versions.length > 1 ? 's' : ''} recorded
-                              </span>
-                            </div>
+                          {/* Document Title */}
+                          <Td className="py-3 px-4 min-w-[220px]">
+                            <span className="font-semibold text-heading text-xs block truncate" title={doc.documentTitle}>
+                              {doc.documentTitle}
+                            </span>
+                            <span className="text-[11px] text-text-muted font-mono block mt-0.5">
+                              {versions.length} revision{versions.length > 1 ? 's' : ''} recorded
+                            </span>
+                          </Td>
 
-                            {/* Current Version File Name */}
-                            <div className="w-56 shrink-0 px-2 flex items-center gap-2">
+                          {/* Current Version File Name (Click to open preview) */}
+                          <Td className="py-3 px-4 min-w-[220px]">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewItem({
+                                  ...currentVersion,
+                                  documentTitle: doc.documentTitle,
+                                  documentTypeId: doc.documentTypeId,
+                                })
+                              }
+                              className="flex items-center gap-2 group/file hover:text-primary transition-colors cursor-pointer text-left w-full focus:outline-none"
+                              title={`Click to open preview of ${currentVersion.fileName}`}
+                            >
                               {renderFileExtIcon(currentVersion.fileExtension)}
-                              <span className="font-mono text-xs text-heading font-medium truncate" title={currentVersion.fileName}>
+                              <span
+                                className="font-mono text-xs text-heading font-medium truncate group-hover/file:text-primary group-hover/file:underline"
+                                title={currentVersion.fileName}
+                              >
                                 {currentVersion.fileName}
                               </span>
-                            </div>
+                              <Eye size={13} className="text-text-muted/50 group-hover/file:text-primary shrink-0 opacity-0 group-hover/file:opacity-100 transition-opacity" />
+                            </button>
+                          </Td>
 
-                            {/* File Size */}
-                            <div className="w-24 shrink-0 px-2 font-mono tabular-nums text-text-muted">
-                              {formatFileSizeKB(currentVersion.fileSizeKB)}
-                            </div>
+                          {/* File Size */}
+                          <Td className="py-3 px-4 w-28 font-mono tabular-nums text-text-muted text-xs">
+                            {formatFileSizeKB(currentVersion.fileSizeKB)}
+                          </Td>
 
-                            {/* Uploaded By & On */}
-                            <div className="w-48 shrink-0 px-2">
-                              <span className="text-heading font-medium block truncate">
-                                {currentVersion.uploadedBy || doc.createdBy}
-                              </span>
-                              <span className="font-mono text-[11px] text-text-muted tabular-nums">
-                                {currentVersion.uploadedOn || doc.createdOn}
-                              </span>
-                            </div>
+                          {/* Uploaded By & On */}
+                          <Td className="py-3 px-4 w-48">
+                            <span className="text-heading font-medium block text-xs truncate">
+                              {currentVersion.uploadedBy || doc.createdBy}
+                            </span>
+                            <span className="font-mono text-[11px] text-text-muted tabular-nums block mt-0.5">
+                              {currentVersion.uploadedOn || doc.createdOn}
+                            </span>
+                          </Td>
 
-                            {/* Actions */}
-                            <div className="w-28 shrink-0 px-2 flex items-center justify-end gap-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedDocForVersion(doc);
-                                  setUploadModalMode('new_version');
-                                  setIsUploadModalOpen(true);
-                                }}
-                                title="Upload new version"
-                                className="text-xs text-primary hover:bg-primary/10 h-8 px-2"
-                              >
-                                <UploadCloud size={14} className="mr-1" />
-                                New Rev
-                              </Button>
-                            </div>
-                          </div>
+                          {/* Actions */}
+                          <Td className="py-3 px-4 w-28 text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedDocForVersion(doc);
+                                setUploadModalMode('new_version');
+                                setIsUploadModalOpen(true);
+                              }}
+                              title="Upload new version"
+                              className="text-xs text-primary hover:bg-primary/10 h-8 px-2"
+                            >
+                              <UploadCloud size={14} className="mr-1" />
+                              New Rev
+                            </Button>
+                          </Td>
+                        </tr>
 
-                          {/* Nested Version History Accordion Drawer */}
-                          {isExpanded && (
-                            <div className="bg-surface/30 p-4 border-b border-border/80 pl-14 space-y-2 animate-in fade-in duration-100">
-                              <div className="flex items-center justify-between pb-1">
-                                <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                                  <Clock size={14} className="text-text-muted" />
-                                  <span>Version History for "{doc.documentTitle}"</span>
-                                </span>
-                                <span className="text-[11px] text-text-muted">
-                                  Newest revisions listed first
-                                </span>
-                              </div>
+                        {/* Nested Version History Accordion Drawer */}
+                        {isExpanded && (
+                          <tr className="bg-surface/30">
+                            <td colSpan={7} className="p-0 border-b border-border/80">
+                              <div className="p-4 pl-14 space-y-2 animate-in fade-in duration-100">
+                                <div className="flex items-center justify-between pb-1">
+                                  <span className="text-xs font-bold text-heading flex items-center gap-1.5">
+                                    <Clock size={14} className="text-text-muted" />
+                                    <span>Version History for "{doc.documentTitle}"</span>
+                                  </span>
+                                  <span className="text-[11px] text-text-muted">
+                                    Newest revisions listed first
+                                  </span>
+                                </div>
 
-                              <div className="bg-bg border border-border rounded-lg overflow-hidden">
-                                <table className="w-full text-xs text-left">
-                                  <thead>
-                                    <tr className="bg-surface/60 border-b border-border text-[11px] font-semibold text-text-muted">
-                                      <th className="py-2.5 px-3">REVISION</th>
-                                      <th className="py-2.5 px-3">FILE NAME</th>
-                                      <th className="py-2.5 px-3">SIZE</th>
-                                      <th className="py-2.5 px-3">UPLOADED BY / DATE</th>
-                                      <th className="py-2.5 px-3">CHANGE REMARKS</th>
-                                      <th className="py-2.5 px-3 text-right">ACTION</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-border/60">
-                                    {versions.map((ver) => (
-                                      <tr key={ver.versionId} className="hover:bg-surface/40 transition-colors">
-                                        <td className="py-2.5 px-3">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="font-mono font-bold text-heading">
-                                              v{ver.versionNo}
-                                            </span>
-                                            {ver.isCurrent && (
-                                              <Badge variant="success" className="text-[10px] px-1.5 py-0">
-                                                Current
-                                              </Badge>
-                                            )}
-                                          </div>
-                                        </td>
-
-                                        <td className="py-2.5 px-3 font-mono text-heading">
-                                          <div className="flex items-center gap-1.5">
-                                            {renderFileExtIcon(ver.fileExtension)}
-                                            <span className="truncate max-w-[220px]" title={ver.fileName}>
-                                              {ver.fileName}
-                                            </span>
-                                          </div>
-                                        </td>
-
-                                        <td className="py-2.5 px-3 font-mono tabular-nums text-text-muted">
-                                          {formatFileSizeKB(ver.fileSizeKB)}
-                                        </td>
-
-                                        <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted tabular-nums">
-                                          <div>{ver.uploadedBy}</div>
-                                          <div>{ver.uploadedOn}</div>
-                                        </td>
-
-                                        <td className="py-2.5 px-3 text-text italic">
-                                          {ver.changeRemarks ? `"${ver.changeRemarks}"` : '—'}
-                                        </td>
-
-                                        <td className="py-2.5 px-3 text-right">
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => toast('This is a mock — no file is actually stored.')}
-                                            title="Download attachment (Mock)"
-                                            className="text-xs text-text-muted hover:text-primary h-7 px-2"
-                                          >
-                                            <Download size={13} className="mr-1" />
-                                            Download
-                                          </Button>
-                                        </td>
+                                <div className="bg-bg border border-border rounded-lg overflow-hidden">
+                                  <table className="w-full text-xs text-left">
+                                    <thead>
+                                      <tr className="bg-surface/60 border-b border-border text-[11px] font-semibold text-text-muted">
+                                        <th className="py-2.5 px-3">REVISION</th>
+                                        <th className="py-2.5 px-3">FILE NAME</th>
+                                        <th className="py-2.5 px-3">SIZE</th>
+                                        <th className="py-2.5 px-3">UPLOADED BY / DATE</th>
+                                        <th className="py-2.5 px-3">CHANGE REMARKS</th>
+                                        <th className="py-2.5 px-3 text-right">ACTION</th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/60">
+                                      {versions.map((ver) => (
+                                        <tr key={ver.versionId} className="hover:bg-surface/40 transition-colors">
+                                          <td className="py-2.5 px-3">
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="font-mono font-bold text-heading">
+                                                v{ver.versionNo}
+                                              </span>
+                                              {ver.isCurrent && (
+                                                <Badge variant="success" className="text-[10px] px-1.5 py-0">
+                                                  Current
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          </td>
+
+                                          <td className="py-2.5 px-3 font-mono text-heading">
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setPreviewItem({
+                                                  ...ver,
+                                                  documentTitle: doc.documentTitle,
+                                                  documentTypeId: doc.documentTypeId,
+                                                })
+                                              }
+                                              className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-pointer text-left group/verfile focus:outline-none"
+                                              title={`Click to view ${ver.fileName}`}
+                                            >
+                                              {renderFileExtIcon(ver.fileExtension)}
+                                              <span
+                                                className="truncate max-w-[220px] group-hover/verfile:underline"
+                                                title={ver.fileName}
+                                              >
+                                                {ver.fileName}
+                                              </span>
+                                              <Eye size={12} className="text-text-muted/50 group-hover/verfile:text-primary shrink-0 opacity-0 group-hover/verfile:opacity-100 transition-opacity" />
+                                            </button>
+                                          </td>
+
+                                          <td className="py-2.5 px-3 font-mono tabular-nums text-text-muted">
+                                            {formatFileSizeKB(ver.fileSizeKB)}
+                                          </td>
+
+                                          <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted tabular-nums">
+                                            <div>{ver.uploadedBy}</div>
+                                            <div>{ver.uploadedOn}</div>
+                                          </td>
+
+                                          <td className="py-2.5 px-3 text-text italic">
+                                            {ver.changeRemarks ? `"${ver.changeRemarks}"` : '—'}
+                                          </td>
+
+                                          <td className="py-2.5 px-3 text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  setPreviewItem({
+                                                    ...ver,
+                                                    documentTitle: doc.documentTitle,
+                                                    documentTypeId: doc.documentTypeId,
+                                                  })
+                                                }
+                                                title="View / Preview attachment"
+                                                className="text-xs text-text-muted hover:text-primary h-7 px-2"
+                                              >
+                                                <Eye size={13} className="mr-1" />
+                                                View
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleDownloadAttachment({
+                                                    ...ver,
+                                                    documentTitle: doc.documentTitle,
+                                                    documentTypeId: doc.documentTypeId,
+                                                  })
+                                                }
+                                                title="Download attachment"
+                                                className="text-xs text-text-muted hover:text-primary h-7 px-2"
+                                              >
+                                                <Download size={13} className="mr-1" />
+                                                Download
+                                              </Button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -743,6 +1027,137 @@ export default function InquiryViewPage() {
           )}
         </Card>
       </div>
+
+      {/* ── Document Preview Modal ── */}
+      {previewItem && (
+        <Modal
+          isOpen={Boolean(previewItem)}
+          onClose={() => setPreviewItem(null)}
+          title={previewItem.documentTitle || previewItem.fileName}
+          maxWidth="max-w-3xl"
+        >
+          <div className="space-y-4">
+            {/* Meta bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-surface/60 p-3.5 rounded-xl border border-border">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                    getDocumentTypeById(previewItem.documentTypeId)?.badgeClass ||
+                    'bg-surface text-text-muted border-border'
+                  }`}
+                >
+                  {getDocumentTypeById(previewItem.documentTypeId)?.typeName || 'Attachment'}
+                </span>
+                <Badge
+                  variant={previewItem.isCurrent ? 'success' : 'neutral'}
+                  className="text-[11px] font-mono px-2 py-0.5"
+                >
+                  Rev v{previewItem.versionNo} {previewItem.isCurrent ? '(Current)' : ''}
+                </Badge>
+                <span
+                  className="font-mono text-heading font-medium text-xs truncate max-w-xs sm:max-w-sm"
+                  title={previewItem.fileName}
+                >
+                  {previewItem.fileName}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 text-text-muted text-xs">
+                <span>
+                  Size: <strong className="text-heading font-mono">{formatFileSizeKB(previewItem.fileSizeKB)}</strong>
+                </span>
+                <span>
+                  Uploaded: <strong className="text-heading font-mono">{previewItem.uploadedOn}</strong> by{' '}
+                  <strong className="text-heading">{previewItem.uploadedBy}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Document Preview Display Box */}
+            <div className="bg-bg rounded-2xl border border-border p-6 flex flex-col items-center justify-center min-h-[320px] shadow-inner text-center space-y-4 relative overflow-hidden">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto border border-primary/20 shadow-xs">
+                {previewItem.fileExtension?.toLowerCase() === '.pdf' ? (
+                  <FileText size={32} className="text-danger" />
+                ) : previewItem.fileExtension?.toLowerCase() === '.dwg' ||
+                  previewItem.fileExtension?.toLowerCase() === '.dxf' ? (
+                  <Layers size={32} className="text-blue-500" />
+                ) : (
+                  <FileCheck size={32} className="text-primary" />
+                )}
+              </div>
+
+              <div className="space-y-1 max-w-md">
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-success/10 text-success border border-success/20">
+                  <ShieldCheck size={14} /> Verified Document File
+                </span>
+                <h4 className="text-base font-bold text-heading mt-2">
+                  {previewItem.documentTitle || previewItem.fileName}
+                </h4>
+                <p className="text-xs text-text-muted font-mono break-all">
+                  {previewItem.fileName}
+                </p>
+              </div>
+
+              {/* Change Remarks */}
+              {previewItem.changeRemarks && (
+                <div className="w-full max-w-lg bg-surface/50 rounded-xl p-3 border border-border text-left space-y-1 text-xs">
+                  <span className="text-[11px] font-semibold text-text-muted block">Revision Remarks:</span>
+                  <p className="text-heading italic">"{previewItem.changeRemarks}"</p>
+                </div>
+              )}
+
+              {/* Document Information Sheet */}
+              <div className="w-full max-w-lg bg-surface/30 rounded-xl p-3.5 border border-border text-left grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-text-muted block text-[11px]">Inquiry No</span>
+                  <span className="font-mono font-medium text-heading">{inquiry.InquiryNo}</span>
+                </div>
+                <div>
+                  <span className="text-text-muted block text-[11px]">Customer</span>
+                  <span className="font-medium text-heading truncate block">{inquiry.CustomerName}</span>
+                </div>
+                <div>
+                  <span className="text-text-muted block text-[11px]">File Format</span>
+                  <span className="font-mono uppercase font-semibold text-primary">
+                    {previewItem.fileExtension?.replace('.', '') || 'FILE'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-text-muted block text-[11px]">Version Status</span>
+                  <span className="font-medium text-heading">
+                    {previewItem.isCurrent
+                      ? 'Current Active Version'
+                      : `Archived Revision (v${previewItem.versionNo})`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setPreviewItem(null)}
+              >
+                Close Preview
+              </Button>
+
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => handleDownloadAttachment(previewItem)}
+                className="text-xs font-semibold"
+              >
+                <Download size={14} className="mr-1.5" />
+                Download Attachment
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* ── Modals ── */}
       <AssignInquiryModal

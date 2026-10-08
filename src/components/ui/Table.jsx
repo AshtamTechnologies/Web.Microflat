@@ -16,6 +16,9 @@ export function TableContainer({
   tableStyle,
   tableClassName = '',
 }) {
+  const hasCustomLayout =
+    tableClassName.includes('table-auto') || tableClassName.includes('table-fixed');
+
   return (
     <div
       className={[
@@ -28,7 +31,8 @@ export function TableContainer({
       <table
         style={tableStyle}
         className={[
-          'w-full text-sm text-left border-collapse table-fixed',
+          'w-full text-sm text-left border-collapse',
+          !hasCustomLayout ? 'table-fixed' : '',
           tableClassName,
         ]
           .filter(Boolean)

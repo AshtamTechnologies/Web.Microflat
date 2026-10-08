@@ -63,7 +63,7 @@ import {
   getStateName,
 } from '../../mocks/vendors';
 import { getActiveVendorVersion } from '../../utils/vendorVersions';
-import { formatDateDisplay } from '../../utils/effectiveDateUtils';
+import { formatDateDisplay, getTodayIsoDate } from '../../utils/effectiveDateUtils';
 
 const columnHelper = createColumnHelper();
 
@@ -200,6 +200,16 @@ export default function VendorEffectiveDatesPage() {
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
 
+  // Latest previous effective date that new revisions cannot precede
+  const minAllowedEffectiveDate = useMemo(() => {
+    const dates = versions
+      .filter((v) => (mode === 'EDIT' ? v.id !== selectedVersionId : true))
+      .map((v) => v.effectiveDate)
+      .filter(Boolean);
+    if (dates.length === 0) return null;
+    return [...dates].sort().reverse()[0];
+  }, [versions, mode, selectedVersionId]);
+
   // Form state for ADD or EDIT
   const [formData, setFormData] = useState({
     effectiveDate: '',
@@ -307,10 +317,11 @@ export default function VendorEffectiveDatesPage() {
   }
 
   function handleStartAdd() {
-    // Clone forward from active version except empty effectiveDate
+    // Clone forward from active version and default to today's date
     const base = activeVersion || selectedVersion || {};
+    const today = getTodayIsoDate();
     setFormData({
-      effectiveDate: '',
+      effectiveDate: today,
       contactPersonName: base.contactPersonName || '',
       phoneNo: base.phoneNo || '',
       alternatePhoneNo: base.alternatePhoneNo || '',
@@ -464,13 +475,16 @@ export default function VendorEffectiveDatesPage() {
     if (!formData.effectiveDate?.trim()) {
       errors.effectiveDate = 'Effective date is required.';
     } else {
+      const enteredDate = formData.effectiveDate.trim();
       // Check collision with other versions
       const collision = versions.find((v) => {
         if (mode === 'EDIT' && v.id === selectedVersionId) return false;
-        return v.effectiveDate === formData.effectiveDate.trim();
+        return v.effectiveDate === enteredDate;
       });
       if (collision) {
         errors.effectiveDate = 'Another version with this effective date already exists for this vendor.';
+      } else if (minAllowedEffectiveDate && enteredDate < minAllowedEffectiveDate) {
+        errors.effectiveDate = `Effective date cannot be earlier than previous effective date (${formatDateDisplay(minAllowedEffectiveDate)}).`;
       }
     }
 
@@ -1337,9 +1351,11 @@ export default function VendorEffectiveDatesPage() {
                     name="effectiveDate"
                     label="Effective Date"
                     type="date"
+                    min={minAllowedEffectiveDate || undefined}
                     value={formData.effectiveDate}
                     onChange={handleInputChange}
                     error={formErrors.effectiveDate}
+                    hint={minAllowedEffectiveDate ? `Must be on or after ${formatDateDisplay(minAllowedEffectiveDate)}` : undefined}
                     required
                   />
                 </div>
