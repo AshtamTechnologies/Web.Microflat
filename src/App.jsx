@@ -33,14 +33,27 @@ import { DocumentTypesProvider } from './context/DocumentTypesContext';
 import ProductCategoriesPage from './pages/configuration/ProductCategoriesPage';
 import { ProductCategoriesProvider } from './context/ProductCategoriesContext';
 
+import UomPage from './pages/configuration/UomPage';
+import { UomProvider } from './context/UomContext';
+
+import RegionsPage from './pages/configuration/RegionsPage';
+import { RegionsProvider } from './context/RegionsContext';
+
+import PaymentTermsPage from './pages/configuration/PaymentTermsPage';
+import { PaymentTermsProvider } from './context/PaymentTermsContext';
+
+import UserViewPage from './pages/users/UserViewPage';
+import { UserSessionsProvider } from './context/UserSessionsContext';
+
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<LoginPage initialMode="login" />} />
-        <Route path="/forgot-password" element={<LoginPage initialMode="forgot-password" />} />
-        <Route path="/reset-password" element={<LoginPage initialMode="force-reset" />} />
+      <UserSessionsProvider>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<LoginPage initialMode="login" />} />
+          <Route path="/forgot-password" element={<LoginPage initialMode="forgot-password" />} />
+          <Route path="/reset-password" element={<LoginPage initialMode="force-reset" />} />
 
         {/* Authenticated routes — wrapped in AppLayout and Context Providers */}
         <Route
@@ -52,9 +65,15 @@ export default function App() {
                     <InquiryDocumentsProvider>
                       <DocumentTypesProvider>
                         <ProductCategoriesProvider>
-                          <SeriesProvider>
-                            <AppLayout />
-                          </SeriesProvider>
+                          <UomProvider>
+                            <RegionsProvider>
+                              <PaymentTermsProvider>
+                                <SeriesProvider>
+                                  <AppLayout />
+                                </SeriesProvider>
+                              </PaymentTermsProvider>
+                            </RegionsProvider>
+                          </UomProvider>
                         </ProductCategoriesProvider>
                       </DocumentTypesProvider>
                     </InquiryDocumentsProvider>
@@ -66,6 +85,7 @@ export default function App() {
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/users" element={<UsersPage />} />
+          <Route path="/users/:id" element={<UserViewPage />} />
           <Route path="/vendors" element={<VendorsPage />} />
           <Route path="/vendors/dashboard" element={<VendorDashboardPage />} />
           <Route path="/vendors/new" element={<VendorFormPage />} />
@@ -92,6 +112,9 @@ export default function App() {
           <Route path="/configuration/series/:docType" element={<SeriesSetupPage />} />
           <Route path="/configuration/document-types" element={<DocumentTypesPage />} />
           <Route path="/configuration/product-categories" element={<ProductCategoriesPage />} />
+          <Route path="/configuration/uom" element={<UomPage />} />
+          <Route path="/configuration/regions" element={<RegionsPage />} />
+          <Route path="/configuration/payment-terms" element={<PaymentTermsPage />} />
         </Route>
 
         {/* Default: redirect root to login */}
@@ -99,6 +122,7 @@ export default function App() {
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </BrowserRouter>
+    </UserSessionsProvider>
+  </BrowserRouter>
   );
 }

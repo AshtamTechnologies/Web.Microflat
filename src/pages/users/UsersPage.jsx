@@ -13,6 +13,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   useReactTable,
   getCoreRowModel,
@@ -37,10 +38,13 @@ import {
   Hash,
   SearchX,
   RotateCcw,
+  Clock,
 } from 'lucide-react';
 
 import { Button, Input, Modal, SearchableSelect, ConfirmModal, TableContainer, Th, Td } from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
+import { useUserSessions } from '../../context/UserSessionsContext';
+import { formatDateTime, formatRelative } from '../../utils/dateTime';
 import { ROLE_OPTIONS } from '../../mocks/users';
 import UserFormModal from './UserFormModal';
 
@@ -58,6 +62,7 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 export default function UsersPage() {
+  const navigate = useNavigate();
   const {
     users,
     search,
@@ -71,6 +76,16 @@ export default function UsersPage() {
     createUser,
     updateUser,
   } = useUsersContext();
+
+  const { getLastLogin } = useUserSessions();
+
+  const lastLoginMap = useMemo(() => {
+    const map = {};
+    users.forEach((u) => {
+      map[u.id] = getLastLogin(u.id);
+    });
+    return map;
+  }, [users, getLastLogin]);
 
   const hasActiveFilters = Boolean(
     search.trim() || roleFilter !== 'ALL' || statusFilter !== 'ALL'
@@ -207,7 +222,47 @@ export default function UsersPage() {
         },
       }),
 
-      /* 4. STATUS — Tinted pill badge with dot */
+      /* 4. LAST LOGIN */
+      columnHelper.accessor((row) => lastLoginMap[row.id] || '', {
+        id: 'lastLogin',
+        header: 'LAST LOGIN',
+        minSize: 170,
+        size: 200,
+        sortingFn: (rowA, rowB) => {
+          const dateA = lastLoginMap[rowA.original.id]
+            ? new Date(lastLoginMap[rowA.original.id]).getTime()
+            : 0;
+          const dateB = lastLoginMap[rowB.original.id]
+            ? new Date(lastLoginMap[rowB.original.id]).getTime()
+            : 0;
+          return dateA - dateB;
+        },
+        cell: (info) => {
+          const row = info.row.original;
+          const loginIso = lastLoginMap[row.id];
+
+          if (!loginIso) {
+            return (
+              <span className="text-xs text-text-muted select-none">
+                Never
+              </span>
+            );
+          }
+
+          return (
+            <div className="flex flex-col py-0.5" title={formatDateTime(loginIso)}>
+              <span className="font-mono tabular-nums text-xs font-semibold text-heading">
+                {formatDateTime(loginIso)}
+              </span>
+              <span className="text-[11px] text-text-muted leading-tight">
+                {formatRelative(loginIso)}
+              </span>
+            </div>
+          );
+        },
+      }),
+
+      /* 5. STATUS — Tinted pill badge with dot */
       columnHelper.accessor('isActive', {
         header: 'STATUS',
         minSize: 110,
@@ -235,7 +290,7 @@ export default function UsersPage() {
         },
       }),
 
-      /* 5. ACTIONS — View, Edit & Delete Ghost buttons */
+      /* 6. ACTIONS — View, Edit & Delete Ghost buttons */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
@@ -251,8 +306,8 @@ export default function UsersPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setUserToView(row)}
-                title="View user details"
+                onClick={() => navigate(`/users/${row.id}`)}
+                title="View user details & login sessions"
                 className="text-text-muted hover:text-primary hover:bg-surface"
               >
                 <Eye size={15} aria-hidden="true" />
@@ -284,7 +339,7 @@ export default function UsersPage() {
         },
       }),
     ],
-    []
+    [lastLoginMap, navigate]
   );
 
   const table = useReactTable({
@@ -654,6 +709,19 @@ export default function UsersPage() {
                         <span className="line-clamp-2">{user.address}</span>
                       </div>
                     )}
+                    <div className="flex items-center gap-2 pt-1 border-t border-border/40 text-xs">
+                      <Clock size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                      <span className="font-mono tabular-nums">
+                        Last login:{' '}
+                        {lastLoginMap[user.id] ? (
+                          <strong className="text-heading font-semibold">
+                            {formatDateTime(lastLoginMap[user.id])}
+                          </strong>
+                        ) : (
+                          <span className="text-text-muted">Never</span>
+                        )}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Action buttons footer */}
@@ -661,7 +729,7 @@ export default function UsersPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setUserToView(user)}
+                      onClick={() => navigate(`/users/${user.id}`)}
                       className="flex-1 text-xs"
                     >
                       <Eye size={13} className="mr-1.5" aria-hidden="true" />

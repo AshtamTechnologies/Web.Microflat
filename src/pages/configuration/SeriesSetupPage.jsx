@@ -19,6 +19,7 @@ import {
 import {
   Card,
   Input,
+  DatePicker,
   SearchableSelect,
   Button,
   Badge,
@@ -549,10 +550,10 @@ export default function SeriesSetupPage() {
                 {/* 7. Effective Date */}
                 <div className="sm:col-span-2 lg:col-span-3">
                   <div className="w-full sm:max-w-md">
-                    <Input
+                    <DatePicker
                       label="Effective Date"
                       id="series-effective-date"
-                      type="date"
+                      name="effectiveDate"
                       min={todayMinDate}
                       required
                       value={form.effectiveDate}
@@ -562,8 +563,6 @@ export default function SeriesSetupPage() {
                       }}
                       error={errors.effectiveDate}
                       hint="Date when this numbering configuration becomes active (No backdating)"
-                      className="font-mono tabular-nums"
-                      leftIcon={<Calendar size={15} />}
                     />
                   </div>
                 </div>
@@ -972,10 +971,10 @@ export default function SeriesSetupPage() {
 
               {/* Effective Date */}
               <div className="sm:col-span-2">
-                <Input
+                <DatePicker
                   label="Effective Date"
                   id="edit-series-effective-date"
-                  type="date"
+                  name="effectiveDate"
                   required
                   value={editForm.effectiveDate}
                   onChange={(e) => {
@@ -983,8 +982,6 @@ export default function SeriesSetupPage() {
                     if (editErrors.effectiveDate) setEditErrors((prev) => ({ ...prev, effectiveDate: null }));
                   }}
                   error={editErrors.effectiveDate}
-                  className="font-mono tabular-nums"
-                  leftIcon={<Calendar size={15} />}
                 />
               </div>
             </div>
@@ -1014,11 +1011,10 @@ export default function SeriesSetupPage() {
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
                 size="md"
                 onClick={handleCloseEditModal}
                 disabled={isUpdating}
-                className="text-xs"
               >
                 Cancel
               </Button>

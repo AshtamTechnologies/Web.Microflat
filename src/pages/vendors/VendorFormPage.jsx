@@ -36,6 +36,7 @@ import {
 import {
   Button,
   Input,
+  DatePicker,
   SearchableSelect,
   StatusSwitch,
   Badge,
@@ -593,10 +594,9 @@ export default function VendorFormPage() {
             />
 
             {/* Effective Date */}
-            <Input
+            <DatePicker
               id="effectiveDate"
               name="effectiveDate"
-              type="date"
               label="Effective Date"
               required
               value={form.effectiveDate}

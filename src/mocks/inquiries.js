@@ -2,14 +2,9 @@
  * inquiries.js — Mock data, options, and helper functions for MicroFlat ERP Inquiry Module.
  */
 
-export const REGION_OPTIONS = [
-  { value: 'reg_west', label: 'West Region (Gujarat, Maharashtra & Goa)' },
-  { value: 'reg_north', label: 'North Region (Delhi NCR, Haryana & Punjab)' },
-  { value: 'reg_south', label: 'South Region (Karnataka, Tamil Nadu & Telangana)' },
-  { value: 'reg_east', label: 'East Region (West Bengal, Odisha & Jharkhand)' },
-  { value: 'reg_central', label: 'Central Region (Madhya Pradesh & Chhattisgarh)' },
-  { value: 'reg_export', label: 'International / Export Market' },
-];
+import { INITIAL_REGIONS } from './regions';
+import { getPathLabel } from '../utils/treeUtils';
+
 
 export const CATEGORY_OPTIONS = [
   { value: 'cat_surface', label: 'Cast Iron & Granite Surface Plates' },
@@ -89,8 +84,12 @@ export const STATUS_OPTIONS = [
 ];
 
 export function getRegionName(regionId) {
-  const reg = REGION_OPTIONS.find((r) => r.value === regionId);
-  return reg ? reg.label : regionId || '—';
+  if (!regionId) return '—';
+  return getPathLabel(regionId, INITIAL_REGIONS, {
+    idKey: 'regionId',
+    parentKey: 'parentRegionId',
+    nameKey: 'regionName',
+  });
 }
 
 export function getCategoryName(categoryId) {

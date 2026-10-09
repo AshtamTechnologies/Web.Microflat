@@ -145,6 +145,8 @@ export default function UserFormModal({
       };
 
       await onSubmit(payload);
+      setForm(INITIAL_FORM);
+      setErrors({});
       onClose();
     } catch {
       // Error handled by caller / toast

@@ -6,12 +6,16 @@
  *   onClose: () => void
  *   onConfirm: () => void | Promise<void>
  *   title?: string (default: 'Confirm Action')
- *   message?: ReactNode (descriptive confirmation body)
- *   confirmText?: string (default: 'Delete')
+ *   message?: ReactNode (or description prop)
+ *   description?: ReactNode
+ *   children?: ReactNode
+ *   confirmText?: string (default: 'Confirm')
  *   cancelText?: string (default: 'Cancel')
  *   variant?: 'danger' | 'warning' | 'primary' (default: 'danger')
- *   icon?: React.ComponentType (default: AlertTriangle for danger/warning, HelpCircle for primary)
+ *   confirmVariant?: 'danger' | 'warning' | 'primary'
+ *   icon?: React.ComponentType
  *   loading?: boolean
+ *   size?: 'sm' | 'md' | 'lg'
  *   maxWidth?: string (default: 'max-w-md')
  */
 
@@ -31,49 +35,63 @@ export default function ConfirmModal({
   onConfirm,
   title = 'Confirm Action',
   message,
-  confirmText = 'Delete',
+  description,
+  children,
+  confirmText = 'Confirm',
   cancelText = 'Cancel',
   variant = 'danger',
+  confirmVariant,
   icon: CustomIcon,
   loading = false,
-  maxWidth = 'max-w-md',
+  size = 'sm',
+  maxWidth,
 }) {
   if (!isOpen) return null;
 
+  const effectiveVariant = confirmVariant || variant;
+  const content = message || description || children;
+
   const IconComponent =
     CustomIcon ||
-    (variant === 'danger' ? Trash2 : variant === 'warning' ? AlertTriangle : HelpCircle);
+    (effectiveVariant === 'danger'
+      ? Trash2
+      : effectiveVariant === 'warning'
+      ? AlertTriangle
+      : HelpCircle);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={title}
+      size={size}
       maxWidth={maxWidth}
     >
       <div className="space-y-4">
         {/* Visual Icon & Content */}
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-3.5">
           <div
             className={[
-              'w-11 h-11 rounded-full flex items-center justify-center shrink-0 shadow-2xs',
-              iconVariants[variant] || iconVariants.danger,
+              'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs',
+              iconVariants[effectiveVariant] || iconVariants.danger,
             ].join(' ')}
           >
             <IconComponent size={20} aria-hidden="true" />
           </div>
-          <div className="space-y-1 flex-1 min-w-0">
+          <div className="space-y-1 flex-1 min-w-0 pt-0.5">
             <h3 className="text-sm font-semibold text-heading leading-snug">
               {title}
             </h3>
-            <div className="text-xs sm:text-sm text-text-muted leading-relaxed">
-              {message}
-            </div>
+            {content && (
+              <div className="text-xs sm:text-sm text-text-muted leading-relaxed">
+                {content}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+        <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
           <Button
             type="button"
             variant="secondary"
@@ -85,11 +103,20 @@ export default function ConfirmModal({
           </Button>
           <Button
             type="button"
-            variant={variant === 'primary' ? 'primary' : 'danger'}
+            variant={effectiveVariant === 'primary' ? 'primary' : 'danger'}
             size="md"
             loading={loading}
             disabled={loading}
-            onClick={onConfirm}
+            onClick={async (e) => {
+              if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+              if (onConfirm) {
+                await onConfirm();
+              }
+              onClose?.();
+            }}
           >
             {confirmText}
           </Button>

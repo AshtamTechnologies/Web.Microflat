@@ -42,7 +42,6 @@ import {
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useUsersContext } from '../../context/UsersContext';
 import {
-  REGION_OPTIONS,
   STATUS_OPTIONS,
   PRIORITY_OPTIONS,
   getRegionName,

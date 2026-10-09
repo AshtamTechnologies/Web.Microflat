@@ -32,7 +32,7 @@ export const INITIAL_PRODUCT_CATEGORIES = [
     categoryId: 'cat_granite_custom',
     categoryCode: 'CAT-GRAN-CUST',
     categoryName: 'Custom High-Precision Granite Metrology Tables',
-    parentCategoryId: 'cat_granite_surf', // 3rd Level Child
+    parentCategoryId: 'cat_surface', // 2nd Level Child under Surface Plates
     isActive: true,
     createdOn: '2025-02-01',
   },

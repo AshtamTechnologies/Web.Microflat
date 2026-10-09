@@ -60,7 +60,7 @@ import { useUsersContext } from '../../context/UsersContext';
 import { useInquiryDocumentsContext } from '../../context/InquiryDocumentsContext';
 import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
-import { getCategoryPathName } from '../../utils/categoryTree';
+import { getCategoryPathName } from '../../utils/treeUtils';
 import {
   getRegionName,
   getStatusOption,

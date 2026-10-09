@@ -15,6 +15,7 @@ export const INITIAL_DOCUMENT_TYPES = [
     allowedExtensions: ['.pdf', '.docx'],
     maxSizeMB: 25,
     isMandatory: true,
+    isActive: true,
   },
   {
     documentTypeId: 'dt_drawing',
@@ -22,6 +23,7 @@ export const INITIAL_DOCUMENT_TYPES = [
     allowedExtensions: ['.pdf', '.dwg'],
     maxSizeMB: 25,
     isMandatory: true,
+    isActive: true,
   },
   {
     documentTypeId: 'dt_spec',
@@ -29,6 +31,7 @@ export const INITIAL_DOCUMENT_TYPES = [
     allowedExtensions: ['.pdf', '.docx'],
     maxSizeMB: 25,
     isMandatory: false,
+    isActive: true,
   },
   {
     documentTypeId: 'dt_quotation',
@@ -36,6 +39,7 @@ export const INITIAL_DOCUMENT_TYPES = [
     allowedExtensions: ['.pdf'],
     maxSizeMB: 25,
     isMandatory: false,
+    isActive: true,
   },
   {
     documentTypeId: 'dt_po',
@@ -43,6 +47,7 @@ export const INITIAL_DOCUMENT_TYPES = [
     allowedExtensions: ['.pdf'],
     maxSizeMB: 25,
     isMandatory: false,
+    isActive: true,
   },
 ];
 

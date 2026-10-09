@@ -47,6 +47,8 @@ import {
 import {
   Button,
   Input,
+  Checkbox,
+  DatePicker,
   SearchableSelect,
   Card,
   Badge,
@@ -62,9 +64,9 @@ import { useUsersContext } from '../../context/UsersContext';
 import { useInquiryDocumentsContext } from '../../context/InquiryDocumentsContext';
 import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
-import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/categoryTree';
+import { useRegions } from '../../context/RegionsContext';
+import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/treeUtils';
 import {
-  REGION_OPTIONS,
   SOURCE_OPTIONS,
   PRIORITY_OPTIONS,
   STATUS_OPTIONS,
@@ -87,8 +89,9 @@ const INITIAL_ITEM_ENTRY = {
   itemCode: '',
   itemName: '',
   specification: '',
-  quantity: '1',
+  quantity: '',
   uom: 'Nos',
+  parentCategoryId: '',
   categoryId: '',
   categoryName: '',
 };
@@ -96,6 +99,7 @@ const INITIAL_ITEM_ENTRY = {
 const INITIAL_FORM = {
   InquiryNo: '',
   InquiryDate: new Date().toISOString().slice(0, 10),
+  parentRegionId: '',
   RegionId: '',
   Subject: '',
   Description: '',
@@ -235,6 +239,7 @@ export default function InquiryFormPage() {
   const { addDocument } = useInquiryDocumentsContext();
   const { documentTypes = [], getDocumentTypeById } = useDocumentTypesContext();
   const { categories = [] } = useProductCategoriesContext();
+  const { regions = [], getRegionOptions } = useRegions();
 
   const userList = allUsers.length > 0 ? allUsers : users;
 
@@ -249,20 +254,123 @@ export default function InquiryFormPage() {
   const [loading, setLoading] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
+  // 2-Level Parent and Sub-Region options
+  const parentRegionOptions = useMemo(() => {
+    const roots = regions.filter((r) => !r.parentRegionId && (r.isActive || r.regionId === form.parentRegionId));
+    return [
+      { value: '', label: '-- Select Parent Region --' },
+      ...roots.map((r) => ({
+        value: r.regionId,
+        label: `${r.regionName} (${r.regionCode})`,
+      })),
+    ];
+  }, [regions, form.parentRegionId]);
+
+  const subRegionOptions = useMemo(() => {
+    if (!form.parentRegionId) return [];
+    const subs = regions.filter(
+      (r) => r.parentRegionId === form.parentRegionId && (r.isActive || r.regionId === form.RegionId)
+    );
+    return [
+      { value: '', label: '-- Select Sub-Region --' },
+      ...subs.map((r) => ({
+        value: r.regionId,
+        label: `${r.regionName} (${r.regionCode})`,
+      })),
+    ];
+  }, [regions, form.parentRegionId, form.RegionId]);
+
+  const handleParentRegionChange = (parentRegId) => {
+    const subs = regions.filter((r) => r.parentRegionId === parentRegId);
+    setForm((prev) => ({
+      ...prev,
+      parentRegionId: parentRegId,
+      RegionId: subs.length > 0 ? '' : parentRegId,
+    }));
+    if (errors.RegionId) {
+      setErrors((prev) => ({ ...prev, RegionId: '' }));
+    }
+  };
+
+  const handleSubRegionChange = (subRegId) => {
+    setForm((prev) => ({
+      ...prev,
+      RegionId: subRegId,
+    }));
+    if (errors.RegionId) {
+      setErrors((prev) => ({ ...prev, RegionId: '' }));
+    }
+  };
+
   // Line item adding/editing form state
-  const [itemFormState, setItemFormState] = useState(INITIAL_ITEM_ENTRY);
+  const [itemFormState, setItemFormState] = useState({ ...INITIAL_ITEM_ENTRY });
   const [editingItemId, setEditingItemId] = useState(null);
   const [itemFieldErrors, setItemFieldErrors] = useState({});
 
+  // 2-Level Parent and Sub-Category options
+  const parentCategoryOptions = useMemo(() => {
+    const roots = categories.filter(
+      (c) => !c.parentCategoryId && (c.isActive || c.categoryId === itemFormState.parentCategoryId)
+    );
+    return [
+      { value: '', label: '-- Select Parent Category --' },
+      ...roots.map((c) => ({
+        value: c.categoryId,
+        label: `${c.categoryName} (${c.categoryCode})`,
+      })),
+    ];
+  }, [categories, itemFormState.parentCategoryId]);
+
+  const subCategoryOptions = useMemo(() => {
+    if (!itemFormState.parentCategoryId) return [];
+    const subs = categories.filter(
+      (c) =>
+        c.parentCategoryId === itemFormState.parentCategoryId &&
+        (c.isActive || c.categoryId === itemFormState.categoryId)
+    );
+    return [
+      { value: '', label: '-- Select Sub-Category --' },
+      ...subs.map((c) => ({
+        value: c.categoryId,
+        label: `${c.categoryName} (${c.categoryCode})`,
+      })),
+    ];
+  }, [categories, itemFormState.parentCategoryId, itemFormState.categoryId]);
+
+  const editingItemIndex = editingItemId !== null
+    ? (form.items || []).findIndex((it, idx) => {
+      const id = it.prItemId !== undefined && it.prItemId !== null
+        ? it.prItemId
+        : it.id !== undefined && it.id !== null
+          ? it.id
+          : idx;
+      return String(id) === String(editingItemId);
+    })
+    : -1;
+
+  const isEditingItem = editingItemIndex !== -1;
+
+  // Line item multi-select and delete confirmation state
+  const [selectedItemIds, setSelectedItemIds] = useState(new Set());
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
   const handleItemFieldChange = (field, value) => {
-    if (field === 'itemId') {
+    if (field === 'parentCategoryId') {
+      const subs = categories.filter((c) => c.parentCategoryId === value);
+      setItemFormState((prev) => ({
+        ...prev,
+        parentCategoryId: value,
+        categoryId: subs.length > 0 ? '' : value,
+      }));
+    } else if (field === 'itemId') {
       const selectedMat = MOCK_MATERIALS.find(
         (m) => String(m.itemId) === String(value)
       );
       if (selectedMat) {
         setItemFormState((prev) => ({
           ...prev,
-          itemId: selectedMat.itemId,
+          itemId: String(selectedMat.itemId),
           itemCode: selectedMat.itemCode,
           itemName: selectedMat.itemName,
           specification: selectedMat.specification,
@@ -272,6 +380,9 @@ export default function InquiryFormPage() {
         setItemFormState((prev) => ({
           ...prev,
           itemId: '',
+          itemCode: '',
+          itemName: '',
+          specification: '',
         }));
       }
     } else {
@@ -286,42 +397,74 @@ export default function InquiryFormPage() {
     }
   };
 
+  const validateItemForm = () => {
+    const errs = {};
+    if (!itemFormState.itemCode || !itemFormState.itemCode.trim()) {
+      errs.itemCode = 'Item code is required';
+    }
+    if (
+      itemFormState.quantity === '' ||
+      itemFormState.quantity === null ||
+      itemFormState.quantity === undefined ||
+      Number(itemFormState.quantity) <= 0 ||
+      isNaN(Number(itemFormState.quantity))
+    ) {
+      errs.quantity = 'Quantity must be greater than 0';
+    }
+
+    setItemFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   const resetItemForm = () => {
     setEditingItemId(null);
     setItemFieldErrors({});
-    setItemFormState(INITIAL_ITEM_ENTRY);
+    setItemFormState({
+      prItemId: null,
+      itemId: '',
+      itemCode: '',
+      itemName: '',
+      specification: '',
+      quantity: '',
+      uom: 'Nos',
+      parentCategoryId: '',
+      categoryId: '',
+      categoryName: '',
+    });
   };
 
   const handleAddOrUpdateItem = (e) => {
     if (e && e.preventDefault) e.preventDefault();
 
+    if (!validateItemForm()) {
+      toast.error('Please enter required item code and a valid quantity (> 0)');
+      return;
+    }
+
     const selectedCatId = itemFormState.categoryId || '';
-    const currentCatName = getCategoryPathName(selectedCatId, categories);
+    const currentCatName = selectedCatId ? getCategoryPathName(selectedCatId, categories) : '';
     const selectedMat = MOCK_MATERIALS.find(
       (m) => String(m.itemId) === String(itemFormState.itemId)
     );
     const resolvedItemCode = itemFormState.itemCode?.trim() || (selectedMat ? selectedMat.itemCode : '') || '—';
     const resolvedItemName = itemFormState.itemName?.trim() || (selectedMat ? selectedMat.itemName : '') || resolvedItemCode;
-    const resolvedQty =
-      itemFormState.quantity !== '' && !isNaN(Number(itemFormState.quantity)) && Number(itemFormState.quantity) > 0
-        ? Number(itemFormState.quantity)
-        : 1;
+    const resolvedQty = Number(itemFormState.quantity) || 1;
     const resolvedUom = itemFormState.uom || 'Nos';
     const resolvedSpec = itemFormState.specification?.trim() || (selectedMat ? selectedMat.specification : '') || '';
 
-    if (editingItemId) {
-      const updated = (form.items || []).map((it) => {
-        if ((it.prItemId || it.id) === editingItemId) {
+    if (isEditingItem) {
+      const updated = (form.items || []).map((it, idx) => {
+        if (idx === editingItemIndex) {
           return {
             ...it,
-            itemId: itemFormState.itemId || '',
+            itemId: itemFormState.itemId ? String(itemFormState.itemId) : '',
             itemCode: resolvedItemCode,
             itemName: resolvedItemName,
             specification: resolvedSpec,
             quantity: resolvedQty,
             uom: resolvedUom,
-            categoryId: selectedCatId,
-            categoryName: currentCatName !== '—' ? currentCatName : (it.categoryName || '—'),
+            categoryId: selectedCatId || it.categoryId || '',
+            categoryName: currentCatName && currentCatName !== '—' ? currentCatName : (it.categoryName || '—'),
           };
         }
         return it;
@@ -339,14 +482,14 @@ export default function InquiryFormPage() {
     } else {
       const newItem = {
         prItemId: Date.now() + Math.floor(Math.random() * 1000),
-        itemId: itemFormState.itemId || '',
+        itemId: itemFormState.itemId ? String(itemFormState.itemId) : '',
         itemCode: resolvedItemCode,
         itemName: resolvedItemName,
         specification: resolvedSpec,
         quantity: resolvedQty,
         uom: resolvedUom,
         categoryId: selectedCatId,
-        categoryName: currentCatName !== '—' ? currentCatName : '—',
+        categoryName: currentCatName && currentCatName !== '—' ? currentCatName : '—',
       };
       const nextItems = [...(form.items || []), newItem];
       const totalQty = nextItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
@@ -359,38 +502,100 @@ export default function InquiryFormPage() {
       }));
       toast.success('Item added to inquiry');
       resetItemForm();
+
     }
   };
 
-  const handleStartEditItem = (item) => {
-    const itemId = item.prItemId || item.id;
-    setEditingItemId(itemId);
+  const handleStartEditItem = (item, index) => {
+    const id = item.prItemId !== undefined && item.prItemId !== null
+      ? item.prItemId
+      : item.id !== undefined && item.id !== null
+        ? item.id
+        : index;
+
+    const foundCat = item.categoryId ? categories.find((c) => c.categoryId === item.categoryId) : null;
+    const parentCatId = foundCat && foundCat.parentCategoryId
+      ? foundCat.parentCategoryId
+      : (foundCat ? foundCat.categoryId : (item.parentCategoryId || ''));
+
+    setEditingItemId(id);
     setItemFieldErrors({});
     setItemFormState({
-      prItemId: itemId,
+      prItemId: id,
       itemId: item.itemId ? String(item.itemId) : '',
       itemCode: item.itemCode && item.itemCode !== '—' ? item.itemCode : '',
       itemName: item.itemName || '',
       specification: item.specification || '',
-      quantity: item.quantity !== undefined && item.quantity !== null ? String(item.quantity) : '1',
+      quantity: item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? String(item.quantity) : '1',
       uom: item.uom || 'Nos',
+      parentCategoryId: parentCatId,
       categoryId: item.categoryId || '',
-      categoryName: item.categoryName || getCategoryPathName(item.categoryId, categories) || '—',
+      categoryName: item.categoryName || (item.categoryId ? getCategoryPathName(item.categoryId, categories) : '') || '—',
     });
   };
 
-  const handleRemoveItem = (index) => {
-    const updated = (form.items || []).filter((_, i) => i !== index);
+  // Toggle single item selection for bulk operations
+  const handleToggleSelectItem = (id) => {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Toggle select all items in table
+  const handleToggleSelectAllItems = () => {
+    const allIds = (form.items || []).map((it, idx) => it.prItemId || it.id || idx);
+    if (selectedItemIds.size === allIds.length && allIds.length > 0) {
+      setSelectedItemIds(new Set());
+    } else {
+      setSelectedItemIds(new Set(allIds));
+    }
+  };
+
+  // Confirm single item deletion
+  const handleConfirmDeleteItem = () => {
+    if (!itemToDelete) return;
+    const targetIndex = itemToDelete.index;
+    const updated = (form.items || []).filter((_, idx) => idx !== targetIndex);
     const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
     setForm((prev) => ({
       ...prev,
       items: updated,
       Quantity: String(totalQty || 1),
     }));
-    toast.success('Item removed');
-    if (editingItemId) {
+
+    if (editingItemIndex === targetIndex || (itemToDelete.item && (editingItemId === itemToDelete.item.prItemId || editingItemId === itemToDelete.item.id))) {
       resetItemForm();
     }
+    toast.success('Item removed from inquiry');
+    setItemToDelete(null);
+  };
+
+  // Confirm bulk item deletion
+  const handleConfirmBulkDelete = () => {
+    const count = selectedItemIds.size;
+    const updated = (form.items || []).filter((it, idx) => {
+      const id = it.prItemId || it.id || idx;
+      return !selectedItemIds.has(id);
+    });
+    const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+    setForm((prev) => ({
+      ...prev,
+      items: updated,
+      Quantity: String(totalQty || 1),
+    }));
+
+    toast.success(`Removed ${count} item${count === 1 ? '' : 's'} from inquiry`);
+    if (editingItemId && selectedItemIds.has(editingItemId)) {
+      resetItemForm();
+    }
+    setSelectedItemIds(new Set());
+    setShowBulkDeleteConfirm(false);
   };
 
   // Attachment Staging State
@@ -411,13 +616,6 @@ export default function InquiryFormPage() {
     return getDocumentTypeById(stageDocTypeId);
   }, [stageDocTypeId, getDocumentTypeById]);
 
-  // Dynamic Product Category dropdown options with hierarchy
-  const categoryOptions = useMemo(() => {
-    return getCategoryDropdownOptions(categories, {
-      activeOnly: true,
-      currentSelectedId: form.CategoryId || existingInquiry?.CategoryId || null,
-    });
-  }, [categories, form.CategoryId, existingInquiry]);
 
   // Build assignee options from UsersContext (No "Leave unassigned" option)
   const userOptions = useMemo(() => {
@@ -435,7 +633,7 @@ export default function InquiryFormPage() {
         const mappedItems = Array.isArray(existingInquiry.items)
           ? existingInquiry.items
           : existingInquiry.Quantity
-          ? [
+            ? [
               {
                 prItemId: 1,
                 itemCode: existingInquiry.ItemCode || 'MAT-CAT-001',
@@ -445,7 +643,12 @@ export default function InquiryFormPage() {
                 uom: existingInquiry.UOM || 'Nos',
               },
             ]
-          : [];
+            : [];
+
+        const loadedRegion = existingInquiry.RegionId ? regions.find((r) => r.regionId === existingInquiry.RegionId) : null;
+        const resolvedParentRegId = loadedRegion && loadedRegion.parentRegionId
+          ? loadedRegion.parentRegionId
+          : (loadedRegion ? loadedRegion.regionId : '');
 
         const data = {
           InquiryNo: existingInquiry.InquiryNo || '',
@@ -465,6 +668,7 @@ export default function InquiryFormPage() {
           City: existingInquiry.City || '',
           State: existingInquiry.State || '',
           Country: existingInquiry.Country || 'India',
+          parentRegionId: resolvedParentRegId,
           RegionId: existingInquiry.RegionId || '',
           CategoryId: existingInquiry.CategoryId || '',
           Quantity: existingInquiry.Quantity !== undefined ? String(existingInquiry.Quantity) : '1',
@@ -497,7 +701,7 @@ export default function InquiryFormPage() {
         setErrors({});
       }
     }
-  }, [isEdit, id, existingInquiry, getNextInquiryNo, userList]);
+  }, [isEdit, id, existingInquiry, getNextInquiryNo, userList, regions]);
 
   // Document type options for Select
   const docTypeOptions = useMemo(() => {
@@ -775,7 +979,7 @@ export default function InquiryFormPage() {
         </div>
 
         {/* Top Action Buttons (Responsive for Steps & Mobile) */}
-        <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+        <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
           <Button
             type="button"
             variant="secondary"
@@ -796,8 +1000,7 @@ export default function InquiryFormPage() {
               onClick={handleNextStep}
               className="flex-1 sm:flex-initial justify-center"
             >
-              <span className="hidden sm:inline">Next: Assignment & Documents</span>
-              <span className="sm:hidden">Next Step</span>
+              <span>Next</span>
               <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
             </Button>
           ) : (
@@ -823,20 +1026,18 @@ export default function InquiryFormPage() {
           <button
             type="button"
             onClick={() => handlePrevStep()}
-            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer ${
-              currentStep === 1
+            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer ${currentStep === 1
                 ? 'bg-primary/10 border-primary/50 ring-1 ring-primary/20 shadow-2xs'
                 : 'bg-surface border-border hover:bg-surface/80'
-            }`}
+              }`}
           >
             <div
-              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-colors ${
-                currentStep === 1
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-colors ${currentStep === 1
                   ? 'bg-primary text-white shadow-xs'
                   : currentStep > 1
-                  ? 'bg-success/15 text-success border border-success/30'
-                  : 'bg-surface text-text-muted border border-border'
-              }`}
+                    ? 'bg-success/15 text-success border border-success/30'
+                    : 'bg-surface text-text-muted border border-border'
+                }`}
             >
               {currentStep > 1 ? <CheckCircle2 size={16} /> : '1'}
             </div>
@@ -868,18 +1069,16 @@ export default function InquiryFormPage() {
                 handleNextStep();
               }
             }}
-            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer ${
-              currentStep === 2
+            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer ${currentStep === 2
                 ? 'bg-primary/10 border-primary/50 ring-1 ring-primary/20 shadow-2xs'
                 : 'bg-surface border-border hover:bg-surface/80'
-            }`}
+              }`}
           >
             <div
-              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-colors ${
-                currentStep === 2
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-colors ${currentStep === 2
                   ? 'bg-primary text-white shadow-xs'
                   : 'bg-surface text-text-muted border border-border'
-              }`}
+                }`}
             >
               2
             </div>
@@ -939,10 +1138,9 @@ export default function InquiryFormPage() {
                 />
 
                 {/* Inquiry Date */}
-                <Input
+                <DatePicker
                   id="InquiryDate"
                   name="InquiryDate"
-                  type="date"
                   label="Inquiry Date"
                   required
                   value={form.InquiryDate}
@@ -950,34 +1148,51 @@ export default function InquiryFormPage() {
                   onBlur={handleBlur}
                   error={errors.InquiryDate}
                   hint="Date request received"
-                  className="font-mono tabular-nums text-sm"
                 />
 
                 {/* Estimate Date */}
-                <Input
+                <DatePicker
                   id="RequiredByDate"
                   name="RequiredByDate"
-                  type="date"
                   label="Estimate Date"
                   value={form.RequiredByDate}
                   onChange={handleChange}
                   hint="Target estimated delivery date"
-                  className="font-mono tabular-nums text-sm"
                 />
 
-                {/* Sales Region */}
+                {/* Parent Sales Region */}
+                <SearchableSelect
+                  id="parentRegionId"
+                  name="parentRegionId"
+                  label="Parent Region"
+                  placeholder="-- Select Parent Region --"
+                  searchPlaceholder="Search parent regions..."
+                  required
+                  options={parentRegionOptions}
+                  value={form.parentRegionId}
+                  onChange={(e) => handleParentRegionChange(e.target.value)}
+                  error={!form.parentRegionId ? errors.RegionId : undefined}
+                />
+
+                {/* Sub-Region */}
                 <SearchableSelect
                   id="RegionId"
                   name="RegionId"
-                  label="Sales Region"
-                  placeholder="Select region..."
-                  searchPlaceholder="Search regions..."
-                  required
-                  options={REGION_OPTIONS}
+                  label="Sub-Region"
+                  placeholder={
+                    !form.parentRegionId
+                      ? 'Select parent region first'
+                      : subRegionOptions.length <= 1
+                      ? 'No sub-regions (Parent selected)'
+                      : '-- Select Sub-Region --'
+                  }
+                  searchPlaceholder="Search sub-regions..."
+                  disabled={!form.parentRegionId || subRegionOptions.length <= 1}
+                  required={subRegionOptions.length > 1}
+                  options={subRegionOptions}
                   value={form.RegionId}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  error={errors.RegionId}
+                  onChange={(e) => handleSubRegionChange(e.target.value)}
+                  error={form.parentRegionId && subRegionOptions.length > 1 && !form.RegionId ? errors.RegionId : undefined}
                 />
 
                 {/* Source */}
@@ -1060,8 +1275,9 @@ export default function InquiryFormPage() {
             </div>
 
             <div className="space-y-4 sm:space-y-5">
-              {/* Row 1: Company Name & Contact Person */}
+              {/* 2-Column Grid for All Customer Information Fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                {/* 1. Customer / Company Name */}
                 <Input
                   id="CustomerName"
                   name="CustomerName"
@@ -1076,6 +1292,7 @@ export default function InquiryFormPage() {
                   autoComplete="organization"
                 />
 
+                {/* 2. Contact Person Name */}
                 <Input
                   id="ContactPerson"
                   name="ContactPerson"
@@ -1087,10 +1304,8 @@ export default function InquiryFormPage() {
                   onBlur={handleBlur}
                   autoComplete="name"
                 />
-              </div>
 
-              {/* Row 2: Email, Phone & Alternative Phone */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+                {/* 3. Email Address */}
                 <Input
                   id="Email"
                   name="Email"
@@ -1104,6 +1319,7 @@ export default function InquiryFormPage() {
                   autoComplete="email"
                 />
 
+                {/* 4. Phone / Mobile Number */}
                 <Input
                   id="Phone"
                   name="Phone"
@@ -1118,6 +1334,7 @@ export default function InquiryFormPage() {
                   autoComplete="tel"
                 />
 
+                {/* 5. Alternative Phone */}
                 <Input
                   id="AlternativePhone"
                   name="AlternativePhone"
@@ -1131,37 +1348,8 @@ export default function InquiryFormPage() {
                   className="font-mono tabular-nums"
                   autoComplete="tel"
                 />
-              </div>
 
-              {/* Row 3: Address Line 1 & Address Line 2 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 pt-1">
-                <Input
-                  id="AddressLine1"
-                  name="AddressLine1"
-                  type="text"
-                  label="Address Line 1"
-                  placeholder="e.g. Plot No. 42, GIDC Industrial Estate"
-                  value={form.AddressLine1}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  autoComplete="address-line1"
-                />
-
-                <Input
-                  id="AddressLine2"
-                  name="AddressLine2"
-                  type="text"
-                  label="Address Line 2"
-                  placeholder="e.g. Phase II, Near Express Highway"
-                  value={form.AddressLine2}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  autoComplete="address-line2"
-                />
-              </div>
-
-              {/* Row 4: City, State, Country */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                {/* 6. City */}
                 <Input
                   id="City"
                   name="City"
@@ -1174,6 +1362,7 @@ export default function InquiryFormPage() {
                   autoComplete="address-level2"
                 />
 
+                {/* 7. State / Province */}
                 <Input
                   id="State"
                   name="State"
@@ -1186,6 +1375,7 @@ export default function InquiryFormPage() {
                   autoComplete="address-level1"
                 />
 
+                {/* 8. Country */}
                 <Input
                   id="Country"
                   name="Country"
@@ -1196,6 +1386,32 @@ export default function InquiryFormPage() {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   autoComplete="country-name"
+                />
+
+                {/* 9. Address Line 1 (After Country) */}
+                <Input
+                  id="AddressLine1"
+                  name="AddressLine1"
+                  type="text"
+                  label="Address Line 1"
+                  placeholder="e.g. Plot No. 42, GIDC Industrial Estate"
+                  value={form.AddressLine1}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  autoComplete="address-line1"
+                />
+
+                {/* 10. Address Line 2 (After Country) */}
+                <Input
+                  id="AddressLine2"
+                  name="AddressLine2"
+                  type="text"
+                  label="Address Line 2"
+                  placeholder="e.g. Phase II, Near Express Highway"
+                  value={form.AddressLine2}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  autoComplete="address-line2"
                 />
               </div>
             </div>
@@ -1215,20 +1431,18 @@ export default function InquiryFormPage() {
 
             {/* ── Sub-Card: Add Item to Inquiry ── */}
             <div
-              className={`p-4 sm:p-5 rounded-xl border bg-surface/50 space-y-4 transition-all duration-200 ${
-                editingItemId
+              className={`p-4 sm:p-5 rounded-xl border bg-surface/50 space-y-4 transition-all duration-200 ${editingItemId
                   ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
                   : 'border-border'
-              }`}
+                }`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-border/70">
                 <div className="flex items-center gap-2.5">
                   <div
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                      editingItemId
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${editingItemId
                         ? 'bg-primary text-white'
                         : 'bg-primary/10 text-primary'
-                    }`}
+                      }`}
                   >
                     {editingItemId ? <Pencil size={15} /> : <Package size={16} />}
                   </div>
@@ -1245,13 +1459,13 @@ export default function InquiryFormPage() {
                 {editingItemId && (
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="secondary"
                     size="sm"
                     onClick={resetItemForm}
-                    className="text-xs text-text-muted hover:text-text self-start sm:self-auto h-7 px-2"
+                    className="text-xs self-start sm:self-auto h-7 px-2"
                   >
                     <X size={13} className="mr-1" />
-                    Cancel Edit
+                    Cancel
                   </Button>
                 )}
               </div>
@@ -1259,15 +1473,35 @@ export default function InquiryFormPage() {
               {/* 3 columns per row layout */}
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Product Category */}
+                  {/* Parent Category */}
+                  <div>
+                    <SearchableSelect
+                      id="item-form-parent-category"
+                      label="Parent Category"
+                      options={parentCategoryOptions}
+                      value={itemFormState.parentCategoryId || ''}
+                      placeholder="-- Select Parent Category --"
+                      searchPlaceholder="Search parent categories..."
+                      onChange={(e) => handleItemFieldChange('parentCategoryId', e.target.value)}
+                    />
+                  </div>
+
+                  {/* Sub-Category */}
                   <div>
                     <SearchableSelect
                       id="item-form-category"
-                      label="Product Category"
-                      options={categoryOptions}
-                      value={itemFormState.categoryId}
-                      placeholder="-- Select Product Category --"
-                      searchPlaceholder="Search categories..."
+                      label="Sub-Category"
+                      options={subCategoryOptions}
+                      value={itemFormState.categoryId || ''}
+                      placeholder={
+                        !itemFormState.parentCategoryId
+                          ? 'Select parent category first'
+                          : subCategoryOptions.length <= 1
+                          ? 'No sub-categories (Parent selected)'
+                          : '-- Select Sub-Category --'
+                      }
+                      searchPlaceholder="Search sub-categories..."
+                      disabled={!itemFormState.parentCategoryId || subCategoryOptions.length <= 1}
                       onChange={(e) => handleItemFieldChange('categoryId', e.target.value)}
                     />
                   </div>
@@ -1290,8 +1524,10 @@ export default function InquiryFormPage() {
                     <Input
                       id="item-form-code"
                       label="Item Code"
+                      required
                       placeholder="e.g. MAT-FST-M6-125"
-                      value={itemFormState.itemCode}
+                      value={itemFormState.itemCode || ''}
+                      error={itemFieldErrors.itemCode}
                       onChange={(e) => handleItemFieldChange('itemCode', e.target.value)}
                     />
                   </div>
@@ -1302,7 +1538,8 @@ export default function InquiryFormPage() {
                       id="item-form-spec"
                       label="Specification"
                       placeholder="e.g. M6 × 125 MM High Tensile Zinc Plated"
-                      value={itemFormState.specification}
+                      value={itemFormState.specification || ''}
+                      error={itemFieldErrors.specification}
                       onChange={(e) => handleItemFieldChange('specification', e.target.value)}
                     />
                   </div>
@@ -1314,8 +1551,10 @@ export default function InquiryFormPage() {
                       label="Quantity"
                       type="number"
                       min="1"
+                      required
                       placeholder="1"
-                      value={itemFormState.quantity}
+                      value={itemFormState.quantity !== undefined && itemFormState.quantity !== null ? itemFormState.quantity : ''}
+                      error={itemFieldErrors.quantity}
                       onChange={(e) => handleItemFieldChange('quantity', e.target.value)}
                     />
                   </div>
@@ -1374,31 +1613,56 @@ export default function InquiryFormPage() {
 
             {/* ── Sub-Card: Items Grid Table ── */}
             <div className="rounded-xl border border-border overflow-hidden bg-bg">
-              <div className="p-3.5 bg-surface/80 border-b border-border flex items-center justify-between gap-3">
+              <div className="p-3.5 bg-surface/80 border-b border-border flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-heading uppercase tracking-wider">
                     Selected Inquiry Products
                   </span>
                   <Badge variant="role" className="text-[11px] px-2 py-0.5 font-mono">
-                    {(form.items || []).length} { (form.items || []).length === 1 ? 'Item' : 'Items' }
+                    {(form.items || []).length} {(form.items || []).length === 1 ? 'Item' : 'Items'}
                   </Badge>
                 </div>
 
-                {(form.items || []).length > 0 && (
-                  <div className="text-xs text-text-muted font-mono flex items-center gap-1.5">
-                    <span>Total Qty:</span>
-                    <strong className="text-heading font-semibold">
-                      {(form.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)}
-                    </strong>
-                  </div>
-                )}
+                <div className="flex items-center gap-3">
+                  {selectedItemIds.size > 0 && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setShowBulkDeleteConfirm(true)}
+                      className="text-xs h-7 px-2.5 shadow-xs cursor-pointer"
+                    >
+                      <Trash2 size={13} className="mr-1.5" />
+                      Delete Selected ({selectedItemIds.size})
+                    </Button>
+                  )}
+
+                  {(form.items || []).length > 0 && (
+                    <div className="text-xs text-text-muted font-mono flex items-center gap-1.5">
+                      <span>Total Qty:</span>
+                      <strong className="text-heading font-semibold">
+                        {(form.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)}
+                      </strong>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {(form.items || []).length > 0 ? (
                 <TableContainer>
                   <thead>
                     <tr>
-                      <Th className="w-12 text-center">#</Th>
+                      <Th className="w-10 text-center">
+                        <Checkbox
+                          checked={
+                            (form.items || []).length > 0 &&
+                            selectedItemIds.size === (form.items || []).length
+                          }
+                          onChange={handleToggleSelectAllItems}
+                          aria-label="Select all products"
+                        />
+                      </Th>
+                      <Th className="w-10 text-center">#</Th>
                       <Th>PRODUCT CATEGORY</Th>
                       <Th>ITEM CODE</Th>
                       <Th>SPECIFICATION</Th>
@@ -1408,50 +1672,65 @@ export default function InquiryFormPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {(form.items || []).map((item, idx) => (
-                      <tr key={item.prItemId || item.id || idx} className="hover:bg-surface/50 transition-colors">
-                        <Td className="text-center font-mono text-xs text-text-muted">
-                          {idx + 1}
-                        </Td>
-                        <Td className="text-xs font-medium text-heading">
-                          {item.categoryName || getCategoryPathName(item.categoryId || form.CategoryId, categories) || '—'}
-                        </Td>
-                        <Td>
-                          <span className="font-mono text-xs font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
-                            {item.itemCode || '—'}
-                          </span>
-                        </Td>
-                        <Td className="text-xs text-text-muted max-w-xs truncate" title={item.specification}>
-                          {item.specification || '—'}
-                        </Td>
-                        <Td className="text-right font-mono tabular-nums text-xs font-bold text-heading">
-                          {item.quantity}
-                        </Td>
-                        <Td className="text-xs text-text-muted font-mono">
-                          {item.uom}
-                        </Td>
-                        <Td className="text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleStartEditItem(item)}
-                              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
-                              title="Edit item"
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(idx)}
-                              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 transition-all cursor-pointer shadow-2xs"
-                              title="Remove item"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </Td>
-                      </tr>
-                    ))}
+                    {(form.items || []).map((item, idx) => {
+                      const itemId = item.prItemId || item.id || idx;
+                      const isRowSelected = selectedItemIds.has(itemId);
+                      return (
+                        <tr
+                          key={itemId}
+                          className={`hover:bg-surface/50 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : ''
+                            }`}
+                        >
+                          <Td className="text-center">
+                            <Checkbox
+                              checked={isRowSelected}
+                              onChange={() => handleToggleSelectItem(itemId)}
+                              aria-label={`Select item ${idx + 1}`}
+                            />
+                          </Td>
+                          <Td className="text-center font-mono text-xs text-text-muted">
+                            {idx + 1}
+                          </Td>
+                          <Td className="text-xs font-medium text-heading">
+                            {item.categoryName || getCategoryPathName(item.categoryId || form.CategoryId, categories) || '—'}
+                          </Td>
+                          <Td>
+                            <span className="font-mono text-xs font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
+                              {item.itemCode || '—'}
+                            </span>
+                          </Td>
+                          <Td className="text-xs text-text-muted max-w-xs truncate" title={item.specification}>
+                            {item.specification || '—'}
+                          </Td>
+                          <Td className="text-right font-mono tabular-nums text-xs font-bold text-heading">
+                            {item.quantity}
+                          </Td>
+                          <Td className="text-xs text-text-muted font-mono">
+                            {item.uom}
+                          </Td>
+                          <Td className="text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditItem(item, idx)}
+                                className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
+                                title="Edit item"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setItemToDelete({ item, index: idx })}
+                                className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 transition-all cursor-pointer shadow-2xs"
+                                title="Remove item"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </Td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </TableContainer>
               ) : (
@@ -1465,7 +1744,7 @@ export default function InquiryFormPage() {
           </Card>
 
           {/* ── Step 1 Bottom Action Controls ── */}
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-3 border-t border-border">
+          <div className="flex items-center justify-end gap-2.5 sm:gap-3 pt-3 border-t border-border">
             <Button
               type="button"
               variant="secondary"
@@ -1485,8 +1764,7 @@ export default function InquiryFormPage() {
               onClick={handleNextStep}
               className="w-full sm:w-auto justify-center"
             >
-              <span className="hidden sm:inline">Continue to Assignment & Documents</span>
-              <span className="sm:hidden">Next: Assignment & Documents</span>
+              <span>Next</span>
               <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
             </Button>
           </div>
@@ -1680,10 +1958,10 @@ export default function InquiryFormPage() {
                       isDragging
                         ? 'border-primary bg-primary/10'
                         : stageFileError
-                        ? 'border-danger/60 bg-danger/5'
-                        : stageDocFile
-                        ? 'border-primary/40 bg-primary/5'
-                        : 'border-border hover:border-primary/50 bg-bg',
+                          ? 'border-danger/60 bg-danger/5'
+                          : stageDocFile
+                            ? 'border-primary/40 bg-primary/5'
+                            : 'border-border hover:border-primary/50 bg-bg',
                     ].join(' ')}
                   >
                     {stageDocFile ? (
@@ -1976,6 +2254,30 @@ export default function InquiryFormPage() {
         message="You have unsaved changes in this inquiry form. Are you sure you want to discard them? All entered details will be lost."
         confirmText="Discard Changes"
         cancelText="Keep Editing"
+        variant="danger"
+      />
+
+      {/* ── Single Product Item Delete Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={Boolean(itemToDelete)}
+        onClose={() => setItemToDelete(null)}
+        onConfirm={handleConfirmDeleteItem}
+        title="Delete Inquiry Product Item?"
+        message={`Are you sure you want to remove "${itemToDelete?.item?.itemName || itemToDelete?.item?.itemCode || 'this product item'}" from this inquiry?`}
+        confirmText="Delete Item"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* ── Bulk Product Items Delete Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={handleConfirmBulkDelete}
+        title={`Delete ${selectedItemIds.size} Selected Items?`}
+        message={`Are you sure you want to remove ${selectedItemIds.size} selected item(s) from this inquiry? This action cannot be undone.`}
+        confirmText={`Delete ${selectedItemIds.size} Items`}
+        cancelText="Cancel"
         variant="danger"
       />
     </form>

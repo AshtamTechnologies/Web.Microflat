@@ -41,7 +41,10 @@ export default function SearchableSelect({
   const searchInputRef = useRef(null);
   const listRef = useRef(null);
 
-  const selectedOption = options.find((opt) => opt.value === value);
+  const selectedOption = useMemo(() => {
+    if (value === null || value === undefined || value === '') return null;
+    return options.find((opt) => String(opt.value) === String(value)) || null;
+  }, [options, value]);
   const hasError = Boolean(error);
 
   // Filter options based on search query

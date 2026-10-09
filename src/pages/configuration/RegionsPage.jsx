@@ -7,20 +7,19 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  FolderTree,
+  MapPin,
   Plus,
   Search,
   Pencil,
   Trash2,
   ChevronRight,
   ChevronDown,
-  Folder,
-  Layers,
+  Globe,
+  Compass,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   X,
-  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -28,9 +27,8 @@ import {
   Card,
   Button,
   Input,
-  SearchableSelect,
   Toggle,
-  Badge,
+  SearchableSelect,
   Modal,
   ConfirmModal,
   TableContainer,
@@ -38,40 +36,39 @@ import {
   Td,
   StatusSwitch,
 } from '../../components/ui';
-import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
+import { useRegionsContext } from '../../context/RegionsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import {
   buildTree,
   flattenVisible,
   getDescendantIds,
   getDropdownOptions,
-  getPathLabel,
 } from '../../utils/treeUtils';
 
 const columnHelper = createColumnHelper();
 
 const INITIAL_FORM = {
-  categoryCode: '',
-  categoryName: '',
-  parentCategoryId: '',
+  regionCode: '',
+  regionName: '',
+  parentRegionId: '',
   isActive: true,
 };
 
-export default function ProductCategoriesPage() {
+export default function RegionsPage() {
   const {
-    categories,
-    addCategory,
-    updateCategory,
-    deleteCategory,
-    toggleCategoryActive,
-  } = useProductCategoriesContext();
+    regions,
+    addRegion,
+    updateRegion,
+    deleteRegion,
+    toggleRegionActive,
+  } = useRegionsContext();
 
   const { inquiries = [] } = useInquiriesContext();
 
   // Simulated initial loading delay
   const [initialLoading, setInitialLoading] = useState(true);
   useEffect(() => {
-    const timer = setTimeout(() => setInitialLoading(false), 700);
+    const timer = setTimeout(() => setInitialLoading(false), 500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -79,19 +76,19 @@ export default function ProductCategoriesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
 
-  // Tree expansion state (start with all categories expanded)
+  // Tree expansion state (start with all regions expanded)
   const [expandedIds, setExpandedIds] = useState(() => {
-    return new Set(categories.map((c) => c.categoryId));
+    return new Set(regions.map((r) => r.regionId));
   });
 
-  // Ensure new categories get expanded when added
+  // Ensure new regions get expanded when added
   useEffect(() => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      categories.forEach((c) => next.add(c.categoryId));
+      regions.forEach((r) => next.add(r.regionId));
       return next;
     });
-  }, [categories]);
+  }, [regions]);
 
   // TanStack table state for resizable columns and sorting
   const [sorting, setSorting] = useState([]);
@@ -99,29 +96,29 @@ export default function ProductCategoriesPage() {
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState(null);
+  const [editingRegion, setEditingRegion] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Delete modal state
-  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [regionToDelete, setRegionToDelete] = useState(null);
 
   /* ── Expand / Collapse handler ── */
-  function toggleExpand(catId) {
+  function toggleExpand(regionId) {
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(catId)) {
-        next.delete(catId);
+      if (next.has(regionId)) {
+        next.delete(regionId);
       } else {
-        next.add(catId);
+        next.add(regionId);
       }
       return next;
     });
   }
 
   function expandAll() {
-    setExpandedIds(new Set(categories.map((c) => c.categoryId)));
+    setExpandedIds(new Set(regions.map((r) => r.regionId)));
   }
 
   function collapseAll() {
@@ -130,85 +127,85 @@ export default function ProductCategoriesPage() {
 
   /* ── Filtered & Hierarchical Tree Computation ── */
   const visibleRows = useMemo(() => {
-    const tree = buildTree(categories, {
-      idKey: 'categoryId',
-      parentKey: 'parentCategoryId',
-      nameKey: 'categoryName',
-      codeKey: 'categoryCode',
+    const tree = buildTree(regions, {
+      idKey: 'regionId',
+      parentKey: 'parentRegionId',
+      nameKey: 'regionName',
+      codeKey: 'regionCode',
     });
 
     // If no search and no status filter, normal tree flattening
     if (!searchQuery.trim() && statusFilter === 'ALL') {
-      return flattenVisible(tree, expandedIds);
+      return flattenVisible(tree, expandedIds, { idKey: 'regionId' });
     }
 
     const q = searchQuery.toLowerCase().trim();
 
-    // Find all matching category IDs
+    // Find all matching region IDs
     const matchingIds = new Set();
-    categories.forEach((cat) => {
+    regions.forEach((reg) => {
       const matchesSearch =
         !q ||
-        cat.categoryCode.toLowerCase().includes(q) ||
-        cat.categoryName.toLowerCase().includes(q);
+        reg.regionCode.toLowerCase().includes(q) ||
+        reg.regionName.toLowerCase().includes(q);
 
       const matchesStatus =
         statusFilter === 'ALL' ||
-        (statusFilter === 'ACTIVE' && cat.isActive) ||
-        (statusFilter === 'INACTIVE' && !cat.isActive);
+        (statusFilter === 'ACTIVE' && reg.isActive) ||
+        (statusFilter === 'INACTIVE' && !reg.isActive);
 
       if (matchesSearch && matchesStatus) {
-        matchingIds.add(cat.categoryId);
+        matchingIds.add(reg.regionId);
       }
     });
 
     // Also include all ancestors of matching nodes so hierarchy remains readable
     const visibleIdsWithAncestors = new Set(matchingIds);
-    const catMap = new Map(categories.map((c) => [c.categoryId, c]));
+    const regMap = new Map(regions.map((r) => [r.regionId, r]));
 
     matchingIds.forEach((id) => {
-      let curr = catMap.get(id);
-      while (curr && curr.parentCategoryId) {
-        visibleIdsWithAncestors.add(curr.parentCategoryId);
-        curr = catMap.get(curr.parentCategoryId);
+      let curr = regMap.get(id);
+      while (curr && curr.parentRegionId) {
+        visibleIdsWithAncestors.add(curr.parentRegionId);
+        curr = regMap.get(curr.parentRegionId);
       }
     });
 
     // Flatten tree including visible nodes (ignore collapse state during search)
     const alwaysExpandDuringSearch = Boolean(q);
     const effectiveExpanded = alwaysExpandDuringSearch
-      ? new Set(categories.map((c) => c.categoryId))
+      ? new Set(regions.map((r) => r.regionId))
       : expandedIds;
 
-    const flattened = flattenVisible(tree, effectiveExpanded);
-    return flattened.filter((row) => visibleIdsWithAncestors.has(row.categoryId));
-  }, [categories, expandedIds, searchQuery, statusFilter]);
+    const flattened = flattenVisible(tree, effectiveExpanded, { idKey: 'regionId' });
+    return flattened.filter((row) => visibleIdsWithAncestors.has(row.regionId));
+  }, [regions, expandedIds, searchQuery, statusFilter]);
 
   /* ── Form Validation ── */
   function validateField(name, value) {
-    const targetId = editingCategory?.categoryId;
+    const targetId = editingRegion?.regionId;
 
     switch (name) {
-      case 'categoryCode': {
+      case 'regionCode': {
         const str = typeof value === 'string' ? value.trim().toUpperCase() : '';
-        if (!str) return 'Category code is required.';
-        if (str.length > 20) return 'Category code cannot exceed 20 characters.';
+        if (!str) return 'Region code is required.';
+        if (str.length > 20) return 'Region code cannot exceed 20 characters.';
         if (!/^[A-Z0-9-]+$/.test(str)) {
           return 'Code must contain uppercase letters, numbers, and hyphens only.';
         }
 
         // Check unique code (case-insensitive)
-        const duplicate = categories.find((c) => {
-          if (editingCategory && c.categoryId === targetId) return false;
-          return c.categoryCode.toUpperCase() === str;
+        const duplicate = regions.find((r) => {
+          if (editingRegion && r.regionId === targetId) return false;
+          return r.regionCode.toUpperCase() === str;
         });
-        if (duplicate) return 'A category with this code already exists.';
+        if (duplicate) return 'A region with this code already exists.';
         return '';
       }
-      case 'categoryName': {
+      case 'regionName': {
         const str = typeof value === 'string' ? value.trim() : '';
-        if (!str) return 'Category name is required.';
-        if (str.length > 100) return 'Category name cannot exceed 100 characters.';
+        if (!str) return 'Region name is required.';
+        if (str.length > 100) return 'Region name cannot exceed 100 characters.';
         return '';
       }
       default:
@@ -218,7 +215,7 @@ export default function ProductCategoriesPage() {
 
   function validateAll(data) {
     const errors = {};
-    ['categoryCode', 'categoryName'].forEach((field) => {
+    ['regionCode', 'regionName'].forEach((field) => {
       const err = validateField(field, data[field]);
       if (err) errors[field] = err;
     });
@@ -226,30 +223,30 @@ export default function ProductCategoriesPage() {
   }
 
   /* ── Modal Open Handlers ── */
-  function handleOpenAdd(parentCatId = null) {
-    // Only top-level categories can be chosen as parent
-    const targetParent = parentCatId
-      ? categories.find((c) => c.categoryId === parentCatId && !c.parentCategoryId)
+  function handleOpenAdd(parentRegId = null) {
+    // Only top-level regions can be chosen as parent
+    const targetParent = parentRegId
+      ? regions.find((r) => r.regionId === parentRegId && !r.parentRegionId)
       : null;
 
-    setEditingCategory(null);
+    setEditingRegion(null);
     setFormData({
-      categoryCode: '',
-      categoryName: '',
-      parentCategoryId: targetParent ? targetParent.categoryId : '',
+      regionCode: '',
+      regionName: '',
+      parentRegionId: targetParent ? targetParent.regionId : '',
       isActive: true,
     });
     setFormErrors({});
     setIsModalOpen(true);
   }
 
-  function handleOpenEdit(cat) {
-    setEditingCategory(cat);
+  function handleOpenEdit(reg) {
+    setEditingRegion(reg);
     setFormData({
-      categoryCode: cat.categoryCode || '',
-      categoryName: cat.categoryName || '',
-      parentCategoryId: cat.parentCategoryId || '',
-      isActive: Boolean(cat.isActive),
+      regionCode: reg.regionCode || '',
+      regionName: reg.regionName || '',
+      parentRegionId: reg.parentRegionId || '',
+      isActive: Boolean(reg.isActive),
     });
     setFormErrors({});
     setIsModalOpen(true);
@@ -258,7 +255,7 @@ export default function ProductCategoriesPage() {
   function handleCloseModal() {
     if (isSubmitting) return;
     setIsModalOpen(false);
-    setEditingCategory(null);
+    setEditingRegion(null);
     setFormData(INITIAL_FORM);
     setFormErrors({});
   }
@@ -273,36 +270,36 @@ export default function ProductCategoriesPage() {
 
     setIsSubmitting(true);
     try {
-      if (editingCategory) {
-        await updateCategory(editingCategory.categoryId, formData);
+      if (editingRegion) {
+        await updateRegion(editingRegion.regionId, formData);
       } else {
-        await addCategory(formData);
+        await addRegion(formData);
       }
       setIsModalOpen(false);
-      setEditingCategory(null);
+      setEditingRegion(null);
       setFormData(INITIAL_FORM);
       setFormErrors({});
     } catch (err) {
-      toast.error('Failed to save category.');
+      toast.error('Failed to save region.');
     } finally {
       setIsSubmitting(false);
     }
   }
 
   /* ── Delete Handlers with Safety Blocks ── */
-  function handleDeleteClick(cat) {
-    const id = cat.categoryId;
+  function handleDeleteClick(reg) {
+    const id = reg.regionId;
 
-    // 1. Block if category has children
-    const hasChildren = categories.some((c) => c.parentCategoryId === id);
+    // 1. Block if region has child sub-regions
+    const hasChildren = regions.some((r) => r.parentRegionId === id);
     if (hasChildren) {
-      toast.error('Cannot delete. It has sub-categories.');
+      toast.error('Cannot delete. It has sub-regions.');
       return;
     }
 
-    // 2. Block if category is used by any inquiry
+    // 2. Block if region is used by any inquiry
     const usedCount = inquiries.filter(
-      (inq) => inq.CategoryId === id || inq.categoryId === id
+      (inq) => inq.RegionId === id || inq.regionId === id
     ).length;
 
     if (usedCount > 0) {
@@ -312,67 +309,67 @@ export default function ProductCategoriesPage() {
       return;
     }
 
-    setCategoryToDelete(cat);
+    setRegionToDelete(reg);
   }
 
   function handleConfirmDelete() {
-    if (!categoryToDelete) return;
-    deleteCategory(categoryToDelete.categoryId);
-    setCategoryToDelete(null);
+    if (!regionToDelete) return;
+    deleteRegion(regionToDelete.regionId);
+    setRegionToDelete(null);
   }
 
-  /* ── Parent Category Options for Add/Edit Modal (Strict 2-Level Limit: Root categories only) ── */
+  /* ── Parent Region Options for Add/Edit Modal (Strict 2-Level Limit: Root regions only) ── */
   const parentSelectOptions = useMemo(() => {
-    // If editing a category that already has children, it cannot become a child of another category (must stay root)
-    const hasChildren = editingCategory
-      ? categories.some((c) => c.parentCategoryId === editingCategory.categoryId)
+    // If editing a region that already has children, it cannot become a child of another region (must stay root)
+    const hasChildren = editingRegion
+      ? regions.some((r) => r.parentRegionId === editingRegion.regionId)
       : false;
 
     if (hasChildren) {
-      return [{ value: '', label: '— None (Top-Level Category — Contains Sub-Categories) —' }];
+      return [{ value: '', label: '— None (Top-Level Region — Contains Sub-Regions) —' }];
     }
 
-    // Only Top-Level categories (where !parentCategoryId) can be chosen as a parent
-    const rootCategories = categories.filter((c) => {
-      if (editingCategory && c.categoryId === editingCategory.categoryId) return false;
-      return !c.parentCategoryId; // Only root categories
+    // Only Top-Level regions (where !parentRegionId) can be chosen as a parent
+    const rootRegions = regions.filter((r) => {
+      if (editingRegion && r.regionId === editingRegion.regionId) return false;
+      return !r.parentRegionId; // Only root regions
     });
 
-    const baseOptions = rootCategories.map((cat) => ({
-      value: cat.categoryId,
-      label: `${cat.categoryName} (${cat.categoryCode})`,
+    const baseOptions = rootRegions.map((reg) => ({
+      value: reg.regionId,
+      label: `${reg.regionName} (${reg.regionCode})`,
     }));
 
     return [
-      { value: '', label: '— None (Top-Level Category) —' },
+      { value: '', label: '— None (Top-Level Region) —' },
       ...baseOptions,
     ];
-  }, [categories, editingCategory]);
+  }, [regions, editingRegion]);
 
   /* ── TanStack Columns with Resizing Support ── */
   const columns = useMemo(
     () => [
-      columnHelper.accessor('categoryCode', {
-        id: 'categoryCode',
-        header: 'CODE',
+      columnHelper.accessor('regionCode', {
+        id: 'regionCode',
+        header: 'Code',
         size: 140,
         minSize: 110,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md shadow-2xs">
-            {row.original.categoryCode}
+            {row.original.regionCode}
           </span>
         ),
       }),
-      columnHelper.accessor('categoryName', {
-        id: 'categoryName',
-        header: 'CATEGORY NAME',
+      columnHelper.accessor('regionName', {
+        id: 'regionName',
+        header: 'Region Name',
         size: 340,
         minSize: 240,
         cell: ({ row }) => {
-          const cat = row.original;
-          const hasChildren = cat.hasChildren;
-          const isExpanded = cat.isExpanded;
-          const indentPx = (cat.depth || 0) * 24;
+          const reg = row.original;
+          const hasChildren = reg.hasChildren;
+          const isExpanded = reg.isExpanded;
+          const indentPx = (reg.depth || 0) * 24;
 
           return (
             <div
@@ -382,9 +379,9 @@ export default function ProductCategoriesPage() {
               {hasChildren ? (
                 <button
                   type="button"
-                  onClick={() => toggleExpand(cat.categoryId)}
+                  onClick={() => toggleExpand(reg.regionId)}
                   className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-heading hover:bg-surface transition-colors cursor-pointer"
-                  title={isExpanded ? 'Collapse subcategories' : 'Expand subcategories'}
+                  title={isExpanded ? 'Collapse sub-regions' : 'Expand sub-regions'}
                 >
                   {isExpanded ? (
                     <ChevronDown size={14} className="text-primary" />
@@ -397,24 +394,24 @@ export default function ProductCategoriesPage() {
               )}
 
               <div className="flex items-center gap-2 min-w-0">
-                {cat.depth === 0 ? (
-                  <Folder
+                {reg.depth === 0 ? (
+                  <Globe
                     size={16}
-                    className={cat.isActive ? 'text-primary shrink-0' : 'text-text-muted shrink-0'}
+                    className={reg.isActive ? 'text-primary shrink-0' : 'text-text-muted shrink-0'}
                   />
                 ) : (
-                  <Layers
+                  <MapPin
                     size={15}
-                    className={cat.isActive ? 'text-primary/80 shrink-0' : 'text-text-muted shrink-0'}
+                    className={reg.isActive ? 'text-primary/80 shrink-0' : 'text-text-muted shrink-0'}
                   />
                 )}
                 <span
                   className={`text-sm font-medium truncate ${
-                    cat.isActive ? 'text-heading' : 'text-text-muted line-through'
+                    reg.isActive ? 'text-heading' : 'text-text-muted line-through'
                   }`}
-                  title={cat.categoryName}
+                  title={reg.regionName}
                 >
-                  {cat.categoryName}
+                  {reg.regionName}
                 </span>
               </div>
             </div>
@@ -423,7 +420,7 @@ export default function ProductCategoriesPage() {
       }),
       columnHelper.accessor('parentName', {
         id: 'parentName',
-        header: 'PARENT CATEGORY',
+        header: 'Parent Region',
         size: 200,
         minSize: 140,
         cell: ({ row }) => (
@@ -434,7 +431,7 @@ export default function ProductCategoriesPage() {
       }),
       columnHelper.accessor('isActive', {
         id: 'isActive',
-        header: 'STATUS',
+        header: 'Status',
         size: 130,
         minSize: 110,
         cell: ({ row }) => {
@@ -461,31 +458,31 @@ export default function ProductCategoriesPage() {
       }),
       columnHelper.accessor('createdOn', {
         id: 'createdOn',
-        header: 'CREATED ON',
+        header: 'Created On',
         size: 130,
         minSize: 110,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
-            {row.original.createdOn}
+            {row.original.createdOn || '—'}
           </span>
         ),
       }),
       columnHelper.display({
         id: 'actions',
-        header: 'ACTIONS',
+        header: 'Actions',
         size: 130,
         minSize: 120,
         enableSorting: false,
         enableResizing: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-1.5 justify-end">
-            {!row.original.parentCategoryId && (
+            {!row.original.parentRegionId && (
               <button
                 type="button"
-                onClick={() => handleOpenAdd(row.original.categoryId)}
+                onClick={() => handleOpenAdd(row.original.regionId)}
                 className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer shadow-2xs"
-                title="Add sub-category"
-                aria-label="Add sub-category"
+                title="Add sub-region"
+                aria-label="Add sub-region"
               >
                 <Plus size={15} />
               </button>
@@ -494,8 +491,8 @@ export default function ProductCategoriesPage() {
               type="button"
               onClick={() => handleOpenEdit(row.original)}
               className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer shadow-2xs"
-              title="Edit category"
-              aria-label="Edit category"
+              title="Edit region"
+              aria-label="Edit region"
             >
               <Pencil size={15} />
             </button>
@@ -503,8 +500,8 @@ export default function ProductCategoriesPage() {
               type="button"
               onClick={() => handleDeleteClick(row.original)}
               className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer shadow-2xs"
-              title="Delete category"
-              aria-label="Delete category"
+              title="Delete region"
+              aria-label="Delete region"
             >
               <Trash2 size={15} />
             </button>
@@ -512,7 +509,7 @@ export default function ProductCategoriesPage() {
         ),
       }),
     ],
-    [categories, expandedIds, inquiries]
+    [regions, expandedIds, inquiries]
   );
 
   const table = useReactTable({
@@ -536,25 +533,23 @@ export default function ProductCategoriesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <FolderTree className="h-6 w-6 text-primary" aria-hidden="true" />
-            Product Categories
+            <MapPin className="h-6 w-6 text-primary" aria-hidden="true" />
+            Regions
           </h1>
           <p className="text-xs text-text-muted mt-1">
-            Manage hierarchical precision metrology categories, parent-child structures & inquiry classification options.
+            Manage hierarchical sales territories, domestic zones, and export distribution regions.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => handleOpenAdd()}
-            className="shadow-xs"
-          >
-            <Plus size={16} className="mr-1.5" />
-            Add Category
-          </Button>
-        </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => handleOpenAdd()}
+          className="self-start sm:self-auto shrink-0 shadow-xs"
+        >
+          <Plus size={16} className="mr-1.5" />
+          Add Region
+        </Button>
       </div>
 
       {/* ── Toolbar: Search, Status Filter & Tree View Helpers ── */}
@@ -568,7 +563,7 @@ export default function ProductCategoriesPage() {
             />
             <input
               type="text"
-              placeholder="Search by code or category name..."
+              placeholder="Search by code or region name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-bg border border-border rounded-lg text-text placeholder:text-text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
@@ -721,14 +716,14 @@ export default function ProductCategoriesPage() {
                   className="px-4 py-12 text-center text-text-muted text-sm"
                 >
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <FolderTree size={32} className="text-text-muted/50" />
+                    <MapPin size={32} className="text-text-muted/50" />
                     <p className="font-semibold text-heading">
-                      No categories match your filters
+                      No regions match your filters
                     </p>
                     <p className="text-xs">
                       {searchQuery || statusFilter !== 'ALL'
                         ? 'Try resetting your search query or status filter.'
-                        : 'Click "+ Add Category" to set up your product hierarchy.'}
+                        : 'Click "+ Add Region" to set up your geographical hierarchy.'}
                     </p>
                   </div>
                 </td>
@@ -752,77 +747,78 @@ export default function ProductCategoriesPage() {
             </div>
           ))
         ) : visibleRows.length > 0 ? (
-          visibleRows.map((cat) => (
+          visibleRows.map((reg) => (
             <div
-              key={cat.categoryId}
+              key={reg.regionId}
               className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
-                      {cat.categoryCode}
+                      {reg.regionCode}
                     </span>
-                    {cat.depth > 0 && (
+                    {reg.depth > 0 && (
                       <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">
-                        Level {cat.depth + 1}
+                        Level {reg.depth + 1}
                       </span>
                     )}
                   </div>
-                  <h3 className={`text-sm font-semibold mt-1 ${cat.isActive ? 'text-heading' : 'text-text-muted line-through'}`}>
-                    {cat.categoryName}
+                  <h3 className={`text-sm font-semibold mt-1 ${reg.isActive ? 'text-heading' : 'text-text-muted line-through'}`}>
+                    {reg.regionName}
                   </h3>
-                  {cat.parentName && (
+                  {reg.parentName && (
                     <p className="text-xs text-text-muted">
-                      Parent: <span className="text-text font-medium">{cat.parentName}</span>
+                      Parent: <span className="font-medium text-text">{reg.parentName}</span>
                     </p>
                   )}
                 </div>
 
                 <span
                   className={[
-                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
-                    cat.isActive
+                    'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium select-none',
+                    reg.isActive
                       ? 'bg-success/10 text-success border border-success/20'
                       : 'bg-danger/10 text-danger border border-danger/20',
                   ].join(' ')}
                 >
                   <span
                     className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      cat.isActive ? 'bg-success' : 'bg-danger'
+                      reg.isActive ? 'bg-success' : 'bg-danger'
                     }`}
                     aria-hidden="true"
                   />
-                  {cat.isActive ? 'Active' : 'Inactive'}
+                  {reg.isActive ? 'Active' : 'Inactive'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-text-muted pt-2 border-t border-border">
-                <span className="font-mono">Created: {cat.createdOn}</span>
+              <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-text-muted">
+                <span className="font-mono tabular-nums">{reg.createdOn || '—'}</span>
+
                 <div className="flex items-center gap-1.5">
-                  {!cat.parentCategoryId && (
+                  {!reg.parentRegionId && (
                     <button
                       type="button"
-                      onClick={() => handleOpenAdd(cat.categoryId)}
+                      onClick={() => handleOpenAdd(reg.regionId)}
                       className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer"
-                      title="Add sub-category"
+                      title="Add sub-region"
                     >
                       <Plus size={14} />
                     </button>
                   )}
                   <button
                     type="button"
-                    onClick={() => handleOpenEdit(cat)}
+                    onClick={() => handleOpenEdit(reg)}
                     className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer"
-                    title="Edit category"
+                    title="Edit region"
                   >
                     <Pencil size={14} />
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleDeleteClick(cat)}
+                    onClick={() => handleDeleteClick(reg)}
                     className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer"
-                    title="Delete category"
+                    title="Delete region"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -832,91 +828,91 @@ export default function ProductCategoriesPage() {
           ))
         ) : (
           <div className="bg-bg border border-border rounded-xl p-8 text-center text-text-muted">
-            <FolderTree size={28} className="mx-auto text-text-muted/50 mb-2" />
-            <p className="font-semibold text-heading text-sm">No categories found</p>
-            <p className="text-xs mt-1">Try adjusting your filters or add a new category.</p>
+            <Compass size={28} className="mx-auto text-text-muted/50 mb-2" />
+            <p className="font-semibold text-heading text-sm">No regions found</p>
+            <p className="text-xs mt-1">Try adjusting your filters or add a new region.</p>
           </div>
         )}
       </div>
 
-      {/* ── Add / Edit Category Modal ── */}
+      {/* ── Add / Edit Region Modal ── */}
       <Modal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        title={editingCategory ? 'Edit Product Category' : 'Add New Product Category'}
+        title={editingRegion ? 'Edit Region' : 'Add New Region'}
         maxWidth="max-w-md"
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
-          {/* Category Code */}
+          {/* Region Code */}
           <Input
-            id="categoryCode"
-            name="categoryCode"
+            id="regionCode"
+            name="regionCode"
             type="text"
-            label="Category Code"
-            placeholder="e.g. CAT-GRAN-01"
+            label="Region Code"
+            placeholder="e.g. REG-WEST-01"
             required
-            value={formData.categoryCode}
+            value={formData.regionCode}
             onChange={(e) => {
               const val = e.target.value.toUpperCase();
-              setFormData((prev) => ({ ...prev, categoryCode: val }));
-              if (formErrors.categoryCode) {
-                setFormErrors((prev) => ({ ...prev, categoryCode: '' }));
+              setFormData((prev) => ({ ...prev, regionCode: val }));
+              if (formErrors.regionCode) {
+                setFormErrors((prev) => ({ ...prev, regionCode: '' }));
               }
             }}
             onBlur={(e) => {
-              const err = validateField('categoryCode', e.target.value);
-              if (err) setFormErrors((prev) => ({ ...prev, categoryCode: err }));
+              const err = validateField('regionCode', e.target.value);
+              if (err) setFormErrors((prev) => ({ ...prev, regionCode: err }));
             }}
-            error={formErrors.categoryCode}
+            error={formErrors.regionCode}
             className="font-mono uppercase text-sm"
             hint="Unique identifier (letters, numbers, hyphens only)"
           />
 
-          {/* Category Name */}
+          {/* Region Name */}
           <Input
-            id="categoryName"
-            name="categoryName"
+            id="regionName"
+            name="regionName"
             type="text"
-            label="Category Name"
-            placeholder="e.g. Granite Surface Plates & Comparator Stands"
+            label="Region Name"
+            placeholder="e.g. West Region (Gujarat & Maharashtra)"
             required
-            value={formData.categoryName}
+            value={formData.regionName}
             onChange={(e) => {
               const val = e.target.value;
-              setFormData((prev) => ({ ...prev, categoryName: val }));
-              if (formErrors.categoryName) {
-                setFormErrors((prev) => ({ ...prev, categoryName: '' }));
+              setFormData((prev) => ({ ...prev, regionName: val }));
+              if (formErrors.regionName) {
+                setFormErrors((prev) => ({ ...prev, regionName: '' }));
               }
             }}
             onBlur={(e) => {
-              const err = validateField('categoryName', e.target.value);
-              if (err) setFormErrors((prev) => ({ ...prev, categoryName: err }));
+              const err = validateField('regionName', e.target.value);
+              if (err) setFormErrors((prev) => ({ ...prev, regionName: err }));
             }}
-            error={formErrors.categoryName}
+            error={formErrors.regionName}
           />
 
-          {/* Parent Category (SearchableSelect) */}
+          {/* Parent Region (SearchableSelect) */}
           <SearchableSelect
-            id="parentCategoryId"
-            name="parentCategoryId"
-            label="Parent Category (Optional)"
-            placeholder="Search or select parent category..."
+            id="parentRegionId"
+            name="parentRegionId"
+            label="Parent Region (Optional)"
+            placeholder="Search or select parent region..."
             options={parentSelectOptions}
-            value={formData.parentCategoryId}
+            value={formData.parentRegionId}
             onChange={(e) =>
               setFormData((prev) => ({
                 ...prev,
-                parentCategoryId: e.target.value,
+                parentRegionId: e.target.value,
               }))
             }
           />
 
           {/* Created On (Read-only in edit mode) */}
-          {editingCategory && (
+          {editingRegion && (
             <div className="text-xs text-text-muted flex items-center justify-between p-2.5 bg-surface/60 rounded-lg border border-border">
               <span>Created Timestamp:</span>
               <span className="font-mono font-medium text-heading">
-                {editingCategory.createdOn}
+                {editingRegion.createdOn}
               </span>
             </div>
           )}
@@ -928,25 +924,24 @@ export default function ProductCategoriesPage() {
                 Status
               </label>
               <p className="text-xs text-text-muted mt-0.5">
-                Set category active or inactive
+                Set region active or inactive
               </p>
             </div>
 
             <StatusSwitch
-              id="category-modal-status"
-              checked={Boolean(formData.isActive)}
+              id="region-modal-status"
+              checked={formData.isActive}
               onChange={(checked) =>
                 setFormData((prev) => ({ ...prev, isActive: checked }))
               }
             />
           </div>
 
-          {/* Modal Footer Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
             <Button
               type="button"
               variant="secondary"
-              size="md"
               onClick={handleCloseModal}
               disabled={isSubmitting}
             >
@@ -955,34 +950,43 @@ export default function ProductCategoriesPage() {
             <Button
               type="submit"
               variant="primary"
-              size="md"
-              loading={isSubmitting}
               disabled={isSubmitting}
+              className="min-w-[100px] flex items-center justify-center gap-2"
             >
-              {editingCategory ? 'Save Changes' : 'Create Category'}
+              {isSubmitting ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>{editingRegion ? 'Save Changes' : 'Add Region'}</span>
+              )}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* ── Delete Confirmation Modal ── */}
+      {/* ── Confirm Delete Modal ── */}
       <ConfirmModal
-        isOpen={Boolean(categoryToDelete)}
-        onClose={() => setCategoryToDelete(null)}
+        isOpen={Boolean(regionToDelete)}
+        onClose={() => setRegionToDelete(null)}
         onConfirm={handleConfirmDelete}
-        title="Delete Product Category?"
+        title="Delete Region"
         message={
-          <>
-            Are you sure you want to permanently delete{' '}
-            <strong className="text-heading font-semibold">
-              {categoryToDelete?.categoryName} ({categoryToDelete?.categoryCode})
-            </strong>
-            ? This action cannot be undone.
-          </>
+          regionToDelete ? (
+            <span>
+              Are you sure you want to delete{' '}
+              <strong className="text-heading font-semibold">
+                {regionToDelete.regionName}
+              </strong>{' '}
+              ({regionToDelete.regionCode})? This action cannot be undone.
+            </span>
+          ) : (
+            'Are you sure you want to delete this region?'
+          )
         }
-        confirmText="Delete Category"
-        cancelText="Cancel"
-        variant="danger"
+        confirmText="Delete Region"
+        confirmVariant="danger"
       />
     </div>
   );

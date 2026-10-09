@@ -41,6 +41,7 @@ import {
   Calendar,
   Layers,
   Flame,
+  Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -305,8 +306,8 @@ export default function PurchaseRequisitionApprovalPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 190,
-        size: 200,
+        minSize: 260,
+        size: 280,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -317,6 +318,23 @@ export default function PurchaseRequisitionApprovalPage() {
               className="flex items-center justify-end gap-2"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* View Button */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  navigate(`/purchase-requisition/${row.prNumber || row.prId}`, {
+                    state: { from: '/approvals/purchase-requisitions', backLabel: 'PR Approval', readOnly: true },
+                  })
+                }
+                className="text-xs font-semibold text-text hover:text-primary hover:bg-primary/10 border border-border hover:border-primary/40 transition-all h-8 px-2.5 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                title={`View ${row.prNumber}`}
+              >
+                <Eye size={14} className="stroke-[2]" aria-hidden="true" />
+                View
+              </Button>
+
               {/* Approve Button */}
               <Button
                 type="button"
@@ -390,7 +408,7 @@ export default function PurchaseRequisitionApprovalPage() {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-            Purchase requisitions awaiting review. Click any row to inspect complete item specifications before deciding.
+            Purchase requisitions awaiting review. Click the View button to inspect complete item specifications before deciding.
           </p>
         </div>
       </div>
@@ -652,17 +670,11 @@ export default function PurchaseRequisitionApprovalPage() {
                   </td>
                 </tr>
               ) : (
-                /* ── Data Rows (Click row to view PR details) ── */
+                /* ── Data Rows ── */
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    onClick={() =>
-                      navigate(`/purchase-requisition/${row.original.prNumber || row.original.prId}`, {
-                        state: { from: '/approvals/purchase-requisitions', backLabel: 'PR Approval', readOnly: true },
-                      })
-                    }
-                    className="hover:bg-surface/80 cursor-pointer transition-colors duration-120 bg-bg group/row"
-                    title="Click row to view full purchase requisition details"
+                    className="hover:bg-surface/80 transition-colors duration-120 bg-bg group/row"
                   >
                     {row.getVisibleCells().map((cell) => (
                       <Td
@@ -701,12 +713,7 @@ export default function PurchaseRequisitionApprovalPage() {
               return (
                 <div
                   key={pr.prId || pr.prNumber}
-                  onClick={() =>
-                    navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`, {
-                      state: { from: '/approvals/purchase-requisitions', backLabel: 'PR Approval', readOnly: true },
-                    })
-                  }
-                  className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3 hover:border-primary/40 cursor-pointer transition-colors"
+                  className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -758,6 +765,21 @@ export default function PurchaseRequisitionApprovalPage() {
                     className="flex items-center gap-2 pt-2 border-t border-border"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`, {
+                          state: { from: '/approvals/purchase-requisitions', backLabel: 'PR Approval', readOnly: true },
+                        })
+                      }
+                      className="flex-1 text-xs font-semibold text-text hover:text-primary hover:bg-primary/10 border border-border h-8 justify-center"
+                    >
+                      <Eye size={13} className="mr-1" />
+                      View
+                    </Button>
+
                     <Button
                       type="button"
                       variant="ghost"
@@ -825,21 +847,83 @@ export default function PurchaseRequisitionApprovalPage() {
         )}
       </div>
 
-      {/* ── 1. APPROVE CONFIRMATION MODAL ── */}
-      <ConfirmModal
-        isOpen={Boolean(prToApprove)}
-        onClose={handleCloseApprove}
-        onConfirm={handleConfirmApprove}
-        title="Approve Purchase Requisition"
-        description={
-          prToApprove
-            ? `Are you sure you want to approve purchase requisition ${prToApprove.prNumber} requested by ${prToApprove.requestedBy} (${prToApprove.department}) for ${prToApprove.items?.length || 0} line items? This will authorize procurement processing.`
-            : ''
-        }
-        confirmText={isSubmittingApprove ? 'Approving...' : 'Yes, Approve Requisition'}
-        confirmVariant="primary"
-        loading={isSubmittingApprove}
-      />
+      {/* ── 1. APPROVE CONFIRMATION MODAL WITH REMARKS ── */}
+      {prToApprove && (
+        <Modal
+          isOpen={Boolean(prToApprove)}
+          onClose={handleCloseApprove}
+          title="Approve Purchase Requisition"
+          size="md"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleConfirmApprove();
+            }}
+            className="space-y-4"
+          >
+            <div className="p-3.5 rounded-xl bg-success/10 border border-success/20 flex items-start gap-3">
+              <CheckCircle2 size={18} className="text-success shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="text-xs">
+                <p className="font-semibold text-success">
+                  Approving {prToApprove.prNumber}
+                </p>
+                <p className="text-text-muted mt-0.5">
+                  Requested by <strong className="text-heading">{prToApprove.requestedBy}</strong> ({prToApprove.department}) for{' '}
+                  <strong className="text-heading">{prToApprove.items?.length || 0} line items</strong>.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-text-muted">
+              Approving this requisition authorizes procurement and generation of purchase orders.
+            </p>
+
+            {/* Approval Comments / Remarks Field */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="pr-approval-remarks"
+                className="text-xs font-semibold text-heading block"
+              >
+                Approval Remarks / Comments (Optional)
+              </label>
+              <textarea
+                id="pr-approval-remarks"
+                name="pr-approval-remarks"
+                rows={3}
+                value={approveRemarks}
+                onChange={(e) => setApproveRemarks(e.target.value)}
+                placeholder="Enter approval remarks or authorization notes..."
+                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-heading placeholder:text-text-muted focus:border-success focus:outline-hidden focus:ring-2 focus:ring-success/20 transition-all resize-y"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleCloseApprove}
+                disabled={isSubmittingApprove}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                disabled={isSubmittingApprove}
+                loading={isSubmittingApprove}
+                className="bg-success hover:bg-success/90 text-white border-transparent"
+              >
+                <Check size={14} className="mr-1.5 stroke-[2.5]" />
+                Confirm Approval
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {/* ── 2. REJECT MODAL WITH REASONS & VALIDATION ── */}
       {prToReject && (
@@ -880,11 +964,11 @@ export default function PurchaseRequisitionApprovalPage() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
+                variant="secondary"
+                size="md"
                 onClick={handleCloseReject}
                 disabled={isSubmittingReject}
               >

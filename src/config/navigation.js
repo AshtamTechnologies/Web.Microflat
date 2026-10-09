@@ -29,6 +29,9 @@ import {
   Hash,
   FileCheck,
   FolderTree,
+  Scale,
+  MapPin,
+  HandCoins,
 } from 'lucide-react';
 
 export const navigation = [
@@ -151,6 +154,24 @@ export const navigation = [
             label: 'Product Categories',
             icon: FolderTree,
             path: '/configuration/product-categories',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Unit of Measurement (UOM)',
+            icon: Scale,
+            path: '/configuration/uom',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Regions',
+            icon: MapPin,
+            path: '/configuration/regions',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Payment Terms',
+            icon: HandCoins,
+            path: '/configuration/payment-terms',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
         ],

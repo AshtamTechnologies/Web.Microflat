@@ -36,6 +36,7 @@ import {
   TableContainer,
   Th,
   Td,
+  StatusSwitch,
 } from '../../components/ui';
 import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useInquiryDocumentsContext } from '../../context/InquiryDocumentsContext';
@@ -47,6 +48,7 @@ const INITIAL_FORM = {
   allowedExtensions: ['.pdf'],
   maxSizeMB: 25,
   isMandatory: false,
+  isActive: true,
 };
 
 export default function DocumentTypesPage() {
@@ -135,6 +137,7 @@ export default function DocumentTypesPage() {
       allowedExtensions: ['.pdf'],
       maxSizeMB: 25,
       isMandatory: false,
+      isActive: true,
     });
     setFormErrors({});
     setIsModalOpen(true);
@@ -149,6 +152,7 @@ export default function DocumentTypesPage() {
         : ['.pdf'],
       maxSizeMB: item.maxSizeMB || 25,
       isMandatory: Boolean(item.isMandatory),
+      isActive: item.isActive !== undefined ? Boolean(item.isActive) : true,
     });
     setFormErrors({});
     setIsModalOpen(true);
@@ -158,6 +162,7 @@ export default function DocumentTypesPage() {
     if (isSubmitting) return;
     setIsModalOpen(false);
     setEditingItem(null);
+    setFormData(INITIAL_FORM);
     setFormErrors({});
   }
 
@@ -179,6 +184,8 @@ export default function DocumentTypesPage() {
       }
       setIsModalOpen(false);
       setEditingItem(null);
+      setFormData(INITIAL_FORM);
+      setFormErrors({});
     } catch (err) {
       toast.error('Failed to save document type.');
     } finally {
@@ -278,6 +285,36 @@ export default function DocumentTypesPage() {
               Optional
             </Badge>
           ),
+      }),
+      columnHelper.accessor('isActive', {
+        id: 'isActive',
+        header: 'STATUS',
+        size: 130,
+        minSize: 110,
+        cell: ({ row }) => {
+          const isActive =
+            row.original.isActive !== undefined
+              ? Boolean(row.original.isActive)
+              : true;
+          return (
+            <span
+              className={[
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none',
+                isActive
+                  ? 'bg-success/10 text-success border border-success/20'
+                  : 'bg-danger/10 text-danger border border-danger/20',
+              ].join(' ')}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  isActive ? 'bg-success' : 'bg-danger'
+                }`}
+                aria-hidden="true"
+              />
+              {isActive ? 'Active' : 'Inactive'}
+            </span>
+          );
+        },
       }),
       columnHelper.display({
         id: 'actions',
@@ -542,15 +579,34 @@ export default function DocumentTypesPage() {
                     </div>
                   </div>
 
-                  {dt.isMandatory ? (
-                    <Badge variant="warning" className="text-[11px] px-2 py-0.5 shrink-0">
-                      Required
-                    </Badge>
-                  ) : (
-                    <Badge variant="neutral" className="text-[11px] px-2 py-0.5 shrink-0 opacity-80">
-                      Optional
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className={[
+                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium select-none',
+                        dt.isActive !== false
+                          ? 'bg-success/10 text-success border border-success/20'
+                          : 'bg-danger/10 text-danger border border-danger/20',
+                      ].join(' ')}
+                    >
+                      <span
+                        className={`w-1 h-1 rounded-full shrink-0 ${
+                          dt.isActive !== false ? 'bg-success' : 'bg-danger'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {dt.isActive !== false ? 'Active' : 'Inactive'}
+                    </span>
+
+                    {dt.isMandatory ? (
+                      <Badge variant="warning" className="text-[11px] px-2 py-0.5 shrink-0">
+                        Required
+                      </Badge>
+                    ) : (
+                      <Badge variant="neutral" className="text-[11px] px-2 py-0.5 shrink-0 opacity-80">
+                        Optional
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1.5 pt-2 border-t border-border">
@@ -682,6 +738,26 @@ export default function DocumentTypesPage() {
               }
               label="Mandatory for RFQ Inquiry"
               description="Inquiries show a warning badge until at least one document of this type is attached."
+            />
+          </div>
+
+          {/* Status Switch (Active / Inactive) */}
+          <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-heading block">
+                Status
+              </label>
+              <p className="text-xs text-text-muted mt-0.5">
+                Set document type active or inactive
+              </p>
+            </div>
+
+            <StatusSwitch
+              id="doctype-modal-status"
+              checked={formData.isActive !== undefined ? formData.isActive : true}
+              onChange={(checked) =>
+                setFormData((prev) => ({ ...prev, isActive: checked }))
+              }
             />
           </div>
 

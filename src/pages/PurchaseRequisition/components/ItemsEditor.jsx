@@ -25,6 +25,8 @@ import {
   TableContainer,
   Th,
   Td,
+  Checkbox,
+  ConfirmModal,
 } from '../../../components/ui';
 import {
   MOCK_MATERIALS,
@@ -49,6 +51,8 @@ const INITIAL_ITEM_FORM = {
   uom: 'Nos',
 };
 
+const getItemKey = (item, idx) => item?.prItemId || item?.id || `item_${idx}`;
+
 export default function ItemsEditor({
   items = [],
   onChange,
@@ -72,11 +76,34 @@ export default function ItemsEditor({
   const [editingId, setEditingId] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // Multiple selection and Delete Confirmation state
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+
   const editingIndex = editingId
-    ? items.findIndex((item) => (item.prItemId || item.id) === editingId)
+    ? items.findIndex((item, idx) => getItemKey(item, idx) === editingId)
     : -1;
 
   const isEditing = editingIndex !== -1;
+
+  // Selection helpers
+  const allItemIds = items.map((it, idx) => getItemKey(it, idx));
+  const isAllSelected = items.length > 0 && selectedIds.length === items.length;
+
+  const handleToggleSelectItem = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds([...allItemIds]);
+    }
+  };
 
   // Handle Field Change in Form
   const handleFieldChange = (field, value) => {
@@ -116,10 +143,10 @@ export default function ItemsEditor({
   const validateItemForm = () => {
     const errs = {};
     if (!formState.itemCode || !formState.itemCode.trim()) {
-      errs.itemCode = 'Item code is required';
+      errs.itemCode = 'Select a material from the catalog';
     }
     if (!formState.itemName || !formState.itemName.trim()) {
-      errs.itemName = 'Item name is required';
+      errs.itemName = 'Select a material from the catalog';
     }
     if (
       formState.quantity === '' ||
@@ -193,7 +220,7 @@ export default function ItemsEditor({
 
   // Start Editing Row
   const handleStartEdit = (item, index) => {
-    const id = item.prItemId || item.id || index;
+    const id = getItemKey(item, index);
     setEditingId(id);
     setFieldErrors({});
     setFormState({
@@ -207,17 +234,42 @@ export default function ItemsEditor({
     });
   };
 
-  // Remove Row
-  const handleRemoveItem = (index) => {
-    const itemToRemove = items[index];
-    const itemIdToRemove = itemToRemove.prItemId || itemToRemove.id;
+  // Trigger Single Delete Prompt
+  const handlePromptRemoveItem = (item, index) => {
+    setItemToDelete({ item, index });
+  };
+
+  // Confirm Single Delete
+  const handleConfirmSingleDelete = () => {
+    if (!itemToDelete) return;
+    const { index, item } = itemToDelete;
+    const itemKey = getItemKey(item, index);
     const updated = items.filter((_, i) => i !== index);
     handleUpdateItems(updated);
-    toast.success('Item removed');
 
-    if (editingId && (editingId === itemIdToRemove || editingIndex === index)) {
+    if (editingId && (editingId === itemKey || editingIndex === index)) {
       resetForm();
     }
+    setSelectedIds((prev) => prev.filter((id) => id !== itemKey));
+    setItemToDelete(null);
+    toast.success('Item removed');
+  };
+
+  // Confirm Bulk Delete
+  const handleConfirmBulkDelete = () => {
+    const count = selectedIds.length;
+    if (count === 0) return;
+    const updated = items.filter(
+      (it, idx) => !selectedIds.includes(getItemKey(it, idx))
+    );
+    handleUpdateItems(updated);
+
+    if (editingId && selectedIds.includes(editingId)) {
+      resetForm();
+    }
+    setSelectedIds([]);
+    setIsBulkDeleteOpen(false);
+    toast.success(`${count} ${count === 1 ? 'item' : 'items'} removed`);
   };
 
   // Calculate total quantity
@@ -273,13 +325,13 @@ export default function ItemsEditor({
           {isEditing && (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={resetForm}
-              className="text-xs text-text-muted hover:text-text self-start sm:self-auto"
+              className="text-xs self-start sm:self-auto"
             >
               <X size={14} className="mr-1" />
-              Cancel Edit
+              Cancel
             </Button>
           )}
         </div>
@@ -305,11 +357,11 @@ export default function ItemsEditor({
               <Input
                 id="item-form-code"
                 label="Item Code"
-                required
-                placeholder="e.g. MAT-FST-M6-125"
+                disabled
+                placeholder="Auto-populated from material..."
                 value={formState.itemCode}
                 error={fieldErrors.itemCode}
-                onChange={(e) => handleFieldChange('itemCode', e.target.value)}
+                className="bg-border/30 font-mono text-xs cursor-not-allowed"
               />
             </div>
 
@@ -318,11 +370,11 @@ export default function ItemsEditor({
               <Input
                 id="item-form-name"
                 label="Item Name"
-                required
-                placeholder="e.g. M6 Fastener"
+                disabled
+                placeholder="Auto-populated from material..."
                 value={formState.itemName}
                 error={fieldErrors.itemName}
-                onChange={(e) => handleFieldChange('itemName', e.target.value)}
+                className="bg-border/30 cursor-not-allowed"
               />
             </div>
 
@@ -432,14 +484,29 @@ export default function ItemsEditor({
             </div>
           </div>
 
-          {items.length > 0 && (
-            <div className="flex items-center gap-3 text-xs self-start sm:self-auto bg-bg px-3 py-1.5 rounded-lg border border-border">
-              <span className="text-text-muted font-medium">Total Quantity:</span>
-              <span className="font-bold font-mono text-heading">
-                {totalQuantity.toLocaleString()}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+            {selectedIds.length > 0 && (
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={() => setIsBulkDeleteOpen(true)}
+                className="font-semibold text-xs shadow-2xs cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                <span>Delete Selected ({selectedIds.length})</span>
+              </Button>
+            )}
+
+            {items.length > 0 && (
+              <div className="flex items-center gap-3 text-xs bg-bg px-3 py-1.5 rounded-lg border border-border">
+                <span className="text-text-muted font-medium">Total Quantity:</span>
+                <span className="font-bold font-mono text-heading">
+                  {totalQuantity.toLocaleString()}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Section Error Banner if provided */}
@@ -465,6 +532,16 @@ export default function ItemsEditor({
           <TableContainer>
             <thead>
               <tr className="bg-surface border-b border-border">
+                <Th className="w-[45px] text-center">
+                  <div className="flex items-center justify-center">
+                    <Checkbox
+                      id="select-all-pr-items"
+                      checked={isAllSelected}
+                      onChange={handleToggleSelectAll}
+                      aria-label="Select all items"
+                    />
+                  </div>
+                </Th>
                 <Th className="w-[50px] text-center">#</Th>
                 <Th className="w-[160px]">Item Code</Th>
                 <Th className="w-[200px]">Item Name</Th>
@@ -476,19 +553,33 @@ export default function ItemsEditor({
             </thead>
             <tbody className="divide-y divide-border bg-surface">
               {items.map((item, index) => {
-                const isCurrentEditing =
-                  editingId &&
-                  (item.prItemId || item.id) === editingId;
+                const itemKey = getItemKey(item, index);
+                const isCurrentEditing = editingId && editingId === itemKey;
+                const isSelected = selectedIds.includes(itemKey);
 
                 return (
                   <tr
-                    key={item.prItemId || item.id || index}
+                    key={itemKey}
                     className={`transition-colors ${
                       isCurrentEditing
                         ? 'bg-primary/10 hover:bg-primary/15'
+                        : isSelected
+                        ? 'bg-primary/[0.04] hover:bg-primary/[0.08]'
                         : 'hover:bg-bg/60'
                     }`}
                   >
+                    {/* Checkbox */}
+                    <Td className="text-center">
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          id={`select-pr-item-${itemKey}`}
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectItem(itemKey)}
+                          aria-label={`Select ${item.itemName || 'item'}`}
+                        />
+                      </div>
+                    </Td>
+
                     {/* Index */}
                     <Td className="text-center font-semibold text-text-muted text-xs">
                       {index + 1}
@@ -545,9 +636,9 @@ export default function ItemsEditor({
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleRemoveItem(index)}
+                          onClick={() => handlePromptRemoveItem(item, index)}
                           title="Remove this item"
-                          className="text-text-muted hover:text-danger hover:bg-danger/10"
+                          className="text-text-muted hover:text-danger hover:bg-danger/10 cursor-pointer"
                         >
                           <Trash2 size={14} aria-hidden="true" />
                         </Button>
@@ -560,7 +651,7 @@ export default function ItemsEditor({
             {items.length > 0 && (
               <tfoot>
                 <tr className="bg-surface/90 border-t-2 border-border font-semibold text-xs text-text">
-                  <td colSpan={4} className="px-5 py-3 text-text-muted">
+                  <td colSpan={5} className="px-5 py-3 text-text-muted">
                     Total {items.length} {items.length === 1 ? 'item' : 'items'}
                   </td>
                   <td className="px-5 py-3 text-right font-mono tabular-nums text-heading font-bold">
@@ -575,6 +666,34 @@ export default function ItemsEditor({
           </TableContainer>
         )}
       </Card>
+
+      {/* ── Single Delete Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={Boolean(itemToDelete)}
+        onClose={() => setItemToDelete(null)}
+        onConfirm={handleConfirmSingleDelete}
+        title="Remove Item"
+        message={`Are you sure you want to remove "${
+          itemToDelete?.item?.itemName || itemToDelete?.item?.itemCode || 'this item'
+        }" from this purchase requisition?`}
+        confirmText="Remove Item"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* ── Bulk Delete Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={isBulkDeleteOpen}
+        onClose={() => setIsBulkDeleteOpen(false)}
+        onConfirm={handleConfirmBulkDelete}
+        title={`Remove ${selectedIds.length} Items`}
+        message={`Are you sure you want to remove the ${selectedIds.length} selected item(s) from this purchase requisition? This action cannot be undone.`}
+        confirmText={`Remove ${selectedIds.length} ${
+          selectedIds.length === 1 ? 'Item' : 'Items'
+        }`}
+        cancelText="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }

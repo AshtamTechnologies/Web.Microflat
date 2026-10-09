@@ -20,6 +20,7 @@ export function DocumentTypesProvider({ children }) {
         allowedExtensions: ['.pdf'],
         maxSizeMB: 25,
         isMandatory: false,
+        isActive: true,
       };
     },
     [documentTypes]
@@ -39,6 +40,7 @@ export function DocumentTypesProvider({ children }) {
         : ['.pdf'],
       maxSizeMB: Number(data.maxSizeMB) || 25,
       isMandatory: Boolean(data.isMandatory),
+      isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
     };
 
     setDocumentTypes((prev) => [...prev, newDocType]);
@@ -61,6 +63,7 @@ export function DocumentTypesProvider({ children }) {
               : dt.allowedExtensions,
             maxSizeMB: data.maxSizeMB !== undefined ? Number(data.maxSizeMB) : dt.maxSizeMB,
             isMandatory: data.isMandatory !== undefined ? Boolean(data.isMandatory) : dt.isMandatory,
+            isActive: data.isActive !== undefined ? Boolean(data.isActive) : (dt.isActive !== undefined ? dt.isActive : true),
           };
         }
         return dt;
@@ -68,6 +71,24 @@ export function DocumentTypesProvider({ children }) {
     );
     toast.success('Document type updated');
     return { ok: true };
+  }, []);
+
+  const toggleDocumentTypeActive = useCallback((id) => {
+    setDocumentTypes((prev) =>
+      prev.map((dt) => {
+        if (dt.documentTypeId === id || dt.id === id) {
+          const nextState = !(dt.isActive !== undefined ? dt.isActive : true);
+          toast.success(
+            nextState ? 'Document type activated' : 'Document type deactivated'
+          );
+          return {
+            ...dt,
+            isActive: nextState,
+          };
+        }
+        return dt;
+      })
+    );
   }, []);
 
   const deleteDocumentType = useCallback((id) => {
@@ -85,6 +106,7 @@ export function DocumentTypesProvider({ children }) {
         addDocumentType,
         updateDocumentType,
         deleteDocumentType,
+        toggleDocumentTypeActive,
       }}
     >
       {children}

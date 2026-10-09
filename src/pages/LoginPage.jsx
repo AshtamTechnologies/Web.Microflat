@@ -31,6 +31,9 @@ import toast from 'react-hot-toast';
 
 import { Button, Input, Checkbox, ErrorBanner } from '../components/ui';
 import { login, forgotPassword, forceResetPassword } from '../services/authService';
+import { useUserSessions } from '../context/UserSessionsContext';
+import { mockUsers } from '../mocks/users';
+import { parseUserAgent } from '../utils/dateTime';
 
 const LOGO = '/micro-flat-logo.png';
 
@@ -176,6 +179,7 @@ function BrandPanel() {
 export default function LoginPage({ initialMode = 'login' }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { recordLogin } = useUserSessions();
 
   // Mode: 'login' | 'forgot-password' | 'force-reset'
   const [mode, setMode] = useState(() => {
@@ -269,6 +273,20 @@ export default function LoginPage({ initialMode = 'login' }) {
       } else {
         sessionStorage.setItem('mf-token', token);
       }
+
+      // Record login session if user matches
+      if (recordLogin) {
+        const userEmail = (user?.email || loginForm.identifier || '').toLowerCase();
+        const matched = mockUsers.find((u) => u.email.toLowerCase() === userEmail);
+        if (matched) {
+          const uaMeta = parseUserAgent();
+          recordLogin(matched.id, {
+            ipAddress: '192.168.1.105',
+            ...uaMeta,
+          });
+        }
+      }
+
       toast.success(`Welcome back, ${user.name || 'User'}!`);
       navigate('/dashboard', { replace: true });
     } catch (err) {

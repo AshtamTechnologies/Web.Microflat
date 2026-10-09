@@ -36,6 +36,7 @@ import {
   AlertCircle,
   FileText,
   User,
+  Eye,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -80,6 +81,7 @@ export default function VendorApprovalPage() {
 
   // Modal States
   const [vendorToApprove, setVendorToApprove] = useState(null);
+  const [approveComments, setApproveComments] = useState('');
   const [isSubmittingApprove, setIsSubmittingApprove] = useState(false);
 
   const [vendorToReject, setVendorToReject] = useState(null);
@@ -113,14 +115,17 @@ export default function VendorApprovalPage() {
   /* ── Approve Handler with Confirmation ── */
   function handleOpenApprove(vendor) {
     setVendorToApprove(vendor);
+    setApproveComments('');
   }
 
   function handleCloseApprove() {
     if (isSubmittingApprove) return;
     setVendorToApprove(null);
+    setApproveComments('');
   }
 
-  async function handleConfirmApprove() {
+  async function handleConfirmApprove(e) {
+    if (e && e.preventDefault) e.preventDefault();
     if (!vendorToApprove) return;
 
     try {
@@ -131,10 +136,11 @@ export default function VendorApprovalPage() {
         approvalStatus: 'Approved',
         approvedOn: now,
         approvedBy: 'Ian Chesnut',
+        approvedByComments: approveComments.trim(),
       });
 
       toast.success(`${vendorToApprove.vendorName} approved successfully`);
-      setVendorToApprove(null);
+      handleCloseApprove();
     } catch {
       toast.error('Failed to approve vendor. Please try again.');
     } finally {
@@ -253,8 +259,8 @@ export default function VendorApprovalPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 200,
-        size: 220,
+        minSize: 260,
+        size: 280,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -265,6 +271,23 @@ export default function VendorApprovalPage() {
               className="flex items-center justify-end gap-2"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* View Button */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  navigate(`/vendors/${row.id}/effective-dates`, {
+                    state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
+                  })
+                }
+                className="text-xs font-semibold text-text hover:text-primary hover:bg-primary/10 border border-border hover:border-primary/40 transition-all h-8 px-2.5 shadow-2xs flex items-center gap-1.5"
+                title={`View ${row.vendorName}`}
+              >
+                <Eye size={14} className="stroke-[2]" aria-hidden="true" />
+                View
+              </Button>
+
               {/* Approve Button */}
               <Button
                 type="button"
@@ -338,7 +361,7 @@ export default function VendorApprovalPage() {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-            Vendors awaiting review. Click any row to inspect complete vendor documentation before deciding.
+            Vendors awaiting review. Click the View button to inspect complete vendor documentation before deciding.
           </p>
         </div>
       </div>
@@ -485,17 +508,11 @@ export default function VendorApprovalPage() {
                   </td>
                 </tr>
               ) : (
-                /* ── Data Rows (Click row to view vendor details) ── */
+                /* ── Data Rows ── */
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    onClick={() =>
-                      navigate(`/vendors/${row.original.id}/effective-dates`, {
-                        state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
-                      })
-                    }
-                    className="hover:bg-surface/80 cursor-pointer transition-colors duration-120 bg-bg group/row"
-                    title="Click row to view full vendor details"
+                    className="hover:bg-surface/80 transition-colors duration-120 bg-bg group/row"
                   >
                     {row.getVisibleCells().map((cell) => (
                       <Td
@@ -533,12 +550,7 @@ export default function VendorApprovalPage() {
               return (
                 <div
                   key={vendor.id}
-                  onClick={() =>
-                    navigate(`/vendors/${vendor.id}/effective-dates`, {
-                      state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
-                    })
-                  }
-                  className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3 hover:border-primary/40 cursor-pointer transition-colors"
+                  className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -574,6 +586,21 @@ export default function VendorApprovalPage() {
                     className="flex items-center justify-end gap-2 pt-2 border-t border-border/50"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        navigate(`/vendors/${vendor.id}/effective-dates`, {
+                          state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
+                        })
+                      }
+                      className="flex-1 text-xs font-semibold text-text hover:text-primary hover:bg-primary/10 border border-border"
+                    >
+                      <Eye size={13} className="mr-1" />
+                      View
+                    </Button>
+
                     <Button
                       type="button"
                       variant="ghost"
@@ -656,34 +683,93 @@ export default function VendorApprovalPage() {
         </div>
       </div>
 
-      {/* ── 1. APPROVE CONFIRMATION MODAL (System Standard) ── */}
-      <ConfirmModal
+      {/* ── 1. APPROVE CONFIRMATION MODAL WITH APPROVAL COMMENT ── */}
+      <Modal
         isOpen={Boolean(vendorToApprove)}
         onClose={handleCloseApprove}
-        title="Approve Vendor"
-        confirmText="Approve Vendor"
-        variant="primary"
-        icon={CheckCircle2}
-        loading={isSubmittingApprove}
-        maxWidth="max-w-md"
-        message={
-          vendorToApprove ? (
-            <div className="space-y-2 text-left">
-              <p className="text-sm text-heading leading-relaxed">
-                Are you sure you want to approve{' '}
-                <strong className="font-semibold text-primary">
-                  {vendorToApprove.vendorName}
-                </strong>{' '}
-                (<span className="font-mono text-xs">{vendorToApprove.vendorCode}</span>)?
-              </p>
-              <p className="text-xs text-text-muted leading-normal">
-                This vendor will be marked as <strong>Approved</strong> and activated for purchase orders and procurement workflows.
-              </p>
+        title="Approve Vendor Application"
+        maxWidth="max-w-xl"
+      >
+        {vendorToApprove && (
+          <form onSubmit={handleConfirmApprove} className="space-y-4">
+            {/* Vendor Profile Highlight Card */}
+            <div className="flex items-start gap-3.5 p-4 rounded-xl bg-success/5 border border-success/20">
+              <div className="w-11 h-11 rounded-xl bg-success/15 border border-success/30 text-success flex items-center justify-center shrink-0">
+                <CheckCircle2 size={22} aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-sm sm:text-base font-bold text-heading truncate">
+                    {vendorToApprove.vendorName}
+                  </h3>
+                  <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
+                    {vendorToApprove.vendorCode}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
+                  {vendorToApprove.contactPersonName && (
+                    <span className="flex items-center gap-1">
+                      <User size={12} className="text-text-muted/70" />
+                      {vendorToApprove.contactPersonName}
+                    </span>
+                  )}
+                  {vendorToApprove.city && (
+                    <span className="flex items-center gap-1">
+                      <MapPin size={12} className="text-text-muted/70" />
+                      {vendorToApprove.city}, {getStateName(vendorToApprove.countryId, vendorToApprove.stateId)}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-          ) : null
-        }
-        onConfirm={handleConfirmApprove}
-      />
+
+            <p className="text-xs text-text-muted">
+              Approving will activate this vendor for purchase orders and procurement workflows.
+            </p>
+
+            {/* Approval Comments Field */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="approve-comments"
+                className="text-xs font-semibold text-heading block"
+              >
+                Approval Comments / Remarks (Optional)
+              </label>
+              <textarea
+                id="approve-comments"
+                rows={3}
+                value={approveComments}
+                onChange={(e) => setApproveComments(e.target.value)}
+                placeholder="Enter approval remarks or internal audit notes..."
+                className="w-full rounded-xl border border-border bg-bg text-heading text-xs p-3 placeholder:text-text-muted focus:border-success focus:ring-2 focus:ring-success/20 outline-none resize-none leading-relaxed transition-all"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleCloseApprove}
+                disabled={isSubmittingApprove}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                loading={isSubmittingApprove}
+                className="flex items-center gap-1.5 bg-success hover:bg-success/90 text-white border-transparent"
+              >
+                <Check size={15} strokeWidth={2.5} />
+                Confirm Approval
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {/* ── 2. REJECT FEEDBACK MODAL (Polished & Redesigned) ── */}
       <Modal

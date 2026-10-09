@@ -26,6 +26,8 @@ import {
   Search,
 } from 'lucide-react';
 import navigation from '../../config/navigation';
+import { useUserSessions } from '../../context/UserSessionsContext';
+import { mockUsers } from '../../mocks/users';
 
 const LOGO = '/micro-flat-logo.png';
 const SIDE_LOGO = '/microsidelogo.png';
@@ -479,7 +481,20 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [collapsed, onCollapsedToggle]);
 
+  const { recordLogout } = useUserSessions();
+
   function handleLogout() {
+    if (recordLogout) {
+      const matched = mockUsers.find(
+        (u) =>
+          u.email.toLowerCase() === user.email.toLowerCase() ||
+          u.firstName === 'Ian' ||
+          u.id === 'u1'
+      );
+      if (matched) {
+        recordLogout(matched.id);
+      }
+    }
     localStorage.removeItem('mf-token');
     sessionStorage.removeItem('mf-token');
     navigate('/login', { replace: true });

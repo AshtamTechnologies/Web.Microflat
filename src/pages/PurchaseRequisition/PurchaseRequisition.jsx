@@ -37,6 +37,7 @@ import {
 import {
   Button,
   Input,
+  DatePicker,
   Select,
   Badge,
   Card,
@@ -48,9 +49,7 @@ import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisition
 import {
   formatPRDate,
   getPRStatusBadgeVariant,
-  getPRPriorityBadgeVariant,
   STATUS_OPTIONS,
-  PRIORITY_OPTIONS,
 } from '../../mocks/purchaseRequisitions';
 
 const columnHelper = createColumnHelper();
@@ -58,11 +57,6 @@ const columnHelper = createColumnHelper();
 const STATUS_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
   ...STATUS_OPTIONS,
-];
-
-const PRIORITY_FILTER_OPTIONS = [
-  { value: 'ALL', label: 'All Priorities' },
-  ...PRIORITY_OPTIONS,
 ];
 
 export default function PurchaseRequisition() {
@@ -74,8 +68,6 @@ export default function PurchaseRequisition() {
     setSearch,
     statusFilter,
     setStatusFilter,
-    priorityFilter,
-    setPriorityFilter,
     dateFilter,
     setDateFilter,
     resetFilters,
@@ -91,12 +83,11 @@ export default function PurchaseRequisition() {
   // Reset pagination to page 1 whenever filters change
   useEffect(() => {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-  }, [search, statusFilter, priorityFilter, dateFilter]);
+  }, [search, statusFilter, dateFilter]);
 
   const hasActiveFilters = Boolean(
     search.trim() ||
       statusFilter !== 'ALL' ||
-      priorityFilter !== 'ALL' ||
       dateFilter
   );
 
@@ -115,9 +106,9 @@ export default function PurchaseRequisition() {
     () => [
       /* 1. PR NUMBER */
       columnHelper.accessor('prNumber', {
-        header: 'PR Number',
-        minSize: 130,
-        size: 150,
+        header: 'PR NUMBER',
+        minSize: 140,
+        size: 155,
         cell: (info) => {
           const pr = info.row.original;
           return (
@@ -126,7 +117,7 @@ export default function PurchaseRequisition() {
               onClick={() =>
                 navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)
               }
-              className="font-semibold text-primary hover:underline inline-flex items-center gap-1.5 cursor-pointer text-left"
+              className="font-semibold text-primary hover:underline inline-flex items-center gap-1.5 cursor-pointer text-left whitespace-nowrap"
             >
               <FileText size={14} className="text-primary/70 shrink-0" />
               <span>{pr.prNumber}</span>
@@ -137,11 +128,11 @@ export default function PurchaseRequisition() {
 
       /* 2. PR DATE */
       columnHelper.accessor('prDate', {
-        header: 'PR Date',
-        minSize: 110,
-        size: 130,
+        header: 'PR DATE',
+        minSize: 120,
+        size: 135,
         cell: (info) => (
-          <span className="text-text-muted text-xs sm:text-sm">
+          <span className="text-text-muted text-xs sm:text-sm whitespace-nowrap">
             {formatPRDate(info.getValue())}
           </span>
         ),
@@ -149,11 +140,11 @@ export default function PurchaseRequisition() {
 
       /* 3. REQUESTED BY */
       columnHelper.accessor('requestedBy', {
-        header: 'Requested By',
-        minSize: 140,
+        header: 'REQUESTED BY',
+        minSize: 150,
         size: 170,
         cell: (info) => (
-          <span className="font-medium text-text text-xs sm:text-sm">
+          <span className="font-medium text-text text-xs sm:text-sm whitespace-nowrap">
             {info.getValue() || '—'}
           </span>
         ),
@@ -161,11 +152,11 @@ export default function PurchaseRequisition() {
 
       /* 4. DEPARTMENT */
       columnHelper.accessor('department', {
-        header: 'Department',
-        minSize: 130,
-        size: 150,
+        header: 'DEPARTMENT',
+        minSize: 140,
+        size: 160,
         cell: (info) => (
-          <span className="text-text-muted text-xs sm:text-sm">
+          <span className="text-text-muted text-xs sm:text-sm whitespace-nowrap">
             {info.getValue() || '—'}
           </span>
         ),
@@ -173,52 +164,44 @@ export default function PurchaseRequisition() {
 
       /* 5. REQUIRED DATE */
       columnHelper.accessor('requiredDate', {
-        header: 'Required Date',
-        minSize: 110,
-        size: 130,
+        header: 'REQUIRED DATE',
+        minSize: 130,
+        size: 145,
         cell: (info) => (
-          <span className="text-text-muted text-xs sm:text-sm">
+          <span className="text-text-muted text-xs sm:text-sm whitespace-nowrap">
             {formatPRDate(info.getValue())}
           </span>
         ),
       }),
 
-      /* 6. PRIORITY */
-      columnHelper.accessor('priority', {
-        header: 'Priority',
-        minSize: 100,
-        size: 120,
-        cell: (info) => {
-          const priority = info.getValue() || 'Normal';
-          const priorityVariant = getPRPriorityBadgeVariant(priority);
-          return <Badge variant={priorityVariant}>{priority}</Badge>;
-        },
-      }),
-
-      /* 7. STATUS */
+      /* 6. STATUS */
       columnHelper.accessor('status', {
-        header: 'Status',
-        minSize: 130,
-        size: 150,
+        header: 'STATUS',
+        minSize: 165,
+        size: 180,
         cell: (info) => {
           const status = info.getValue() || 'Pending Approval';
           const statusVariant = getPRStatusBadgeVariant(status);
-          return <Badge variant={statusVariant}>{status}</Badge>;
+          return (
+            <div className="inline-flex items-center whitespace-nowrap">
+              <Badge variant={statusVariant}>{status}</Badge>
+            </div>
+          );
         },
       }),
 
-      /* 8. ACTIONS */
+      /* 7. ACTIONS */
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
-        minSize: 120,
-        size: 130,
+        header: 'ACTIONS',
+        minSize: 185,
+        size: 200,
         enableResizing: false,
         enableSorting: false,
         cell: (info) => {
           const pr = info.row.original;
           return (
-            <div className="flex items-center justify-end gap-1.5 pr-2">
+            <div className="flex items-center justify-end gap-2 whitespace-nowrap">
               <Button
                 variant="secondary"
                 size="sm"
@@ -226,10 +209,10 @@ export default function PurchaseRequisition() {
                   navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)
                 }
                 title="View Requisition"
-                className="h-8 px-2.5 text-xs text-text hover:text-primary hover:border-primary"
+                className="h-8 px-2.5 text-xs text-text hover:text-primary hover:border-primary shrink-0 inline-flex items-center gap-1 font-medium"
               >
-                <Eye size={13} className="mr-1" />
-                View
+                <Eye size={13} className="text-primary/70 shrink-0" />
+                <span>View</span>
               </Button>
               <Button
                 variant="secondary"
@@ -240,10 +223,10 @@ export default function PurchaseRequisition() {
                   )
                 }
                 title="Edit Requisition"
-                className="h-8 px-2.5 text-xs text-text hover:text-primary hover:border-primary"
+                className="h-8 px-2.5 text-xs text-text hover:text-primary hover:border-primary shrink-0 inline-flex items-center gap-1 font-medium"
               >
-                <Pencil size={13} className="mr-1" />
-                Edit
+                <Pencil size={13} className="text-primary/70 shrink-0" />
+                <span>Edit</span>
               </Button>
             </div>
           );
@@ -390,9 +373,9 @@ export default function PurchaseRequisition() {
 
       {/* ── Filters & Search Control Bar ── */}
       <Card padding="md" className="space-y-4 shadow-xs">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-end">
           {/* Search Box */}
-          <div className="md:col-span-4">
+          <div className="sm:col-span-2 md:col-span-5">
             <Input
               id="pr-search"
               label="Search"
@@ -414,23 +397,12 @@ export default function PurchaseRequisition() {
             />
           </div>
 
-          {/* Priority Filter */}
-          <div className="md:col-span-2">
-            <Select
-              id="pr-priority-filter"
-              label="Priority Filter"
-              options={PRIORITY_FILTER_OPTIONS}
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-            />
-          </div>
-
           {/* Date Filter */}
-          <div className="md:col-span-2">
-            <Input
+          <div className="md:col-span-3">
+            <DatePicker
               id="pr-date-filter"
+              name="dateFilter"
               label="Date Filter"
-              type="date"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
             />
@@ -472,8 +444,8 @@ export default function PurchaseRequisition() {
       <div className="hidden md:block">
         <Card padding="none" className="overflow-hidden border border-border shadow-xs">
           <TableContainer
-            tableStyle={{ width: table.getTotalSize(), minWidth: '100%' }}
-            tableClassName="table-fixed"
+            tableStyle={{ width: '100%', minWidth: '980px' }}
+            tableClassName="w-full"
           >
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -530,7 +502,7 @@ export default function PurchaseRequisition() {
                           <div
                             className={`select-none ${
                               header.id === 'actions'
-                                ? 'text-right w-full pr-4'
+                                ? 'text-right w-full'
                                 : ''
                             }`}
                           >
@@ -673,7 +645,6 @@ export default function PurchaseRequisition() {
           table.getRowModel().rows.map((row) => {
             const pr = row.original;
             const statusVariant = getPRStatusBadgeVariant(pr.status);
-            const priorityVariant = getPRPriorityBadgeVariant(pr.priority);
 
             return (
               <Card
@@ -700,9 +671,6 @@ export default function PurchaseRequisition() {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <Badge variant={statusVariant}>{pr.status}</Badge>
-                    <Badge variant={priorityVariant} className="text-[10px]">
-                      {pr.priority}
-                    </Badge>
                   </div>
                 </div>
 

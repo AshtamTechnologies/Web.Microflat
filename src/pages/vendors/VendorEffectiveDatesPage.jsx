@@ -19,7 +19,9 @@ import {
   Eye,
   Pencil,
   Save,
+  Check,
   X,
+  User,
   Building2,
   Contact,
   MapPin,
@@ -47,6 +49,7 @@ import toast from 'react-hot-toast';
 import {
   Button,
   Input,
+  DatePicker,
   SearchableSelect,
   Badge,
   Card,
@@ -166,17 +169,96 @@ export default function VendorEffectiveDatesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getVendorById, updateVendorVersions } = useVendorsContext();
+  const { getVendorById, updateVendorVersions, updateVendor } = useVendorsContext();
 
   const backPath = location.state?.from || '/vendors';
   const backLabel = location.state?.backLabel || 'Vendors';
+  const isFromApproval = Boolean(
+    location.state?.from === '/approvals/vendors' ||
+    location.state?.isApprovalView
+  );
   const isReadOnly = Boolean(
     location.state?.readOnly ||
-    location.state?.from === '/approvals/vendors' ||
+    isFromApproval ||
     location.state?.from === '/vendors/dashboard'
   );
 
   const vendor = getVendorById(id);
+
+  // Approval Modal States
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [approveComments, setApproveComments] = useState('');
+  const [isSubmittingApprove, setIsSubmittingApprove] = useState(false);
+
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectComments, setRejectComments] = useState('');
+  const [isSubmittingReject, setIsSubmittingReject] = useState(false);
+
+  function handleOpenApprove() {
+    setApproveComments('');
+    setIsApproveModalOpen(true);
+  }
+
+  function handleCloseApprove() {
+    if (isSubmittingApprove) return;
+    setIsApproveModalOpen(false);
+    setApproveComments('');
+  }
+
+  async function handleConfirmApprove(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!vendor) return;
+
+    try {
+      setIsSubmittingApprove(true);
+      const now = formatAuditTimestamp();
+      await updateVendor(vendor.id, {
+        approvalStatus: 'Approved',
+        approvedOn: now,
+        approvedBy: 'Ian Chesnut',
+        approvedByComments: approveComments.trim(),
+      });
+      toast.success(`${vendor.vendorName} approved successfully`);
+      setIsApproveModalOpen(false);
+    } catch {
+      toast.error('Failed to approve vendor. Please try again.');
+    } finally {
+      setIsSubmittingApprove(false);
+    }
+  }
+
+  function handleOpenReject() {
+    setRejectComments('');
+    setIsRejectModalOpen(true);
+  }
+
+  function handleCloseReject() {
+    if (isSubmittingReject) return;
+    setIsRejectModalOpen(false);
+    setRejectComments('');
+  }
+
+  async function handleConfirmReject(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!vendor || !rejectComments.trim()) return;
+
+    try {
+      setIsSubmittingReject(true);
+      const now = formatAuditTimestamp();
+      await updateVendor(vendor.id, {
+        approvalStatus: 'Rejected',
+        approvedOn: now,
+        approvedBy: 'Ian Chesnut',
+        approvedByComments: rejectComments.trim(),
+      });
+      toast.success(`${vendor.vendorName} rejected`);
+      setIsRejectModalOpen(false);
+    } catch {
+      toast.error('Failed to reject vendor. Please try again.');
+    } finally {
+      setIsSubmittingReject(false);
+    }
+  }
 
   // Versions array from vendor
   const versions = useMemo(() => {
@@ -790,28 +872,58 @@ export default function VendorEffectiveDatesPage() {
           </div>
         </div>
 
-        {/* Status Badges */}
-        <div className="flex items-center gap-2 self-start sm:self-center">
-          <span
-            className={[
-              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none',
-              vendor.isActive
-                ? 'bg-success/10 text-success border border-success/20'
-                : 'bg-danger/10 text-danger border border-danger/20',
-            ].join(' ')}
-          >
+        {/* Status Badges & Approval Actions */}
+        <div className="flex items-center gap-2.5 self-start sm:self-center flex-wrap">
+          {(vendor.approvalStatus || '').toLowerCase() === 'approved' && (
             <span
-              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                vendor.isActive ? 'bg-success' : 'bg-danger'
-              }`}
-              aria-hidden="true"
-            />
-            {vendor.isActive ? 'Active' : 'Inactive'}
-          </span>
+              className={[
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none',
+                vendor.isActive
+                  ? 'bg-success/10 text-success border border-success/20'
+                  : 'bg-danger/10 text-danger border border-danger/20',
+              ].join(' ')}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  vendor.isActive ? 'bg-success' : 'bg-danger'
+                }`}
+                aria-hidden="true"
+              />
+              {vendor.isActive ? 'Active' : 'Inactive'}
+            </span>
+          )}
 
           <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
             {vendor.approvalStatus || 'Pending'}
           </Badge>
+
+          {isFromApproval && (vendor.approvalStatus || '').toLowerCase() === 'pending' && (
+            <div className="flex items-center gap-2 pl-2 border-l border-border">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenApprove}
+                className="text-xs font-semibold text-success hover:text-success hover:bg-success/15 border border-success/30 hover:border-success/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5"
+                title={`Approve ${vendor.vendorName}`}
+              >
+                <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
+                Approve
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenReject}
+                className="text-xs font-semibold text-danger hover:text-danger hover:bg-danger/15 border border-danger/30 hover:border-danger/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5"
+                title={`Reject ${vendor.vendorName}`}
+              >
+                <X size={14} className="stroke-[2.5]" aria-hidden="true" />
+                Reject
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1346,11 +1458,10 @@ export default function VendorEffectiveDatesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Effective Date */}
                 <div>
-                  <Input
+                  <DatePicker
                     id="effectiveDate"
                     name="effectiveDate"
                     label="Effective Date"
-                    type="date"
                     min={minAllowedEffectiveDate || undefined}
                     value={formData.effectiveDate}
                     onChange={handleInputChange}
@@ -1836,11 +1947,11 @@ export default function VendorEffectiveDatesPage() {
             {/* Popup Action Footer */}
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <Button
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 onClick={() => setPreviewItem(null)}
               >
-                Close Preview
+                Close
               </Button>
 
               <Button
@@ -1855,6 +1966,185 @@ export default function VendorEffectiveDatesPage() {
           </div>
         </Modal>
       )}
+
+      {/* ── Approve Modal (With Approval Comments) ── */}
+      <Modal
+        isOpen={isApproveModalOpen}
+        onClose={handleCloseApprove}
+        title="Approve Vendor Application"
+        maxWidth="max-w-xl"
+      >
+        {vendor && (
+          <form onSubmit={handleConfirmApprove} className="space-y-4">
+            <div className="flex items-start gap-3.5 p-4 rounded-xl bg-success/5 border border-success/20">
+              <div className="w-11 h-11 rounded-xl bg-success/15 border border-success/30 text-success flex items-center justify-center shrink-0">
+                <CheckCircle2 size={22} aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-sm sm:text-base font-bold text-heading truncate">
+                    {vendor.vendorName}
+                  </h3>
+                  <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
+                    {vendor.vendorCode}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
+                  {vendor.contactPersonName && (
+                    <span className="flex items-center gap-1">
+                      <User size={12} className="text-text-muted/70" />
+                      {vendor.contactPersonName}
+                    </span>
+                  )}
+                  {vendor.city && (
+                    <span className="flex items-center gap-1">
+                      <MapPin size={12} className="text-text-muted/70" />
+                      {vendor.city}, {getStateName(vendor.countryId, vendor.stateId)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-text-muted">
+              Approving will activate this vendor for purchase orders and procurement workflows.
+            </p>
+
+            {/* Approval Comments Field */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="page-approve-comments"
+                className="text-xs font-semibold text-heading block"
+              >
+                Approval Comments / Remarks (Optional)
+              </label>
+              <textarea
+                id="page-approve-comments"
+                rows={3}
+                value={approveComments}
+                onChange={(e) => setApproveComments(e.target.value)}
+                placeholder="Enter approval remarks or internal audit notes..."
+                className="w-full rounded-xl border border-border bg-bg text-heading text-xs p-3 placeholder:text-text-muted focus:border-success focus:ring-2 focus:ring-success/20 outline-none resize-none leading-relaxed transition-all"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleCloseApprove}
+                disabled={isSubmittingApprove}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                loading={isSubmittingApprove}
+                className="flex items-center gap-1.5 bg-success hover:bg-success/90 text-white border-transparent"
+              >
+                <Check size={15} strokeWidth={2.5} />
+                Confirm Approval
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ── Reject Modal (With Reason for Rejection) ── */}
+      <Modal
+        isOpen={isRejectModalOpen}
+        onClose={handleCloseReject}
+        title="Reject Vendor Application"
+        maxWidth="max-w-xl"
+      >
+        {vendor && (
+          <form onSubmit={handleConfirmReject} className="space-y-4">
+            <div className="flex items-start gap-3.5 p-4 rounded-xl bg-surface/70 border border-border">
+              <div className="w-11 h-11 rounded-xl bg-danger/10 border border-danger/20 text-danger flex items-center justify-center shrink-0">
+                <Building2 size={20} aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-sm sm:text-base font-bold text-heading truncate">
+                    {vendor.vendorName}
+                  </h3>
+                  <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
+                    {vendor.vendorCode}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
+                  {vendor.contactPersonName && (
+                    <span className="flex items-center gap-1">
+                      <User size={12} className="text-text-muted/70" />
+                      {vendor.contactPersonName}
+                    </span>
+                  )}
+                  {vendor.city && (
+                    <span className="flex items-center gap-1">
+                      <MapPin size={12} className="text-text-muted/70" />
+                      {vendor.city}, {getStateName(vendor.countryId, vendor.stateId)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Rejection Comments Field */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="page-reject-comments"
+                className="text-xs font-semibold text-heading block"
+              >
+                Reason for Rejection <span className="text-danger">*</span>
+              </label>
+              <textarea
+                id="page-reject-comments"
+                rows={3}
+                required
+                value={rejectComments}
+                onChange={(e) => setRejectComments(e.target.value)}
+                placeholder="Explain why this vendor application is being rejected (required)..."
+                className="w-full rounded-xl border border-border bg-bg text-heading text-xs p-3 placeholder:text-text-muted focus:border-danger focus:ring-2 focus:ring-danger/20 outline-none resize-none leading-relaxed transition-all"
+              />
+            </div>
+
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-danger/5 border border-danger/15 text-xs text-text-muted">
+              <AlertCircle size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
+              <span>
+                Rejecting will mark this vendor as <strong>Rejected</strong>.
+              </span>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleCloseReject}
+                disabled={isSubmittingReject}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="danger"
+                size="md"
+                disabled={!rejectComments.trim() || isSubmittingReject}
+                loading={isSubmittingReject}
+                className="flex items-center gap-1.5"
+              >
+                <X size={15} strokeWidth={2.5} />
+                Reject Vendor
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

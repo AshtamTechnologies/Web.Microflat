@@ -4,8 +4,9 @@
  * Fully read-only, professional ERP layout with audit trail and print support.
  */
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   ArrowLeft,
   Pencil,
@@ -18,6 +19,8 @@ import {
   AlertCircle,
   FileText,
   CheckCircle2,
+  Check,
+  X,
 } from 'lucide-react';
 
 import {
@@ -27,6 +30,7 @@ import {
   TableContainer,
   Th,
   Td,
+  Modal,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -40,18 +44,90 @@ export default function PurchaseRequisitionView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getPRById } = usePurchaseRequisitionContext();
+  const { getPRById, approvePR, rejectPR } = usePurchaseRequisitionContext();
 
   const backPath = location.state?.from || '/purchase-requisition';
   const backLabel = location.state?.backLabel || 'Back to Purchase Requisition';
+  const isFromApproval = Boolean(
+    location.state?.from === '/approvals/purchase-requisitions' ||
+    location.state?.isApprovalView
+  );
   const isReadOnly = Boolean(
     location.state?.readOnly ||
-    location.state?.from === '/approvals/purchase-requisitions'
+    isFromApproval
   );
+
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+  const [approveRemarks, setApproveRemarks] = useState('');
+  const [isSubmittingApprove, setIsSubmittingApprove] = useState(false);
+
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectComments, setRejectComments] = useState('');
+  const [isSubmittingReject, setIsSubmittingReject] = useState(false);
 
   const pr = useMemo(() => {
     return getPRById(id);
   }, [id, getPRById]);
+
+  function handleOpenApprove() {
+    setApproveRemarks('');
+    setIsApproveModalOpen(true);
+  }
+
+  function handleCloseApprove() {
+    if (isSubmittingApprove) return;
+    setIsApproveModalOpen(false);
+    setApproveRemarks('');
+  }
+
+  async function handleConfirmApprove() {
+    if (!pr) return;
+    try {
+      setIsSubmittingApprove(true);
+      await approvePR(pr.prId || pr.prNumber, {
+        approvedBy: 'Ian Chesnut',
+        remarks: approveRemarks.trim(),
+      });
+      toast.success(`Purchase Requisition ${pr.prNumber} approved successfully`);
+      setIsApproveModalOpen(false);
+    } catch {
+      toast.error('Failed to approve purchase requisition.');
+    } finally {
+      setIsSubmittingApprove(false);
+    }
+  }
+
+  function handleOpenReject() {
+    setRejectComments('');
+    setIsRejectModalOpen(true);
+  }
+
+  function handleCloseReject() {
+    if (isSubmittingReject) return;
+    setIsRejectModalOpen(false);
+    setRejectComments('');
+  }
+
+  async function handleConfirmReject(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!pr || !rejectComments.trim()) {
+      toast.error('Please enter a rejection reason.');
+      return;
+    }
+    try {
+      setIsSubmittingReject(true);
+      await rejectPR(pr.prId || pr.prNumber, {
+        rejectedBy: 'Ian Chesnut',
+        rejectionReason: rejectComments.trim(),
+      });
+      toast.success(`Purchase Requisition ${pr.prNumber} rejected`);
+      setIsRejectModalOpen(false);
+    } catch {
+      toast.error('Failed to reject purchase requisition.');
+    } finally {
+      setIsSubmittingReject(false);
+    }
+  }
 
   if (!pr) {
     return (
@@ -119,8 +195,36 @@ export default function PurchaseRequisitionView() {
         </div>
 
         {/* Action Buttons */}
-        {!isReadOnly && (
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          {isFromApproval && (pr.status || '').toLowerCase().includes('pending') && (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenApprove}
+                className="text-xs font-semibold text-success hover:text-success hover:bg-success/15 border border-success/30 hover:border-success/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                title={`Approve ${pr.prNumber}`}
+              >
+                <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
+                Approve
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenReject}
+                className="text-xs font-semibold text-danger hover:text-danger hover:bg-danger/15 border border-danger/30 hover:border-danger/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                title={`Reject ${pr.prNumber}`}
+              >
+                <X size={14} className="stroke-[2.5]" aria-hidden="true" />
+                Reject
+              </Button>
+            </>
+          )}
+
+          {!isReadOnly && (
             <Button
               variant="primary"
               size="sm"
@@ -132,8 +236,8 @@ export default function PurchaseRequisitionView() {
               <Pencil size={15} className="mr-1.5" />
               Edit Requisition
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ── Section 1: PR Information Card ── */}
@@ -333,6 +437,148 @@ export default function PurchaseRequisitionView() {
           </div>
         </div>
       </Card>
+
+      {/* ── 1. APPROVE CONFIRMATION MODAL WITH REMARKS ── */}
+      {isApproveModalOpen && pr && (
+        <Modal
+          isOpen={isApproveModalOpen}
+          onClose={handleCloseApprove}
+          title="Approve Purchase Requisition"
+          size="md"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleConfirmApprove();
+            }}
+            className="space-y-4"
+          >
+            <div className="p-3.5 rounded-xl bg-success/10 border border-success/20 flex items-start gap-3">
+              <CheckCircle2 size={18} className="text-success shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="text-xs">
+                <p className="font-semibold text-success">
+                  Approving {pr.prNumber}
+                </p>
+                <p className="text-text-muted mt-0.5">
+                  Requested by <strong className="text-heading">{pr.requestedBy}</strong> ({pr.department}) for{' '}
+                  <strong className="text-heading">{pr.items?.length || 0} line items</strong>.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-text-muted">
+              Approving this requisition authorizes procurement and generation of purchase orders.
+            </p>
+
+            {/* Approval Comments / Remarks Field */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="view-pr-approval-remarks"
+                className="text-xs font-semibold text-heading block"
+              >
+                Approval Remarks / Comments (Optional)
+              </label>
+              <textarea
+                id="view-pr-approval-remarks"
+                name="view-pr-approval-remarks"
+                rows={3}
+                value={approveRemarks}
+                onChange={(e) => setApproveRemarks(e.target.value)}
+                placeholder="Enter approval remarks or authorization notes..."
+                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-heading placeholder:text-text-muted focus:border-success focus:outline-hidden focus:ring-2 focus:ring-success/20 transition-all resize-y"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleCloseApprove}
+                disabled={isSubmittingApprove}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                disabled={isSubmittingApprove}
+                loading={isSubmittingApprove}
+                className="bg-success hover:bg-success/90 text-white border-transparent"
+              >
+                <Check size={14} className="mr-1.5 stroke-[2.5]" />
+                Confirm Approval
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* ── 2. REJECT MODAL WITH REASONS & VALIDATION ── */}
+      {isRejectModalOpen && pr && (
+        <Modal
+          isOpen={isRejectModalOpen}
+          onClose={handleCloseReject}
+          title="Reject Purchase Requisition"
+          size="md"
+        >
+          <form onSubmit={handleConfirmReject} className="space-y-4">
+            <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/20 flex items-start gap-3">
+              <AlertCircle size={18} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="text-xs">
+                <p className="font-semibold text-danger">
+                  Rejecting {pr.prNumber}
+                </p>
+                <p className="text-text-muted mt-0.5">
+                  Requested by <strong className="text-heading">{pr.requestedBy}</strong> ({pr.department})
+                </p>
+              </div>
+            </div>
+
+            {/* Reason Textarea */}
+            <div>
+              <label htmlFor="view-rejection-reason" className="block text-xs font-semibold text-heading mb-1.5">
+                Reason for Rejection <span className="text-danger">*</span>
+              </label>
+              <textarea
+                id="view-rejection-reason"
+                name="view-rejection-reason"
+                rows={3}
+                required
+                value={rejectComments}
+                onChange={(e) => setRejectComments(e.target.value)}
+                placeholder="Explain clearly why this purchase requisition is rejected..."
+                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-heading placeholder:text-text-muted focus:border-danger focus:outline-hidden focus:ring-2 focus:ring-danger/20 transition-all resize-y"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleCloseReject}
+                disabled={isSubmittingReject}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="danger"
+                size="sm"
+                disabled={isSubmittingReject || !rejectComments.trim()}
+                loading={isSubmittingReject}
+              >
+                <X size={14} className="mr-1.5 stroke-[2.5]" />
+                Confirm Rejection
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

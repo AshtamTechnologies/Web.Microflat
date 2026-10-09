@@ -209,7 +209,7 @@ export default function VendorsPage() {
         },
       }),
 
-      /* 4. CITY / STATE */
+      /* 4. CITY / STATE — Commented out as requested
       columnHelper.accessor((row) => `${row.city}, ${getStateName(row.countryId, row.stateId)}`, {
         id: 'cityState',
         header: 'CITY / STATE',
@@ -225,8 +225,9 @@ export default function VendorsPage() {
           );
         },
       }),
+      */
 
-      /* 5. EFFECTIVE DATE */
+      /* 5. EFFECTIVE DATE — Commented out as requested
       columnHelper.accessor((row) => row.effectiveDate || '', {
         id: 'effectiveDate',
         header: 'EFFECTIVE DATE',
@@ -249,14 +250,20 @@ export default function VendorsPage() {
           );
         },
       }),
+      */
 
-      /* 6. STATUS */
+      /* 6. STATUS (Only shown if vendor is approved) */
       columnHelper.accessor('isActive', {
         header: 'STATUS',
         minSize: 120,
         size: 140,
         cell: (info) => {
           const row = info.row.original;
+          const isApproved = (row.approvalStatus || '').toLowerCase() === 'approved';
+          if (!isApproved) {
+            return <span className="text-text-muted text-xs font-mono">—</span>;
+          }
+
           const isActive = row.isActive;
           return (
             <span
@@ -698,22 +705,24 @@ export default function VendorsPage() {
                       </p>
                     </div>
 
-                    <span
-                      className={[
-                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
-                        vendor.isActive
-                          ? 'bg-success/10 text-success border border-success/20'
-                          : 'bg-danger/10 text-danger border border-danger/20',
-                      ].join(' ')}
-                    >
+                    {(vendor.approvalStatus || '').toLowerCase() === 'approved' && (
                       <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          vendor.isActive ? 'bg-success' : 'bg-danger'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {vendor.isActive ? 'Active' : 'Inactive'}
-                    </span>
+                        className={[
+                          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
+                          vendor.isActive
+                            ? 'bg-success/10 text-success border border-success/20'
+                            : 'bg-danger/10 text-danger border border-danger/20',
+                        ].join(' ')}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            vendor.isActive ? 'bg-success' : 'bg-danger'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        {vendor.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    )}
                   </div>
 
                   {/* Contact & Location details */}

@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   Input,
+  DatePicker,
   Select,
   SearchableSelect,
   Badge,
@@ -244,10 +245,10 @@ export default function PurchaseRequisitionEdit() {
 
           {/* Row 1, Col 2: PR Date */}
           <div>
-            <Input
+            <DatePicker
               id="edit-pr-date"
+              name="prDate"
               label="PR Date"
-              type="date"
               required
               value={formData.prDate}
               onChange={(e) => handleFieldChange('prDate', e.target.value)}
@@ -284,10 +285,10 @@ export default function PurchaseRequisitionEdit() {
 
           {/* Row 2, Col 2: Required Date */}
           <div>
-            <Input
+            <DatePicker
               id="edit-pr-required-date"
+              name="requiredDate"
               label="Required Date"
-              type="date"
               required
               value={formData.requiredDate}
               error={errors.requiredDate}

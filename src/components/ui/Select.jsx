@@ -18,6 +18,7 @@ export default function Select({
   error,
   hint,
   options = [],
+  required = false,
   className = '',
   ...rest
 }) {
@@ -31,6 +32,11 @@ export default function Select({
           className="text-sm font-medium text-text leading-none"
         >
           {label}
+          {required && (
+            <span className="text-danger ml-0.5" aria-hidden="true">
+              *
+            </span>
+          )}
         </label>
       )}
 
