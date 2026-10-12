@@ -19,7 +19,7 @@ export const DOCUMENT_TYPE_OPTIONS = [
     maxSizeMB: 25,
     isMandatory: true,
     badgeVariant: 'info',
-    badgeClass: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+    badgeClass: 'bg-info-bg text-info border-info-border',
   },
   {
     id: 'dt_spec',
@@ -28,7 +28,7 @@ export const DOCUMENT_TYPE_OPTIONS = [
     maxSizeMB: 25,
     isMandatory: false,
     badgeVariant: 'warning',
-    badgeClass: 'bg-warning/10 text-warning border-warning/20',
+    badgeClass: 'bg-warning-bg text-warning border-warning-border',
   },
   {
     id: 'dt_quotation',
@@ -37,7 +37,7 @@ export const DOCUMENT_TYPE_OPTIONS = [
     maxSizeMB: 25,
     isMandatory: false,
     badgeVariant: 'role',
-    badgeClass: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+    badgeClass: 'bg-primary/10 text-primary border-primary/20',
   },
   {
     id: 'dt_po',

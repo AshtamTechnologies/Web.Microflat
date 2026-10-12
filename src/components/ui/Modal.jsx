@@ -12,7 +12,7 @@
  *   maxWidth?: string (default derived from size or 'max-w-2xl')
  */
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 const SIZE_CLASSES = {
@@ -63,7 +63,7 @@ export default function Modal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-gray-950/50 backdrop-blur-xs transition-opacity duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-overlay backdrop-blur-xs transition-opacity duration-200"
       onClick={(e) => {
         if (e.target === overlayRef.current) {
           onClose?.();
@@ -75,18 +75,22 @@ export default function Modal({
     >
       <div
         className={[
-          'w-full bg-bg border border-border rounded-xl sm:rounded-2xl shadow-2xl',
-          'flex flex-col max-h-[92vh] overflow-hidden',
+          'w-full bg-bg border border-border rounded-modal shadow-modal',
+          'flex flex-col max-h-[90dvh] overflow-hidden',
           'animate-in fade-in zoom-in-95 duration-150',
           effectiveMaxWidth,
         ].join(' ')}
       >
         {/* Enterprise Header */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-4.5 border-b border-border bg-bg shrink-0">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-border bg-bg shrink-0">
           <div className="flex items-center gap-3 min-w-0 pr-2">
             {IconComponent && (
-              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <IconComponent size={18} aria-hidden="true" />
+              <div className="w-8 h-8 rounded-control bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                {React.isValidElement(IconComponent) ? (
+                  IconComponent
+                ) : (
+                  <IconComponent size={18} aria-hidden="true" />
+                )}
               </div>
             )}
             <div className="min-w-0">
@@ -109,7 +113,7 @@ export default function Modal({
             onClick={onClose}
             aria-label="Close dialog"
             className={[
-              'p-1.5 rounded-lg text-text-muted hover:text-heading hover:bg-surface',
+              'p-1.5 rounded-control text-text-muted hover:text-heading hover:bg-surface',
               'transition-colors duration-150 focus-ring cursor-pointer shrink-0',
             ].join(' ')}
           >

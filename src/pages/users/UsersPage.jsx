@@ -41,7 +41,7 @@ import {
   Clock,
 } from 'lucide-react';
 
-import { Button, Input, Modal, SearchableSelect, ConfirmModal, TableContainer, Th, Td } from '../../components/ui';
+import { Button, Input, Modal, SearchableSelect, ConfirmModal, TableContainer, Th, Td, PageHeader } from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
 import { useUserSessions } from '../../context/UserSessionsContext';
 import { formatDateTime, formatRelative } from '../../utils/dateTime';
@@ -172,7 +172,7 @@ export default function UsersPage() {
                 {row.mobile || '—'}
               </span>
               {row.secondaryPhone && (
-                <span className="font-mono tabular-nums text-[11px] text-text-muted">
+                <span className="font-mono tabular-nums text-2xs text-text-muted">
                   Sec: {row.secondaryPhone}
                 </span>
               )}
@@ -254,7 +254,7 @@ export default function UsersPage() {
               <span className="font-mono tabular-nums text-xs font-semibold text-heading">
                 {formatDateTime(loginIso)}
               </span>
-              <span className="text-[11px] text-text-muted leading-tight">
+              <span className="text-2xs text-text-muted leading-tight">
                 {formatRelative(loginIso)}
               </span>
             </div>
@@ -384,28 +384,22 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       {/* ── Page Header with Add User Button Outside the Card ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-heading tracking-tight">
-            User Management
-          </h1>
-          <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-            Manage system users, role assignments, address details, and active account statuses.
-          </p>
-        </div>
-
-        {/* Add User Button (outside the card) */}
-        <Button
-          id="add-user-btn"
-          variant="primary"
-          size="md"
-          onClick={handleOpenAdd}
-          className="shrink-0 self-start sm:self-auto flex items-center justify-center shadow-xs"
-        >
-          <UserPlus size={16} className="mr-1.5" aria-hidden="true" />
-          Add User
-        </Button>
-      </div>
+      <PageHeader
+        title="User Management"
+        subtitle="Manage system users, role assignments, address details, and active account statuses."
+        actions={
+          <Button
+            id="add-user-btn"
+            variant="primary"
+            size="md"
+            onClick={handleOpenAdd}
+            className="shadow-xs"
+          >
+            <UserPlus size={16} className="mr-1.5" aria-hidden="true" />
+            Add User
+          </Button>
+        }
+      />
 
       {/* ── UNIFIED CARD CONTAINER: Toolbar + Table/Cards + Pagination ── */}
       <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
@@ -661,7 +655,7 @@ export default function UsersPage() {
                         {roles.map((r, i) => (
                           <span
                             key={i}
-                            className="inline-block text-[11px] font-medium text-text-muted bg-border/50 px-2 py-0.5 rounded-full"
+                            className="inline-block text-2xs font-medium text-text-muted bg-border/50 px-2 py-0.5 rounded-full"
                           >
                             {r}
                           </span>
@@ -856,7 +850,7 @@ export default function UsersPage() {
                   <span className="truncate">{userToView.email || '—'}</span>
                 </p>
                 {userToView.id && (
-                  <div className="mt-2 flex items-center gap-1 text-[11px] font-mono text-text-muted bg-bg/80 border border-border px-2 py-0.5 rounded-md w-fit">
+                  <div className="mt-2 flex items-center gap-1 text-2xs font-mono text-text-muted bg-bg/80 border border-border px-2 py-0.5 rounded-md w-fit">
                     <Hash size={11} className="shrink-0 text-text-muted/60" />
                     <span>ID: {userToView.id}</span>
                   </div>
@@ -872,14 +866,14 @@ export default function UsersPage() {
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="p-3 bg-bg border border-border rounded-lg space-y-1">
-                  <span className="text-[11px] font-medium text-text-muted block">Primary Mobile</span>
+                  <span className="text-2xs font-medium text-text-muted block">Primary Mobile</span>
                   <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
                     <Phone size={14} className="text-text-muted/70 shrink-0" />
                     <span>{userToView.mobile || '—'}</span>
                   </div>
                 </div>
                 <div className="p-3 bg-bg border border-border rounded-lg space-y-1">
-                  <span className="text-[11px] font-medium text-text-muted block">Secondary Phone</span>
+                  <span className="text-2xs font-medium text-text-muted block">Secondary Phone</span>
                   <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
                     <Smartphone size={14} className="text-text-muted/70 shrink-0" />
                     <span>{userToView.secondaryPhone || 'Not provided'}</span>

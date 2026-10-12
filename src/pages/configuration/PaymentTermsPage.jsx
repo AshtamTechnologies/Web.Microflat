@@ -33,6 +33,9 @@ import {
   Th,
   Td,
   StatusSwitch,
+  PageHeader,
+  FilterBar,
+  IconButton,
 } from '../../components/ui';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
 import { formatDate } from '../../utils/dateUtils';
@@ -41,6 +44,7 @@ const columnHelper = createColumnHelper();
 
 const INITIAL_FORM = {
   termCode: '',
+  displayOrder: 1,
   description: '',
   isActive: true,
 };
@@ -66,7 +70,7 @@ export default function PaymentTermsPage() {
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
 
   // TanStack table state for resizable columns and sorting
-  const [sorting, setSorting] = useState([{ id: 'termCode', desc: false }]);
+  const [sorting, setSorting] = useState([{ id: 'displayOrder', desc: false }]);
   const [columnSizing, setColumnSizing] = useState({});
 
   // Modal states
@@ -108,6 +112,16 @@ export default function PaymentTermsPage() {
         if (duplicate) return 'A payment term with this code already exists.';
         return '';
       }
+      case 'displayOrder': {
+        if (value === '' || value === null || value === undefined) {
+          return 'Display order is required.';
+        }
+        const num = Number(value);
+        if (isNaN(num) || num < 1) {
+          return 'Display order must be a positive integer.';
+        }
+        return '';
+      }
       case 'description': {
         if (isRichTextEmpty(value)) {
           return 'Description is required.';
@@ -121,7 +135,7 @@ export default function PaymentTermsPage() {
 
   function validateAll(data) {
     const errors = {};
-    ['termCode', 'description'].forEach((field) => {
+    ['termCode', 'displayOrder', 'description'].forEach((field) => {
       const err = validateField(field, data[field]);
       if (err) errors[field] = err;
     });
@@ -130,8 +144,15 @@ export default function PaymentTermsPage() {
 
   /* ── Modal Open Handlers ── */
   function handleOpenAdd() {
+    const maxOrder = paymentTerms.reduce(
+      (max, pt) => Math.max(max, Number(pt.displayOrder) || 0),
+      0
+    );
     setEditingTerm(null);
-    setFormData(INITIAL_FORM);
+    setFormData({
+      ...INITIAL_FORM,
+      displayOrder: maxOrder + 1,
+    });
     setFormErrors({});
     setIsModalOpen(true);
   }
@@ -140,6 +161,7 @@ export default function PaymentTermsPage() {
     setEditingTerm(term);
     setFormData({
       termCode: term.termCode || '',
+      displayOrder: term.displayOrder !== undefined ? term.displayOrder : 1,
       description: term.description || '',
       isActive: Boolean(term.isActive),
     });
@@ -164,6 +186,7 @@ export default function PaymentTermsPage() {
 
     const normalizedData = {
       ...formData,
+      displayOrder: Number(formData.displayOrder) || 1,
       description: cleanDescription,
     };
 
@@ -230,6 +253,17 @@ export default function PaymentTermsPage() {
   /* ── TanStack Columns with Resizing and Sorting ── */
   const columns = useMemo(
     () => [
+      columnHelper.accessor('displayOrder', {
+        id: 'displayOrder',
+        header: 'Order',
+        size: 90,
+        minSize: 75,
+        cell: ({ row }) => (
+          <span className="font-mono tabular-nums text-xs font-semibold text-text-muted bg-surface/80 border border-border px-2 py-0.5 rounded shadow-2xs">
+            #{row.original.displayOrder ?? '—'}
+          </span>
+        ),
+      }),
       columnHelper.accessor('termCode', {
         id: 'termCode',
         header: 'Code',
@@ -244,17 +278,25 @@ export default function PaymentTermsPage() {
       columnHelper.accessor('description', {
         id: 'description',
         header: 'Payment Terms / Description',
-        size: 460,
-        minSize: 260,
+        size: 440,
+        minSize: 240,
         cell: ({ row }) => {
           const desc = row.original.description || '';
+          const isHtml = /<[a-z][\s\S]*>/i.test(desc);
+          if (isHtml) {
+            return (
+              <div
+                className="text-xs text-text max-h-24 overflow-y-auto pr-1 prose prose-xs max-w-none leading-relaxed [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
+                dangerouslySetInnerHTML={{
+                  __html: desc,
+                }}
+              />
+            );
+          }
           return (
-            <div
-              className="text-xs text-text max-h-24 overflow-y-auto pr-1 prose prose-xs max-w-none leading-relaxed [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
-              dangerouslySetInnerHTML={{
-                __html: desc || '<span class="text-text-muted italic">No terms specified</span>',
-              }}
-            />
+            <p className="text-xs text-text whitespace-pre-line line-clamp-3 leading-relaxed" title={desc}>
+              {desc || <span className="text-text-muted italic">No terms specified</span>}
+            </p>
           );
         },
       }),
@@ -348,54 +390,47 @@ export default function PaymentTermsPage() {
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Header Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <HandCoins className="h-6 w-6 text-primary" aria-hidden="true" />
-            Payment Terms
-          </h1>
-          <p className="text-xs text-text-muted mt-1">
-            Configure commercial payment credit periods, due day thresholds & billing agreements for purchase and sales contracts.
-          </p>
-        </div>
-
-        <Button
-          variant="primary"
-          size="md"
-          onClick={handleOpenAdd}
-          className="self-start sm:self-auto shrink-0 shadow-xs"
-        >
-          <Plus size={16} className="mr-1.5" />
-          Add Payment Term
-        </Button>
-      </div>
+      <PageHeader
+        title="Payment Terms"
+        icon={HandCoins}
+        subtitle="Configure commercial payment credit periods, due day thresholds & billing agreements for purchase and sales contracts."
+        actions={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleOpenAdd}
+            className="self-start sm:self-auto shrink-0 shadow-xs"
+          >
+            <Plus size={16} className="mr-1.5" />
+            Add Payment Term
+          </Button>
+        }
+      />
 
       {/* ── Toolbar: Search & Status Filters ── */}
-      <Card padding="sm" className="bg-bg">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          {/* Search Input */}
-          <div className="relative flex-1 max-w-md">
-            <Search
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-            />
-            <input
-              type="text"
-              placeholder="Search by code or description..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-bg border border-border rounded-lg text-text placeholder:text-text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
+      <FilterBar>
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <Input
+            id="search-payment-terms"
+            type="text"
+            placeholder="Search by code or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            leftIcon={<Search size={15} />}
+            rightElement={
+              searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-text-muted hover:text-text cursor-pointer p-1"
+                >
+                  <X size={14} />
+                </button>
+              ) : null
+            }
+          />
+        </div>
 
           {/* Status Filter Chips */}
           <div className="flex items-center p-1 bg-surface rounded-lg border border-border self-start sm:self-auto">
@@ -414,8 +449,7 @@ export default function PaymentTermsPage() {
               </button>
             ))}
           </div>
-        </div>
-      </Card>
+      </FilterBar>
 
       {/* ── Desktop View (md+): Data Table ── */}
       <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden shadow-2xs">
@@ -557,13 +591,20 @@ export default function PaymentTermsPage() {
                 className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md shadow-2xs">
-                    {term.termCode}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md shadow-2xs">
+                      {term.termCode}
+                    </span>
+                    {term.displayOrder !== undefined && (
+                      <span className="text-2xs font-mono text-text-muted bg-surface px-1.5 py-0.5 rounded border border-border">
+                        #{term.displayOrder}
+                      </span>
+                    )}
+                  </div>
 
                   <span
                     className={[
-                      'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium select-none',
+                      'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-2xs font-medium select-none',
                       term.isActive
                         ? 'bg-success/10 text-success border border-success/20'
                         : 'bg-danger/10 text-danger border border-danger/20',
@@ -580,10 +621,16 @@ export default function PaymentTermsPage() {
                 </div>
 
                 {term.description && (
-                  <div
-                    className="text-xs text-text max-h-24 overflow-y-auto prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
-                    dangerouslySetInnerHTML={{ __html: term.description }}
-                  />
+                  /<[a-z][\s\S]*>/i.test(term.description) ? (
+                    <div
+                      className="text-xs text-text max-h-24 overflow-y-auto prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
+                      dangerouslySetInnerHTML={{ __html: term.description }}
+                    />
+                  ) : (
+                    <p className="text-xs text-text whitespace-pre-line leading-relaxed">
+                      {term.description}
+                    </p>
+                  )
                 )}
 
                 <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-text-muted">
@@ -632,30 +679,57 @@ export default function PaymentTermsPage() {
         maxWidth="max-w-xl"
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
-          {/* Term Code */}
-          <Input
-            id="termCode"
-            name="termCode"
-            type="text"
-            label="Term Code"
-            placeholder="e.g. NET-30"
-            required
-            value={formData.termCode}
-            onChange={(e) => {
-              const val = e.target.value.toUpperCase();
-              setFormData((prev) => ({ ...prev, termCode: val }));
-              if (formErrors.termCode) {
-                setFormErrors((prev) => ({ ...prev, termCode: '' }));
-              }
-            }}
-            onBlur={(e) => {
-              const err = validateField('termCode', e.target.value);
-              if (err) setFormErrors((prev) => ({ ...prev, termCode: err }));
-            }}
-            error={formErrors.termCode}
-            className="font-mono uppercase text-sm"
-            hint="Unique identifier (letters, numbers, hyphens only)"
-          />
+          {/* Term Code & Display Order */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              id="termCode"
+              name="termCode"
+              type="text"
+              label="Term Code"
+              placeholder="e.g. NET-30"
+              required
+              value={formData.termCode}
+              onChange={(e) => {
+                const val = e.target.value.toUpperCase();
+                setFormData((prev) => ({ ...prev, termCode: val }));
+                if (formErrors.termCode) {
+                  setFormErrors((prev) => ({ ...prev, termCode: '' }));
+                }
+              }}
+              onBlur={(e) => {
+                const err = validateField('termCode', e.target.value);
+                if (err) setFormErrors((prev) => ({ ...prev, termCode: err }));
+              }}
+              error={formErrors.termCode}
+              className="font-mono uppercase text-sm"
+              hint="Letters, numbers, and hyphens"
+            />
+
+            <Input
+              id="displayOrder"
+              name="displayOrder"
+              type="number"
+              min={1}
+              label="Display Order"
+              placeholder="e.g. 1"
+              required
+              value={formData.displayOrder}
+              onChange={(e) => {
+                const val = e.target.value;
+                setFormData((prev) => ({ ...prev, displayOrder: val }));
+                if (formErrors.displayOrder) {
+                  setFormErrors((prev) => ({ ...prev, displayOrder: '' }));
+                }
+              }}
+              onBlur={(e) => {
+                const err = validateField('displayOrder', e.target.value);
+                if (err) setFormErrors((prev) => ({ ...prev, displayOrder: err }));
+              }}
+              error={formErrors.displayOrder}
+              className="font-mono text-sm"
+              hint="Numeric sequence in lists"
+            />
+          </div>
 
           {/* Description / Payment Terms (Compulsory Rich Text Editor) */}
           <div className="space-y-1.5">
@@ -688,7 +762,7 @@ export default function PaymentTermsPage() {
                 <span>{formErrors.description}</span>
               </p>
             )}
-            <p className="text-[11px] text-text-muted">
+            <p className="text-2xs text-text-muted">
               Use the numbered list toolbar icon to structure ordered payment terms (1., 2., 3.).
             </p>
           </div>

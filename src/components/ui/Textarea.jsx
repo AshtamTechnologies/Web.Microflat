@@ -30,15 +30,12 @@ export default function Textarea({
   const currentLength = typeof value === 'string' ? value.length : 0;
 
   return (
-    <div className="flex flex-col gap-1.5 w-full">
+    <div className="mf-field">
       {label && (
-        <label
-          htmlFor={id}
-          className="form-label"
-        >
+        <label htmlFor={id} className="mf-label">
           {label}
           {required && (
-            <span className="form-label-required" aria-hidden="true">
+            <span className="mf-required" aria-hidden="true">
               *
             </span>
           )}
@@ -53,16 +50,6 @@ export default function Textarea({
         className={[
           'mf-textarea',
           hasError ? 'mf-textarea--err' : '',
-          'w-full rounded-lg border bg-bg text-text text-sm',
-          'px-3 py-2.5 leading-relaxed resize-y',
-          'placeholder:text-text-muted/50 placeholder:font-normal',
-          'transition-colors duration-150 ease-in-out',
-          /* focus */
-          'outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
-          /* error */
-          hasError
-            ? 'border-danger focus:ring-danger/20 focus:border-danger'
-            : 'border-border hover:border-text-muted',
           className,
         ]
           .filter(Boolean)
@@ -74,13 +61,13 @@ export default function Textarea({
         {...rest}
       />
 
-      <div className="flex items-center justify-between text-xs min-h-[1rem]">
+      <div className="flex items-center justify-between min-h-[1rem]">
         {hasError ? (
-          <p id={`${id}-error`} className="text-danger font-medium leading-none">
+          <p id={`${id}-error`} role="alert" className="mf-error">
             {error}
           </p>
         ) : hint ? (
-          <p id={`${id}-hint`} className="text-text-muted leading-none">
+          <p id={`${id}-hint`} className="mf-hint">
             {hint}
           </p>
         ) : (
@@ -88,7 +75,7 @@ export default function Textarea({
         )}
 
         {showCharCount && maxLength && (
-          <span className="text-text-muted font-mono tabular-nums text-right ml-auto leading-none">
+          <span className="text-2xs text-text-muted font-mono tabular-nums text-right ml-auto">
             {currentLength}/{maxLength}
           </span>
         )}

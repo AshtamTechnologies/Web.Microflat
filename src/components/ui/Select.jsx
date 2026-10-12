@@ -4,6 +4,7 @@
  * Props (mirrors Input API):
  *   label:    string           — visible label
  *   id:       string           — ties label→select (a11y)
+ *   size:     'sm'|'md'|'lg'   — optional select height (default 'md')
  *   error:    string | null    — field-level error message
  *   hint:     string | null    — helper text shown when no error
  *   options:  { value, label }[] — select options
@@ -15,6 +16,7 @@ import { ChevronDown } from 'lucide-react';
 export default function Select({
   label,
   id,
+  size = 'md',
   error,
   hint,
   options = [],
@@ -23,17 +25,15 @@ export default function Select({
   ...rest
 }) {
   const hasError = Boolean(error);
+  const sizeClass = size === 'sm' ? 'mf-select--sm' : size === 'lg' ? 'mf-select--lg' : '';
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="mf-field">
       {label && (
-        <label
-          htmlFor={id}
-          className="form-label"
-        >
+        <label htmlFor={id} className="mf-label">
           {label}
           {required && (
-            <span className="form-label-required" aria-hidden="true">
+            <span className="mf-required" aria-hidden="true">
               *
             </span>
           )}
@@ -44,14 +44,9 @@ export default function Select({
         <select
           id={id}
           className={[
-            'w-full rounded-lg border bg-bg text-text text-sm appearance-none',
-            'px-3 py-2.5 pr-9 leading-snug',
-            'transition-colors duration-150 ease-in-out',
-            'outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
-            'cursor-pointer',
-            hasError
-              ? 'border-danger focus:ring-danger/20 focus:border-danger'
-              : 'border-border hover:border-text-muted',
+            'mf-select appearance-none pr-9 cursor-pointer',
+            sizeClass,
+            hasError ? 'mf-select--err' : '',
             className,
           ]
             .filter(Boolean)
@@ -77,18 +72,14 @@ export default function Select({
 
       {/* Field-level error */}
       {hasError && (
-        <p
-          id={`${id}-error`}
-          role="alert"
-          className="text-xs text-danger flex items-center gap-1"
-        >
+        <p id={`${id}-error`} role="alert" className="mf-error flex items-center gap-1">
           {error}
         </p>
       )}
 
-      {/* Hint text (only shown when no error) */}
+      {/* Hint text */}
       {!hasError && hint && (
-        <p id={`${id}-hint`} className="text-xs text-text-muted">
+        <p id={`${id}-hint`} className="mf-hint">
           {hint}
         </p>
       )}

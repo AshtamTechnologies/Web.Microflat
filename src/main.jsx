@@ -18,8 +18,6 @@ createRoot(document.getElementById('root')).render(
     <App />
     {/*
       Single global Toaster — colors derived from design tokens.
-      success: --success tint background (#16A34A at 10% opacity)
-      error:   --danger tint background (#DC2626 at 10% opacity)
     */}
     <Toaster
       position="top-right"
@@ -28,32 +26,32 @@ createRoot(document.getElementById('root')).render(
         duration: 4000,
         style: {
           fontFamily: 'var(--font-sans)',
-          fontSize: '14px',
-          borderRadius: '10px',
+          fontSize: 'var(--text-sm)',
+          borderRadius: 'var(--radius-control)',
           padding: '12px 16px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          boxShadow: 'var(--shadow-dropdown)',
           maxWidth: '360px',
         },
         success: {
           style: {
-            background: 'color-mix(in srgb, #16A34A 12%, white)',
-            color: '#166534',
-            border: '1px solid color-mix(in srgb, #16A34A 25%, white)',
+            background: 'var(--success-bg)',
+            color: 'var(--success-text)',
+            border: '1px solid var(--success-border)',
           },
           iconTheme: {
-            primary: '#16A34A',
-            secondary: 'white',
+            primary: 'var(--success)',
+            secondary: 'var(--on-primary)',
           },
         },
         error: {
           style: {
-            background: 'color-mix(in srgb, #DC2626 10%, white)',
-            color: '#991B1B',
-            border: '1px solid color-mix(in srgb, #DC2626 25%, white)',
+            background: 'var(--danger-bg)',
+            color: 'var(--danger-text)',
+            border: '1px solid var(--danger-border)',
           },
           iconTheme: {
-            primary: '#DC2626',
-            secondary: 'white',
+            primary: 'var(--danger)',
+            secondary: 'var(--on-primary)',
           },
         },
       }}

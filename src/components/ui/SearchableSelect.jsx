@@ -56,14 +56,17 @@ export default function SearchableSelect({
     );
   }, [options, searchQuery]);
 
-  // Measure trigger element and update fixed coordinates synchronously
+  // Measure trigger element and update fixed coordinates synchronously (bounded within viewport)
   const updateCoords = useCallback(() => {
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const width = Math.min(rect.width, viewportWidth - 24);
+      const left = Math.max(12, Math.min(rect.left, viewportWidth - width - 12));
       setCoords({
         top: rect.bottom + 6,
-        left: rect.left,
-        width: rect.width,
+        left,
+        width,
       });
     }
   }, []);
@@ -176,11 +179,11 @@ export default function SearchableSelect({
       {label && (
         <label
           htmlFor={id}
-          className="form-label"
+          className="mf-label"
         >
           {label}
           {required && (
-            <span className="form-label-required" aria-hidden="true">
+            <span className="mf-required" aria-hidden="true">
               *
             </span>
           )}
@@ -198,8 +201,8 @@ export default function SearchableSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={[
-          'w-full rounded-lg border bg-bg text-left text-sm',
-          'px-3 py-2.5 flex items-center justify-between',
+          'w-full h-10 rounded-control border bg-bg text-left text-sm',
+          'px-3 flex items-center justify-between',
           'transition-all duration-150 ease-in-out cursor-pointer',
           'outline-none select-none',
           isOpen
@@ -249,7 +252,7 @@ export default function SearchableSelect({
               width: `${coords.width}px`,
               zIndex: 99999,
             }}
-            className="bg-bg border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in duration-100"
+            className="bg-bg border border-border rounded-modal shadow-dropdown overflow-hidden animate-in fade-in duration-100"
           >
             {/* Search box inside dropdown */}
             <div className="p-2 border-b border-border bg-surface/60 flex items-center gap-2">

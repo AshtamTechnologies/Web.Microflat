@@ -113,7 +113,7 @@ export default function ActivityTimeline({
                   </span>
                   {item.changedBy && (
                     <>
-                      <span className="text-text-muted text-[11px]">•</span>
+                      <span className="text-text-muted text-2xs">•</span>
                       <span className="text-xs text-text font-medium">
                         by <strong className="text-heading">{item.changedBy}</strong>
                       </span>
@@ -122,7 +122,7 @@ export default function ActivityTimeline({
                 </div>
 
                 {item.timestamp && (
-                  <span className="font-mono text-[11px] text-text-muted shrink-0 tabular-nums">
+                  <span className="font-mono text-2xs text-text-muted shrink-0 tabular-nums">
                     {formatDateTime(item.timestamp)}
                   </span>
                 )}

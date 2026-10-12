@@ -48,6 +48,7 @@ import {
   Card,
   Badge,
   Modal,
+  PageHeader,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { chartColors } from '../../config/chartColors';
@@ -288,27 +289,19 @@ export default function VendorDashboardPage() {
   return (
     <div className="space-y-4 sm:space-y-6 w-full pb-8 sm:pb-12">
       {/* ── 1. Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border-b border-border pb-4 sm:pb-5">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-heading tracking-tight flex items-center gap-2 sm:gap-2.5">
-            <Truck className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" aria-hidden="true" />
-            <span className="truncate">Vendor Dashboard</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-text-muted mt-0.5 sm:mt-1">
-            Overview of vendor onboarding and approvals
-          </p>
-        </div>
-
-        {/* Top-Right Action */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      <PageHeader
+        title="Vendor Dashboard"
+        subtitle="Overview of vendor onboarding and approvals"
+        icon={<Truck className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" aria-hidden="true" />}
+        actions={
           <Link to="/vendors/new" className="w-full sm:w-auto">
             <Button variant="primary" size="md" className="w-full sm:w-auto shadow-xs justify-center">
               <Plus size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
               <span>Add Vendor</span>
             </Button>
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── 2. KPI Metrics Row (4 Cards) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
@@ -399,7 +392,7 @@ export default function VendorDashboardPage() {
                 <span className="text-xl sm:text-2xl font-bold font-mono text-heading leading-none">
                   {allVendors.length}
                 </span>
-                <span className="text-[10.5px] sm:text-[11px] text-text-muted mt-0.5">Vendors</span>
+                <span className="text-2xs sm:text-2xs text-text-muted mt-0.5">Vendors</span>
               </div>
             </div>
 
@@ -416,7 +409,7 @@ export default function VendorDashboardPage() {
                   </div>
                   <div className="font-mono text-text-muted flex items-center gap-1.5">
                     <span className="font-semibold text-heading">{item.value}</span>
-                    <span className="text-[11px] text-text-muted">({item.percentage}%)</span>
+                    <span className="text-2xs text-text-muted">({item.percentage}%)</span>
                   </div>
                 </div>
               ))}
@@ -497,7 +490,7 @@ export default function VendorDashboardPage() {
                   <CheckCircle2 size={20} />
                 </div>
                 <p className="text-xs font-semibold text-heading">No vendors awaiting approval</p>
-                <p className="text-[11px] text-text-muted">All supplier compliance reviews are up to date.</p>
+                <p className="text-2xs text-text-muted">All supplier compliance reviews are up to date.</p>
               </div>
             ) : (
               <div className="divide-y divide-border -mx-3 sm:-mx-5">
@@ -516,11 +509,11 @@ export default function VendorDashboardPage() {
                         >
                           {vendor.vendorName}
                         </Link>
-                        <span className="font-mono text-[10px] sm:text-[10.5px] px-1.5 py-0.5 bg-surface border border-border text-text rounded font-medium shrink-0">
+                        <span className="font-mono text-2xs px-1.5 py-0.5 bg-surface border border-border text-text rounded font-medium shrink-0">
                           {vendor.vendorCode}
                         </span>
                       </div>
-                      <p className="text-[10.5px] sm:text-[11px] text-text-muted flex items-center gap-1.5 font-mono flex-wrap">
+                      <p className="text-2xs text-text-muted flex items-center gap-1.5 font-mono flex-wrap">
                         <Calendar size={11} className="shrink-0" />
                         <span>Submitted: {formatDate(vendor.createdOn || vendor.effectiveDate)}</span>
                         {vendor.city && (
@@ -604,11 +597,11 @@ export default function VendorDashboardPage() {
                         <span className="text-xs sm:text-sm font-semibold text-heading group-hover:text-primary transition-colors truncate">
                           {vendor.vendorName}
                         </span>
-                        <span className="font-mono text-[10px] sm:text-[10.5px] px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded font-medium shrink-0">
+                        <span className="font-mono text-2xs px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded font-medium shrink-0">
                           {vendor.vendorCode}
                         </span>
                       </div>
-                      <p className="text-[10.5px] sm:text-[11px] text-text-muted flex items-center gap-1.5 flex-wrap">
+                      <p className="text-2xs text-text-muted flex items-center gap-1.5 flex-wrap">
                         <MapPin size={11} className="shrink-0" />
                         <span className="truncate">{vendor.city || 'Unknown Location'}</span>
                         <span>•</span>
@@ -617,7 +610,7 @@ export default function VendorDashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                      <Badge variant={vendor.isActive ? 'active' : 'inactive'} className="text-[10.5px] sm:text-xs">
+                      <Badge variant={vendor.isActive ? 'active' : 'inactive'} className="text-2xs sm:text-xs">
                         {vendor.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                       <ChevronRight size={14} className="text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-transform" />

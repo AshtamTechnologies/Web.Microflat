@@ -18,5 +18,9 @@ export { default as Textarea }         from './Textarea';
 export { default as DetailField }      from './DetailField';
 export { TableContainer, Th, Td }     from './Table';
 
-
-
+/* ── New Shared UI Components ── */
+export { default as PageHeader }       from './PageHeader';
+export { default as FormGrid, FormGrid as FormGridComponent, FormSection } from './FormGrid';
+export { default as EmptyState }       from './EmptyState';
+export { default as FilterBar }        from './FilterBar';
+export { default as IconButton }       from './IconButton';

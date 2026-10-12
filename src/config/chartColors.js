@@ -1,43 +1,101 @@
-// Keep in sync with tokens.css — recharts cannot consume CSS custom properties directly.
-export const chartColors = {
+/**
+ * MicroFlat ERP – Chart Colors Configuration
+ *
+ * Reads color values dynamically from tokens.css custom properties at runtime
+ * via getComputedStyle so Recharts gets resolved color strings while
+ * respecting light/dark theme switches and eliminating hardcoded hex values.
+ */
+
+const tokenMap = {
   // Brand palette
-  brand50: '#EAF5FC',
-  brand100: '#CDE7F7',
-  brand200: '#9BCFEF',
-  brand300: '#63B3E5',
-  brand400: '#2E97D9',
-  brand500: '#0076BA',
-  brand600: '#005E96',
-  brand700: '#004873',
-  brand800: '#033A5C',
-  brand900: '#072B44',
+  brand50:  '--brand-50',
+  brand100: '--brand-100',
+  brand200: '--brand-200',
+  brand300: '--brand-300',
+  brand400: '--brand-400',
+  brand500: '--brand-500',
+  brand600: '--brand-600',
+  brand700: '--brand-700',
+  brand800: '--brand-800',
+  brand900: '--brand-900',
 
   // Neutral palette
-  gray50: '#F8FAFC',
-  gray100: '#EEF2F6',
-  gray200: '#E2E8F0',
-  gray300: '#CBD5E1',
-  gray400: '#94A3B8',
-  gray500: '#64748B',
-  gray600: '#475569',
-  gray700: '#334155',
-  gray800: '#1E293B',
-  gray900: '#0F172A',
-  gray950: '#0B1220',
+  gray50:  '--gray-50',
+  gray100: '--gray-100',
+  gray200: '--gray-200',
+  gray300: '--gray-300',
+  gray400: '--gray-400',
+  gray500: '--gray-500',
+  gray600: '--gray-600',
+  gray700: '--gray-700',
+  gray800: '--gray-800',
+  gray900: '--gray-900',
+  gray950: '--gray-950',
 
   // Semantic status
-  success: '#16A34A',
-  warning: '#D97706',
-  danger: '#DC2626',
-  accent500: '#C9A227',
+  success:   '--success',
+  warning:   '--warning',
+  danger:    '--danger',
+  accent500: '--accent-500',
 
-  // Semantic shortcuts
-  primary: '#0076BA',
-  border: '#E2E8F0',
-  surface: '#F8FAFC',
-  text: '#1E293B',
-  textMuted: '#64748B',
-  heading: '#0F172A',
+  // Semantic surface shortcuts
+  primary:   '--primary',
+  border:    '--border',
+  surface:   '--surface',
+  text:      '--text',
+  textMuted: '--text-muted',
+  heading:   '--heading',
 };
+
+function readCssVariable(varName) {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    if (value) {
+      if (value.startsWith('var(')) {
+        const innerVar = value.slice(4, -1).trim();
+        return readCssVariable(innerVar);
+      }
+      return value;
+    }
+  }
+  return `var(${varName})`;
+}
+
+export const chartColors = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      if (typeof prop === 'string' && tokenMap[prop]) {
+        return readCssVariable(tokenMap[prop]);
+      }
+      if (prop === 'toJSON') {
+        return () => {
+          const res = {};
+          for (const key of Object.keys(tokenMap)) {
+            res[key] = readCssVariable(tokenMap[key]);
+          }
+          return res;
+        };
+      }
+      return undefined;
+    },
+    ownKeys() {
+      return Object.keys(tokenMap);
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      if (typeof prop === 'string' && tokenMap[prop]) {
+        return {
+          enumerable: true,
+          configurable: true,
+          value: readCssVariable(tokenMap[prop]),
+        };
+      }
+      return undefined;
+    },
+    has(_target, prop) {
+      return prop in tokenMap;
+    },
+  }
+);
 
 export default chartColors;

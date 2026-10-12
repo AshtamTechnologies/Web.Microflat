@@ -89,15 +89,15 @@ export default function TagInput({
   const hasError = Boolean(error || localError);
 
   return (
-    <div className={`flex flex-col gap-1.5 w-full ${className}`}>
+    <div className={`mf-field ${className}`}>
       {label && (
         <label
           htmlFor={id}
-          className="form-label flex items-center gap-1"
+          className="mf-label"
         >
           {label}
           {required && (
-            <span className="form-label-required" aria-hidden="true">
+            <span className="mf-required" aria-hidden="true">
               *
             </span>
           )}
@@ -105,7 +105,7 @@ export default function TagInput({
       )}
 
       <div
-        className={`w-full rounded-lg border bg-bg p-2 transition-all flex flex-wrap items-center gap-1.5 min-h-[42px] ${
+        className={`w-full rounded-control border bg-bg p-1.5 transition-all flex flex-wrap items-center gap-1.5 min-h-[40px] ${
           hasError
             ? 'border-danger focus-within:ring-2 focus-within:ring-danger/20'
             : 'border-border focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 hover:border-text-muted/60'
@@ -115,7 +115,7 @@ export default function TagInput({
         {value.map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-surface border border-border text-heading shadow-2xs group"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-badge text-xs font-mono font-semibold bg-surface border border-border text-heading shadow-2xs group"
           >
             <Tag size={11} className="text-primary" />
             <span>{tag}</span>
@@ -152,11 +152,11 @@ export default function TagInput({
 
       {/* Error / Hint Messages */}
       {error ? (
-        <p className="text-xs text-danger flex items-center gap-1">{error}</p>
+        <p className="mf-error flex items-center gap-1">{error}</p>
       ) : localError ? (
-        <p className="text-xs text-danger flex items-center gap-1">{localError}</p>
+        <p className="mf-error flex items-center gap-1">{localError}</p>
       ) : hint ? (
-        <p className="text-xs text-text-muted">{hint}</p>
+        <p className="mf-hint">{hint}</p>
       ) : null}
     </div>
   );

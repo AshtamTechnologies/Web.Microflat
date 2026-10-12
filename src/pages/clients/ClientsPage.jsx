@@ -39,6 +39,7 @@ import {
   TableContainer,
   Th,
   Td,
+  PageHeader,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useClientsTable } from './useClientsTable.jsx';
@@ -117,31 +118,22 @@ export default function ClientsPage() {
   return (
     <div className="space-y-5 pb-16">
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Handshake size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-heading">Clients</h1>
-              <p className="text-xs text-text-muted mt-0.5">
-                Register and manage customers, distributors, dealers, and agents
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="primary"
-          onClick={() => navigate('/clients/new')}
-          className="shadow-2xs text-xs font-semibold self-start sm:self-auto"
-        >
-          <Plus size={15} className="mr-1.5" />
-          Add Client
-        </Button>
-      </div>
+      <PageHeader
+        title="Clients"
+        subtitle="Register and manage customers, distributors, dealers, and agents"
+        icon={<Handshake size={20} />}
+        actions={
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => navigate('/clients/new')}
+            className="shadow-2xs text-xs font-semibold"
+          >
+            <Plus size={15} className="mr-1.5" />
+            Add Client
+          </Button>
+        }
+      />
 
       {/* ── Toolbar & Filter Controls ── */}
       <Card padding="sm" className="bg-bg">

@@ -36,6 +36,7 @@ import {
   Th,
   Td,
   Modal,
+  PageHeader,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -230,33 +231,15 @@ export default function PurchaseRequisitionView() {
 
   return (
     <div className="w-full space-y-6 pb-20">
-      {/* ── Top Navigation & Back Button ── */}
-      <div>
-        <button
-          type="button"
-          onClick={() => navigate(backPath)}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-bg hover:bg-surface text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
-        >
-          <ArrowLeft
-            size={14}
-            className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
-          />
-          <span>{backLabel}</span>
-        </button>
-      </div>
-
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-heading">
-              Purchase Requisition
-            </h1>
-            <span className="text-xl font-bold text-primary">
-              {pr.prNumber}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 mt-1">
+      <PageHeader
+        backButton={{
+          onClick: () => navigate(backPath),
+          label: backLabel,
+        }}
+        title={`Purchase Requisition ${pr.prNumber}`}
+        badge={
+          <div className="flex items-center gap-2">
             <Badge variant={statusVariant} className="px-2.5 py-0.5 text-xs font-medium">
               {pr.status}
             </Badge>
@@ -264,53 +247,53 @@ export default function PurchaseRequisitionView() {
               Priority: {pr.priority}
             </Badge>
           </div>
-        </div>
+        }
+        actions={
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {isFromApproval && (pr.status || '').toLowerCase().includes('pending') && (
+              <>
+                <Button
+                  type="button"
+                  variant="success"
+                  size="sm"
+                  onClick={handleOpenApprove}
+                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title={`Approve ${pr.prNumber}`}
+                >
+                  <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
+                  Approve
+                </Button>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-          {isFromApproval && (pr.status || '').toLowerCase().includes('pending') && (
-            <>
+                <Button
+                  type="button"
+                  variant="danger-soft"
+                  size="sm"
+                  onClick={handleOpenReject}
+                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title={`Reject ${pr.prNumber}`}
+                >
+                  <X size={14} className="stroke-[2.5]" aria-hidden="true" />
+                  Reject
+                </Button>
+              </>
+            )}
+
+            {!isReadOnly && (
               <Button
-                type="button"
-                variant="ghost"
+                variant="primary"
                 size="sm"
-                onClick={handleOpenApprove}
-                className="text-xs font-semibold text-success hover:text-success hover:bg-success/15 border border-success/30 hover:border-success/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                title={`Approve ${pr.prNumber}`}
+                onClick={() =>
+                  navigate(`/purchase-requisition/${pr.prNumber || pr.prId}/edit`)
+                }
+                className="font-semibold shadow-sm"
               >
-                <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
-                Approve
+                <Pencil size={15} className="mr-1.5" />
+                Edit Requisition
               </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleOpenReject}
-                className="text-xs font-semibold text-danger hover:text-danger hover:bg-danger/15 border border-danger/30 hover:border-danger/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                title={`Reject ${pr.prNumber}`}
-              >
-                <X size={14} className="stroke-[2.5]" aria-hidden="true" />
-                Reject
-              </Button>
-            </>
-          )}
-
-          {!isReadOnly && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() =>
-                navigate(`/purchase-requisition/${pr.prNumber || pr.prId}/edit`)
-              }
-              className="font-semibold shadow-sm"
-            >
-              <Pencil size={15} className="mr-1.5" />
-              Edit Requisition
-            </Button>
-          )}
-        </div>
-      </div>
+            )}
+          </div>
+        }
+      />
 
       {/* ── Section 1: PR Information Card ── */}
       <Card padding="md" className="space-y-4 shadow-xs border-border">
@@ -485,7 +468,7 @@ export default function PurchaseRequisitionView() {
                     <p className="font-semibold text-heading truncate">
                       {att.fileName}
                     </p>
-                    <p className="text-[11px] text-text-muted font-mono mt-0.5">
+                    <p className="text-2xs text-text-muted font-mono mt-0.5">
                       {att.fileSizeKB ? `${att.fileSizeKB} KB` : '150 KB'} • Uploaded by {att.uploadedBy || pr.requestedBy} {att.uploadedDate ? `• ${formatPRDate(att.uploadedDate)}` : ''}
                     </p>
                   </div>

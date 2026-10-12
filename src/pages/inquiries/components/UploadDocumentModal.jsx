@@ -15,7 +15,7 @@ import {
   Plus,
   FileCheck,
 } from 'lucide-react';
-import { Modal, Button, Input, SearchableSelect } from '../../../components/ui';
+import { Modal, Button, Input, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiryDocumentsContext } from '../../../context/InquiryDocumentsContext';
 import { useDocumentTypesContext } from '../../../context/DocumentTypesContext';
 import { formatFileSizeKB } from '../../../mocks/inquiryDocuments';
@@ -246,7 +246,7 @@ export default function UploadDocumentModal({
         {isNewVersion && targetDocument && (
           <div className="p-3.5 bg-surface rounded-xl border border-border space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+              <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider">
                 Document Target
               </span>
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${activeDocType?.badgeClass}`}>
@@ -402,26 +402,18 @@ export default function UploadDocumentModal({
         </div>
 
         {/* Remarks / Change Notes */}
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="upload-remarks"
-            className="text-sm font-medium text-heading leading-none"
-          >
-            {isNewVersion ? 'Version Change Remarks (Optional)' : 'Remarks / Notes (Optional)'}
-          </label>
-          <textarea
-            id="upload-remarks"
-            rows={2}
-            value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
-            placeholder={
-              isNewVersion
-                ? 'e.g. Revised dimensional drawing per client feedback on bore size...'
-                : 'e.g. Initial customer RFQ document with scope requirements...'
-            }
-            className="w-full rounded-lg border border-border bg-bg text-text text-sm p-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-text-muted/60"
-          />
-        </div>
+        <Textarea
+          id="upload-remarks"
+          label={isNewVersion ? 'Version Change Remarks (Optional)' : 'Remarks / Notes (Optional)'}
+          rows={2}
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          placeholder={
+            isNewVersion
+              ? 'e.g. Revised dimensional drawing per client feedback on bore size...'
+              : 'e.g. Initial customer RFQ document with scope requirements...'
+          }
+        />
 
         {/* Footer Actions */}
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">

@@ -5,24 +5,83 @@
 @theme inline {
   --font-sans:            var(--font-sans);
   --font-mono:            var(--font-mono);
+
+  /* Brand and Surface Colors */
   --color-primary:        var(--primary);
   --color-primary-hover:  var(--primary-hover);
   --color-primary-active: var(--primary-active);
+  --color-on-primary:     var(--on-primary);
   --color-bg:             var(--bg);
   --color-surface:        var(--surface);
   --color-border:         var(--border);
   --color-text:           var(--text);
   --color-text-muted:     var(--text-muted);
   --color-heading:        var(--heading);
+  --color-overlay:        var(--overlay);
+
+  /* Status Colors & Tints */
   --color-success:        var(--success);
+  --color-success-bg:     var(--success-bg);
+  --color-success-border: var(--success-border);
+  --color-success-text:   var(--success-text);
+
   --color-warning:        var(--warning);
+  --color-warning-bg:     var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-warning-text:   var(--warning-text);
+
   --color-danger:         var(--danger);
+  --color-danger-bg:      var(--danger-bg);
+  --color-danger-border:  var(--danger-border);
+  --color-danger-text:    var(--danger-text);
+
+  --color-info:           var(--info);
+  --color-info-bg:        var(--info-bg);
+  --color-info-border:    var(--info-border);
+  --color-info-text:      var(--info-text);
+
   --color-accent:         var(--accent-500);
+
+  /* Form & Detail Colors */
   --color-label:          var(--label-color);
   --color-field-bg:       var(--field-bg);
   --color-field-border:   var(--field-border);
+  --color-field-border-hover: var(--field-border-hover);
+  --color-field-border-focus: var(--field-border-focus);
+  --color-field-text:     var(--field-text);
+  --color-field-placeholder: var(--field-placeholder);
   --color-view-label:     var(--view-label-color);
   --color-view-value:     var(--view-value-color);
+
+  /* Typography scale */
+  --text-2xs:             var(--text-2xs);
+  --text-xs:              var(--text-xs);
+  --text-sm:              var(--text-sm);
+  --text-base:            var(--text-base);
+  --text-lg:              var(--text-lg);
+  --text-xl:              var(--text-xl);
+  --text-2xl:             var(--text-2xl);
+
+  /* Radii */
+  --radius-control:       var(--radius-control);
+  --radius-card:          var(--radius-card);
+  --radius-modal:         var(--radius-modal);
+  --radius-badge:         var(--radius-badge);
+
+  /* Shadows */
+  --shadow-card:          var(--shadow-card);
+  --shadow-dropdown:      var(--shadow-dropdown);
+  --shadow-modal:         var(--shadow-modal);
+
+  /* Spacings */
+  --spacing-page-padding: var(--page-padding);
+  --spacing-card-padding: var(--card-padding);
+  --spacing-section-gap:  var(--section-gap);
+  --spacing-form-gap:     var(--form-gap);
+  --spacing-control-sm:   var(--control-height-sm);
+  --spacing-control-md:   var(--control-height-md);
+  --spacing-control-lg:   var(--control-height-lg);
+  --spacing-header-height: var(--header-height);
 }
 
 /* ── Global resets & base styles ─────────────────────────────────────────── */

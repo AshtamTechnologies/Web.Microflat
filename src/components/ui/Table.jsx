@@ -22,7 +22,7 @@ export function TableContainer({
   return (
     <div
       className={[
-        'w-full overflow-x-auto',
+        'w-full overflow-x-auto rounded-card border border-border bg-bg',
         className,
       ]
         .filter(Boolean)
@@ -65,7 +65,7 @@ export function Th({
     <th
       className={[
         'relative select-none group/th',
-        'px-5 py-3.5',
+        'px-4 sm:px-5 py-3 sm:py-3.5',
         'text-xs font-semibold uppercase tracking-wider text-text-muted',
         'border-b border-border bg-surface',
         'whitespace-nowrap overflow-hidden',
@@ -141,9 +141,9 @@ export function Td({ children, style, className = '', ...rest }) {
   return (
     <td
       className={[
-        'px-5 py-4',
+        'px-4 sm:px-5 py-3 sm:py-3.5',
         'text-sm text-text',
-        'align-middle whitespace-nowrap overflow-hidden',
+        'align-middle whitespace-nowrap overflow-hidden border-b border-border/70',
         className,
       ]
         .filter(Boolean)

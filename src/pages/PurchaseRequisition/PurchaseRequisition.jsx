@@ -44,6 +44,7 @@ import {
   TableContainer,
   Th,
   Td,
+  PageHeader,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -258,23 +259,16 @@ export default function PurchaseRequisition() {
   return (
     <div className="w-full space-y-6 pb-16">
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-heading">
-              Purchase Requisition
-            </h1>
-            <Badge variant="role" className="text-xs">
-              {filteredRequisitions.length}{' '}
-              {filteredRequisitions.length === 1 ? 'Record' : 'Records'}
-            </Badge>
-          </div>
-          <p className="text-sm text-text-muted mt-1">
-            Manage purchase requisitions and track their status.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="Purchase Requisition"
+        subtitle="Manage purchase requisitions and track their status."
+        badge={
+          <Badge variant="role" className="text-xs">
+            {filteredRequisitions.length}{' '}
+            {filteredRequisitions.length === 1 ? 'Record' : 'Records'}
+          </Badge>
+        }
+        actions={
           <Button
             variant="primary"
             onClick={() => navigate('/purchase-requisition/create')}
@@ -283,8 +277,8 @@ export default function PurchaseRequisition() {
             <Plus size={16} className="mr-1.5" />
             Create Purchase Requisition
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Summary KPI Cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">

@@ -1,15 +1,16 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    MicroFlat ERP – Design Tokens
-   This is the ONLY file permitted to contain raw hex color values.
-   All components must reference the semantic surface-role variables below.
+   To change the look of the whole system, edit only this file.
+   This is the ONLY file permitted to contain raw hex color values and raw design numbers.
+   All components must reference the semantic tokens defined below.
 ───────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Typography tokens ─────────────────────────────────────────────────── */
+  /* ── 1. Typography Fonts ─────────────────────────────────────────────────── */
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
 
-  /* ── Brand palette ─────────────────────────────────────────────────────── */
+  /* ── 2. Brand Palette ─────────────────────────────────────────────────────── */
   --brand-50:  #EAF5FC;
   --brand-100: #CDE7F7;
   --brand-200: #9BCFEF;
@@ -21,7 +22,7 @@
   --brand-800: #033A5C;
   --brand-900: #072B44;
 
-  /* ── Neutral palette ───────────────────────────────────────────────────── */
+  /* ── 3. Neutral Palette ───────────────────────────────────────────────────── */
   --gray-50:  #F8FAFC;
   --gray-100: #EEF2F6;
   --gray-200: #E2E8F0;
@@ -34,13 +35,41 @@
   --gray-900: #0F172A;
   --gray-950: #0B1220;
 
-  /* ── Semantic status ───────────────────────────────────────────────────── */
+  /* ── 4. Semantic Status Colors ────────────────────────────────────────────── */
   --success:    #16A34A;
   --warning:    #D97706;
   --danger:     #DC2626;
+  --info:       #0284C7;
   --accent-500: #C9A227;
 
-  /* ── Surface roles (these are what every component uses) ───────────────── */
+  /* Additional Palette Colors (for editor presets & charts) */
+  --color-blue:   #2563EB;
+  --color-sky:    #0284C7;
+  --color-green:  #16A34A;
+  --color-amber:  #D97706;
+  --color-red:    #DC2626;
+  --color-purple: #7C3AED;
+  --color-slate:  #64748B;
+  --color-dark:   #0F172A;
+
+  /* ── 5. Status Tint Tokens (Light theme) ──────────────────────────────────── */
+  --success-bg:     #F0FDF4;
+  --success-border: #BBF7D0;
+  --success-text:   #15803D;
+
+  --warning-bg:     #FFFBEB;
+  --warning-border: #FDE68A;
+  --warning-text:   #B45309;
+
+  --danger-bg:      #FEF2F2;
+  --danger-border:  #FECACA;
+  --danger-text:    #B91C1C;
+
+  --info-bg:        #F0F9FF;
+  --info-border:    #BAE6FD;
+  --info-text:      #0369A1;
+
+  /* ── 6. Surface Roles ─────────────────────────────────────────────────────── */
   --bg:             #FFFFFF;
   --surface:        var(--gray-50);
   --border:         var(--gray-200);
@@ -50,10 +79,94 @@
   --primary:        var(--brand-500);
   --primary-hover:  var(--brand-600);
   --primary-active: var(--brand-700);
+  --on-primary:     #FFFFFF;
+  --overlay:        rgba(15, 23, 42, 0.45);
 
-  /* ── Form Control & Label Tokens ────────────────────────────────────────── */
+  /* ── 7. Typography Scale ─────────────────────────────────────────────────── */
+  --text-2xs:  0.6875rem; /* 11px */
+  --text-xs:   0.75rem;   /* 12px */
+  --text-sm:   0.875rem;  /* 14px */
+  --text-base: 1rem;      /* 16px */
+  --text-lg:   1.125rem;  /* 18px */
+  --text-xl:   1.25rem;   /* 20px */
+  --text-2xl:  1.5rem;    /* 24px */
+
+  --leading-none:    1;
+  --leading-tight:   1.25;
+  --leading-snug:    1.375;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.625;
+
+  --font-weight-normal:   400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  /* Semantic Typography Tokens */
+  --page-title-size:    var(--text-xl);
+  --section-title-size: var(--text-base);
+  --body-size:          var(--text-sm);
+  --caption-size:       var(--text-xs);
+  --table-head-size:    var(--text-xs);
+  --table-cell-size:    var(--text-sm);
+
+  /* ── 8. Spacing & Layout Scale ───────────────────────────────────────────── */
+  --space-1:  0.25rem;  /* 4px */
+  --space-2:  0.5rem;   /* 8px */
+  --space-3:  0.75rem;  /* 12px */
+  --space-4:  1rem;     /* 16px */
+  --space-5:  1.25rem;  /* 20px */
+  --space-6:  1.5rem;   /* 24px */
+  --space-7:  1.75rem;  /* 28px */
+  --space-8:  2rem;     /* 32px */
+  --space-9:  2.25rem;  /* 36px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-11: 2.75rem;  /* 44px */
+  --space-12: 3rem;     /* 48px */
+
+  --page-padding:            clamp(1rem, 2vw, 1.75rem);
+  --card-padding:            1.25rem;
+  --section-gap:             1.5rem;
+  --form-gap:                1rem;
+  --sidebar-width:           240px;
+  --sidebar-width-collapsed: 64px;
+  --header-height:           56px;
+  --content-max-width:       1440px;
+
+  /* ── 9. Shape & Radius ───────────────────────────────────────────────────── */
+  --radius-sm:      0.25rem;  /* 4px */
+  --radius-md:      0.375rem; /* 6px */
+  --radius-lg:      0.5rem;   /* 8px */
+  --radius-xl:      0.75rem;  /* 12px */
+  --radius-2xl:     1rem;     /* 16px */
+  --radius-full:    9999px;
+
+  --radius-control: var(--radius-lg);   /* 8px for inputs, buttons, selects */
+  --radius-card:    var(--radius-xl);   /* 12px for cards & panels */
+  --radius-modal:   var(--radius-xl);   /* 12px for modal dialogs */
+  --radius-badge:   var(--radius-full); /* full pill for badges & chips */
+
+  /* ── 10. Elevation & Shadows ─────────────────────────────────────────────── */
+  --shadow-2xs:      0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-xs:       0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm:       0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
+  --shadow-md:       0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+  --shadow-lg:       0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-card:     0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-dropdown: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  --shadow-modal:    0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+
+  /* ── 11. Controls & Form Primitives ──────────────────────────────────────── */
+  --control-height-sm: 2rem;    /* 32px */
+  --control-height-md: 2.5rem;  /* 40px */
+  --control-height-lg: 2.75rem; /* 44px */
+  --control-padding-x: 0.75rem;
+  --focus-ring:        2px solid var(--primary);
+  --focus-ring-offset: 2px;
+  --disabled-opacity:  0.5;
+
   --label-color:        var(--heading);
-  --label-font-size:    0.875rem;
+  --label-font-size:    var(--text-sm);
   --label-font-weight:  500;
   --label-line-height:  1;
 
@@ -63,18 +176,101 @@
   --field-border-focus: var(--primary);
   --field-text:         var(--text);
   --field-placeholder:  var(--text-muted);
-  --field-radius:       0.5rem;
+  --field-radius:       var(--radius-control);
 
-  /* ── View / Detail Display Tokens ────────────────────────────────────────── */
+  /* ── 12. View / Detail Display Tokens ────────────────────────────────────── */
   --view-label-color:        var(--text-muted);
-  --view-label-font-size:    0.75rem;
+  --view-label-font-size:    var(--text-xs);
   --view-label-font-weight:  500;
   --view-label-transform:    none;
   --view-label-spacing:      normal;
 
   --view-value-color:        var(--heading);
-  --view-value-font-size:    0.875rem;
+  --view-value-font-size:    var(--text-sm);
   --view-value-font-weight:  600;
+
+  /* ── 13. Motion ──────────────────────────────────────────────────────────── */
+  --transition-fast: 150ms ease-in-out;
+  --transition-base: 200ms ease-in-out;
+
+  /* ── 14. Z-Index Scale ───────────────────────────────────────────────────── */
+  --z-dropdown: 40;
+  --z-sidebar:  30;
+  --z-modal:    50;
+  --z-toast:    60;
+
+  /* ── 15. Components ──────────────────────────────────────────────────────── */
+  --table-header-bg: var(--surface);
+  --table-row-hover: color-mix(in srgb, var(--primary) 3%, var(--bg));
+  --table-border:    var(--border);
+
+  --badge-size-sm: var(--text-2xs);
+  --badge-size-md: var(--text-xs);
+
+  --modal-width-sm:  28rem;
+  --modal-width-md:  32rem;
+  --modal-width-lg:  42rem;
+  --modal-width-xl:  56rem;
+  --modal-width-2xl: 64rem;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   MicroFlat ERP – Dark Theme
+   Overrides ONLY semantic & surface tokens. Raw palette values remain unchanged.
+───────────────────────────────────────────────────────────────────────────── */
+.dark {
+  --bg:             #0B1220;
+  --surface:        #111C2E;
+  --border:         #1E293B;
+  --text:           #CBD5E1;
+  --text-muted:     #64748B;
+  --heading:        #F8FAFC;
+  --overlay:        rgba(0, 0, 0, 0.7);
 
+  --primary:        var(--brand-400);
+  --primary-hover:  var(--brand-300);
+  --primary-active: var(--brand-500);
+  --on-primary:     #072B44;
+
+  /* Form Fields in dark mode */
+  --field-bg:           #07101E;
+  --field-border:       #1E293B;
+  --field-border-hover: #475569;
+  --field-border-focus: var(--brand-400);
+  --field-text:         #F8FAFC;
+  --field-placeholder:  #475569;
+
+  /* Detail View Fields in dark mode */
+  --view-label-color:   #94A3B8;
+  --view-value-color:   #F8FAFC;
+
+  /* Tables in dark mode */
+  --table-header-bg: #111C2E;
+  --table-row-hover: color-mix(in srgb, var(--brand-400) 7%, #0B1220);
+  --table-border:    #1E293B;
+
+  /* Status Tints in dark mode */
+  --success-bg:     rgba(22, 163, 74, 0.14);
+  --success-border: rgba(22, 163, 74, 0.35);
+  --success-text:   #4ADE80;
+
+  --warning-bg:     rgba(217, 119, 6, 0.14);
+  --warning-border: rgba(217, 119, 6, 0.35);
+  --warning-text:   #FBBF24;
+
+  --danger-bg:      rgba(220, 38, 38, 0.14);
+  --danger-border:  rgba(220, 38, 38, 0.35);
+  --danger-text:    #F87171;
+
+  --info-bg:        rgba(2, 132, 199, 0.14);
+  --info-border:    rgba(2, 132, 199, 0.35);
+  --info-text:      #38BDF8;
+
+  /* Shadows in dark mode */
+  --shadow-sm:       0 1px 3px 0 rgba(0, 0, 0, 0.4);
+  --shadow-md:       0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg:       0 10px 15px -3px rgba(0, 0, 0, 0.6);
+  --shadow-card:     0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  --shadow-dropdown: 0 10px 25px -5px rgba(0, 0, 0, 0.7);
+  --shadow-modal:    0 20px 25px -5px rgba(0, 0, 0, 0.8);
+}

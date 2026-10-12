@@ -37,6 +37,7 @@ import {
   Card,
   Checkbox,
   Textarea,
+  PageHeader,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import { CONTACT_TYPE_OPTIONS } from '../../mocks/clients';
@@ -213,52 +214,50 @@ export default function ClientFormPage() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 pb-6">
       {/* ── Top Header & Actions Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title={isEdit ? 'Edit Client' : 'Add Client'}
+        subtitle={
+          isEdit
+            ? `Update company credentials, addresses, and contacts for ${form.companyName || 'client'}`
+            : 'Register a new customer, distributor, dealer, or agency account'
+        }
+        backButton={
           <button
             type="button"
             onClick={handleCancel}
-            className="p-2 rounded-lg border border-border bg-surface text-text hover:text-primary hover:bg-surface/80 transition-colors cursor-pointer"
-            title="Go Back"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft
+              size={14}
+              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
+            />
+            <span>Back to Clients</span>
           </button>
-          <div>
-            <h1 className="text-xl font-bold text-heading">
-              {isEdit ? 'Edit Client' : 'Add Client'}
-            </h1>
-            <p className="text-xs text-text-muted mt-0.5">
-              {isEdit
-                ? `Update company credentials, addresses, and contacts for ${form.companyName || 'client'}`
-                : 'Register a new customer, distributor, dealer, or agency account'}
-            </p>
+        }
+        actions={
+          <div className="flex items-center gap-2.5">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleCancel}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isSubmitting}
+              className="font-semibold shadow-2xs"
+            >
+              <Save size={14} className="mr-1.5" />
+              {isSubmitting ? 'Saving Client...' : isEdit ? 'Save Changes' : 'Save Client'}
+            </Button>
           </div>
-        </div>
-
-        {/* Top Save / Cancel Buttons */}
-        <div className="flex items-center gap-2.5 self-end sm:self-auto">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-            className="text-xs"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            disabled={isSubmitting}
-            className="text-xs font-semibold shadow-2xs"
-          >
-            <Save size={14} className="mr-1.5" />
-            {isSubmitting ? 'Saving Client...' : isEdit ? 'Save Changes' : 'Save Client'}
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── 1. Company Details Card (3 Columns Layout) ── */}
       <Card padding="md" className="space-y-4">
@@ -313,18 +312,6 @@ export default function ClientFormPage() {
             />
           </div>
 
-          {/* 3. Contact Type */}
-          <div>
-            <Select
-              label="Contact Type"
-              id="contactTypeId"
-              required
-              value={form.contactTypeId}
-              onChange={(e) => handleFieldChange('contactTypeId', e.target.value)}
-              options={CONTACT_TYPE_OPTIONS}
-              error={errors.contactTypeId}
-            />
-          </div>
 
           {/* 4. Official Email */}
           <div>

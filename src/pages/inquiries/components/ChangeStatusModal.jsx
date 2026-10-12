@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { RefreshCw, MessageSquare } from 'lucide-react';
-import { Modal, Button, SearchableSelect } from '../../../components/ui';
+import { Modal, Button, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiriesContext } from '../../../context/InquiriesContext';
 import { STATUS_OPTIONS, getStatusOption } from '../../../mocks/inquiries';
 
@@ -96,23 +96,14 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
         </div>
 
         {/* Remarks / Notes */}
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="status-remarks"
-            className="text-sm font-medium text-heading leading-none flex items-center gap-1.5"
-          >
-            <MessageSquare size={14} className="text-text-muted" />
-            <span>Reason / Notes for Status Change (Optional)</span>
-          </label>
-          <textarea
-            id="status-remarks"
-            rows={3}
-            value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
-            placeholder="e.g. Quotation dispatched with 30-day validity, waiting on client purchase order..."
-            className="w-full rounded-lg border border-border bg-bg text-text text-sm p-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-text-muted/60"
-          />
-        </div>
+        <Textarea
+          id="status-remarks"
+          label="Reason / Notes for Status Change (Optional)"
+          rows={3}
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          placeholder="e.g. Quotation dispatched with 30-day validity, waiting on client purchase order..."
+        />
 
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">

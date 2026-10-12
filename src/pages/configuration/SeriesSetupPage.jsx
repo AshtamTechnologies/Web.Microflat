@@ -420,7 +420,7 @@ export default function SeriesSetupPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-heading">New Series Version</h2>
-                  <p className="text-[11px] text-text-muted">
+                  <p className="text-2xs text-text-muted">
                     Pre-populated from currently active version. Create a new revision to change numbering rules.
                   </p>
                 </div>
@@ -576,7 +576,7 @@ export default function SeriesSetupPage() {
                     <Sparkles size={16} />
                   </div>
                   <div className="min-w-0">
-                    <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-text-muted block">
+                    <span className="text-2xs sm:text-2xs font-semibold uppercase tracking-wider text-text-muted block">
                       Live Sample Preview
                     </span>
                     <span className="font-mono font-bold text-base sm:text-lg text-primary tabular-nums tracking-wide break-all">
@@ -585,7 +585,7 @@ export default function SeriesSetupPage() {
                   </div>
                 </div>
 
-                <div className="text-[11px] text-text-muted font-mono bg-bg px-3 py-1.5 rounded-lg border border-border/80 self-start sm:self-auto break-all">
+                <div className="text-2xs text-text-muted font-mono bg-bg px-3 py-1.5 rounded-lg border border-border/80 self-start sm:self-auto break-all">
                   Format: {previewFormatPattern}
                 </div>
               </div>
@@ -627,7 +627,7 @@ export default function SeriesSetupPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-heading">Series Version History</h2>
-                  <p className="text-[11px] text-text-muted">
+                  <p className="text-2xs text-text-muted">
                     Read-only audit history of past, current active, and scheduled series numbering rules.
                   </p>
                 </div>
@@ -669,7 +669,7 @@ export default function SeriesSetupPage() {
                         {/* Header: Effective Date & Status Badge */}
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <span className="text-[10px] uppercase font-bold tracking-wider text-text-muted block">
+                            <span className="text-2xs uppercase font-bold tracking-wider text-text-muted block">
                               Effective Date
                             </span>
                             <span className="font-mono font-bold text-sm text-heading tabular-nums">
@@ -684,7 +684,7 @@ export default function SeriesSetupPage() {
 
                         {/* Example Number Box */}
                         <div className="bg-bg/95 px-3 py-2 rounded-lg border border-border/80 flex items-center justify-between gap-2">
-                          <span className="text-[11px] text-text-muted font-medium">Example Number:</span>
+                          <span className="text-2xs text-text-muted font-medium">Example Number:</span>
                           <span className="font-mono font-bold text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20 break-all">
                             {sampleNum}
                           </span>
@@ -693,36 +693,36 @@ export default function SeriesSetupPage() {
                         {/* Specs Grid */}
                         <div className="grid grid-cols-3 gap-2 text-xs py-2 px-1 border-t border-b border-border/60 bg-bg/40 rounded-lg">
                           <div>
-                            <span className="text-[10px] text-text-muted block">Prefix</span>
+                            <span className="text-2xs text-text-muted block">Prefix</span>
                             <span className="font-mono font-bold text-heading">{ver.prefix}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-text-muted block">Separator</span>
+                            <span className="text-2xs text-text-muted block">Separator</span>
                             <span className="font-mono text-heading">
                               {ver.separator === '' || ver.separator === 'None' ? 'None' : ver.separator}
                             </span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-text-muted block">Year Fmt</span>
+                            <span className="text-2xs text-text-muted block">Year Fmt</span>
                             <span className="font-mono text-heading">{ver.yearFormat || 'None'}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-text-muted block">Length</span>
+                            <span className="text-2xs text-text-muted block">Length</span>
                             <span className="font-mono text-heading tabular-nums">{ver.numberLength} digits</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-text-muted block">Start No</span>
+                            <span className="text-2xs text-text-muted block">Start No</span>
                             <span className="font-mono text-heading tabular-nums">{ver.startingNumber}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-text-muted block">Reset</span>
+                            <span className="text-2xs text-text-muted block">Reset</span>
                             <span className="text-heading truncate block">{ver.resetCounter || 'Yearly'}</span>
                           </div>
                         </div>
 
                         {/* Audit Details & Actions */}
                         <div className="flex items-center justify-between gap-2.5 pt-1">
-                          <div className="text-[11px] text-text-muted truncate">
+                          <div className="text-2xs text-text-muted truncate">
                             By <span className="font-medium text-text">{ver.createdBy || 'Ian Chesnut'}</span> • {formatDate(ver.createdOn)}
                           </div>
 
@@ -791,7 +791,7 @@ export default function SeriesSetupPage() {
                             {/* Separator */}
                             <Td className="py-3.5 px-3 text-center font-mono text-text-muted whitespace-nowrap">
                               {ver.separator === '' || ver.separator === 'None' ? (
-                                <span className="text-text-muted/60 italic text-[11px]">None</span>
+                                <span className="text-text-muted/60 italic text-2xs">None</span>
                               ) : (
                                 <span className="inline-block px-2 py-0.5 rounded bg-surface border border-border text-xs font-semibold text-heading">
                                   {ver.separator}
@@ -839,7 +839,7 @@ export default function SeriesSetupPage() {
                             </Td>
 
                             {/* Created On */}
-                            <Td className="py-3.5 px-4 font-mono text-[11px] text-text-muted tabular-nums whitespace-nowrap">
+                            <Td className="py-3.5 px-4 font-mono text-2xs text-text-muted tabular-nums whitespace-nowrap">
                               {formatDate(ver.createdOn)}
                             </Td>
 
@@ -994,7 +994,7 @@ export default function SeriesSetupPage() {
                   <Sparkles size={14} />
                 </div>
                 <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted block">
+                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
                     Updated Number Preview
                   </span>
                   <span className="font-mono font-bold text-sm text-primary tabular-nums">
@@ -1003,7 +1003,7 @@ export default function SeriesSetupPage() {
                 </div>
               </div>
 
-              <div className="text-[11px] text-text-muted font-mono bg-bg px-2.5 py-1 rounded-lg border border-border/80">
+              <div className="text-2xs text-text-muted font-mono bg-bg px-2.5 py-1 rounded-lg border border-border/80">
                 Format: {editPreviewFormatPattern}
               </div>
             </div>

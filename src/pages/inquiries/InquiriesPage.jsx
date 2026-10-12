@@ -38,6 +38,7 @@ import {
   TableContainer,
   Th,
   Td,
+  PageHeader,
 } from '../../components/ui';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useUsersContext } from '../../context/UsersContext';
@@ -210,7 +211,7 @@ export default function InquiriesPage() {
         cell: (info) => {
           const priority = info.getValue() || 'Medium';
           return (
-            <Badge variant={getPriorityBadgeVariant(priority)} className="text-[11px] px-2 py-0.5">
+            <Badge variant={getPriorityBadgeVariant(priority)} className="text-2xs px-2 py-0.5">
               {priority}
             </Badge>
           );
@@ -348,18 +349,11 @@ export default function InquiriesPage() {
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Header Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <Inbox className="h-6 w-6 text-primary" aria-hidden="true" />
-            Inquiry Management
-          </h1>
-          <p className="text-xs text-text-muted mt-1">
-            Track customer RFQs, precision manufacturing enquiries, assignments & conversion status.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="Inquiry Management"
+        subtitle="Track customer RFQs, precision manufacturing enquiries, assignments & conversion status."
+        icon={<Inbox className="h-6 w-6 text-primary" aria-hidden="true" />}
+        actions={
           <Button
             variant="primary"
             onClick={() => navigate('/inquiries/new')}
@@ -368,8 +362,8 @@ export default function InquiriesPage() {
             <Plus size={16} className="mr-1.5" aria-hidden="true" />
             New Inquiry
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── DESKTOP VIEW (md+): Table ── */}
       <div className="hidden md:block">
@@ -647,7 +641,7 @@ export default function InquiriesPage() {
             <div className="p-8 text-center bg-surface border border-border rounded-xl">
               <SearchX size={24} className="mx-auto text-text-muted opacity-60 mb-2" />
               <p className="text-xs font-semibold text-heading">No inquiries found</p>
-              <p className="text-[11px] text-text-muted mt-0.5">Try altering your search or status chip</p>
+              <p className="text-2xs text-text-muted mt-0.5">Try altering your search or status chip</p>
             </div>
           ) : (
             table.getRowModel().rows.map((row) => {
@@ -666,7 +660,7 @@ export default function InquiriesPage() {
                         <span className="font-mono text-xs font-bold text-primary">
                           {inq.InquiryNo}
                         </span>
-                        <Badge variant={getPriorityBadgeVariant(inq.Priority)} className="text-[10px] px-1.5 py-0">
+                        <Badge variant={getPriorityBadgeVariant(inq.Priority)} className="text-2xs px-1.5 py-0">
                           {inq.Priority}
                         </Badge>
                       </div>
@@ -704,7 +698,7 @@ export default function InquiriesPage() {
                         {getRegionName(inq.RegionId)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between font-mono tabular-nums text-[11px]">
+                    <div className="flex items-center justify-between font-mono tabular-nums text-2xs">
                       <span>Date:</span>
                       <span>{formatDate(inq.InquiryDate)}</span>
                     </div>

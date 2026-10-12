@@ -34,6 +34,7 @@ import {
   Th,
   Td,
   ConfirmModal,
+  PageHeader,
 } from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
 import { useUserSessions } from '../../context/UserSessionsContext';
@@ -135,59 +136,58 @@ export default function UserViewPage() {
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Navigation & Actions Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
+      <PageHeader
+        title={`${user.firstName} ${user.lastName}`}
+        backButton={
           <Link
             to="/users"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-heading transition-colors mb-1"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-heading transition-colors"
           >
             <ArrowLeft size={14} />
             Back to Users
           </Link>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-heading tracking-tight">
-              {user.firstName} {user.lastName}
-            </h1>
+        }
+        badge={
+          <span
+            className={[
+              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none',
+              user.isActive
+                ? 'bg-success/10 text-success border border-success/20'
+                : 'bg-danger/10 text-danger border border-danger/20',
+            ].join(' ')}
+          >
             <span
-              className={[
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none',
-                user.isActive
-                  ? 'bg-success/10 text-success border border-success/20'
-                  : 'bg-danger/10 text-danger border border-danger/20',
-              ].join(' ')}
+              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                user.isActive ? 'bg-success' : 'bg-danger'
+              }`}
+              aria-hidden="true"
+            />
+            {user.isActive ? 'Active' : 'Inactive'}
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setIsEditModalOpen(true)}
+              className="flex items-center gap-1.5 shadow-2xs"
             >
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  user.isActive ? 'bg-success' : 'bg-danger'
-                }`}
-                aria-hidden="true"
-              />
-              {user.isActive ? 'Active' : 'Inactive'}
-            </span>
+              <Pencil size={15} />
+              Edit User
+            </Button>
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => setIsDeleteModalOpen(true)}
+              className="text-danger hover:bg-danger/10 hover:text-danger flex items-center gap-1.5"
+            >
+              <Trash2 size={15} />
+              Delete
+            </Button>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => setIsEditModalOpen(true)}
-            className="flex items-center gap-1.5 shadow-2xs"
-          >
-            <Pencil size={15} />
-            Edit User
-          </Button>
-          <Button
-            variant="ghost"
-            size="md"
-            onClick={() => setIsDeleteModalOpen(true)}
-            className="text-danger hover:bg-danger/10 hover:text-danger flex items-center gap-1.5"
-          >
-            <Trash2 size={15} />
-            Delete
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ════════════════════════════════════════════════════════════════ */}
       {/* CARD 1: User Details Card                                        */}
@@ -364,7 +364,7 @@ export default function UserViewPage() {
                             {getDeviceIcon(sess.device)}
                             {sess.device}
                           </span>
-                          <span className="text-[11px] text-text-muted truncate">
+                          <span className="text-2xs text-text-muted truncate">
                             {sess.browser} • {sess.os}
                           </span>
                         </div>
@@ -372,7 +372,7 @@ export default function UserViewPage() {
 
                       {/* Status Badge */}
                       <Td>
-                        <Badge variant={status.variant} className="text-[11px] px-2.5 py-0.5">
+                        <Badge variant={status.variant} className="text-2xs px-2.5 py-0.5">
                           {status.label}
                         </Badge>
                       </Td>
@@ -385,7 +385,7 @@ export default function UserViewPage() {
             <div className="py-10 text-center text-text-muted">
               <History size={26} className="mx-auto text-text-muted/50 mb-2" />
               <p className="font-semibold text-heading text-xs">No login history yet</p>
-              <p className="text-[11px] mt-0.5">This user has not authenticated to the system.</p>
+              <p className="text-2xs mt-0.5">This user has not authenticated to the system.</p>
             </div>
           )}
         </div>
@@ -420,26 +420,26 @@ export default function UserViewPage() {
                       {getDeviceIcon(sess.device)}
                       <span className="text-xs font-bold text-heading">{sess.device}</span>
                     </div>
-                    <Badge variant={status.variant} className="text-[11px] px-2 py-0.5">
+                    <Badge variant={status.variant} className="text-2xs px-2 py-0.5">
                       {status.label}
                     </Badge>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/60">
                     <div>
-                      <span className="text-[10px] text-text-muted uppercase block">Login Time</span>
+                      <span className="text-2xs text-text-muted uppercase block">Login Time</span>
                       <span className="font-mono tabular-nums text-heading font-medium">
                         {formatDateTime(sess.loginAt)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-text-muted uppercase block">Logout Time</span>
+                      <span className="text-2xs text-text-muted uppercase block">Logout Time</span>
                       <span className="font-mono tabular-nums text-text-muted">
                         {sess.logoutAt ? formatDateTime(sess.logoutAt) : '—'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-text-muted uppercase block">Duration</span>
+                      <span className="text-2xs text-text-muted uppercase block">Duration</span>
                       <span
                         className={`font-mono tabular-nums ${
                           isActive ? 'text-success font-semibold' : 'text-heading'
@@ -449,14 +449,14 @@ export default function UserViewPage() {
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-text-muted uppercase block">IP Address</span>
+                      <span className="text-2xs text-text-muted uppercase block">IP Address</span>
                       <span className="font-mono tabular-nums text-text-muted">
                         {sess.ipAddress}
                       </span>
                     </div>
                   </div>
 
-                  <div className="text-[11px] text-text-muted pt-1 border-t border-border/40 truncate">
+                  <div className="text-2xs text-text-muted pt-1 border-t border-border/40 truncate">
                     {sess.browser} • {sess.os}
                   </div>
                 </div>
@@ -466,7 +466,7 @@ export default function UserViewPage() {
             <div className="p-8 text-center bg-surface/30 border border-dashed border-border rounded-xl text-text-muted">
               <History size={24} className="mx-auto text-text-muted/50 mb-1.5" />
               <p className="font-semibold text-heading text-xs">No login history yet</p>
-              <p className="text-[11px] mt-0.5">This user has not authenticated to the system.</p>
+              <p className="text-2xs mt-0.5">This user has not authenticated to the system.</p>
             </div>
           )}
         </div>

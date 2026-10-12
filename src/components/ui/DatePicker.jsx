@@ -317,9 +317,9 @@ export default function DatePicker({
           htmlFor={id}
           className="form-label flex items-center justify-between"
         >
-          <span>
+          <span className="mf-label">
             {label}
-            {required && <span className="form-label-required" aria-hidden="true">*</span>}
+            {required && <span className="mf-required" aria-hidden="true">*</span>}
           </span>
         </label>
       )}
@@ -338,8 +338,8 @@ export default function DatePicker({
             }
           }}
           className={[
-            'w-full flex items-center justify-between rounded-lg border bg-bg text-text text-sm text-left',
-            'px-3 py-2.5 leading-snug cursor-pointer select-none transition-all duration-150',
+            'w-full h-10 flex items-center justify-between rounded-control border bg-bg text-text text-sm text-left',
+            'px-3 leading-snug cursor-pointer select-none transition-all duration-150',
             hasError
               ? 'border-danger focus:ring-danger/20 focus:border-danger'
               : isOpen
@@ -389,12 +389,12 @@ export default function DatePicker({
 
       {/* Field Error / Hint */}
       {hasError && (
-        <p id={`${id}-error`} role="alert" className="text-xs text-danger flex items-center gap-1">
+        <p id={`${id}-error`} role="alert" className="mf-error flex items-center gap-1">
           {error}
         </p>
       )}
       {!hasError && hint && (
-        <p id={`${id}-hint`} className="text-xs text-text-muted">
+        <p id={`${id}-hint`} className="mf-hint">
           {hint}
         </p>
       )}
@@ -410,7 +410,7 @@ export default function DatePicker({
             width: `${coords.width}px`,
             zIndex: 99999,
           }}
-          className="bg-bg border border-border rounded-xl shadow-xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100 select-none text-text"
+          className="bg-bg border border-border rounded-modal shadow-dropdown overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100 select-none text-text"
           role="dialog"
           aria-label="Calendar date picker"
         >
@@ -525,7 +525,7 @@ export default function DatePicker({
                   {DAY_NAMES.map((d, i) => (
                     <div
                       key={d}
-                      className={`text-[11px] font-bold py-1 ${
+                      className={`text-2xs font-bold py-1 ${
                         i === 0 || i === 6 ? 'text-primary/80' : 'text-text-muted'
                       }`}
                     >

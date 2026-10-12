@@ -168,11 +168,11 @@ function NavItem({ item, collapsed, onClick }) {
               transform: 'translateY(-50%)',
               zIndex: 99999,
             }}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in duration-100"
+            className="flex items-center gap-2 px-3 py-1.5 bg-heading text-bg text-xs font-semibold rounded-control shadow-dropdown whitespace-nowrap pointer-events-none animate-in fade-in duration-100"
           >
             <span>{item.label}</span>
             {item.badge && (
-              <span className="px-1.5 py-0.2 bg-primary text-white text-[10px] font-bold rounded-full">
+              <span className="px-1.5 py-0.5 bg-primary text-on-primary text-2xs font-bold rounded-badge">
                 {item.badge}
               </span>
             )}
@@ -351,7 +351,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
               onMouseLeave={handleFlyoutMouseLeave}
               className="w-56 bg-bg border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
             >
-              <div className="px-3.5 py-2.5 border-b border-border bg-surface/70 text-[10.5px] font-bold tracking-wider text-text-muted uppercase flex items-center justify-between">
+              <div className="px-3.5 py-2.5 border-b border-border bg-surface/70 text-2xs font-bold tracking-wider text-text-muted uppercase flex items-center justify-between">
                 <span>{item.label}</span>
                 {Icon && <Icon size={13} className="text-text-muted" />}
               </div>
@@ -642,7 +642,7 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
               onChange={(e) => setNavSearch(e.target.value)}
               className="w-full pl-8 pr-14 py-1.5 text-xs rounded-lg bg-surface/80 border border-border text-heading placeholder:text-text-muted focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
             />
-            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[9.5px] font-mono font-medium text-text-muted/80 bg-bg border border-border/80 rounded shadow-2xs pointer-events-none">
+            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-2xs font-mono font-medium text-text-muted/80 bg-bg border border-border/80 rounded shadow-2xs pointer-events-none">
               Ctrl K
             </kbd>
           </div>
@@ -658,7 +658,7 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
           <div key={sec.section || sIdx} className="space-y-1">
             {/* Section Category Title */}
             {!collapsed && sec.section && (
-              <div className="px-2 pt-2 pb-1 text-[10px] font-bold tracking-wider text-text-muted/80 uppercase">
+              <div className="px-2 pt-2 pb-1 text-2xs font-bold tracking-wider text-text-muted/80 uppercase">
                 {sec.section}
               </div>
             )}
@@ -716,11 +716,11 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <p className="text-xs font-semibold text-heading truncate">{user.name}</p>
-                <span className="px-1.5 py-0.2 bg-primary/10 text-primary text-[9.5px] font-bold rounded-md">
+                <span className="px-1.5 py-0.2 bg-primary/10 text-primary text-2xs font-bold rounded-md">
                   {user.role}
                 </span>
               </div>
-              <div className="flex items-center gap-1 mt-0.5 text-[10.5px] text-text-muted">
+              <div className="flex items-center gap-1 mt-0.5 text-2xs text-text-muted">
                 <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
                 <span className="truncate">Connected (Live)</span>
               </div>

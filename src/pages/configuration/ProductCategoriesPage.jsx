@@ -37,6 +37,8 @@ import {
   Th,
   Td,
   StatusSwitch,
+  PageHeader,
+  FilterBar,
 } from '../../components/ui';
 import { formatDate } from '../../utils/dateUtils';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
@@ -534,18 +536,11 @@ export default function ProductCategoriesPage() {
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Header Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <FolderTree className="h-6 w-6 text-primary" aria-hidden="true" />
-            Product Categories
-          </h1>
-          <p className="text-xs text-text-muted mt-1">
-            Manage hierarchical precision metrology categories, parent-child structures & inquiry classification options.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+      <PageHeader
+        title="Product Categories"
+        icon={FolderTree}
+        subtitle="Manage hierarchical precision metrology categories, parent-child structures & inquiry classification options."
+        actions={
           <Button
             variant="primary"
             size="md"
@@ -555,35 +550,33 @@ export default function ProductCategoriesPage() {
             <Plus size={16} className="mr-1.5" />
             Add Category
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Toolbar: Search, Status Filter & Tree View Helpers ── */}
-      <Card padding="sm" className="bg-bg">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          {/* Search Input */}
-          <div className="relative flex-1 max-w-md">
-            <Search
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-            />
-            <input
-              type="text"
-              placeholder="Search by code or category name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-bg border border-border rounded-lg text-text placeholder:text-text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
+      <FilterBar>
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <Input
+            id="search-product-categories"
+            type="text"
+            placeholder="Search by code or category name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            leftIcon={<Search size={15} />}
+            rightElement={
+              searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-text-muted hover:text-text cursor-pointer p-1"
+                >
+                  <X size={14} />
+                </button>
+              ) : null
+            }
+          />
+        </div>
 
           {/* Status Filter Chips & Expand Controls */}
           <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5">
@@ -622,8 +615,7 @@ export default function ProductCategoriesPage() {
               </button>
             </div>
           </div>
-        </div>
-      </Card>
+      </FilterBar>
 
       {/* ── Desktop View (md+): Hierarchical Resizable Table ── */}
       <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden shadow-2xs">
@@ -765,7 +757,7 @@ export default function ProductCategoriesPage() {
                       {cat.categoryCode}
                     </span>
                     {cat.depth > 0 && (
-                      <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">
+                      <span className="text-2xs text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">
                         Level {cat.depth + 1}
                       </span>
                     )}
@@ -798,7 +790,7 @@ export default function ProductCategoriesPage() {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-text-muted pt-2 border-t border-border">
+              <div className="flex items-center justify-between text-2xs text-text-muted pt-2 border-t border-border">
                 <span className="font-mono">Created: {formatDate(cat.createdOn)}</span>
                 <div className="flex items-center gap-1.5">
                   {!cat.parentCategoryId && (

@@ -276,7 +276,7 @@ export default function UserFormModal({
             <label className="form-label block mb-1.5">
               Account Status <span className="form-label-required" aria-hidden="true">*</span>
             </label>
-            <div className="flex items-center h-[42px]">
+            <div className="flex items-center h-control">
               <StatusSwitch
                 id="user-status-switch"
                 checked={form.isActive}

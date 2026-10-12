@@ -42,6 +42,7 @@ import {
   Badge,
   Card,
   Modal,
+  PageHeader,
 } from '../../components/ui';
 import { formatDate } from '../../utils/dateUtils';
 import { useVendorsContext } from '../../context/VendorsContext';
@@ -499,46 +500,44 @@ export default function VendorFormPage() {
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-6 pb-20">
       {/* ── Top Page Header & Navigation ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-5">
-        <div>
+      <PageHeader
+        title={isEdit ? `Edit Vendor: ${existingVendor?.vendorName}` : 'Add New Vendor'}
+        icon={<Building2 className="h-6 w-6 text-primary" aria-hidden="true" />}
+        backButton={
           <button
             type="button"
             onClick={handleCancel}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer mb-3"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
             <ArrowLeft size={14} className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform duration-150" aria-hidden="true" />
             <span>Back to Vendors</span>
           </button>
-          <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <Building2 className="h-6 w-6 text-primary" aria-hidden="true" />
-            {isEdit ? `Edit Vendor: ${existingVendor?.vendorName}` : 'Add New Vendor'}
-          </h1>
-        </div>
-
-        {/* Top Action Buttons */}
-        <div className="flex items-center gap-3 shrink-0">
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={handleCancel}
-            disabled={loading}
-          >
-            <X size={16} className="mr-1.5" aria-hidden="true" />
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            loading={loading}
-            disabled={loading}
-          >
-            <Save size={16} className="mr-1.5" aria-hidden="true" />
-            {isEdit ? 'Save Changes' : 'Create Vendor'}
-          </Button>
-        </div>
-      </div>
+        }
+        actions={
+          <div className="flex items-center gap-3 shrink-0">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={handleCancel}
+              disabled={loading}
+            >
+              <X size={16} className="mr-1.5" aria-hidden="true" />
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              loading={loading}
+              disabled={loading}
+            >
+              <Save size={16} className="mr-1.5" aria-hidden="true" />
+              {isEdit ? 'Save Changes' : 'Create Vendor'}
+            </Button>
+          </div>
+        }
+      />
 
       {/* ── SECTION 1: VENDOR MASTER DETAILS ── */}
       <Card padding="md" className="bg-bg">
@@ -630,7 +629,7 @@ export default function VendorFormPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {/* Contact Person Name */}
           <Input
             id="contactPersonName"
@@ -739,7 +738,7 @@ export default function VendorFormPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {/* Country (SearchableSelect) */}
           <SearchableSelect
             id="countryId"
@@ -794,25 +793,8 @@ export default function VendorFormPage() {
             autoComplete="address-level2"
           />
 
-          {/* Postal / Zip Code */}
-          <Input
-            id="zipCode"
-            name="zipCode"
-            type="text"
-            label="Postal / Zip Code"
-            placeholder="e.g. 380015"
-            required
-            maxLength={6}
-            value={form.zipCode}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.zipCode}
-            className="font-mono tabular-nums"
-            autoComplete="postal-code"
-          />
-
           {/* Address Line 1 */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-3">
             <Input
               id="address1"
               name="address1"
@@ -843,6 +825,23 @@ export default function VendorFormPage() {
               autoComplete="address-line2"
             />
           </div>
+
+          {/* Postal / Zip Code */}
+          <Input
+            id="zipCode"
+            name="zipCode"
+            type="text"
+            label="Postal / Zip Code"
+            placeholder="e.g. 380015"
+            required
+            maxLength={6}
+            value={form.zipCode}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.zipCode}
+            className="font-mono tabular-nums"
+            autoComplete="postal-code"
+          />
         </div>
       </Card>
 
@@ -943,7 +942,7 @@ export default function VendorFormPage() {
                   <p className="text-xs font-medium text-heading">
                     <span className="text-primary hover:underline font-semibold">Click to choose files</span> or drag & drop here
                   </p>
-                  <p className="text-[11px] text-text-muted mt-1">
+                  <p className="text-2xs text-text-muted mt-1">
                     Allowed formats: <strong className="text-heading font-medium">Images (PNG, JPG, WEBP)</strong> & <strong className="text-heading font-medium">PDF documents</strong> only (Max 15MB each)
                   </p>
                 </div>
@@ -965,7 +964,7 @@ export default function VendorFormPage() {
                   <Paperclip size={18} />
                 </div>
                 <p className="text-xs font-medium text-heading">No documents attached yet</p>
-                <p className="text-[11px] text-text-muted mt-0.5 max-w-sm mx-auto">
+                <p className="text-2xs text-text-muted mt-0.5 max-w-sm mx-auto">
                   Select a document name above and upload vendor credentials, GST certificates, MSME documents, or bank details.
                 </p>
               </div>
@@ -986,13 +985,13 @@ export default function VendorFormPage() {
                           {att.documentName}
                         </h4>
                         <p className="text-xs text-text-muted flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-[11px] text-text break-all">{att.fileName}</span>
+                          <span className="font-mono text-2xs text-text break-all">{att.fileName}</span>
                           <span>•</span>
-                          <span className="font-mono text-[11px]">{att.fileSize || 'Unknown size'}</span>
+                          <span className="font-mono text-2xs">{att.fileSize || 'Unknown size'}</span>
                           {att.uploadedAt && (
                             <>
                               <span>•</span>
-                              <span className="text-[11px] font-mono text-text-muted">Added: {att.uploadedAt}</span>
+                              <span className="text-2xs font-mono text-text-muted">Added: {att.uploadedAt}</span>
                             </>
                           )}
                         </p>
@@ -1066,7 +1065,7 @@ export default function VendorFormPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 {/* Approval Status */}
                 <div className="space-y-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted block">
+                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
                     Approval Status
                   </span>
                   <Badge variant={existingVendor.approvalStatus?.toLowerCase() || 'pending'}>
@@ -1077,7 +1076,7 @@ export default function VendorFormPage() {
                 {/* Approver Name */}
                 {existingVendor.approvalStatus !== 'Pending' && (
                   <div className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted block">
+                    <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
                       Approved / Reviewed By
                     </span>
                     <span className="text-xs font-medium text-heading">
@@ -1089,7 +1088,7 @@ export default function VendorFormPage() {
                 {/* Approval Date */}
                 {existingVendor.approvalStatus !== 'Pending' && (
                   <div className="space-y-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted block">
+                    <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
                       Approved Date
                     </span>
                     <span className="text-xs font-mono tabular-nums text-text">

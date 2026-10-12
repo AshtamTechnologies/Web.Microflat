@@ -507,7 +507,7 @@ export default function LoginPage({ initialMode = 'login' }) {
 
                 {/* Demo helper pills */}
                 <div className="pt-2 border-t border-border/70 space-y-2">
-                  <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider text-center select-none">
+                  <p className="text-2xs font-medium text-text-muted uppercase tracking-wider text-center select-none">
                     Demo Credentials (Click to test)
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -518,9 +518,9 @@ export default function LoginPage({ initialMode = 'login' }) {
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-heading">Standard User</span>
-                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Direct</span>
+                        <span className="text-2xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Direct</span>
                       </div>
-                      <p className="text-[11px] font-mono text-text-muted mt-0.5">admin@microflat.in</p>
+                      <p className="text-2xs font-mono text-text-muted mt-0.5">admin@microflat.in</p>
                     </button>
 
                     <button
@@ -530,9 +530,9 @@ export default function LoginPage({ initialMode = 'login' }) {
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-heading">First-Time User</span>
-                        <span className="text-[10px] bg-warning/10 text-warning px-1.5 py-0.5 rounded font-medium">Force Reset</span>
+                        <span className="text-2xs bg-warning/10 text-warning px-1.5 py-0.5 rounded font-medium">Force Reset</span>
                       </div>
-                      <p className="text-[11px] font-mono text-text-muted mt-0.5">newuser@microflat.in</p>
+                      <p className="text-2xs font-mono text-text-muted mt-0.5">newuser@microflat.in</p>
                     </button>
                   </div>
                 </div>
@@ -683,12 +683,12 @@ export default function LoginPage({ initialMode = 'login' }) {
                     <p className="text-xs font-semibold text-heading leading-tight">
                       {pendingUser?.name || 'Authorized User'}
                     </p>
-                    <p className="text-[11px] text-text-muted font-mono leading-tight mt-0.5">
+                    <p className="text-2xs text-text-muted font-mono leading-tight mt-0.5">
                       {pendingUser?.email || loginForm.identifier || 'user@microflat.in'}
                     </p>
                   </div>
                 </div>
-                <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                <span className="text-2xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                   {pendingUser?.role || 'User'}
                 </span>
               </div>

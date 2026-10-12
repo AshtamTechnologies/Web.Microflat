@@ -10,7 +10,7 @@
  * Sidebar width: collapsed=64px (w-16), expanded=240px (w-60).
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import { Menu, X, PanelLeftOpen } from 'lucide-react';
 import Sidebar from './Sidebar';
@@ -52,6 +52,15 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const title = usePageTitle();
+  const location = useLocation();
+  const mainRef = useRef(null);
+
+  // Ensure <main> scroll container resets to top on every navigation/redirect
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+  }, [location.pathname, location.search]);
 
   function toggleCollapsed() {
     const next = !collapsed;
@@ -176,7 +185,7 @@ export default function AppLayout() {
           </header>
 
           {/* ── Page content ── */}
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
+          <main ref={mainRef} className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
             <Outlet />
           </main>
         </div>

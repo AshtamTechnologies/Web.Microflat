@@ -59,6 +59,7 @@ import {
   TableContainer,
   Th,
   Td,
+  PageHeader,
 } from '../../components/ui';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useUsersContext } from '../../context/UsersContext';
@@ -74,7 +75,7 @@ import {
   UOM_OPTIONS,
 } from '../../mocks/inquiries';
 import { MOCK_MATERIALS } from '../../mocks/purchaseRequisitions';
-import { formatFileSizeKB } from '../../mocks/inquiryDocuments';
+import { formatFileSizeKB, getDocumentType } from '../../mocks/inquiryDocuments';
 
 const PRODUCT_SELECT_OPTIONS = [
   { value: '', label: '-- Select Product from Catalog --' },
@@ -249,6 +250,10 @@ export default function InquiryFormPage() {
   const { allUsers = [], users = [] } = useUsersContext();
   const { addDocument } = useInquiryDocumentsContext();
   const { documentTypes = [], getDocumentTypeById } = useDocumentTypesContext();
+
+  const resolveDocType = (typeId) => {
+    return getDocumentTypeById(typeId) || getDocumentType(typeId);
+  };
   const { categories = [] } = useProductCategoriesContext();
   const { regions = [], getRegionOptions } = useRegions();
 
@@ -899,7 +904,7 @@ export default function InquiryFormPage() {
     const lower = fileName.toLowerCase();
     if (lower.endsWith('.pdf')) return <FileText size={16} className="text-danger shrink-0" />;
     if (lower.endsWith('.docx') || lower.endsWith('.doc')) return <FileText size={16} className="text-primary shrink-0" />;
-    if (lower.endsWith('.dwg') || lower.endsWith('.dxf')) return <Layers size={16} className="text-blue-500 shrink-0" />;
+    if (lower.endsWith('.dwg') || lower.endsWith('.dxf')) return <Layers size={16} className="text-primary shrink-0" />;
     return <File size={16} className="text-text-muted shrink-0" />;
   };
 
@@ -1017,12 +1022,14 @@ export default function InquiryFormPage() {
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-6 pb-20">
       {/* ── Top Page Header & Navigation ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border-b border-border pb-4 sm:pb-5">
-        <div className="min-w-0">
+      <PageHeader
+        title={isEdit ? `Edit Inquiry: ${existingInquiry?.InquiryNo}` : 'New Inquiry / RFQ Registration'}
+        icon={<Inbox className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" aria-hidden="true" />}
+        backButton={
           <button
             type="button"
             onClick={handleCancel}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer mb-2 sm:mb-3"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
             <ArrowLeft
               size={14}
@@ -1031,52 +1038,48 @@ export default function InquiryFormPage() {
             />
             <span>Back to Inquiries</span>
           </button>
-          <h1 className="text-xl sm:text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <Inbox className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" aria-hidden="true" />
-            <span className="truncate">{isEdit ? `Edit Inquiry: ${existingInquiry?.InquiryNo}` : 'New Inquiry / RFQ Registration'}</span>
-          </h1>
-        </div>
-
-        {/* Top Action Buttons (Responsive for Steps & Mobile) */}
-        <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={handleCancel}
-            disabled={loading}
-            className="flex-1 sm:flex-initial"
-          >
-            <X size={16} className="mr-1.5" aria-hidden="true" />
-            Cancel
-          </Button>
-
-          {currentStep === 1 ? (
+        }
+        actions={
+          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
             <Button
               type="button"
-              variant="primary"
+              variant="secondary"
               size="md"
-              onClick={handleNextStep}
-              className="flex-1 sm:flex-initial justify-center"
-            >
-              <span>Next</span>
-              <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
-            </Button>
-          ) : (
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              loading={loading}
+              onClick={handleCancel}
               disabled={loading}
-              className="flex-1 sm:flex-initial justify-center"
+              className="flex-1 sm:flex-initial"
             >
-              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
-              {isEdit ? 'Save Changes' : 'Create Inquiry'}
+              <X size={16} className="mr-1.5" aria-hidden="true" />
+              Cancel
             </Button>
-          )}
-        </div>
-      </div>
+
+            {currentStep === 1 ? (
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={handleNextStep}
+                className="flex-1 sm:flex-initial justify-center"
+              >
+                <span>Next</span>
+                <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                loading={loading}
+                disabled={loading}
+                className="flex-1 sm:flex-initial justify-center"
+              >
+                <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
+                {isEdit ? 'Save Changes' : 'Create Inquiry'}
+              </Button>
+            )}
+          </div>
+        }
+      />
 
       {/* ── 2-STEP PROGRESS STEPPER ── */}
       <div className="bg-surface/60 border border-border rounded-xl p-2.5 sm:p-4">
@@ -1102,11 +1105,11 @@ export default function InquiryFormPage() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-[11px] sm:text-xs uppercase font-bold tracking-wider text-text-muted">
+                <span className="text-2xs sm:text-xs uppercase font-bold tracking-wider text-text-muted">
                   Step 1
                 </span>
                 {currentStep > 1 && (
-                  <Badge variant="success" className="text-[10px] py-0 px-1.5 font-semibold">
+                  <Badge variant="success" className="text-2xs py-0 px-1.5 font-semibold">
                     Completed
                   </Badge>
                 )}
@@ -1114,7 +1117,7 @@ export default function InquiryFormPage() {
               <p className="text-xs sm:text-sm font-semibold text-heading truncate">
                 Inquiry & Customer Details
               </p>
-              <p className="text-[11px] text-text-muted truncate">
+              <p className="text-2xs text-text-muted truncate">
                 Inquiry info, Customer profile & Requirements
               </p>
             </div>
@@ -1143,11 +1146,11 @@ export default function InquiryFormPage() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-[11px] sm:text-xs uppercase font-bold tracking-wider text-text-muted">
+                <span className="text-2xs sm:text-xs uppercase font-bold tracking-wider text-text-muted">
                   Step 2
                 </span>
                 {currentStep === 2 && (
-                  <Badge variant="primary" className="text-[10px] py-0 px-1.5 font-semibold">
+                  <Badge variant="primary" className="text-2xs py-0 px-1.5 font-semibold">
                     Active Step
                   </Badge>
                 )}
@@ -1155,7 +1158,7 @@ export default function InquiryFormPage() {
               <p className="text-xs sm:text-sm font-semibold text-heading truncate">
                 Assignment, Notes & Documents
               </p>
-              <p className="text-[11px] text-text-muted truncate">
+              <p className="text-2xs text-text-muted truncate">
                 Team assignment, Initial comments & Attachments
               </p>
             </div>
@@ -1468,7 +1471,7 @@ export default function InquiryFormPage() {
               <div className="flex items-center gap-2 text-heading font-semibold text-base">
                 <Package size={18} className="text-primary shrink-0" aria-hidden="true" />
                 <span>3. Product Selection</span>
-                <span className="text-[11px] font-medium text-text-muted bg-surface border border-border px-2 py-0.5 rounded-full">
+                <span className="text-2xs font-medium text-text-muted bg-surface border border-border px-2 py-0.5 rounded-full">
                   Optional
                 </span>
               </div>
@@ -1498,7 +1501,7 @@ export default function InquiryFormPage() {
                     <h4 className="text-sm font-bold text-heading">
                       {editingItemId ? 'Edit Inquiry Product Item' : 'Add Item to Inquiry'}
                     </h4>
-                    <p className="text-[11px] text-text-muted">
+                    <p className="text-2xs text-text-muted">
                       Select product category, catalog item or enter specifications, quantity and unit below.
                     </p>
                   </div>
@@ -1669,7 +1672,7 @@ export default function InquiryFormPage() {
                   <span className="text-xs font-bold text-heading uppercase tracking-wider">
                     Selected Inquiry Products
                   </span>
-                  <Badge variant="role" className="text-[11px] px-2 py-0.5 font-mono">
+                  <Badge variant="role" className="text-2xs px-2 py-0.5 font-mono">
                     {(form.items || []).length} {(form.items || []).length === 1 ? 'Item' : 'Items'}
                   </Badge>
                 </div>
@@ -1700,67 +1703,121 @@ export default function InquiryFormPage() {
               </div>
 
               {(form.items || []).length > 0 ? (
-                <TableContainer>
-                  <thead>
-                    <tr>
-                      <Th className="w-10 text-center">
-                        <Checkbox
-                          checked={
-                            (form.items || []).length > 0 &&
-                            selectedItemIds.size === (form.items || []).length
-                          }
-                          onChange={handleToggleSelectAllItems}
-                          aria-label="Select all products"
-                        />
-                      </Th>
-                      <Th className="w-10 text-center">#</Th>
-                      <Th>PRODUCT CATEGORY</Th>
-                      <Th>ITEM CODE</Th>
-                      <Th>SPECIFICATION</Th>
-                      <Th className="text-right">QTY</Th>
-                      <Th>UOM</Th>
-                      <Th className="text-right w-24">ACTIONS</Th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
+                <>
+                  {/* Desktop / Tablet Table View (md+) */}
+                  <div className="hidden md:block">
+                    <TableContainer tableClassName="w-full min-w-[760px] text-left border-collapse text-xs">
+                      <thead>
+                        <tr>
+                          <Th className="w-10 text-center">
+                            <Checkbox
+                              checked={
+                                (form.items || []).length > 0 &&
+                                selectedItemIds.size === (form.items || []).length
+                              }
+                              onChange={handleToggleSelectAllItems}
+                              aria-label="Select all products"
+                            />
+                          </Th>
+                          <Th className="w-10 text-center">#</Th>
+                          <Th className="min-w-[140px]">PRODUCT CATEGORY</Th>
+                          <Th className="w-32">ITEM CODE</Th>
+                          <Th className="min-w-[160px]">SPECIFICATION</Th>
+                          <Th className="text-right w-20">QTY</Th>
+                          <Th className="w-20">UOM</Th>
+                          <Th className="text-right w-24">ACTIONS</Th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {(form.items || []).map((item, idx) => {
+                          const itemId = item.prItemId || item.id || idx;
+                          const isRowSelected = selectedItemIds.has(itemId);
+                          return (
+                            <tr
+                              key={itemId}
+                              className={`hover:bg-surface/50 transition-colors ${
+                                isRowSelected ? 'bg-primary/[0.04]' : ''
+                              }`}
+                            >
+                              <Td className="text-center">
+                                <Checkbox
+                                  checked={isRowSelected}
+                                  onChange={() => handleToggleSelectItem(itemId)}
+                                  aria-label={`Select item ${idx + 1}`}
+                                />
+                              </Td>
+                              <Td className="text-center font-mono text-xs text-text-muted">
+                                {idx + 1}
+                              </Td>
+                              <Td className="text-xs font-medium text-heading">
+                                {item.categoryName || getCategoryPathName(item.categoryId || form.CategoryId, categories) || '—'}
+                              </Td>
+                              <Td>
+                                <span className="font-mono text-xs font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
+                                  {item.itemCode || '—'}
+                                </span>
+                              </Td>
+                              <Td className="text-xs text-text-muted max-w-xs truncate" title={item.specification}>
+                                {item.specification || '—'}
+                              </Td>
+                              <Td className="text-right font-mono tabular-nums text-xs font-bold text-heading">
+                                {item.quantity}
+                              </Td>
+                              <Td className="text-xs text-text-muted font-mono">
+                                {item.uom}
+                              </Td>
+                              <Td className="text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditItem(item, idx)}
+                                    className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
+                                    title="Edit item"
+                                  >
+                                    <Pencil size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setItemToDelete({ item, index: idx })}
+                                    className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 transition-all cursor-pointer shadow-2xs"
+                                    title="Remove item"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </Td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </TableContainer>
+                  </div>
+
+                  {/* Mobile Stacked Card View (< md) */}
+                  <div className="block md:hidden divide-y divide-border">
                     {(form.items || []).map((item, idx) => {
                       const itemId = item.prItemId || item.id || idx;
                       const isRowSelected = selectedItemIds.has(itemId);
                       return (
-                        <tr
+                        <div
                           key={itemId}
-                          className={`hover:bg-surface/50 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : ''
-                            }`}
+                          className={`p-3.5 space-y-2.5 transition-colors ${
+                            isRowSelected ? 'bg-primary/[0.04]' : 'hover:bg-surface/40'
+                          }`}
                         >
-                          <Td className="text-center">
-                            <Checkbox
-                              checked={isRowSelected}
-                              onChange={() => handleToggleSelectItem(itemId)}
-                              aria-label={`Select item ${idx + 1}`}
-                            />
-                          </Td>
-                          <Td className="text-center font-mono text-xs text-text-muted">
-                            {idx + 1}
-                          </Td>
-                          <Td className="text-xs font-medium text-heading">
-                            {item.categoryName || getCategoryPathName(item.categoryId || form.CategoryId, categories) || '—'}
-                          </Td>
-                          <Td>
-                            <span className="font-mono text-xs font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
-                              {item.itemCode || '—'}
-                            </span>
-                          </Td>
-                          <Td className="text-xs text-text-muted max-w-xs truncate" title={item.specification}>
-                            {item.specification || '—'}
-                          </Td>
-                          <Td className="text-right font-mono tabular-nums text-xs font-bold text-heading">
-                            {item.quantity}
-                          </Td>
-                          <Td className="text-xs text-text-muted font-mono">
-                            {item.uom}
-                          </Td>
-                          <Td className="text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Checkbox
+                                checked={isRowSelected}
+                                onChange={() => handleToggleSelectItem(itemId)}
+                                aria-label={`Select item ${idx + 1}`}
+                              />
+                              <span className="font-mono text-2xs text-text-muted">#{idx + 1}</span>
+                              <span className="font-mono text-xs font-bold text-heading bg-surface border border-border px-2 py-0.5 rounded-md truncate">
+                                {item.itemCode || '—'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <button
                                 type="button"
                                 onClick={() => handleStartEditItem(item, idx)}
@@ -1778,12 +1835,30 @@ export default function InquiryFormPage() {
                                 <Trash2 size={13} />
                               </button>
                             </div>
-                          </Td>
-                        </tr>
+                          </div>
+
+                          <div className="text-xs space-y-1">
+                            <div className="text-text-muted">
+                              Category: <span className="font-medium text-heading">{item.categoryName || getCategoryPathName(item.categoryId || form.CategoryId, categories) || '—'}</span>
+                            </div>
+                            {item.specification && (
+                              <div className="text-text-muted text-2xs bg-surface/60 p-2 rounded border border-border/60 break-words">
+                                {item.specification}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-border/60 font-mono">
+                            <span className="text-text-muted">Quantity:</span>
+                            <span className="font-bold text-heading text-sm">
+                              {item.quantity} <span className="text-xs font-normal text-text-muted">{item.uom}</span>
+                            </span>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </TableContainer>
+                  </div>
+                </>
               ) : (
                 <div className="py-8 text-center text-text-muted text-xs space-y-1">
                   <Package size={24} className="mx-auto text-text-muted/40 mb-1" />
@@ -1890,7 +1965,7 @@ export default function InquiryFormPage() {
                     <MessageSquare size={14} className="text-primary shrink-0" />
                     <span>Initial Comment / Handover Note (Optional)</span>
                   </label>
-                  <span className="text-[11px] text-text-muted font-normal">
+                  <span className="text-2xs text-text-muted font-normal">
                     Automatically logged into inquiry activity upon saving
                   </span>
                 </div>
@@ -1939,13 +2014,13 @@ export default function InquiryFormPage() {
                       onChange={(e) => {
                         setStageDocTypeId(e.target.value);
                         if (stageDocFile) {
-                          const err = validateFile(stageDocFile, getDocumentType(e.target.value));
+                          const err = validateFile(stageDocFile, resolveDocType(e.target.value));
                           setStageFileError(err);
                         }
                       }}
                     />
                     {activeStagedDocType && (
-                      <p className="text-[11px] text-text-muted pt-0.5">
+                      <p className="text-2xs text-text-muted pt-0.5">
                         Allowed: <strong className="font-mono text-heading">{activeStagedDocType.allowedExtensions.join(', ')}</strong> • Max: <strong className="font-mono text-heading">{activeStagedDocType.maxSizeMB}MB</strong>
                       </p>
                     )}
@@ -2025,7 +2100,7 @@ export default function InquiryFormPage() {
                             <p className="text-xs font-bold text-heading font-mono truncate">
                               {stageDocFile.name}
                             </p>
-                            <p className="text-[11px] text-text-muted font-mono tabular-nums">
+                            <p className="text-2xs text-text-muted font-mono tabular-nums">
                               {formatFileSizeKB(Math.round(stageDocFile.size / 1024))}
                             </p>
                           </div>
@@ -2053,7 +2128,7 @@ export default function InquiryFormPage() {
                         <p className="text-xs font-semibold text-heading">
                           Click to choose file or drag & drop here
                         </p>
-                        <p className="text-[11px] text-text-muted mt-0.5">
+                        <p className="text-2xs text-text-muted mt-0.5">
                           {activeStagedDocType
                             ? `Allowed formats: ${activeStagedDocType.allowedExtensions.join(', ')} (Max ${activeStagedDocType.maxSizeMB}MB)`
                             : 'Select document type above'}
@@ -2109,14 +2184,14 @@ export default function InquiryFormPage() {
                     <span className="text-xs font-bold text-heading">
                       Queued Attachments ({form.attachments.length})
                     </span>
-                    <span className="text-[11px] text-text-muted">
+                    <span className="text-2xs text-text-muted">
                       Will be uploaded upon inquiry creation
                     </span>
                   </div>
 
                   <table className="w-full min-w-[540px] text-xs text-left">
                     <thead>
-                      <tr className="bg-surface/30 border-b border-border/70 text-[11px] font-semibold text-text-muted">
+                      <tr className="bg-surface/30 border-b border-border/70 text-2xs font-semibold text-text-muted">
                         <th className="py-2.5 px-4 w-28">TYPE</th>
                         <th className="py-2.5 px-4 min-w-[140px]">DOCUMENT TITLE</th>
                         <th className="py-2.5 px-4 min-w-[180px]">FILE NAME</th>
@@ -2127,12 +2202,12 @@ export default function InquiryFormPage() {
                     </thead>
                     <tbody className="divide-y divide-border/60">
                       {form.attachments.map((att) => {
-                        const docType = getDocumentType(att.documentTypeId);
+                        const docType = resolveDocType(att.documentTypeId);
                         return (
                           <tr key={att.id} className="hover:bg-surface/30 transition-colors">
                             <td className="py-2.5 px-4">
                               <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${docType.badgeClass}`}
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold border ${docType.badgeClass}`}
                               >
                                 {docType.typeName}
                               </span>
@@ -2240,11 +2315,11 @@ export default function InquiryFormPage() {
           <div className="space-y-4">
             <div className="p-3.5 bg-surface rounded-xl border border-border space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider">
                   Document Type
                 </span>
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${getDocumentType(previewAttachment.documentTypeId).badgeClass}`}>
-                  {getDocumentType(previewAttachment.documentTypeId).typeName}
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${resolveDocType(previewAttachment.documentTypeId)?.badgeClass || 'bg-surface text-text-muted border-border'}`}>
+                  {resolveDocType(previewAttachment.documentTypeId)?.typeName || 'Document'}
                 </span>
               </div>
               <p className="text-sm font-bold text-heading">
@@ -2260,7 +2335,7 @@ export default function InquiryFormPage() {
 
             {previewAttachment.remarks && (
               <div className="p-3 bg-bg rounded-lg border border-border text-xs text-text">
-                <span className="text-text-muted block text-[11px] font-medium mb-0.5">Remarks</span>
+                <span className="text-text-muted block text-2xs font-medium mb-0.5">Remarks</span>
                 <p className="text-heading">{previewAttachment.remarks}</p>
               </div>
             )}

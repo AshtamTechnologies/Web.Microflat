@@ -11,22 +11,22 @@ import { AlertCircle, AlertTriangle, Info, CheckCircle2, X } from 'lucide-react'
 
 const VARIANT_STYLES = {
   danger: {
-    container: 'border-danger/30 bg-danger/10 text-danger',
+    container: 'border-danger-border bg-danger-bg text-danger',
     icon: AlertCircle,
     dismiss: 'text-danger/70 hover:text-danger hover:bg-danger/10 focus-visible:outline-danger',
   },
   warning: {
-    container: 'border-warning/30 bg-warning/10 text-warning',
+    container: 'border-warning-border bg-warning-bg text-warning',
     icon: AlertTriangle,
     dismiss: 'text-warning/70 hover:text-warning hover:bg-warning/10 focus-visible:outline-warning',
   },
   info: {
-    container: 'border-primary/30 bg-primary/10 text-primary',
+    container: 'border-info-border bg-info-bg text-info',
     icon: Info,
-    dismiss: 'text-primary/70 hover:text-primary hover:bg-primary/10 focus-visible:outline-primary',
+    dismiss: 'text-info/70 hover:text-info hover:bg-info/10 focus-visible:outline-primary',
   },
   success: {
-    container: 'border-success/30 bg-success/10 text-success',
+    container: 'border-success-border bg-success-bg text-success',
     icon: CheckCircle2,
     dismiss: 'text-success/70 hover:text-success hover:bg-success/10 focus-visible:outline-success',
   },
@@ -43,7 +43,7 @@ export default function ErrorBanner({ message, onDismiss, variant = 'danger' }) 
       role="alert"
       aria-live="assertive"
       className={[
-        'flex items-start gap-3 rounded-xl px-4 py-3 border',
+        'flex items-start gap-3 rounded-control px-4 py-3 border',
         currentVariant.container,
         'text-sm leading-snug',
       ].join(' ')}
@@ -60,7 +60,7 @@ export default function ErrorBanner({ message, onDismiss, variant = 'danger' }) 
           onClick={onDismiss}
           aria-label="Dismiss alert"
           className={[
-            'shrink-0 rounded p-0.5',
+            'shrink-0 rounded-control p-0.5',
             currentVariant.dismiss,
             'transition-colors duration-150 cursor-pointer',
           ].join(' ')}

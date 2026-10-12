@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { UserPlus, UserCheck, MessageSquare, AlertCircle } from 'lucide-react';
-import { Modal, Button, SearchableSelect } from '../../../components/ui';
+import { Modal, Button, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiriesContext } from '../../../context/InquiriesContext';
 import { useUsersContext } from '../../../context/UsersContext';
 
@@ -124,23 +124,14 @@ export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
         </div>
 
         {/* Remarks */}
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="assignee-remarks"
-            className="text-sm font-medium text-heading leading-none flex items-center gap-1.5"
-          >
-            <MessageSquare size={14} className="text-text-muted" />
-            <span>Assignment Remarks / Handover Note (Optional)</span>
-          </label>
-          <textarea
-            id="assignee-remarks"
-            rows={3}
-            value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
-            placeholder="e.g. Assigned for technical feasibility review and BOM pricing estimate..."
-            className="w-full rounded-lg border border-border bg-bg text-text text-sm p-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-text-muted/60"
-          />
-        </div>
+        <Textarea
+          id="assignee-remarks"
+          label="Assignment Remarks / Handover Note (Optional)"
+          rows={3}
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          placeholder="e.g. Assigned for technical feasibility review and BOM pricing estimate..."
+        />
 
         {/* Modal Action Buttons */}
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">

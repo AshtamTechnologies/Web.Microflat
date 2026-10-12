@@ -23,7 +23,7 @@ export default function Toggle({
     <label
       htmlFor={id}
       className={[
-        'inline-flex items-center gap-3 cursor-pointer select-none',
+        'inline-flex items-center gap-3 cursor-pointer select-none mf-label',
         disabled ? 'opacity-50 cursor-not-allowed' : '',
         className,
       ]
@@ -47,8 +47,7 @@ export default function Toggle({
       <span
         aria-hidden="true"
         className={[
-          /* track — w=40px h=22px */
-          'relative inline-flex shrink-0 rounded-full',
+          'relative inline-flex shrink-0 w-10 h-6 rounded-full',
           'transition-colors duration-200 ease-in-out',
           'border-2 border-transparent',
           checked ? 'bg-primary' : 'bg-border',
@@ -56,17 +55,19 @@ export default function Toggle({
         ]
           .filter(Boolean)
           .join(' ')}
-        style={{ width: '40px', height: '22px' }}
       >
         {/* Thumb */}
         <span
-          className="block w-4 h-4 rounded-full bg-white shadow-sm absolute top-0.5 transition-transform duration-200 ease-in-out"
-          style={{ transform: checked ? 'translateX(18px)' : 'translateX(2px)' }}
+          className={[
+            'block w-4 h-4 rounded-full bg-bg shadow-sm absolute top-0.5',
+            'transition-transform duration-200 ease-in-out',
+            checked ? 'translate-x-4.5' : 'translate-x-0.5',
+          ].join(' ')}
         />
       </span>
 
       {label && (
-        <span className="text-sm text-text">{label}</span>
+        <span className="text-sm text-text font-normal">{label}</span>
       )}
     </label>
   );

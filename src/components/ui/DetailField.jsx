@@ -22,7 +22,7 @@ import { ExternalLink } from 'lucide-react';
 export default function DetailField({
   label,
   value,
-  icon: Icon,
+  icon,
   mono = false,
   isLink = false,
   href = '',
@@ -34,6 +34,16 @@ export default function DetailField({
   children,
 }) {
   const hasContent = value !== undefined && value !== null && value !== '' && value !== false;
+
+  const renderIcon = (extraClass = '') => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) return icon;
+    if (typeof icon === 'function' || typeof icon === 'object') {
+      const IconComponent = icon;
+      return <IconComponent size={14} className={`shrink-0 ${extraClass}`} />;
+    }
+    return null;
+  };
 
   const renderContent = () => {
     if (children) {
@@ -50,7 +60,7 @@ export default function DetailField({
           href={`mailto:${value}`}
           className="font-medium text-primary hover:underline inline-flex items-center gap-1.5 truncate max-w-full"
         >
-          {Icon && <Icon size={14} className="shrink-0 text-primary/80" />}
+          {renderIcon('text-primary/80')}
           <span className="truncate">{value}</span>
         </a>
       );
@@ -64,7 +74,7 @@ export default function DetailField({
             mono ? 'font-mono tabular-nums' : ''
           }`}
         >
-          {Icon && <Icon size={14} className="shrink-0 text-text-muted" />}
+          {renderIcon('text-text-muted')}
           <span>{value}</span>
         </a>
       );
@@ -80,7 +90,7 @@ export default function DetailField({
           rel="noreferrer"
           className="text-primary hover:underline inline-flex items-center gap-1 break-all"
         >
-          {Icon && <Icon size={14} className="shrink-0" />}
+          {renderIcon()}
           <span>{value}</span>
           <ExternalLink size={12} className="shrink-0" />
         </a>
@@ -93,7 +103,7 @@ export default function DetailField({
           mono ? 'font-mono' : ''
         } ${valueClassName}`}
       >
-        {Icon && <Icon size={14} className="shrink-0 text-text-muted" />}
+        {renderIcon('text-text-muted')}
         <span className="break-words">{value}</span>
       </div>
     );

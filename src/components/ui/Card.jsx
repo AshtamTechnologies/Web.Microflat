@@ -2,17 +2,17 @@
  * Card — elevated surface container.
  *
  * Props:
- *   padding: 'none' | 'sm' | 'md' | 'lg'  (default: 'md')
- *   shadow:  boolean                        (default: false)
+ *   padding:   'none' | 'sm' | 'md' | 'lg'  (default: 'md')
+ *   shadow:    boolean                        (default: false)
  *   className: string
- *   children: ReactNode
+ *   children:  ReactNode
  */
 
 const paddingClasses = {
   none: '',
-  sm:   'p-4',
-  md:   'p-6',
-  lg:   'p-8',
+  sm:   'p-3 sm:p-4',
+  md:   'p-4 sm:p-6',
+  lg:   'p-6 sm:p-8',
 };
 
 export default function Card({
@@ -25,8 +25,8 @@ export default function Card({
   return (
     <div
       className={[
-        'rounded-xl border border-border bg-surface',
-        shadow ? 'shadow-sm' : '',
+        'rounded-card border border-border bg-surface',
+        shadow ? 'shadow-card' : '',
         paddingClasses[padding],
         className,
       ]

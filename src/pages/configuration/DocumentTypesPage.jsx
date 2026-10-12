@@ -37,6 +37,8 @@ import {
   Th,
   Td,
   StatusSwitch,
+  PageHeader,
+  FilterBar,
 } from '../../components/ui';
 import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useInquiryDocumentsContext } from '../../context/InquiryDocumentsContext';
@@ -250,7 +252,7 @@ export default function DocumentTypesPage() {
               {exts.map((ext) => (
                 <span
                   key={ext}
-                  className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-surface border border-border text-text shadow-2xs"
+                  className="inline-flex items-center px-2 py-0.5 rounded text-2xs font-mono font-medium bg-surface border border-border text-text shadow-2xs"
                 >
                   {ext}
                 </span>
@@ -277,11 +279,11 @@ export default function DocumentTypesPage() {
         minSize: 120,
         cell: ({ row }) =>
           row.original.isMandatory ? (
-            <Badge variant="warning" className="text-[11px] px-2 py-0.5">
+            <Badge variant="warning" className="text-2xs px-2 py-0.5">
               Required
             </Badge>
           ) : (
-            <Badge variant="neutral" className="text-[11px] px-2 py-0.5 opacity-80">
+            <Badge variant="neutral" className="text-2xs px-2 py-0.5 opacity-80">
               Optional
             </Badge>
           ),
@@ -376,59 +378,51 @@ export default function DocumentTypesPage() {
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Header Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <FileCheck className="h-6 w-6 text-primary" aria-hidden="true" />
-            Inquiry Document Types
-          </h1>
-          <p className="text-xs text-text-muted mt-1">
-            Configure allowed document attachments, allowed file extensions, file size limits & mandatory RFQ rules.
-          </p>
-        </div>
-
-        <Button
-          variant="primary"
-          size="md"
-          onClick={handleOpenAdd}
-          className="self-start sm:self-auto shrink-0 shadow-xs"
-        >
-          <Plus size={16} className="mr-1.5" />
-          Add Document Type
-        </Button>
-      </div>
+      <PageHeader
+        title="Inquiry Document Types"
+        icon={FileCheck}
+        subtitle="Configure allowed document attachments, allowed file extensions, file size limits & mandatory RFQ rules."
+        actions={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleOpenAdd}
+            className="self-start sm:self-auto shrink-0 shadow-xs"
+          >
+            <Plus size={16} className="mr-1.5" />
+            Add Document Type
+          </Button>
+        }
+      />
 
       {/* ── Search & Filter Toolbar ── */}
-      <Card padding="sm" className="bg-bg">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-            />
-            <input
-              type="text"
-              placeholder="Search by document type name..."
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-bg border border-border rounded-lg text-text placeholder:text-text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-            />
-            {globalFilter && (
-              <button
-                type="button"
-                onClick={() => setGlobalFilter('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
-          <div className="text-xs text-text-muted self-end sm:self-center font-mono">
-            {filteredData.length} {filteredData.length === 1 ? 'type' : 'types'}
-          </div>
+      <FilterBar>
+        <div className="relative flex-1 max-w-md">
+          <Input
+            id="search-doctypes"
+            type="text"
+            placeholder="Search by document type name..."
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            leftIcon={<Search size={15} />}
+            rightElement={
+              globalFilter ? (
+                <button
+                  type="button"
+                  onClick={() => setGlobalFilter('')}
+                  className="text-text-muted hover:text-text cursor-pointer p-1"
+                >
+                  <X size={14} />
+                </button>
+              ) : null
+            }
+          />
         </div>
-      </Card>
+
+        <div className="text-xs text-text-muted self-end sm:self-center font-mono">
+          {filteredData.length} {filteredData.length === 1 ? 'type' : 'types'}
+        </div>
+      </FilterBar>
 
       {/* ── Desktop View (md+): Document Types Table Container ── */}
       <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden shadow-2xs">
@@ -582,7 +576,7 @@ export default function DocumentTypesPage() {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span
                       className={[
-                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium select-none',
+                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium select-none',
                         dt.isActive !== false
                           ? 'bg-success/10 text-success border border-success/20'
                           : 'bg-danger/10 text-danger border border-danger/20',
@@ -598,11 +592,11 @@ export default function DocumentTypesPage() {
                     </span>
 
                     {dt.isMandatory ? (
-                      <Badge variant="warning" className="text-[11px] px-2 py-0.5 shrink-0">
+                      <Badge variant="warning" className="text-2xs px-2 py-0.5 shrink-0">
                         Required
                       </Badge>
                     ) : (
-                      <Badge variant="neutral" className="text-[11px] px-2 py-0.5 shrink-0 opacity-80">
+                      <Badge variant="neutral" className="text-2xs px-2 py-0.5 shrink-0 opacity-80">
                         Optional
                       </Badge>
                     )}
@@ -610,12 +604,12 @@ export default function DocumentTypesPage() {
                 </div>
 
                 <div className="space-y-1.5 pt-2 border-t border-border">
-                  <span className="text-[11px] text-text-muted">Allowed Extensions:</span>
+                  <span className="text-2xs text-text-muted">Allowed Extensions:</span>
                   <div className="flex flex-wrap gap-1.5">
                     {exts.map((ext) => (
                       <span
                         key={ext}
-                        className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-surface border border-border text-text"
+                        className="inline-flex items-center px-2 py-0.5 rounded text-2xs font-mono font-medium bg-surface border border-border text-text"
                       >
                         {ext}
                       </span>

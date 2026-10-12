@@ -29,6 +29,8 @@ import {
   Th,
   Td,
   StatusSwitch,
+  PageHeader,
+  FilterBar,
 } from '../../components/ui';
 import { useUomContext } from '../../context/UomContext';
 import { formatDate } from '../../utils/dateUtils';
@@ -317,74 +319,66 @@ export default function UomPage() {
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Header Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <Scale className="h-6 w-6 text-primary" aria-hidden="true" />
-            Unit of Measurement (UOM)
-          </h1>
-          <p className="text-xs text-text-muted mt-1">
-            Manage measurement units, descriptions, and active status for procurement and inventory.
-          </p>
-        </div>
-
-        <Button
-          variant="primary"
-          size="md"
-          onClick={handleOpenAdd}
-          className="self-start sm:self-auto shrink-0 shadow-xs"
-        >
-          <Plus size={16} className="mr-1.5" />
-          Add UOM
-        </Button>
-      </div>
+      <PageHeader
+        title="Unit of Measurement (UOM)"
+        icon={Scale}
+        subtitle="Manage measurement units, descriptions, and active status for procurement and inventory."
+        actions={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleOpenAdd}
+            className="self-start sm:self-auto shrink-0 shadow-xs"
+          >
+            <Plus size={16} className="mr-1.5" />
+            Add UOM
+          </Button>
+        }
+      />
 
       {/* ── Search & Status Filter Toolbar ── */}
-      <Card padding="sm" className="bg-bg">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          {/* Search Input */}
-          <div className="relative flex-1 max-w-md">
-            <Search
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-            />
-            <input
-              type="text"
-              placeholder="Search by UOM name or description..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-bg border border-border rounded-lg text-text placeholder:text-text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
-          {/* Status Filter Chips */}
-          <div className="flex items-center p-1 bg-surface rounded-lg border border-border self-start sm:self-auto">
-            {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setStatusFilter(status)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
-                  statusFilter === status
-                    ? 'bg-bg text-heading shadow-2xs font-semibold'
-                    : 'text-text-muted hover:text-text'
-                }`}
-              >
-                {status.toLowerCase()}
-              </button>
-            ))}
-          </div>
+      <FilterBar>
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <Input
+            id="search-uom"
+            type="text"
+            placeholder="Search by UOM name or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            leftIcon={<Search size={15} />}
+            rightElement={
+              searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-text-muted hover:text-text cursor-pointer p-1"
+                >
+                  <X size={14} />
+                </button>
+              ) : null
+            }
+          />
         </div>
-      </Card>
+
+        {/* Status Filter Chips */}
+        <div className="flex items-center p-1 bg-surface rounded-lg border border-border self-start sm:self-auto">
+          {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setStatusFilter(status)}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
+                statusFilter === status
+                  ? 'bg-bg text-heading shadow-2xs font-semibold'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {status.toLowerCase()}
+            </button>
+          ))}
+        </div>
+      </FilterBar>
 
       {/* ── Desktop View (md+): Data Table ── */}
       <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden shadow-2xs">
@@ -548,7 +542,7 @@ export default function UomPage() {
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-text-muted pt-2 border-t border-border">
+                <div className="flex items-center justify-between text-2xs text-text-muted pt-2 border-t border-border">
                   <span className="font-mono">Created: {formatDate(uom.createdOn)}</span>
                   <div className="flex items-center gap-1.5">
                     <button

@@ -48,6 +48,9 @@ import {
   TableContainer,
   Th,
   Td,
+  Badge,
+  PageHeader,
+  Textarea,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { getStateName } from '../../mocks/vendors';
@@ -260,8 +263,8 @@ export default function VendorApprovalPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 260,
-        size: 280,
+        minSize: 300,
+        size: 310,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -269,33 +272,33 @@ export default function VendorApprovalPage() {
 
           return (
             <div
-              className="flex items-center justify-end gap-2"
+              className="flex items-center justify-end gap-2 shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
               {/* View Button */}
               <Button
                 type="button"
-                variant="ghost"
+                variant="primary-soft"
                 size="sm"
                 onClick={() =>
                   navigate(`/vendors/${row.id}/effective-dates`, {
                     state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
                   })
                 }
-                className="text-xs font-semibold text-text hover:text-primary hover:bg-primary/10 border border-border hover:border-primary/40 transition-all h-8 px-2.5 shadow-2xs flex items-center gap-1.5"
+                className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`View ${row.vendorName}`}
               >
-                <Eye size={14} className="stroke-[2]" aria-hidden="true" />
+                <Eye size={14} className="stroke-[2.2]" aria-hidden="true" />
                 View
               </Button>
 
               {/* Approve Button */}
               <Button
                 type="button"
-                variant="ghost"
+                variant="success"
                 size="sm"
                 onClick={() => handleOpenApprove(row)}
-                className="text-xs font-semibold text-success hover:text-success hover:bg-success/15 border border-success/30 hover:border-success/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5"
+                className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`Approve ${row.vendorName}`}
               >
                 <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
@@ -305,10 +308,10 @@ export default function VendorApprovalPage() {
               {/* Reject Button */}
               <Button
                 type="button"
-                variant="ghost"
+                variant="danger-soft"
                 size="sm"
                 onClick={() => handleOpenReject(row)}
-                className="text-xs font-semibold text-danger hover:text-danger hover:bg-danger/15 border border-danger/30 hover:border-danger/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5"
+                className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`Reject ${row.vendorName}`}
               >
                 <X size={14} className="stroke-[2.5]" aria-hidden="true" />
@@ -350,22 +353,16 @@ export default function VendorApprovalPage() {
   return (
     <div className="space-y-6">
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-heading tracking-tight">
-              Vendor Approval
-            </h1>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning border border-warning/30 shadow-2xs">
-              <Clock size={12} className="shrink-0" />
-              {totalPendingCount} pending
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-            Vendors awaiting review. Click the View button to inspect complete vendor documentation before deciding.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Vendor Approval"
+        subtitle="Vendors awaiting review. Click the View button to inspect complete vendor documentation before deciding."
+        badge={
+          <Badge variant="pending" size="sm" className="ml-2 gap-1">
+            <Clock size={12} className="shrink-0" />
+            {totalPendingCount} pending
+          </Badge>
+        }
+      />
 
       {/* ── Unified Card Container ── */}
       <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
@@ -519,6 +516,7 @@ export default function VendorApprovalPage() {
                       <Td
                         key={cell.id}
                         style={{ width: cell.column.getSize() }}
+                        className={cell.column.id === 'actions' ? 'overflow-visible pr-3 sm:pr-4' : ''}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </Td>
@@ -589,38 +587,38 @@ export default function VendorApprovalPage() {
                   >
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="primary-soft"
                       size="sm"
                       onClick={() =>
                         navigate(`/vendors/${vendor.id}/effective-dates`, {
                           state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
                         })
                       }
-                      className="flex-1 text-xs font-semibold text-text hover:text-primary hover:bg-primary/10 border border-border"
+                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                     >
-                      <Eye size={13} className="mr-1" />
+                      <Eye size={13} />
                       View
                     </Button>
 
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="success"
                       size="sm"
                       onClick={() => handleOpenApprove(vendor)}
-                      className="flex-1 text-xs font-semibold text-success hover:text-success hover:bg-success/15 border border-success/30"
+                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                     >
-                      <Check size={13} className="mr-1 stroke-[2.5]" />
+                      <Check size={13} className="stroke-[2.5]" />
                       Approve
                     </Button>
 
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="danger-soft"
                       size="sm"
                       onClick={() => handleOpenReject(vendor)}
-                      className="flex-1 text-xs font-semibold text-danger hover:text-danger hover:bg-danger/15 border border-danger/30"
+                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                     >
-                      <X size={13} className="mr-1 stroke-[2.5]" />
+                      <X size={13} className="stroke-[2.5]" />
                       Reject
                     </Button>
                   </div>
@@ -639,13 +637,13 @@ export default function VendorApprovalPage() {
 
           <div className="flex items-center gap-1.5">
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-              className="text-xs h-8 px-2.5"
+              className="text-xs h-8 px-3"
             >
-              Prev
+              Previous
             </Button>
 
             {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
@@ -672,11 +670,11 @@ export default function VendorApprovalPage() {
             })}
 
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-              className="text-xs h-8 px-2.5"
+              className="text-xs h-8 px-3"
             >
               Next
             </Button>
@@ -813,32 +811,15 @@ export default function VendorApprovalPage() {
             </div>
 
             {/* Rejection Comments Field */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="reject-comments"
-                  className="text-sm font-medium text-heading block leading-none"
-                >
-                  Reason for Rejection <span className="text-danger" aria-hidden="true">*</span>
-                </label>
-                <span className="text-[11px] text-text-muted font-mono">
-                  {rejectComments.length} chars
-                </span>
-              </div>
-              <textarea
-                id="reject-comments"
-                rows={3}
-                required
-                value={rejectComments}
-                onChange={(e) => setRejectComments(e.target.value)}
-                placeholder="Explain why this vendor application is being rejected (required for audit log)..."
-                className={[
-                  'w-full rounded-xl border bg-bg text-heading text-sm p-3',
-                  'border-border placeholder:text-text-muted transition-all duration-150',
-                  'focus:border-danger focus:ring-2 focus:ring-danger/20 outline-none resize-none leading-relaxed',
-                ].join(' ')}
-              />
-            </div>
+            <Textarea
+              id="reject-comments"
+              label="Reason for Rejection"
+              required
+              rows={3}
+              value={rejectComments}
+              onChange={(e) => setRejectComments(e.target.value)}
+              placeholder="Explain why this vendor application is being rejected (required for audit log)..."
+            />
 
             {/* Alert Notice */}
             <div className="flex items-start gap-2.5 p-3 rounded-lg bg-danger/5 border border-danger/15 text-xs text-text-muted">

@@ -81,14 +81,14 @@ const TextColor = Mark.create({
 
 const PRESET_COLORS = [
   { name: 'Default', value: '' },
-  { name: 'Primary Blue', value: '#2563eb' },
-  { name: 'Sky Blue', value: '#0284c7' },
-  { name: 'Green', value: '#16a34a' },
-  { name: 'Amber', value: '#d97706' },
-  { name: 'Red', value: '#dc2626' },
-  { name: 'Purple', value: '#7c3aed' },
-  { name: 'Muted Slate', value: '#64748b' },
-  { name: 'Dark', value: '#0f172a' },
+  { name: 'Primary Blue', value: 'var(--color-blue)' },
+  { name: 'Sky Blue', value: 'var(--color-sky)' },
+  { name: 'Green', value: 'var(--color-green)' },
+  { name: 'Amber', value: 'var(--color-amber)' },
+  { name: 'Red', value: 'var(--color-red)' },
+  { name: 'Purple', value: 'var(--color-purple)' },
+  { name: 'Muted Slate', value: 'var(--color-slate)' },
+  { name: 'Dark', value: 'var(--color-dark)' },
 ];
 
 export default function RichTextEditor({
@@ -240,24 +240,24 @@ export default function RichTextEditor({
   );
 
   return (
-    <div className={`flex flex-col gap-1.5 w-full ${className}`}>
+    <div className={`mf-field ${className}`}>
       {/* Label and Mode info */}
       {label && (
         <div className="flex items-center justify-between">
           <label
             htmlFor={id}
-            className="form-label flex items-center gap-1"
+            className="mf-label"
           >
             {label}
-            {required && <span className="form-label-required">*</span>}
+            {required && <span className="mf-required">*</span>}
           </label>
-          <span className="text-xs text-text-muted">Rich Text Editor</span>
+          <span className="text-2xs text-text-muted">Rich Text Editor</span>
         </div>
       )}
 
       {/* Editor Main Box */}
       <div
-        className={`w-full rounded-lg border transition-all overflow-hidden bg-bg ${
+        className={`w-full rounded-control border transition-all overflow-hidden bg-bg ${
           error
             ? 'border-danger focus-within:ring-2 focus-within:ring-danger/20'
             : 'border-border focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20'
@@ -272,7 +272,7 @@ export default function RichTextEditor({
             title="Normal Paragraph (Resets headings, quotes, lists)"
           >
             <Type size={14} className="mr-1" />
-            <span className="text-[11px]">Normal</span>
+            <span className="text-2xs">Normal</span>
           </ToolbarButton>
 
           {/* Heading 1 */}
@@ -349,13 +349,13 @@ export default function RichTextEditor({
               className="px-2 py-1 text-xs rounded-md font-medium transition-colors cursor-pointer flex items-center gap-1 text-text-muted hover:text-heading hover:bg-surface active:bg-surface/80"
             >
               <Palette size={14} className="text-primary" />
-              <span className="text-[11px] hidden sm:inline">Color</span>
+              <span className="text-2xs hidden sm:inline">Color</span>
               <ChevronDown size={11} className="text-text-muted/70" />
             </button>
 
             {isColorMenuOpen && (
               <div className="absolute top-full left-0 mt-1 p-2 bg-surface border border-border rounded-lg shadow-lg z-50 w-48 space-y-2">
-                <div className="text-[10.5px] font-semibold text-text-muted uppercase tracking-wider px-1">
+                <div className="text-2xs font-semibold text-text-muted uppercase tracking-wider px-1">
                   Preset Colors
                 </div>
                 <div className="grid grid-cols-5 gap-1.5 px-1">
@@ -378,7 +378,7 @@ export default function RichTextEditor({
                       }}
                     >
                       {!col.value && (
-                        <span className="text-[10px] text-bg font-bold">×</span>
+                        <span className="text-2xs text-bg font-bold">×</span>
                       )}
                     </button>
                   ))}
@@ -396,7 +396,7 @@ export default function RichTextEditor({
                       }}
                       className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
                     />
-                    <span className="text-[11px] text-primary hover:underline">Pick</span>
+                    <span className="text-2xs text-primary hover:underline">Pick</span>
                   </label>
                 </div>
               </div>

@@ -35,6 +35,7 @@ import {
   TableContainer,
   Th,
   Td,
+  PageHeader,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { getStateName } from '../../mocks/vendors';
@@ -242,7 +243,7 @@ export default function VendorsPage() {
                 {formatDateDisplay(row.effectiveDate)}
               </span>
               <div>
-                <Badge variant={statusInfo.badgeVariant} className="text-[10px] px-1.5 py-0">
+                <Badge variant={statusInfo.badgeVariant} className="text-2xs px-1.5 py-0">
                   {statusInfo.label}
                 </Badge>
               </div>
@@ -379,18 +380,11 @@ export default function VendorsPage() {
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Header Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <Truck className="h-6 w-6 text-primary" aria-hidden="true" />
-            Vendor Management
-          </h1>
-          <p className="text-xs text-text-muted mt-1">
-            Directory of approved suppliers, subcontractors, and material vendors.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="Vendor Management"
+        subtitle="Directory of approved suppliers, subcontractors, and material vendors."
+        icon={<Truck className="h-6 w-6 text-primary" aria-hidden="true" />}
+        actions={
           <Button
             variant="primary"
             onClick={() => navigate('/vendors/new')}
@@ -399,8 +393,8 @@ export default function VendorsPage() {
             <Plus size={16} className="mr-1.5" aria-hidden="true" />
             Add Vendor
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── DESKTOP VIEW (md+): Full Table ── */}
       <div className="hidden md:block">
@@ -670,7 +664,7 @@ export default function VendorsPage() {
             <div className="p-8 text-center bg-surface border border-border rounded-xl">
               <SearchX size={24} className="mx-auto text-text-muted opacity-60 mb-2" />
               <p className="text-xs font-semibold text-heading">No vendors found</p>
-              <p className="text-[11px] text-text-muted mt-0.5">Try changing your search terms</p>
+              <p className="text-2xs text-text-muted mt-0.5">Try changing your search terms</p>
             </div>
           ) : (
             table.getRowModel().rows.map((row) => {
@@ -699,7 +693,7 @@ export default function VendorsPage() {
                       <p className="text-xs text-text-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
                         <span>Contact: {vendor.contactPersonName}</span>
                         <span>•</span>
-                        <span className="font-mono text-[11px] font-medium text-heading">
+                        <span className="font-mono text-2xs font-medium text-heading">
                           Eff: {formatDateDisplay(vendor.effectiveDate)}
                         </span>
                       </p>

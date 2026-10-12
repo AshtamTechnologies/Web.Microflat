@@ -29,6 +29,7 @@ import {
   Select,
   SearchableSelect,
   Badge,
+  PageHeader,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -201,45 +202,38 @@ export default function PurchaseRequisitionEdit() {
 
   return (
     <div className="w-full space-y-6 pb-20">
-      {/* ── Top Navigation Breadcrumb ── */}
-      <div>
-        <button
-          type="button"
-          onClick={() =>
-            navigate(
-              `/purchase-requisition/${originalPR.prNumber || originalPR.prId}`
-            )
-          }
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-bg hover:bg-surface text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
-        >
-          <ArrowLeft
-            size={14}
-            className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
-          />
-          <span>Back to View Requisition</span>
-        </button>
-      </div>
-
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-heading">
-            Edit Purchase Requisition
-          </h1>
-          <p className="text-sm text-text-muted mt-0.5">
-            Modify requisition details, items, or status.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Badge variant={currentStatusVariant} className="px-3 py-1 text-xs">
-            {formData.status}
-          </Badge>
-          <Badge variant="role" className="px-3 py-1 text-xs font-mono">
-            {formData.prNumber}
-          </Badge>
-        </div>
-      </div>
+      <PageHeader
+        title="Edit Purchase Requisition"
+        subtitle="Modify requisition details, items, or status."
+        backButton={
+          <button
+            type="button"
+            onClick={() =>
+              navigate(
+                `/purchase-requisition/${originalPR.prNumber || originalPR.prId}`
+              )
+            }
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-bg hover:bg-surface text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
+          >
+            <ArrowLeft
+              size={14}
+              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
+            />
+            <span>Back to View Requisition</span>
+          </button>
+        }
+        badge={
+          <div className="flex items-center gap-2">
+            <Badge variant={currentStatusVariant} className="px-3 py-1 text-xs">
+              {formData.status}
+            </Badge>
+            <Badge variant="role" className="px-3 py-1 text-xs font-mono">
+              {formData.prNumber}
+            </Badge>
+          </div>
+        }
+      />
 
       {/* Error Summary Banner */}
       {errors.items && (
@@ -426,7 +420,7 @@ export default function PurchaseRequisitionEdit() {
                     <p className="font-semibold text-heading truncate">
                       {file.fileName || file.name}
                     </p>
-                    <p className="text-[11px] text-text-muted font-mono mt-0.5">
+                    <p className="text-2xs text-text-muted font-mono mt-0.5">
                       {file.fileSizeKB ? `${file.fileSizeKB} KB` : `${(file.size / 1024).toFixed(1)} KB`} • Uploaded by {file.uploadedBy || 'Ian Chesnut'}
                     </p>
                   </div>

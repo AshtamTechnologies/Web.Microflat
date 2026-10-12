@@ -55,10 +55,13 @@ export default function SearchableMultiSelect({
   const updateCoords = useCallback(() => {
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const width = Math.min(rect.width, viewportWidth - 24);
+      const left = Math.max(12, Math.min(rect.left, viewportWidth - width - 12));
       setCoords({
         top: rect.bottom + 6,
-        left: rect.left,
-        width: rect.width,
+        left,
+        width,
       });
     }
   }, []);
@@ -170,11 +173,11 @@ export default function SearchableMultiSelect({
       {label && (
         <label
           htmlFor={id}
-          className="form-label"
+          className="mf-label"
         >
           {label}
           {required && (
-            <span className="form-label-required" aria-hidden="true">
+            <span className="mf-required" aria-hidden="true">
               *
             </span>
           )}
@@ -198,8 +201,8 @@ export default function SearchableMultiSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={[
-          'w-full min-h-[42px] rounded-lg border bg-bg text-left text-sm',
-          'px-3 py-1.5 flex items-center justify-between gap-2',
+          'w-full min-h-[40px] rounded-control border bg-bg text-left text-sm',
+          'px-3 py-1 flex items-center justify-between gap-2',
           'transition-all duration-150 ease-in-out cursor-pointer',
           'outline-none select-none',
           isOpen
@@ -225,7 +228,7 @@ export default function SearchableMultiSelect({
                 return (
                   <span
                     key={val}
-                    className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-xs font-medium px-2 py-0.5 rounded-md leading-tight max-w-[140px] truncate"
+                    className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-xs font-medium px-2 py-0.5 rounded-badge leading-tight max-w-[140px] truncate"
                   >
                     <span className="truncate">{labelText}</span>
                     <button
@@ -240,7 +243,7 @@ export default function SearchableMultiSelect({
                 );
               })}
               {selectedValues.length > maxDisplayTags && (
-                <span className="inline-flex items-center bg-surface border border-border text-text-muted text-xs font-semibold px-2 py-0.5 rounded-md">
+                <span className="inline-flex items-center bg-surface border border-border text-text-muted text-xs font-semibold px-2 py-0.5 rounded-badge">
                   +{selectedValues.length - maxDisplayTags} more
                 </span>
               )}
@@ -275,7 +278,7 @@ export default function SearchableMultiSelect({
               width: `${coords.width}px`,
               zIndex: 99999,
             }}
-            className="bg-bg border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in duration-100"
+            className="bg-bg border border-border rounded-modal shadow-dropdown overflow-hidden animate-in fade-in duration-100"
           >
             {/* Search box inside dropdown */}
             <div className="p-2 border-b border-border bg-surface/60 flex items-center gap-2">

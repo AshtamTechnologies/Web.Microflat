@@ -14,8 +14,7 @@ export default function Checkbox({ id, label, checked, onChange, className = '',
     <label
       htmlFor={id}
       className={[
-        'inline-flex items-center gap-2.5 cursor-pointer select-none',
-        'form-label',
+        'inline-flex items-center gap-2.5 cursor-pointer select-none mf-label',
         className,
       ]
         .filter(Boolean)
@@ -33,11 +32,11 @@ export default function Checkbox({ id, label, checked, onChange, className = '',
         {/* Custom checkbox box */}
         <span
           className={[
-            'w-4 h-4 rounded flex items-center justify-center',
+            'w-4 h-4 rounded-control flex items-center justify-center',
             'border transition-colors duration-150 ease-in-out',
             'peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30 peer-focus-visible:ring-offset-1',
             checked
-              ? 'bg-primary border-primary'
+              ? 'bg-primary border-primary text-on-primary'
               : 'bg-bg border-border hover:border-primary',
           ]
             .filter(Boolean)
@@ -54,8 +53,8 @@ export default function Checkbox({ id, label, checked, onChange, className = '',
             >
               <path
                 d="M1 4L3.5 6.5L9 1"
-                stroke="white"
-                strokeWidth="1.5"
+                stroke="currentColor"
+                strokeWidth="1.75"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -63,7 +62,7 @@ export default function Checkbox({ id, label, checked, onChange, className = '',
           )}
         </span>
       </span>
-      {label}
+      {label && <span>{label}</span>}
     </label>
   );
 }

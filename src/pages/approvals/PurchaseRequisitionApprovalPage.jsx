@@ -56,6 +56,7 @@ import {
   Th,
   Td,
   Badge,
+  PageHeader,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -290,7 +291,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 {info.getValue() || '—'}
               </span>
               <span
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-bold border ${
                   isUrgent
                     ? 'bg-danger/10 text-danger border-danger/25'
                     : 'bg-primary/10 text-primary border-primary/20'
@@ -316,7 +317,7 @@ export default function PurchaseRequisitionApprovalPage() {
               <span className="font-semibold text-heading text-xs sm:text-sm leading-snug">
                 {row.requestedBy || 'Unknown'}
               </span>
-              <span className="text-text-muted text-[11px] sm:text-xs leading-normal flex items-center gap-1 mt-0.5">
+              <span className="text-text-muted text-2xs sm:text-xs leading-normal flex items-center gap-1 mt-0.5">
                 <Building2 size={12} className="text-text-muted/70 shrink-0" />
                 {row.department || 'General'}
               </span>
@@ -325,25 +326,22 @@ export default function PurchaseRequisitionApprovalPage() {
         },
       }),
 
-      /* 3. LINE ITEMS COUNT & PREVIEW */
+      /* 3. LINE ITEMS COUNT */
       columnHelper.accessor('items', {
         header: 'LINE ITEMS',
-        minSize: 220,
-        size: 260,
+        minSize: 110,
+        size: 130,
         cell: (info) => {
           const items = info.getValue() || [];
           const itemCount = items.length;
-          const firstTwo = items.slice(0, 2).map((i) => i.itemName || i.itemCode).join(', ');
-          const hasMore = itemCount > 2;
 
           return (
-            <div className="flex items-center gap-2 py-0.5">
-              <span className="font-mono text-[11px] font-bold px-2 py-0.5 bg-surface border border-border text-heading rounded-md shrink-0">
-                {itemCount} {itemCount === 1 ? 'item' : 'items'}
-              </span>
-              <span className="text-xs text-text-muted truncate max-w-xs" title={firstTwo}>
-                {firstTwo}
-                {hasMore && ` +${itemCount - 2} more`}
+            <div className="flex items-center py-0.5">
+              <span
+                className="font-mono text-xs font-semibold px-2.5 py-0.5 bg-surface border border-border text-heading rounded-md shrink-0 inline-flex items-center gap-1.5 shadow-2xs"
+                title={items.map((i) => i.itemName || i.itemCode).join(', ')}
+              >
+                <span>{itemCount} {itemCount === 1 ? 'item' : 'items'}</span>
               </span>
             </div>
           );
@@ -368,13 +366,13 @@ export default function PurchaseRequisitionApprovalPage() {
           return (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 setPrToViewAttachments(row);
               }}
-              className="text-xs font-semibold text-primary hover:text-primary hover:bg-primary/10 border border-primary/25 hover:border-primary/40 transition-all h-7 px-2.5 shadow-2xs flex items-center gap-1.5 cursor-pointer rounded-md"
+              className="text-xs font-semibold text-primary hover:text-primary bg-primary/5 hover:bg-primary/10 border border-primary/30 hover:border-primary/50 transition-all h-7 px-2.5 shadow-2xs flex items-center gap-1.5 cursor-pointer rounded-md"
               title={`View ${count} attachment${count > 1 ? 's' : ''} for ${row.prNumber}`}
             >
               <Paperclip size={12} className="shrink-0" />
@@ -398,7 +396,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 <span>{formatPRDate(row.prDate) || '—'}</span>
               </div>
               {row.requiredDate && (
-                <span className="text-[10.5px] text-text-muted mt-0.5">
+                <span className="text-2xs text-text-muted mt-0.5">
                   Req: {formatPRDate(row.requiredDate)}
                 </span>
               )}
@@ -411,8 +409,8 @@ export default function PurchaseRequisitionApprovalPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 260,
-        size: 280,
+        minSize: 300,
+        size: 310,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -420,33 +418,33 @@ export default function PurchaseRequisitionApprovalPage() {
 
           return (
             <div
-              className="flex items-center justify-end gap-2"
+              className="flex items-center justify-end gap-2 shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
               {/* View Button */}
               <Button
                 type="button"
-                variant="ghost"
+                variant="primary-soft"
                 size="sm"
                 onClick={() =>
                   navigate(`/purchase-requisition/${row.prNumber || row.prId}`, {
                     state: { from: '/approvals/purchase-requisitions', backLabel: 'PR Approval', readOnly: true },
                   })
                 }
-                className="text-xs font-semibold text-text hover:text-primary hover:bg-primary/10 border border-border hover:border-primary/40 transition-all h-8 px-2.5 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`View ${row.prNumber}`}
               >
-                <Eye size={14} className="stroke-[2]" aria-hidden="true" />
+                <Eye size={14} className="stroke-[2.2]" aria-hidden="true" />
                 View
               </Button>
 
               {/* Approve Button */}
               <Button
                 type="button"
-                variant="ghost"
+                variant="success"
                 size="sm"
                 onClick={() => handleOpenApprove(row)}
-                className="text-xs font-semibold text-success hover:text-success hover:bg-success/15 border border-success/30 hover:border-success/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`Approve ${row.prNumber}`}
               >
                 <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
@@ -456,10 +454,10 @@ export default function PurchaseRequisitionApprovalPage() {
               {/* Reject Button */}
               <Button
                 type="button"
-                variant="ghost"
+                variant="danger-soft"
                 size="sm"
                 onClick={() => handleOpenReject(row)}
-                className="text-xs font-semibold text-danger hover:text-danger hover:bg-danger/15 border border-danger/30 hover:border-danger/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`Reject ${row.prNumber}`}
               >
                 <X size={14} className="stroke-[2.5]" aria-hidden="true" />
@@ -501,22 +499,16 @@ export default function PurchaseRequisitionApprovalPage() {
   return (
     <div className="space-y-6">
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-heading tracking-tight">
-              Purchase Requisition Approval
-            </h1>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning border border-warning/30 shadow-2xs">
-              <Clock size={12} className="shrink-0" />
-              {totalPendingCount} pending
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-            Purchase requisitions awaiting review. Click the View button to inspect complete item specifications before deciding.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Purchase Requisition Approval"
+        subtitle="Purchase requisitions awaiting review. Click the View button to inspect complete item specifications before deciding."
+        badge={
+          <Badge variant="warning">
+            <Clock size={12} className="shrink-0 mr-1" />
+            {totalPendingCount} pending
+          </Badge>
+        }
+      />
 
       {/* ── KPI Summary Cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
@@ -530,7 +522,7 @@ export default function PurchaseRequisitionApprovalPage() {
             </div>
           </div>
           <p className="text-2xl font-bold text-heading mt-2 font-mono">{totalPendingCount}</p>
-          <span className="text-[11px] text-text-muted mt-0.5 block">Awaiting manager signoff</span>
+          <span className="text-2xs text-text-muted mt-0.5 block">Awaiting manager signoff</span>
         </div>
 
         <div className="p-4 rounded-xl border border-border bg-surface/50 shadow-2xs">
@@ -543,7 +535,7 @@ export default function PurchaseRequisitionApprovalPage() {
             </div>
           </div>
           <p className="text-2xl font-bold text-heading mt-2 font-mono">{urgentCount}</p>
-          <span className="text-[11px] text-text-muted mt-0.5 block">High urgency requisitions</span>
+          <span className="text-2xs text-text-muted mt-0.5 block">High urgency requisitions</span>
         </div>
 
         <div className="p-4 rounded-xl border border-border bg-surface/50 shadow-2xs">
@@ -556,7 +548,7 @@ export default function PurchaseRequisitionApprovalPage() {
             </div>
           </div>
           <p className="text-2xl font-bold text-heading mt-2 font-mono">{totalLineItems}</p>
-          <span className="text-[11px] text-text-muted mt-0.5 block">Materials requested</span>
+          <span className="text-2xs text-text-muted mt-0.5 block">Materials requested</span>
         </div>
 
         <div className="p-4 rounded-xl border border-border bg-surface/50 shadow-2xs">
@@ -569,7 +561,7 @@ export default function PurchaseRequisitionApprovalPage() {
             </div>
           </div>
           <p className="text-2xl font-bold text-heading mt-2 font-mono">{distinctDeptsCount}</p>
-          <span className="text-[11px] text-text-muted mt-0.5 block">Active request centers</span>
+          <span className="text-2xs text-text-muted mt-0.5 block">Active request centers</span>
         </div>
       </div>
 
@@ -579,7 +571,7 @@ export default function PurchaseRequisitionApprovalPage() {
         <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center flex-1 gap-3 flex-wrap">
             {/* Search Input */}
-            <div className="relative flex-1 min-w-[220px] max-w-md">
+            <div className="relative flex-1 min-w-0 sm:min-w-56 max-w-md">
               <Search
                 size={16}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
@@ -785,6 +777,7 @@ export default function PurchaseRequisitionApprovalPage() {
                       <Td
                         key={cell.id}
                         style={{ width: cell.column.getSize() }}
+                        className={cell.column.id === 'actions' ? 'overflow-visible pr-3 sm:pr-4' : ''}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </Td>
@@ -827,7 +820,7 @@ export default function PurchaseRequisitionApprovalPage() {
                           {pr.prNumber}
                         </span>
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-bold border ${
                             isUrgent
                               ? 'bg-danger/10 text-danger border-danger/25'
                               : 'bg-primary/10 text-primary border-primary/20'
@@ -854,17 +847,12 @@ export default function PurchaseRequisitionApprovalPage() {
 
                   {/* Materials brief */}
                   <div className="pt-2 border-t border-border text-xs text-text-muted space-y-1">
-                    <div className="flex items-center justify-between font-mono text-[11px]">
-                      <span>Items: <strong>{items.length} line{items.length !== 1 ? 's' : ''}</strong></span>
+                    <div className="flex items-center justify-between font-mono text-2xs">
+                      <span>Items: <strong>{items.length} {items.length === 1 ? 'item' : 'items'}</strong></span>
                       <span>Date: {formatPRDate(pr.prDate)}</span>
                     </div>
-                    {items.length > 0 && (
-                      <p className="truncate text-[11px] text-text">
-                        {items.map((i) => i.itemName || i.itemCode).join(', ')}
-                      </p>
-                    )}
                     {pr.attachments?.length > 0 && (
-                      <div className="flex items-center justify-between text-[11px] pt-1">
+                      <div className="flex items-center justify-between text-2xs pt-1">
                         <span className="text-text-muted">Attachments:</span>
                         <button
                           type="button"
@@ -888,38 +876,38 @@ export default function PurchaseRequisitionApprovalPage() {
                   >
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="primary-soft"
                       size="sm"
                       onClick={() =>
                         navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`, {
                           state: { from: '/approvals/purchase-requisitions', backLabel: 'PR Approval', readOnly: true },
                         })
                       }
-                      className="flex-1 text-xs font-semibold text-text hover:text-primary hover:bg-primary/10 border border-border h-8 justify-center"
+                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                     >
-                      <Eye size={13} className="mr-1" />
+                      <Eye size={13} />
                       View
                     </Button>
 
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="success"
                       size="sm"
                       onClick={() => handleOpenApprove(pr)}
-                      className="flex-1 text-xs font-semibold text-success hover:bg-success/15 border border-success/30 h-8 justify-center"
+                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                     >
-                      <Check size={14} className="mr-1 stroke-[2.5]" />
+                      <Check size={14} className="stroke-[2.5]" />
                       Approve
                     </Button>
 
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="danger-soft"
                       size="sm"
                       onClick={() => handleOpenReject(pr)}
-                      className="flex-1 text-xs font-semibold text-danger hover:bg-danger/15 border border-danger/30 h-8 justify-center"
+                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                     >
-                      <X size={14} className="mr-1 stroke-[2.5]" />
+                      <X size={14} className="stroke-[2.5]" />
                       Reject
                     </Button>
                   </div>
@@ -1124,7 +1112,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 <p className="text-xs font-semibold text-heading">
                   Requisition {prToViewAttachments.prNumber}
                 </p>
-                <p className="text-[11px] text-text-muted mt-0.5">
+                <p className="text-2xs text-text-muted mt-0.5">
                   Requested by <strong className="text-heading">{prToViewAttachments.requestedBy}</strong> ({prToViewAttachments.department})
                 </p>
               </div>
@@ -1153,7 +1141,7 @@ export default function PurchaseRequisitionApprovalPage() {
                         <p className="text-xs font-semibold text-heading truncate" title={file.fileName || file.name}>
                           {file.fileName || file.name}
                         </p>
-                        <p className="text-[11px] text-text-muted mt-0.5 font-mono">
+                        <p className="text-2xs text-text-muted mt-0.5 font-mono">
                           {file.fileSizeKB ? `${file.fileSizeKB} KB` : (file.size || '120 KB')}
                           {file.uploadedDate ? ` • ${file.uploadedDate}` : ''}
                         </p>
@@ -1163,10 +1151,10 @@ export default function PurchaseRequisitionApprovalPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
                         onClick={() => handleDownloadAttachment(file, prToViewAttachments)}
-                        className="text-xs text-primary hover:bg-primary/10 h-7 px-2.5 flex items-center gap-1 border border-primary/20 cursor-pointer"
+                        className="text-xs text-primary hover:text-primary-hover h-7 px-2.5 flex items-center gap-1 border-primary/30 cursor-pointer"
                       >
                         <Download size={12} />
                         Download
@@ -1180,7 +1168,7 @@ export default function PurchaseRequisitionApprovalPage() {
             <div className="flex items-center justify-between pt-3 border-t border-border">
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 onClick={() => {
                   const pr = prToViewAttachments;
@@ -1189,7 +1177,7 @@ export default function PurchaseRequisitionApprovalPage() {
                     state: { from: '/approvals/purchase-requisitions', backLabel: 'PR Approval', readOnly: true },
                   });
                 }}
-                className="text-xs text-text-muted hover:text-primary"
+                className="text-xs font-medium text-heading hover:text-primary"
               >
                 <Eye size={13} className="mr-1.5" />
                 Open Full View

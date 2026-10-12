@@ -19,6 +19,7 @@
  *   maxWidth?: string (default: 'max-w-md')
  */
 
+import React from 'react';
 import { AlertTriangle, Trash2, HelpCircle } from 'lucide-react';
 import Modal from './Modal';
 import Button from './Button';
@@ -72,11 +73,15 @@ export default function ConfirmModal({
         <div className="flex items-start gap-3.5">
           <div
             className={[
-              'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs',
+              'w-10 h-10 rounded-control flex items-center justify-center shrink-0 shadow-2xs',
               iconVariants[effectiveVariant] || iconVariants.danger,
             ].join(' ')}
           >
-            <IconComponent size={20} aria-hidden="true" />
+            {React.isValidElement(IconComponent) ? (
+              IconComponent
+            ) : (
+              <IconComponent size={20} aria-hidden="true" />
+            )}
           </div>
           <div className="space-y-1 flex-1 min-w-0 pt-0.5">
             <h3 className="text-sm font-semibold text-heading leading-snug">

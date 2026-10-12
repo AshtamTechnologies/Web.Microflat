@@ -53,7 +53,7 @@ export default function SubSidebar({
       {/* ── Desktop (>= 1024px): Fixed-width vertical panel ── */}
       <div className="hidden lg:flex flex-col w-56 shrink-0 bg-bg border border-border rounded-2xl p-3 shadow-2xs">
         {title && (
-          <div className="px-3 pt-1.5 pb-2 text-[11px] font-bold uppercase tracking-wider text-text-muted select-none border-b border-border/60 mb-2">
+          <div className="px-3 pt-1.5 pb-2 text-2xs font-bold uppercase tracking-wider text-text-muted select-none border-b border-border/60 mb-2">
             {title}
           </div>
         )}

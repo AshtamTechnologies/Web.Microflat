@@ -54,6 +54,7 @@ import {
   Th,
   Td,
   Modal,
+  PageHeader,
 } from '../../components/ui';
 import ActivityTimeline from '../../components/ActivityTimeline';
 import { useInquiriesContext } from '../../context/InquiriesContext';
@@ -255,7 +256,7 @@ export default function InquiryViewPage() {
     const lower = ext.toLowerCase();
     if (lower === '.pdf') return <FileText size={15} className="text-danger shrink-0" />;
     if (lower === '.docx' || lower === '.doc') return <FileText size={15} className="text-primary shrink-0" />;
-    if (lower === '.dwg' || lower === '.dxf') return <Layers size={15} className="text-blue-500 shrink-0" />;
+    if (lower === '.dwg' || lower === '.dxf') return <Layers size={15} className="text-primary shrink-0" />;
     return <File size={15} className="text-text-muted shrink-0" />;
   };
 
@@ -285,12 +286,13 @@ export default function InquiryViewPage() {
   return (
     <div className="space-y-6 pb-20">
       {/* ── Top Header & Actions ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-5">
-        <div>
+      <PageHeader
+        title={inquiry.InquiryNo}
+        backButton={
           <button
             type="button"
             onClick={() => navigate('/inquiries')}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer mb-3"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
             <ArrowLeft
               size={14}
@@ -299,79 +301,73 @@ export default function InquiryViewPage() {
             />
             <span>Back to Inquiries</span>
           </button>
+        }
+        badge={
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border ${statusInfo.badgeClass}`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`} />
+              {statusInfo.name}
+            </span>
 
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-heading tracking-tight font-mono">
-              {inquiry.InquiryNo}
-            </h1>
-
-            {/* Badges */}
-            <div className="flex items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border ${statusInfo.badgeClass}`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`} />
-                {statusInfo.name}
-              </span>
-
-              <Badge
-                variant={getPriorityBadgeVariant(inquiry.Priority)}
-                className="text-xs px-2 py-0.5"
-              >
-                {inquiry.Priority} Priority
-              </Badge>
-            </div>
+            <Badge
+              variant={getPriorityBadgeVariant(inquiry.Priority)}
+              className="text-xs px-2 py-0.5"
+            >
+              {inquiry.Priority} Priority
+            </Badge>
           </div>
-        </div>
+        }
+        actions={
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Change Status Button */}
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setIsStatusModalOpen(true)}
+              className="text-xs"
+            >
+              <RefreshCw size={14} className="mr-1.5" />
+              Change Status
+            </Button>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Change Status Button */}
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={() => setIsStatusModalOpen(true)}
-            className="text-xs"
-          >
-            <RefreshCw size={14} className="mr-1.5" />
-            Change Status
-          </Button>
+            {/* Assign / Reassign Button */}
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setIsAssignModalOpen(true)}
+              className="text-xs"
+            >
+              {isAssigned ? (
+                <>
+                  <UserCheck size={14} className="mr-1.5 text-primary" />
+                  Reassign
+                </>
+              ) : (
+                <>
+                  <UserPlus size={14} className="mr-1.5" />
+                  Assign
+                </>
+              )}
+            </Button>
 
-          {/* Assign / Reassign Button */}
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={() => setIsAssignModalOpen(true)}
-            className="text-xs"
-          >
-            {isAssigned ? (
-              <>
-                <UserCheck size={14} className="mr-1.5 text-primary" />
-                Reassign
-              </>
-            ) : (
-              <>
-                <UserPlus size={14} className="mr-1.5" />
-                Assign
-              </>
-            )}
-          </Button>
-
-          {/* Edit Button */}
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            onClick={() => navigate(`/inquiries/${inquiry.id || inquiry.InquiryId}/edit`)}
-            className="text-xs"
-          >
-            <Pencil size={14} className="mr-1.5" />
-            Edit Inquiry
-          </Button>
-        </div>
-      </div>
+            {/* Edit Button */}
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={() => navigate(`/inquiries/${inquiry.id || inquiry.InquiryId}/edit`)}
+              className="text-xs"
+            >
+              <Pencil size={14} className="mr-1.5" />
+              Edit Inquiry
+            </Button>
+          </div>
+        }
+      />
 
       {/* ── Grid of Detail Sections ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -539,7 +535,7 @@ export default function InquiryViewPage() {
                 <button
                   type="button"
                   onClick={() => setMobileViewMode('cards')}
-                  className={`px-2 py-0.5 text-[11px] font-medium rounded transition-colors ${
+                  className={`px-2 py-0.5 text-2xs font-medium rounded transition-colors ${
                     mobileViewMode === 'cards'
                       ? 'bg-primary text-white shadow-2xs'
                       : 'text-text-muted hover:text-heading'
@@ -550,7 +546,7 @@ export default function InquiryViewPage() {
                 <button
                   type="button"
                   onClick={() => setMobileViewMode('table')}
-                  className={`px-2 py-0.5 text-[11px] font-medium rounded transition-colors ${
+                  className={`px-2 py-0.5 text-2xs font-medium rounded transition-colors ${
                     mobileViewMode === 'table'
                       ? 'bg-primary text-white shadow-2xs'
                       : 'text-text-muted hover:text-heading'
@@ -568,24 +564,24 @@ export default function InquiryViewPage() {
                   <div key={item.prItemId || item.id || idx} className="p-3.5 space-y-2.5 bg-surface/20">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 min-w-0">
-                        <span className="w-5 h-5 rounded-full bg-surface border border-border flex items-center justify-center text-[10px] font-mono text-text-muted shrink-0 mt-0.5">
+                        <span className="w-5 h-5 rounded-full bg-surface border border-border flex items-center justify-center text-2xs font-mono text-text-muted shrink-0 mt-0.5">
                           {idx + 1}
                         </span>
                         <div>
-                          <span className="text-[10px] uppercase font-semibold text-text-muted block">Product Category</span>
+                          <span className="text-2xs uppercase font-semibold text-text-muted block">Product Category</span>
                           <span className="font-semibold text-xs text-heading leading-snug">
                             {item.categoryName || getCategoryPathName(item.categoryId || inquiry.CategoryId, categories) || '—'}
                           </span>
                         </div>
                       </div>
-                      <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-[11px] shrink-0">
+                      <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-2xs shrink-0">
                         {item.itemCode || 'MAT-CAT-001'}
                       </span>
                     </div>
 
                     {item.specification && item.specification !== '—' && (
                       <div className="text-xs text-text-muted bg-surface/50 p-2.5 rounded-lg border border-border/60 pl-3">
-                        <span className="text-[10px] uppercase font-semibold text-text-muted block mb-0.5">Specification</span>
+                        <span className="text-2xs uppercase font-semibold text-text-muted block mb-0.5">Specification</span>
                         <span className="leading-relaxed">{item.specification}</span>
                       </div>
                     )}
@@ -733,7 +729,7 @@ export default function InquiryViewPage() {
               <MessageSquare size={14} className="text-primary" />
               <span>Add Comment / Internal Note</span>
             </label>
-            <span className="text-[11px] text-text-muted">
+            <span className="text-2xs text-text-muted">
               Posting as <strong className="text-heading font-medium">Ian Chesnut</strong>
             </span>
           </div>
@@ -750,11 +746,11 @@ export default function InquiryViewPage() {
           <div className="flex items-center justify-between gap-3 pt-0.5">
             <div>
               {commentText.length > 0 ? (
-                <span className="font-mono text-[11px] text-text-muted tabular-nums">
+                <span className="font-mono text-2xs text-text-muted tabular-nums">
                   {commentText.length} chars
                 </span>
               ) : (
-                <span className="text-[11px] text-text-muted">
+                <span className="text-2xs text-text-muted">
                   Add remarks or updates to the inquiry audit history
                 </span>
               )}
@@ -844,19 +840,21 @@ export default function InquiryViewPage() {
               </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto border border-border rounded-xl">
-              <TableContainer>
-                <thead>
-                  <tr className="bg-surface/60 border-b border-border text-left">
-                    <Th className="py-3 px-3 w-12 text-center"></Th>
-                    <Th className="py-3 px-4 w-40">DOCUMENT TYPE</Th>
-                    <Th className="py-3 px-4 min-w-[220px]">DOCUMENT TITLE</Th>
-                    <Th className="py-3 px-4 min-w-[220px]">CURRENT REVISION</Th>
-                    <Th className="py-3 px-4 w-28">FILE SIZE</Th>
-                    <Th className="py-3 px-4 w-48">UPLOADED BY / DATE</Th>
-                    <Th className="py-3 px-4 w-28 text-right">ACTIONS</Th>
-                  </tr>
-                </thead>
+            <TableContainer
+              className="rounded-xl border border-border overflow-x-auto"
+              tableClassName="w-full min-w-[840px] text-xs text-left border-collapse table-auto sm:table-fixed"
+            >
+              <thead>
+                <tr className="bg-surface/60 border-b border-border text-left">
+                  <Th className="py-3 px-3 w-12 text-center"></Th>
+                  <Th className="py-3 px-4 w-40">DOCUMENT TYPE</Th>
+                  <Th className="py-3 px-4 min-w-[220px]">DOCUMENT TITLE</Th>
+                  <Th className="py-3 px-4 min-w-[220px]">CURRENT REVISION</Th>
+                  <Th className="py-3 px-4 w-28">FILE SIZE</Th>
+                  <Th className="py-3 px-4 w-48">UPLOADED BY / DATE</Th>
+                  <Th className="py-3 px-4 w-32 text-right">ACTIONS</Th>
+                </tr>
+              </thead>
 
                 <tbody className="divide-y divide-border bg-bg">
                   {inquiryDocuments.map((doc) => {
@@ -898,7 +896,7 @@ export default function InquiryViewPage() {
                             <span className="font-semibold text-heading text-xs block truncate" title={doc.documentTitle}>
                               {doc.documentTitle}
                             </span>
-                            <span className="text-[11px] text-text-muted font-mono block mt-0.5">
+                            <span className="text-2xs text-text-muted font-mono block mt-0.5">
                               {versions.length} revision{versions.length > 1 ? 's' : ''} recorded
                             </span>
                           </Td>
@@ -938,16 +936,16 @@ export default function InquiryViewPage() {
                             <span className="text-heading font-medium block text-xs truncate">
                               {currentVersion.uploadedBy || doc.createdBy}
                             </span>
-                            <span className="font-mono text-[11px] text-text-muted tabular-nums block mt-0.5">
+                            <span className="font-mono text-2xs text-text-muted tabular-nums block mt-0.5">
                               {formatDate(currentVersion.uploadedOn || doc.createdOn)}
                             </span>
                           </Td>
 
                           {/* Actions */}
-                          <Td className="py-3 px-4 w-28 text-right">
+                          <Td className="py-3 px-4 w-32 text-right whitespace-nowrap">
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant="secondary"
                               size="sm"
                               onClick={() => {
                                 setSelectedDocForVersion(doc);
@@ -955,10 +953,10 @@ export default function InquiryViewPage() {
                                 setIsUploadModalOpen(true);
                               }}
                               title="Upload new version"
-                              className="text-xs text-primary hover:bg-primary/10 h-8 px-2"
+                              className="text-xs font-semibold text-primary border-primary/30 hover:border-primary hover:bg-primary/10 bg-surface shadow-2xs h-7 px-2.5 inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
                             >
-                              <UploadCloud size={14} className="mr-1" />
-                              New Rev
+                              <UploadCloud size={13} className="shrink-0 text-primary" />
+                              <span>New Rev</span>
                             </Button>
                           </Td>
                         </tr>
@@ -967,39 +965,39 @@ export default function InquiryViewPage() {
                         {isExpanded && (
                           <tr className="bg-surface/30">
                             <td colSpan={7} className="p-0 border-b border-border/80">
-                              <div className="p-4 pl-14 space-y-2 animate-in fade-in duration-100">
-                                <div className="flex items-center justify-between pb-1">
-                                  <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                                    <Clock size={14} className="text-text-muted" />
-                                    <span>Version History for "{doc.documentTitle}"</span>
+                              <div className="p-3 sm:p-4 sm:pl-12 space-y-2.5 animate-in fade-in duration-100">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
+                                  <span className="text-xs font-bold text-heading flex items-center gap-1.5 min-w-0">
+                                    <Clock size={14} className="text-text-muted shrink-0" />
+                                    <span className="truncate">Version History for "{doc.documentTitle}"</span>
                                   </span>
-                                  <span className="text-[11px] text-text-muted">
+                                  <span className="text-2xs text-text-muted shrink-0">
                                     Newest revisions listed first
                                   </span>
                                 </div>
 
-                                <div className="bg-bg border border-border rounded-lg overflow-hidden">
-                                  <table className="w-full text-xs text-left">
+                                <div className="bg-bg border border-border rounded-lg overflow-x-auto shadow-2xs">
+                                  <table className="w-full min-w-[720px] text-xs text-left border-collapse">
                                     <thead>
-                                      <tr className="bg-surface/60 border-b border-border text-[11px] font-semibold text-text-muted">
-                                        <th className="py-2.5 px-3">REVISION</th>
-                                        <th className="py-2.5 px-3">FILE NAME</th>
-                                        <th className="py-2.5 px-3">SIZE</th>
-                                        <th className="py-2.5 px-3">UPLOADED BY / DATE</th>
-                                        <th className="py-2.5 px-3">CHANGE REMARKS</th>
-                                        <th className="py-2.5 px-3 text-right">ACTION</th>
+                                      <tr className="bg-surface/60 border-b border-border text-2xs font-semibold text-text-muted">
+                                        <th className="py-2.5 px-3 w-24">REVISION</th>
+                                        <th className="py-2.5 px-3 min-w-[200px]">FILE NAME</th>
+                                        <th className="py-2.5 px-3 w-20">SIZE</th>
+                                        <th className="py-2.5 px-3 w-40">UPLOADED BY / DATE</th>
+                                        <th className="py-2.5 px-3 min-w-[220px]">CHANGE REMARKS</th>
+                                        <th className="py-2.5 px-3 w-48 text-right">ACTION</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border/60">
                                       {versions.map((ver) => (
                                         <tr key={ver.versionId} className="hover:bg-surface/40 transition-colors">
-                                          <td className="py-2.5 px-3">
+                                          <td className="py-2.5 px-3 whitespace-nowrap">
                                             <div className="flex items-center gap-1.5">
                                               <span className="font-mono font-bold text-heading">
                                                 v{ver.versionNo}
                                               </span>
                                               {ver.isCurrent && (
-                                                <Badge variant="success" className="text-[10px] px-1.5 py-0">
+                                                <Badge variant="success" className="text-2xs px-1.5 py-0">
                                                   Current
                                                 </Badge>
                                               )}
@@ -1021,7 +1019,7 @@ export default function InquiryViewPage() {
                                             >
                                               {renderFileExtIcon(ver.fileExtension)}
                                               <span
-                                                className="truncate max-w-[220px] group-hover/verfile:underline"
+                                                className="truncate max-w-[200px] sm:max-w-[240px] group-hover/verfile:underline"
                                                 title={ver.fileName}
                                               >
                                                 {ver.fileName}
@@ -1030,24 +1028,24 @@ export default function InquiryViewPage() {
                                             </button>
                                           </td>
 
-                                          <td className="py-2.5 px-3 font-mono tabular-nums text-text-muted">
+                                          <td className="py-2.5 px-3 font-mono tabular-nums text-text-muted whitespace-nowrap">
                                             {formatFileSizeKB(ver.fileSizeKB)}
                                           </td>
 
-                                          <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted tabular-nums">
-                                            <div>{ver.uploadedBy}</div>
+                                          <td className="py-2.5 px-3 font-mono text-2xs text-text-muted tabular-nums whitespace-nowrap">
+                                            <div className="font-medium text-heading/90">{ver.uploadedBy}</div>
                                             <div>{formatDate(ver.uploadedOn)}</div>
                                           </td>
 
-                                          <td className="py-2.5 px-3 text-text italic">
-                                            {ver.changeRemarks ? `"${ver.changeRemarks}"` : '—'}
+                                          <td className="py-2.5 px-3 text-text">
+                                            {ver.changeRemarks || '—'}
                                           </td>
 
-                                          <td className="py-2.5 px-3 text-right">
-                                            <div className="flex items-center justify-end gap-1">
+                                          <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                            <div className="flex items-center justify-end gap-1.5">
                                               <Button
                                                 type="button"
-                                                variant="ghost"
+                                                variant="secondary"
                                                 size="sm"
                                                 onClick={() =>
                                                   setPreviewItem({
@@ -1057,14 +1055,14 @@ export default function InquiryViewPage() {
                                                   })
                                                 }
                                                 title="View / Preview attachment"
-                                                className="text-xs text-text-muted hover:text-primary h-7 px-2"
+                                                className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2.5 inline-flex items-center gap-1 cursor-pointer"
                                               >
-                                                <Eye size={13} className="mr-1" />
-                                                View
+                                                <Eye size={13} className="text-text-muted shrink-0" />
+                                                <span>View</span>
                                               </Button>
                                               <Button
                                                 type="button"
-                                                variant="ghost"
+                                                variant="secondary"
                                                 size="sm"
                                                 onClick={() =>
                                                   handleDownloadAttachment({
@@ -1074,10 +1072,10 @@ export default function InquiryViewPage() {
                                                   })
                                                 }
                                                 title="Download attachment"
-                                                className="text-xs text-text-muted hover:text-primary h-7 px-2"
+                                                className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2.5 inline-flex items-center gap-1 cursor-pointer"
                                               >
-                                                <Download size={13} className="mr-1" />
-                                                Download
+                                                <Download size={13} className="text-text-muted shrink-0" />
+                                                <span>Download</span>
                                               </Button>
                                             </div>
                                           </td>
@@ -1095,7 +1093,6 @@ export default function InquiryViewPage() {
                   })}
                 </tbody>
               </TableContainer>
-            </div>
           )}
         </Card>
       </div>
@@ -1122,7 +1119,7 @@ export default function InquiryViewPage() {
                 </span>
                 <Badge
                   variant={previewItem.isCurrent ? 'success' : 'neutral'}
-                  className="text-[11px] font-mono px-2 py-0.5"
+                  className="text-2xs font-mono px-2 py-0.5"
                 >
                   Rev v{previewItem.versionNo} {previewItem.isCurrent ? '(Current)' : ''}
                 </Badge>
@@ -1152,7 +1149,7 @@ export default function InquiryViewPage() {
                   <FileText size={32} className="text-danger" />
                 ) : previewItem.fileExtension?.toLowerCase() === '.dwg' ||
                   previewItem.fileExtension?.toLowerCase() === '.dxf' ? (
-                  <Layers size={32} className="text-blue-500" />
+                  <Layers size={32} className="text-primary" />
                 ) : (
                   <FileCheck size={32} className="text-primary" />
                 )}
@@ -1173,29 +1170,29 @@ export default function InquiryViewPage() {
               {/* Change Remarks */}
               {previewItem.changeRemarks && (
                 <div className="w-full max-w-lg bg-surface/50 rounded-xl p-3 border border-border text-left space-y-1 text-xs">
-                  <span className="text-[11px] font-semibold text-text-muted block">Revision Remarks:</span>
-                  <p className="text-heading italic">"{previewItem.changeRemarks}"</p>
+                  <span className="text-2xs font-semibold text-text-muted block">Revision Remarks:</span>
+                  <p className="text-heading italic">{previewItem.changeRemarks}</p>
                 </div>
               )}
 
               {/* Document Information Sheet */}
               <div className="w-full max-w-lg bg-surface/30 rounded-xl p-3.5 border border-border text-left grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-text-muted block text-[11px]">Inquiry No</span>
+                  <span className="text-text-muted block text-2xs">Inquiry No</span>
                   <span className="font-mono font-medium text-heading">{inquiry.InquiryNo}</span>
                 </div>
                 <div>
-                  <span className="text-text-muted block text-[11px]">Customer</span>
+                  <span className="text-text-muted block text-2xs">Customer</span>
                   <span className="font-medium text-heading truncate block">{inquiry.CustomerName}</span>
                 </div>
                 <div>
-                  <span className="text-text-muted block text-[11px]">File Format</span>
+                  <span className="text-text-muted block text-2xs">File Format</span>
                   <span className="font-mono uppercase font-semibold text-primary">
                     {previewItem.fileExtension?.replace('.', '') || 'FILE'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-text-muted block text-[11px]">Version Status</span>
+                  <span className="text-text-muted block text-2xs">Version Status</span>
                   <span className="font-medium text-heading">
                     {previewItem.isCurrent
                       ? 'Current Active Version'

@@ -58,6 +58,7 @@ import {
   Th,
   Td,
   Modal,
+  PageHeader,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import {
@@ -677,7 +678,7 @@ export default function VendorEffectiveDatesPage() {
                 {formatDateDisplay(row.effectiveDate)}
               </span>
               {isCurrent && (
-                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-success/15 text-success border border-success/30 select-none">
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-bold bg-success/15 text-success border border-success/30 select-none">
                   Current
                 </span>
               )}
@@ -811,90 +812,73 @@ export default function VendorEffectiveDatesPage() {
   return (
     <div className="w-full space-y-6 pb-16">
       {/* ── 1. HEADER (FULL SCREEN WIDTH) ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-        <div className="flex items-start sm:items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(backPath)}
-            className="text-text-muted hover:text-heading h-9 px-2.5 -ml-2"
-            title={backLabel}
-          >
-            <ArrowLeft size={18} className="mr-1" />
-            <span className="text-xs font-semibold">{backLabel}</span>
-          </Button>
-
-          <div className="h-4 w-px bg-border hidden sm:block" />
-
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold text-heading tracking-tight">
-                {vendor.vendorName}
-              </h1>
-              <span className="font-mono text-xs font-bold px-2.5 py-0.5 bg-primary/10 text-primary rounded-md border border-primary/20">
-                {vendor.vendorCode}
-              </span>
-            </div>
-            <p className="text-xs text-text-muted mt-0.5">
-              Effective-dated version history, master details, and supporting documents
-            </p>
-          </div>
-        </div>
-
-        {/* Status Badges & Approval Actions */}
-        <div className="flex items-center gap-2.5 self-start sm:self-center flex-wrap">
-          {(vendor.approvalStatus || '').toLowerCase() === 'approved' && (
-            <span
-              className={[
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none',
-                vendor.isActive
-                  ? 'bg-success/10 text-success border border-success/20'
-                  : 'bg-danger/10 text-danger border border-danger/20',
-              ].join(' ')}
-            >
+      <PageHeader
+        title={vendor.vendorName}
+        subtitle="Effective-dated version history, master details, and supporting documents"
+        badge={
+          <span className="font-mono text-xs font-bold px-2.5 py-0.5 bg-primary/10 text-primary rounded-md border border-primary/20">
+            {vendor.vendorCode}
+          </span>
+        }
+        backButton={{
+          onClick: () => navigate(backPath),
+          label: backLabel,
+        }}
+        actions={
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {(vendor.approvalStatus || '').toLowerCase() === 'approved' && (
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  vendor.isActive ? 'bg-success' : 'bg-danger'
-                }`}
-                aria-hidden="true"
-              />
-              {vendor.isActive ? 'Active' : 'Inactive'}
-            </span>
-          )}
-
-          <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
-            {vendor.approvalStatus || 'Pending'}
-          </Badge>
-
-          {isFromApproval && (vendor.approvalStatus || '').toLowerCase() === 'pending' && (
-            <div className="flex items-center gap-2 pl-2 border-l border-border">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleOpenApprove}
-                className="text-xs font-semibold text-success hover:text-success hover:bg-success/15 border border-success/30 hover:border-success/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5"
-                title={`Approve ${vendor.vendorName}`}
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none',
+                  vendor.isActive
+                    ? 'bg-success/10 text-success border border-success/20'
+                    : 'bg-danger/10 text-danger border border-danger/20',
+                ].join(' ')}
               >
-                <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
-                Approve
-              </Button>
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    vendor.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
+                  aria-hidden="true"
+                />
+                {vendor.isActive ? 'Active' : 'Inactive'}
+              </span>
+            )}
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleOpenReject}
-                className="text-xs font-semibold text-danger hover:text-danger hover:bg-danger/15 border border-danger/30 hover:border-danger/50 transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5"
-                title={`Reject ${vendor.vendorName}`}
-              >
-                <X size={14} className="stroke-[2.5]" aria-hidden="true" />
-                Reject
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+            <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
+              {vendor.approvalStatus || 'Pending'}
+            </Badge>
+
+            {isFromApproval && (vendor.approvalStatus || '').toLowerCase() === 'pending' && (
+              <div className="flex items-center gap-2 pl-2 border-l border-border">
+                <Button
+                  type="button"
+                  variant="success"
+                  size="sm"
+                  onClick={handleOpenApprove}
+                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title={`Approve ${vendor.vendorName}`}
+                >
+                  <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
+                  Approve
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="danger-soft"
+                  size="sm"
+                  onClick={handleOpenReject}
+                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title={`Reject ${vendor.vendorName}`}
+                >
+                  <X size={14} className="stroke-[2.5]" aria-hidden="true" />
+                  Reject
+                </Button>
+              </div>
+            )}
+          </div>
+        }
+      />
 
       {/* ── 2. EFFECTIVE DATES GRID / CARDS (CARD WITH RESIZABLE COLUMNS) ── */}
       <Card className="overflow-hidden shadow-xs border-border">
@@ -952,12 +936,12 @@ export default function VendorEffectiveDatesPage() {
                           {formatDateDisplay(ver.effectiveDate)}
                         </span>
                         {isCurrent && (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-success/15 text-success border border-success/30">
+                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold bg-success/15 text-success border border-success/30">
                             Current
                           </span>
                         )}
                         {isSelected && (
-                          <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-primary/15 text-primary">
+                          <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-semibold bg-primary/15 text-primary">
                             Selected
                           </span>
                         )}
@@ -1002,7 +986,7 @@ export default function VendorEffectiveDatesPage() {
                   </div>
 
                   {/* Middle / Bottom line: Context info */}
-                  <div className="mt-2 pt-2 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-text-muted">
+                  <div className="mt-2 pt-2 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-2xs text-text-muted">
                     <div className="flex items-center gap-1.5 truncate">
                       <MapPin size={12} className="shrink-0 text-text-muted/70" />
                       <span className="truncate">
@@ -1012,13 +996,13 @@ export default function VendorEffectiveDatesPage() {
                     </div>
 
                     <div className="flex items-center justify-between sm:justify-end gap-2">
-                      <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                      <div className="flex items-center gap-1.5 font-mono text-2xs">
                         <Clock size={11} className="shrink-0 text-text-muted/70" />
                         <span>{formatDateDisplay(ver.createdOn)}</span>
                       </div>
 
                       {verAtts.length > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[10px] text-primary font-medium">
+                        <span className="inline-flex items-center gap-1 text-2xs text-primary font-medium">
                           <Paperclip size={10} />
                           {verAtts.length} doc{verAtts.length > 1 ? 's' : ''}
                         </span>
@@ -1316,7 +1300,7 @@ export default function VendorEffectiveDatesPage() {
               </div>
               <div className="space-y-3 pt-1">
                 <div className="space-y-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted block">
+                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
                     Notes & Terms
                   </span>
                   <div className="text-xs text-heading font-medium bg-surface/50 rounded-lg p-3.5 border border-border/60 whitespace-pre-line leading-relaxed">
@@ -1344,11 +1328,11 @@ export default function VendorEffectiveDatesPage() {
                 <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                   <Paperclip size={15} className="text-primary" />
                   Attachments & Supporting Documents
-                  <span className="text-[11px] font-normal text-text-muted ml-1">
+                  <span className="text-2xs font-normal text-text-muted ml-1">
                     ({currentViewAttachments.length})
                   </span>
                 </div>
-                <span className="text-[11px] text-text-muted hidden sm:inline">
+                <span className="text-2xs text-text-muted hidden sm:inline">
                   Click any document card to view details in popup
                 </span>
               </div>
@@ -1374,7 +1358,7 @@ export default function VendorEffectiveDatesPage() {
                           <p className="text-xs font-semibold text-heading truncate group-hover:text-primary transition-colors">
                             {att.documentName || att.fileName}
                           </p>
-                          <p className="text-[11px] text-text-muted truncate mt-0.5">
+                          <p className="text-2xs text-text-muted truncate mt-0.5">
                             {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
                           </p>
                         </div>
@@ -1586,22 +1570,8 @@ export default function VendorEffectiveDatesPage() {
                   />
                 </div>
 
-                {/* ZIP / Postal Code */}
-                <div>
-                  <Input
-                    id="zipCode"
-                    name="zipCode"
-                    label="ZIP / Postal Code"
-                    placeholder="e.g. 388120"
-                    value={formData.zipCode}
-                    onChange={handleInputChange}
-                    error={formErrors.zipCode}
-                    required
-                  />
-                </div>
-
                 {/* Address Line 1 */}
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 lg:col-span-3">
                   <Input
                     id="address1"
                     name="address1"
@@ -1615,7 +1585,7 @@ export default function VendorEffectiveDatesPage() {
                 </div>
 
                 {/* Address Line 2 */}
-                <div className="sm:col-span-2 lg:col-span-3">
+                <div className="sm:col-span-2 lg:col-span-2">
                   <Input
                     id="address2"
                     name="address2"
@@ -1623,6 +1593,20 @@ export default function VendorEffectiveDatesPage() {
                     placeholder="e.g. Near Anand Cross Road"
                     value={formData.address2}
                     onChange={handleInputChange}
+                  />
+                </div>
+
+                {/* ZIP / Postal Code */}
+                <div>
+                  <Input
+                    id="zipCode"
+                    name="zipCode"
+                    label="ZIP / Postal Code"
+                    placeholder="e.g. 388120"
+                    value={formData.zipCode}
+                    onChange={handleInputChange}
+                    error={formErrors.zipCode}
+                    required
                   />
                 </div>
               </div>
@@ -1659,7 +1643,7 @@ export default function VendorEffectiveDatesPage() {
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
                 <Paperclip size={15} className="text-primary" />
                 Attachments & Supporting Documents for this Version
-                <span className="text-[11px] font-normal text-text-muted ml-1">
+                <span className="text-2xs font-normal text-text-muted ml-1">
                   ({attachments.length})
                 </span>
               </div>
@@ -1719,7 +1703,7 @@ export default function VendorEffectiveDatesPage() {
                 <p className="text-xs font-semibold text-heading">
                   Drag and drop files here, or <span className="text-primary">browse</span>
                 </p>
-                <p className="text-[11px] text-text-muted mt-1">
+                <p className="text-2xs text-text-muted mt-1">
                   Supported formats: PDF, PNG, JPG, JPEG, WEBP (Up to 10 MB per file)
                 </p>
               </div>
@@ -1749,7 +1733,7 @@ export default function VendorEffectiveDatesPage() {
                           <p className="text-xs font-semibold text-heading truncate hover:text-primary transition-colors">
                             {att.documentName || att.fileName}
                           </p>
-                          <p className="text-[11px] text-text-muted truncate">
+                          <p className="text-2xs text-text-muted truncate">
                             {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
                           </p>
                         </div>
@@ -1828,7 +1812,7 @@ export default function VendorEffectiveDatesPage() {
             {/* Meta bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-surface/50 p-3 rounded-xl border border-border">
               <div className="flex items-center gap-2">
-                <Badge variant="neutral" className="text-[11px] font-mono">
+                <Badge variant="neutral" className="text-2xs font-mono">
                   {previewItem.fileName.split('.').pop()?.toUpperCase() || 'DOC'}
                 </Badge>
                 <span className="text-heading font-medium truncate max-w-xs sm:max-w-md">
@@ -1877,7 +1861,7 @@ export default function VendorEffectiveDatesPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-success/10 text-success border border-success/20">
+                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-2xs font-bold bg-success/10 text-success border border-success/20">
                       <ShieldCheck size={12} /> Verified Document
                     </span>
                     <h4 className="text-base font-bold text-heading mt-2">

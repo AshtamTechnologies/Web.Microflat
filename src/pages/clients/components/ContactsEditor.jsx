@@ -236,7 +236,7 @@ export default function ContactsEditor({ rows = [], onChange }) {
               checked={formState.isActive}
               onChange={(checked) => handleFieldChange('isActive', checked)}
             />
-            <span className="text-[11px] text-text-muted mt-1">
+            <span className="text-2xs text-text-muted mt-1">
               {formState.isActive ? 'Active recipient for communications' : 'Inactive contact'}
             </span>
           </div>
@@ -283,7 +283,7 @@ export default function ContactsEditor({ rows = [], onChange }) {
           <div className="text-center py-8 px-4 border border-dashed border-border rounded-xl bg-surface/20 space-y-1.5">
             <User size={22} className="mx-auto text-text-muted/60" />
             <p className="text-xs font-medium text-heading">No contact persons added</p>
-            <p className="text-[11px] text-text-muted">
+            <p className="text-2xs text-text-muted">
               Add primary, finance, or technical contacts using the form above.
             </p>
           </div>
@@ -323,7 +323,7 @@ export default function ContactsEditor({ rows = [], onChange }) {
                     <Td className="py-3 px-3 font-mono tabular-nums text-xs">
                       <div className="text-heading font-medium">{row.mobile1 || '—'}</div>
                       {row.mobile2 && (
-                        <div className="text-[11px] text-text-muted mt-0.5">{row.mobile2}</div>
+                        <div className="text-2xs text-text-muted mt-0.5">{row.mobile2}</div>
                       )}
                     </Td>
 
@@ -362,30 +362,28 @@ export default function ContactsEditor({ rows = [], onChange }) {
                     </Td>
 
                     {/* Actions */}
-                    <Td className="py-3 px-3 text-right">
+                    <Td className="py-2.5 px-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => onEdit(row)}
-                            className="h-7 w-7 p-0 text-text-muted hover:text-primary hover:bg-primary/5"
-                            title="Edit Contact"
-                          >
-                            <Pencil size={13} />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => handleRemove(rowId)}
-                            className="h-7 w-7 p-0 text-text-muted hover:text-danger hover:bg-danger/5"
-                            title="Remove Contact"
-                          >
-                            <Trash2 size={13} />
-                          </Button>
-                        </div>
-                      </Td>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(row)}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all shadow-2xs cursor-pointer"
+                          title="Edit Contact"
+                          aria-label="Edit Contact"
+                        >
+                          <Pencil size={14} className="shrink-0" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemove(rowId)}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
+                          title="Remove Contact"
+                          aria-label="Remove Contact"
+                        >
+                          <Trash2 size={14} className="shrink-0" />
+                        </button>
+                      </div>
+                    </Td>
                     </tr>
                   );
                 })}

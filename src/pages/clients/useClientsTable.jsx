@@ -97,7 +97,7 @@ export function useClientsTable({ onDeleteClick }) {
             <span className="font-medium text-heading text-xs truncate">
               {fullName}
             </span>
-            <span className="font-mono tabular-nums text-text-muted text-[11px] truncate mt-0.5">
+            <span className="font-mono tabular-nums text-text-muted text-2xs truncate mt-0.5">
               {primary.mobile1 || primary.email || '—'}
             </span>
           </div>

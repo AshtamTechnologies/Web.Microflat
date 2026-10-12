@@ -107,6 +107,12 @@ export default function AddressesEditor({ rows = [], onChange }) {
     handleFieldChange('stateId', '');
   };
 
+  const handleAddressTypeChange = (e) => {
+    const val = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
+    const typeValue = typeof val === 'object' && val !== null ? val.value || '' : String(val || '');
+    handleFieldChange('addressType', typeValue);
+  };
+
   const handleStateChange = (e) => {
     const val = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
     const stateCode = typeof val === 'object' && val !== null ? val.value || '' : String(val || '');
@@ -158,13 +164,15 @@ export default function AddressesEditor({ rows = [], onChange }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Address Type */}
           <div>
-            <Select
+            <SearchableSelect
               label="Address Type"
               id="addr-type"
               required
               value={formState.addressType}
-              onChange={(e) => handleFieldChange('addressType', e.target.value)}
+              onChange={handleAddressTypeChange}
               options={ADDRESS_TYPE_OPTIONS}
+              placeholder="Select address type..."
+              searchPlaceholder="Search address types..."
               error={fieldErrors.addressType}
             />
           </div>
@@ -197,8 +205,8 @@ export default function AddressesEditor({ rows = [], onChange }) {
                 !formState.countryId
                   ? 'Select country first'
                   : stateOptions.length === 0
-                  ? 'No states listed'
-                  : 'Select state...'
+                    ? 'No states listed'
+                    : 'Select state...'
               }
               searchPlaceholder="Search states..."
               error={fieldErrors.stateId}
@@ -316,7 +324,7 @@ export default function AddressesEditor({ rows = [], onChange }) {
           <div className="text-center py-8 px-4 border border-dashed border-border rounded-xl bg-surface/20 space-y-1.5">
             <Building size={22} className="mx-auto text-text-muted/60" />
             <p className="text-xs font-medium text-heading">No addresses added</p>
-            <p className="text-[11px] text-text-muted">
+            <p className="text-2xs text-text-muted">
               Use the form above to add a billing or shipping address for this client.
             </p>
           </div>
@@ -348,94 +356,90 @@ export default function AddressesEditor({ rows = [], onChange }) {
                 const countryName = getCountryName(rowCountryId);
                 const stateName = getStateName(rowCountryId, rowStateId);
 
-                  return (
-                    <tr
-                      key={rowId}
-                      className={`transition-colors hover:bg-surface/50 ${
-                        isCurrentEditing ? 'bg-primary/5 ring-1 ring-primary/20' : ''
+                return (
+                  <tr
+                    key={rowId}
+                    className={`transition-colors hover:bg-surface/50 ${isCurrentEditing ? 'bg-primary/5 ring-1 ring-primary/20' : ''
                       }`}
-                    >
-                      {/* Type */}
-                      <Td className="py-3 px-3">
-                        <Badge variant={getAddressTypeBadgeVariant(row.addressType)} className="text-[11px] px-2 py-0.5">
-                          {row.addressType}
-                        </Badge>
-                      </Td>
+                  >
+                    {/* Type */}
+                    <Td className="py-3 px-3">
+                      <Badge variant={getAddressTypeBadgeVariant(row.addressType)} className="text-2xs px-2 py-0.5">
+                        {row.addressType}
+                      </Badge>
+                    </Td>
 
-                      {/* Address 1 & 2 */}
-                      <Td className="py-3 px-3">
-                        <p className="font-medium text-heading text-xs">{row.address1}</p>
-                        {row.address2 && (
-                          <p className="text-[11px] text-text-muted mt-0.5">{row.address2}</p>
-                        )}
-                      </Td>
+                    {/* Address 1 & 2 */}
+                    <Td className="py-3 px-3">
+                      <p className="font-medium text-heading text-xs">{row.address1}</p>
+                      {row.address2 && (
+                        <p className="text-2xs text-text-muted mt-0.5">{row.address2}</p>
+                      )}
+                    </Td>
 
-                      {/* City / State / Country */}
-                      <Td className="py-3 px-3 text-xs text-text">
-                        <div>
-                          <span className="font-medium text-heading">{row.city}</span>
-                          {stateName && <span className="text-text-muted">, {stateName}</span>}
-                        </div>
-                        <div className="text-[11px] text-text-muted">{countryName}</div>
-                      </Td>
+                    {/* City / State / Country */}
+                    <Td className="py-3 px-3 text-xs text-text">
+                      <div>
+                        <span className="font-medium text-heading">{row.city}</span>
+                        {stateName && <span className="text-text-muted">, {stateName}</span>}
+                      </div>
+                      <div className="text-2xs text-text-muted">{countryName}</div>
+                    </Td>
 
-                      {/* ZIP */}
-                      <Td className="py-3 px-3 font-mono tabular-nums text-text-muted">
-                        {row.zipCode || '—'}
-                      </Td>
+                    {/* ZIP */}
+                    <Td className="py-3 px-3 font-mono tabular-nums text-text-muted">
+                      {row.zipCode || '—'}
+                    </Td>
 
-                      {/* Status */}
-                      <Td className="py-3 px-3 text-center">
+                    {/* Status */}
+                    <Td className="py-3 px-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleRowActive(rowId)}
+                        title={`Click to mark ${row.isActive ? 'Inactive' : 'Active'}`}
+                        className={[
+                          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors select-none',
+                          row.isActive
+                            ? 'bg-success/10 text-success border border-success/20 hover:bg-success/20'
+                            : 'bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20',
+                        ].join(' ')}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${row.isActive ? 'bg-success' : 'bg-danger'
+                            }`}
+                          aria-hidden="true"
+                        />
+                        {row.isActive ? 'Active' : 'Inactive'}
+                      </button>
+                    </Td>
+
+                    {/* Actions */}
+                    <Td className="py-2.5 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
-                          onClick={() => handleToggleRowActive(rowId)}
-                          title={`Click to mark ${row.isActive ? 'Inactive' : 'Active'}`}
-                          className={[
-                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors select-none',
-                            row.isActive
-                              ? 'bg-success/10 text-success border border-success/20 hover:bg-success/20'
-                              : 'bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20',
-                          ].join(' ')}
+                          onClick={() => handleStartEdit(row)}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all shadow-2xs cursor-pointer"
+                          title="Edit Address"
+                          aria-label="Edit Address"
                         >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              row.isActive ? 'bg-success' : 'bg-danger'
-                            }`}
-                            aria-hidden="true"
-                          />
-                          {row.isActive ? 'Active' : 'Inactive'}
+                          <Pencil size={14} className="shrink-0" />
                         </button>
-                      </Td>
-
-                      {/* Actions */}
-                      <Td className="py-3 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => handleStartEdit(row)}
-                            className="h-7 w-7 p-0 text-text-muted hover:text-primary hover:bg-primary/5"
-                            title="Edit Address"
-                          >
-                            <Pencil size={13} />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => handleRemove(rowId)}
-                            className="h-7 w-7 p-0 text-text-muted hover:text-danger hover:bg-danger/5"
-                            title="Remove Address"
-                          >
-                            <Trash2 size={13} />
-                          </Button>
-                        </div>
-                      </Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+                        <button
+                          type="button"
+                          onClick={() => handleRemove(rowId)}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
+                          title="Remove Address"
+                          aria-label="Remove Address"
+                        >
+                          <Trash2 size={14} className="shrink-0" />
+                        </button>
+                      </div>
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </TableContainer>
         )}
       </div>

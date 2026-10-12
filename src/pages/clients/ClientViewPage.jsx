@@ -30,6 +30,7 @@ import {
   TableContainer,
   Th,
   Td,
+  PageHeader,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import {
@@ -73,49 +74,48 @@ export default function ClientViewPage() {
   return (
     <div className="space-y-6 pb-20">
       {/* ── Top Header & Actions ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title={client.companyName}
+        subtitle={`Client ID: ${clientId}`}
+        backButton={
           <button
             type="button"
             onClick={() => navigate('/clients')}
-            className="p-2 rounded-lg border border-border bg-surface text-text hover:text-primary hover:bg-surface/80 transition-colors cursor-pointer"
-            title="Back to Clients"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft
+              size={14}
+              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
+            />
+            <span>Back to Clients</span>
           </button>
-
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl font-bold text-heading">{client.companyName}</h1>
-              <Badge
-                variant={getContactTypeBadgeVariant(client.contactTypeId)}
-                className="text-xs px-2.5 py-0.5"
-              >
-                {client.contactTypeId || 'Customer'}
-              </Badge>
-              <Badge
-                variant={client.isActive ? 'active' : 'inactive'}
-                className="text-xs px-2.5 py-0.5"
-              >
-                {client.isActive ? 'Active' : 'Inactive'}
-              </Badge>
-            </div>
-            <p className="text-xs text-text-muted mt-1 font-mono tabular-nums">
-              Client ID: {clientId}
-            </p>
+        }
+        badge={
+          <div className="flex items-center gap-2">
+            <Badge
+              variant={getContactTypeBadgeVariant(client.contactTypeId)}
+            >
+              {client.contactTypeId || 'Customer'}
+            </Badge>
+            <Badge
+              variant={client.isActive ? 'active' : 'inactive'}
+            >
+              {client.isActive ? 'Active' : 'Inactive'}
+            </Badge>
           </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="primary"
-          onClick={() => navigate(`/clients/${clientId}/edit`)}
-          className="text-xs font-semibold shadow-2xs self-start sm:self-auto"
-        >
-          <Pencil size={14} className="mr-1.5" />
-          Edit Client
-        </Button>
-      </div>
+        }
+        actions={
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => navigate(`/clients/${clientId}/edit`)}
+            className="text-xs font-semibold shadow-2xs"
+          >
+            <Pencil size={14} className="mr-1.5" />
+            Edit Client
+          </Button>
+        }
+      />
 
       {/* ── 1. Company Details Card (3 Columns Layout) ── */}
       <Card padding="md" className="space-y-4">
@@ -216,12 +216,12 @@ export default function ClientViewPage() {
                   <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
                     <Badge
                       variant={getAddressTypeBadgeVariant(addr.addressType)}
-                      className="text-[11px] px-2 py-0.5 font-medium"
+                      className="text-2xs px-2 py-0.5 font-medium"
                     >
                       {addr.addressType}
                     </Badge>
                     {!addr.isActive && (
-                      <span className="text-[10px] uppercase font-bold text-text-muted bg-surface px-1.5 py-0.5 rounded border border-border">
+                      <span className="text-2xs uppercase font-bold text-text-muted bg-surface px-1.5 py-0.5 rounded border border-border">
                         Inactive
                       </span>
                     )}
@@ -313,7 +313,7 @@ export default function ClientViewPage() {
                           <Td className="py-3 px-3 text-center">
                             <Badge
                               variant={c.isActive ? 'active' : 'inactive'}
-                              className="text-[11px] px-2 py-0.5"
+                              className="text-2xs px-2 py-0.5"
                             >
                               {c.isActive ? 'Active' : 'Inactive'}
                             </Badge>
@@ -339,7 +339,7 @@ export default function ClientViewPage() {
                       <span className="font-semibold text-xs text-heading">{fullName}</span>
                       <Badge
                         variant={c.isActive ? 'active' : 'inactive'}
-                        className="text-[10px] px-2 py-0.5"
+                        className="text-2xs px-2 py-0.5"
                       >
                         {c.isActive ? 'Active' : 'Inactive'}
                       </Badge>
@@ -347,19 +347,19 @@ export default function ClientViewPage() {
 
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
-                        <span className="text-[10px] text-text-muted uppercase block">Mobile 1</span>
+                        <span className="text-2xs text-text-muted uppercase block">Mobile 1</span>
                         <span className="font-mono tabular-nums font-medium text-heading">
                           {c.mobile1 || '—'}
                         </span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-text-muted uppercase block">Mobile 2</span>
+                        <span className="text-2xs text-text-muted uppercase block">Mobile 2</span>
                         <span className="font-mono tabular-nums text-text-muted">
                           {c.mobile2 || '—'}
                         </span>
                       </div>
                       <div className="col-span-2">
-                        <span className="text-[10px] text-text-muted uppercase block">Email</span>
+                        <span className="text-2xs text-text-muted uppercase block">Email</span>
                         <span className="text-text break-all">
                           {c.email || '—'}
                         </span>

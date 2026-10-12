@@ -35,6 +35,8 @@ import {
   Th,
   Td,
   StatusSwitch,
+  PageHeader,
+  FilterBar,
 } from '../../components/ui';
 import { useRegionsContext } from '../../context/RegionsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
@@ -531,54 +533,47 @@ export default function RegionsPage() {
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Header Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-heading tracking-tight flex items-center gap-2.5">
-            <MapPin className="h-6 w-6 text-primary" aria-hidden="true" />
-            Regions
-          </h1>
-          <p className="text-xs text-text-muted mt-1">
-            Manage hierarchical sales territories, domestic zones, and export distribution regions.
-          </p>
-        </div>
-
-        <Button
-          variant="primary"
-          size="md"
-          onClick={() => handleOpenAdd()}
-          className="self-start sm:self-auto shrink-0 shadow-xs"
-        >
-          <Plus size={16} className="mr-1.5" />
-          Add Region
-        </Button>
-      </div>
+      <PageHeader
+        title="Regions"
+        icon={MapPin}
+        subtitle="Manage hierarchical sales territories, domestic zones, and export distribution regions."
+        actions={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => handleOpenAdd()}
+            className="self-start sm:self-auto shrink-0 shadow-xs"
+          >
+            <Plus size={16} className="mr-1.5" />
+            Add Region
+          </Button>
+        }
+      />
 
       {/* ── Toolbar: Search, Status Filter & Tree View Helpers ── */}
-      <Card padding="sm" className="bg-bg">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          {/* Search Input */}
-          <div className="relative flex-1 max-w-md">
-            <Search
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-            />
-            <input
-              type="text"
-              placeholder="Search by code or region name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-bg border border-border rounded-lg text-text placeholder:text-text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
+      <FilterBar>
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md">
+          <Input
+            id="search-regions"
+            type="text"
+            placeholder="Search by code or region name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            leftIcon={<Search size={15} />}
+            rightElement={
+              searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-text-muted hover:text-text cursor-pointer p-1"
+                >
+                  <X size={14} />
+                </button>
+              ) : null
+            }
+          />
+        </div>
 
           {/* Status Filter Chips & Expand Controls */}
           <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5">
@@ -617,8 +612,7 @@ export default function RegionsPage() {
               </button>
             </div>
           </div>
-        </div>
-      </Card>
+      </FilterBar>
 
       {/* ── Desktop View (md+): Hierarchical Resizable Table ── */}
       <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden shadow-2xs">
@@ -760,7 +754,7 @@ export default function RegionsPage() {
                       {reg.regionCode}
                     </span>
                     {reg.depth > 0 && (
-                      <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">
+                      <span className="text-2xs text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">
                         Level {reg.depth + 1}
                       </span>
                     )}
@@ -777,7 +771,7 @@ export default function RegionsPage() {
 
                 <span
                   className={[
-                    'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium select-none',
+                    'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-2xs font-medium select-none',
                     reg.isActive
                       ? 'bg-success/10 text-success border border-success/20'
                       : 'bg-danger/10 text-danger border border-danger/20',

@@ -49,10 +49,12 @@ import ClientsPage from './pages/clients/ClientsPage';
 import ClientFormPage from './pages/clients/ClientFormPage';
 import ClientViewPage from './pages/clients/ClientViewPage';
 import { ClientsProvider } from './context/ClientsContext';
+import ScrollToTop from './components/common/ScrollToTop';
 
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <UserSessionsProvider>
         <Routes>
           {/* Public routes */}
