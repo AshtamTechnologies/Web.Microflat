@@ -173,13 +173,13 @@ export default function InquiriesPage() {
         minSize: 200,
         size: 250,
         cell: (info) => {
-          const subject = info.getValue();
+          const subject = info.getValue() || info.row.original.items?.[0]?.itemName || info.row.original.items?.[0]?.specification || '—';
           return (
             <span
               className="text-xs text-text font-medium line-clamp-1"
               title={subject}
             >
-              {subject || '—'}
+              {subject}
             </span>
           );
         },

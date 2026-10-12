@@ -22,6 +22,7 @@ import {
   Button,
   Card,
   Input,
+  Textarea,
   DatePicker,
   Select,
   SearchableSelect,
@@ -260,19 +261,13 @@ export default function PurchaseRequisitionCreate() {
 
           {/* Row 3: Remarks (Spans all 3 columns) */}
           <div className="md:col-span-3">
-            <label
-              htmlFor="pr-remarks"
-              className="text-sm font-medium text-text leading-none block mb-1.5"
-            >
-              Remarks / Justification
-            </label>
-            <textarea
+            <Textarea
               id="pr-remarks"
+              label="Remarks / Justification"
               rows={3}
               placeholder="Enter any justification, special requirements, or vendor delivery instructions..."
               value={formData.remarks}
               onChange={(e) => handleFieldChange('remarks', e.target.value)}
-              className="w-full rounded-lg border border-border bg-bg text-text text-sm p-3 placeholder:text-text-muted outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors resize-y"
             />
           </div>
         </div>
@@ -285,13 +280,14 @@ export default function PurchaseRequisitionCreate() {
       />
 
       {/* ── Section 3: Bottom Form Actions ── */}
-      <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-4 border-t border-border">
+      <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-4 border-t border-border">
         <Button
           type="button"
           variant="secondary"
           onClick={() => navigate('/purchase-requisition')}
           className="w-full sm:w-auto"
         >
+          <X size={16} className="mr-1.5" />
           Cancel
         </Button>
 

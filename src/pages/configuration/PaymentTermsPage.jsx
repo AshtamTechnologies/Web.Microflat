@@ -25,6 +25,7 @@ import {
   Card,
   Button,
   Input,
+  Textarea,
   Toggle,
   Modal,
   ConfirmModal,
@@ -774,39 +775,25 @@ export default function PaymentTermsPage() {
           />
 
           {/* Description */}
-          <div className="space-y-1.5">
-            <label
-              htmlFor="description"
-              className="block text-xs font-semibold text-text uppercase tracking-wider"
-            >
-              Description (Optional)
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              rows={3}
-              maxLength={250}
-              placeholder="e.g. Standard 30 days commercial credit period from invoice date..."
-              value={formData.description}
-              onChange={(e) => {
-                const val = e.target.value;
-                setFormData((prev) => ({ ...prev, description: val }));
-                if (formErrors.description) {
-                  setFormErrors((prev) => ({ ...prev, description: '' }));
-                }
-              }}
-              className="w-full rounded-xl border border-border bg-bg px-3.5 py-2.5 text-sm text-text placeholder:text-text-muted focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20 transition-all resize-none"
-            />
-            <div className="flex items-center justify-between text-[11px] text-text-muted">
-              <span>Short description or billing agreement note</span>
-              <span className="font-mono tabular-nums">
-                {formData.description.length}/250
-              </span>
-            </div>
-            {formErrors.description && (
-              <p className="text-xs text-danger">{formErrors.description}</p>
-            )}
-          </div>
+          <Textarea
+            id="description"
+            name="description"
+            label="Description (Optional)"
+            rows={3}
+            maxLength={250}
+            showCharCount
+            placeholder="e.g. Standard 30 days commercial credit period from invoice date..."
+            value={formData.description}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFormData((prev) => ({ ...prev, description: val }));
+              if (formErrors.description) {
+                setFormErrors((prev) => ({ ...prev, description: '' }));
+              }
+            }}
+            error={formErrors.description}
+            hint="Short description or billing agreement note"
+          />
 
           {/* Created On (Read-only in edit mode) */}
           {editingTerm && (

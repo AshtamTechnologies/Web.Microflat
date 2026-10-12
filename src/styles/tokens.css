@@ -50,6 +50,31 @@
   --primary:        var(--brand-500);
   --primary-hover:  var(--brand-600);
   --primary-active: var(--brand-700);
+
+  /* ── Form Control & Label Tokens ────────────────────────────────────────── */
+  --label-color:        var(--heading);
+  --label-font-size:    0.875rem;
+  --label-font-weight:  500;
+  --label-line-height:  1;
+
+  --field-bg:           var(--bg);
+  --field-border:       var(--border);
+  --field-border-hover: var(--text-muted);
+  --field-border-focus: var(--primary);
+  --field-text:         var(--text);
+  --field-placeholder:  var(--text-muted);
+  --field-radius:       0.5rem;
+
+  /* ── View / Detail Display Tokens ────────────────────────────────────────── */
+  --view-label-color:        var(--text-muted);
+  --view-label-font-size:    0.75rem;
+  --view-label-font-weight:  500;
+  --view-label-transform:    none;
+  --view-label-spacing:      normal;
+
+  --view-value-color:        var(--heading);
+  --view-value-font-size:    0.875rem;
+  --view-value-font-weight:  600;
 }
 
 

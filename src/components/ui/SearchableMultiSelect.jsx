@@ -170,11 +170,11 @@ export default function SearchableMultiSelect({
       {label && (
         <label
           htmlFor={id}
-          className="text-sm font-medium text-heading leading-none"
+          className="form-label"
         >
           {label}
           {required && (
-            <span className="text-danger ml-0.5" aria-hidden="true">
+            <span className="form-label-required" aria-hidden="true">
               *
             </span>
           )}

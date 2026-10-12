@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Modal, Input, SearchableMultiSelect, Button, StatusSwitch } from '../../components/ui';
+import { Modal, Input, Textarea, SearchableMultiSelect, Button, StatusSwitch } from '../../components/ui';
 import { ROLE_OPTIONS } from '../../mocks/users';
 
 const INITIAL_FORM = {
@@ -260,31 +260,21 @@ export default function UserFormModal({
 
           {/* Address (Spans 2 columns on desktop) */}
           <div className="sm:col-span-2">
-            <label
-              htmlFor="user-address"
-              className="text-sm font-medium text-heading block leading-none mb-1.5"
-            >
-              Address
-            </label>
-            <textarea
+            <Textarea
               id="user-address"
               name="address"
+              label="Address"
               rows={2}
               value={form.address}
               onChange={handleChange}
               placeholder="Enter full address, street, city, state, postal code..."
-              className={[
-                'w-full rounded-lg border bg-bg text-heading text-sm px-3 py-2',
-                'border-border placeholder:text-text-muted transition-all duration-150',
-                'focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none resize-none',
-              ].join(' ')}
             />
           </div>
 
           {/* Status Switch Button */}
           <div className="sm:col-span-2 flex flex-col justify-between pt-1">
-            <label className="text-sm font-medium text-heading block leading-none mb-1.5">
-              Account Status <span className="text-danger" aria-hidden="true">*</span>
+            <label className="form-label block mb-1.5">
+              Account Status <span className="form-label-required" aria-hidden="true">*</span>
             </label>
             <div className="flex items-center h-[42px]">
               <StatusSwitch

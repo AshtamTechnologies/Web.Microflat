@@ -93,11 +93,11 @@ export default function TagInput({
       {label && (
         <label
           htmlFor={id}
-          className="text-sm font-medium text-heading leading-none flex items-center gap-1"
+          className="form-label flex items-center gap-1"
         >
           {label}
           {required && (
-            <span className="text-danger" aria-hidden="true">
+            <span className="form-label-required" aria-hidden="true">
               *
             </span>
           )}

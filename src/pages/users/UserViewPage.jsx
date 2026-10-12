@@ -29,6 +29,7 @@ import {
   Card,
   Button,
   Badge,
+  DetailField,
   TableContainer,
   Th,
   Td,
@@ -218,56 +219,53 @@ export default function UserViewPage() {
         {/* Contact & Role Information Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Primary Mobile */}
-          <div className="p-3.5 bg-surface/40 border border-border rounded-xl space-y-1">
-            <span className="text-[11px] font-medium text-text-muted block uppercase tracking-wider">
-              Primary Mobile
-            </span>
-            <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
-              <Phone size={14} className="text-primary shrink-0" />
-              <span>{user.mobile || '—'}</span>
-            </div>
+          <div className="p-3.5 bg-surface/40 border border-border rounded-xl">
+            <DetailField
+              label="Primary Mobile"
+              value={user.mobile}
+              icon={Phone}
+              isPhone
+              mono
+            />
           </div>
 
           {/* Secondary Phone */}
-          <div className="p-3.5 bg-surface/40 border border-border rounded-xl space-y-1">
-            <span className="text-[11px] font-medium text-text-muted block uppercase tracking-wider">
-              Secondary Phone
-            </span>
-            <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
-              <Smartphone size={14} className="text-text-muted shrink-0" />
-              <span>{user.secondaryPhone || 'Not provided'}</span>
-            </div>
+          <div className="p-3.5 bg-surface/40 border border-border rounded-xl">
+            <DetailField
+              label="Secondary Phone"
+              value={user.secondaryPhone || 'Not provided'}
+              icon={Smartphone}
+              mono
+            />
           </div>
 
           {/* Assigned Roles */}
-          <div className="p-3.5 bg-surface/40 border border-border rounded-xl space-y-1.5">
-            <span className="text-[11px] font-medium text-text-muted block uppercase tracking-wider">
-              Assigned Roles ({userRoles.length})
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {userRoles.map((r, i) => (
-                <span
-                  key={i}
-                  className="inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium bg-primary/10 text-primary border border-primary/20"
-                >
-                  <ShieldCheck size={12} className="shrink-0" />
-                  {r}
-                </span>
-              ))}
-            </div>
+          <div className="p-3.5 bg-surface/40 border border-border rounded-xl">
+            <DetailField label={`Assigned Roles (${userRoles.length})`}>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {userRoles.map((r, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                  >
+                    <ShieldCheck size={12} className="shrink-0" />
+                    {r}
+                  </span>
+                ))}
+              </div>
+            </DetailField>
           </div>
         </div>
 
         {/* Address */}
         <div className="p-3.5 bg-surface/40 border border-border rounded-xl flex items-start gap-3">
           <MapPin size={16} className="text-primary shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <span className="text-[11px] font-medium text-text-muted block uppercase tracking-wider">
-              Registered Address
-            </span>
-            <p className="text-xs sm:text-sm text-heading leading-relaxed">
-              {user.address || <span className="text-text-muted italic">No address provided</span>}
-            </p>
+          <div className="space-y-0.5 min-w-0 flex-1">
+            <DetailField
+              label="Registered Address"
+              value={user.address || 'No address provided'}
+              valueClassName="text-xs sm:text-sm text-heading leading-relaxed font-normal"
+            />
           </div>
         </div>
       </Card>

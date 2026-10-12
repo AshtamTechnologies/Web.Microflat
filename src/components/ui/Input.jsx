@@ -30,11 +30,11 @@ export default function Input({
       {label && (
         <label
           htmlFor={id}
-          className="text-sm font-medium text-text leading-none"
+          className="form-label"
         >
           {label}
           {required && (
-            <span className="text-danger ml-0.5" aria-hidden="true">
+            <span className="form-label-required" aria-hidden="true">
               *
             </span>
           )}
@@ -53,7 +53,7 @@ export default function Input({
           className={[
             'w-full rounded-lg border bg-bg text-text text-sm',
             'px-3 py-2.5 leading-snug',
-            'placeholder:text-text-muted',
+            'placeholder:text-text-muted/50 placeholder:font-normal',
             'transition-colors duration-150 ease-in-out',
             /* focus */
             'outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',

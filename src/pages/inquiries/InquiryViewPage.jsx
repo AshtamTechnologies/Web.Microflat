@@ -48,6 +48,7 @@ import {
   Button,
   Badge,
   Card,
+  DetailField,
   ErrorBanner,
   TableContainer,
   Th,
@@ -282,10 +283,6 @@ export default function InquiryViewPage() {
               </Badge>
             </div>
           </div>
-
-          <p className="text-sm font-medium text-text-muted mt-1 max-w-2xl">
-            {inquiry.Subject}
-          </p>
         </div>
 
         {/* Action Buttons */}
@@ -351,31 +348,28 @@ export default function InquiryViewPage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div>
-              <span className="text-text-muted block mb-0.5">Inquiry Date</span>
-              <span className="font-mono tabular-nums font-medium text-heading text-sm">
-                {inquiry.InquiryDate}
-              </span>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <DetailField
+              label="Inquiry Date"
+              value={inquiry.InquiryDate}
+              mono
+            />
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Estimate Date</span>
-              <span className="font-mono tabular-nums font-medium text-heading text-sm flex items-center gap-1.5">
-                <Calendar size={14} className="text-text-muted" />
-                {inquiry.RequiredByDate || inquiry.EstimateDate || 'Not specified'}
-              </span>
-            </div>
+            <DetailField
+              label="Estimate Date"
+              value={inquiry.RequiredByDate || inquiry.EstimateDate || 'Not specified'}
+              icon={Calendar}
+              mono
+            />
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Sales Region</span>
-              <span className="font-medium text-heading text-sm">
-                {getRegionName(inquiry.RegionId)}
-              </span>
-            </div>
+            <DetailField
+              label="Sales Region"
+              value={getRegionName(inquiry.RegionId)}
+            />
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Source Channel</span>
+            <DetailField
+              label="Source Channel"
+            >
               <span className="font-medium text-heading text-sm">
                 {inquiry.Source || 'Website'}
                 {inquiry.Source === 'Distributor' && inquiry.DistributorName ? (
@@ -384,18 +378,11 @@ export default function InquiryViewPage() {
                   </span>
                 ) : null}
               </span>
-            </div>
-
-            <div className="sm:col-span-2">
-              <span className="text-text-muted block mb-0.5">Requirement Subject</span>
-              <p className="font-semibold text-heading text-sm">
-                {inquiry.Subject}
-              </p>
-            </div>
+            </DetailField>
 
             {inquiry.Description && (
               <div className="sm:col-span-2 pt-2 border-t border-border/60">
-                <span className="text-text-muted block mb-1">Specifications & Notes</span>
+                <span className="view-field-label">Specifications & Notes</span>
                 {inquiry.Description.includes('<') ? (
                   <div
                     className="rich-text-content text-text bg-surface/40 p-3.5 rounded-lg border border-border leading-relaxed text-sm overflow-x-auto"
@@ -421,65 +408,49 @@ export default function InquiryViewPage() {
             <span className="text-xs text-text-muted">Client Profile</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="sm:col-span-2">
-              <span className="text-text-muted block mb-0.5">Company / Customer Name</span>
-              <span className="font-bold text-heading text-sm">
-                {inquiry.CustomerName}
-              </span>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <DetailField
+              label="Company / Customer Name"
+              value={inquiry.CustomerName}
+              className="sm:col-span-2"
+              valueClassName="text-sm font-bold"
+            />
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Contact Person</span>
-              <span className="font-medium text-heading text-sm flex items-center gap-1.5">
-                <User size={14} className="text-text-muted" />
-                {inquiry.ContactPerson || '—'}
-              </span>
-            </div>
+            <DetailField
+              label="Contact Person"
+              value={inquiry.ContactPerson}
+              icon={User}
+            />
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Email Address</span>
-              {inquiry.Email ? (
-                <a
-                  href={`mailto:${inquiry.Email}`}
-                  className="font-medium text-primary hover:underline text-sm flex items-center gap-1.5 truncate"
-                >
-                  <Mail size={14} className="shrink-0 text-primary/80" />
-                  {inquiry.Email}
-                </a>
-              ) : (
-                <span className="text-text-muted">—</span>
-              )}
-            </div>
+            <DetailField
+              label="Email Address"
+              value={inquiry.Email}
+              icon={Mail}
+              isEmail
+            />
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Phone / Contact No</span>
-              {inquiry.Phone ? (
-                <span className="font-mono tabular-nums font-medium text-heading text-sm flex items-center gap-1.5">
-                  <Phone size={14} className="text-text-muted" />
-                  {inquiry.Phone}
-                </span>
-              ) : (
-                <span className="text-text-muted">—</span>
-              )}
-            </div>
+            <DetailField
+              label="Phone / Contact No"
+              value={inquiry.Phone}
+              icon={Phone}
+              isPhone
+              mono
+            />
 
             {inquiry.AlternativePhone ? (
-              <div>
-                <span className="text-text-muted block mb-0.5">Alternative Phone</span>
-                <span className="font-mono tabular-nums font-medium text-heading text-sm flex items-center gap-1.5">
-                  <Phone size={14} className="text-text-muted" />
-                  {inquiry.AlternativePhone}
-                </span>
-              </div>
+              <DetailField
+                label="Alternative Phone"
+                value={inquiry.AlternativePhone}
+                icon={Phone}
+                isPhone
+                mono
+              />
             ) : null}
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Sales Territory</span>
-              <span className="font-medium text-heading text-sm">
-                {getRegionName(inquiry.RegionId)}
-              </span>
-            </div>
+            <DetailField
+              label="Sales Territory"
+              value={getRegionName(inquiry.RegionId)}
+            />
 
             {(inquiry.AddressLine1 || inquiry.AddressLine2 || inquiry.City || inquiry.State || inquiry.Country) && (
               <div className="sm:col-span-2 pt-2 border-t border-border/60">

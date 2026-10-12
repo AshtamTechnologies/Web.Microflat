@@ -5,7 +5,7 @@
  *
  * 2-Step Workflow:
  *   Step 1: Inquiry & Customer Details
- *     - 1. Inquiry Details (InquiryNo, InquiryDate, Subject, Description, Source, Priority)
+ *     - 1. Inquiry Details (InquiryNo, InquiryDate, Description, Source, Priority)
  *     - 2. Customer Information (CustomerName, ContactPerson, Email, Phone, AlternativePhone, AddressLine1, AddressLine2, City, State, Country)
  *     - 3. Classification & Value (RegionId, CategoryId, Quantity, UOM, EstimatedValue, RequiredByDate)
  *
@@ -16,6 +16,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   ArrowLeft,
   ArrowRight,
@@ -83,6 +84,20 @@ const PRODUCT_SELECT_OPTIONS = [
   })),
 ];
 
+function normalizeUom(val) {
+  if (!val) return 'NOS';
+  const upper = String(val).trim().toUpperCase();
+  if (upper === 'METER' || upper === 'METERS' || upper === 'M') return 'MTR';
+  if (upper === 'NO' || upper === 'NOS' || upper === 'NUMBERS') return 'NOS';
+  if (upper === 'PC' || upper === 'PCS' || upper === 'PIECES') return 'PCS';
+  if (upper === 'SET' || upper === 'SETS') return 'SETS';
+  if (upper === 'UNIT' || upper === 'UNITS') return 'UNITS';
+  if (upper === 'KGS' || upper === 'KG' || upper === 'KILOGRAM') return 'KG';
+  if (upper === 'BOXES' || upper === 'BOX') return 'BOX';
+  const match = UOM_OPTIONS.find((o) => o.value === upper);
+  return match ? match.value : 'NOS';
+}
+
 const INITIAL_ITEM_ENTRY = {
   prItemId: null,
   itemId: '',
@@ -90,7 +105,7 @@ const INITIAL_ITEM_ENTRY = {
   itemName: '',
   specification: '',
   quantity: '',
-  uom: 'Nos',
+  uom: 'NOS',
   parentCategoryId: '',
   categoryId: '',
   categoryName: '',
@@ -138,9 +153,6 @@ function validateField(name, value) {
     case 'InquiryDate':
       if (!str) return 'Inquiry date is required.';
       return '';
-    case 'Subject':
-      if (!str) return 'Inquiry subject / requirement title is required.';
-      return '';
     case 'CustomerName':
       if (!str) return 'Customer / Company name is required.';
       return '';
@@ -185,7 +197,6 @@ function validateStep1(form) {
   const requiredFields = [
     'InquiryNo',
     'InquiryDate',
-    'Subject',
     'CustomerName',
     'RegionId',
   ];
@@ -252,7 +263,6 @@ export default function InquiryFormPage() {
   const [initialSnapshot, setInitialSnapshot] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // 2-Level Parent and Sub-Region options
   const parentRegionOptions = useMemo(() => {
@@ -374,7 +384,7 @@ export default function InquiryFormPage() {
           itemCode: selectedMat.itemCode,
           itemName: selectedMat.itemName,
           specification: selectedMat.specification,
-          uom: selectedMat.uom || prev.uom || 'Nos',
+          uom: normalizeUom(selectedMat.uom || prev.uom),
         }));
       } else {
         setItemFormState((prev) => ({
@@ -400,7 +410,7 @@ export default function InquiryFormPage() {
   const validateItemForm = () => {
     const errs = {};
     if (!itemFormState.itemCode || !itemFormState.itemCode.trim()) {
-      errs.itemCode = 'Item code is required';
+      errs.itemCode = 'Please select a product from the catalog';
     }
     if (
       itemFormState.quantity === '' ||
@@ -426,7 +436,7 @@ export default function InquiryFormPage() {
       itemName: '',
       specification: '',
       quantity: '',
-      uom: 'Nos',
+      uom: 'NOS',
       parentCategoryId: '',
       categoryId: '',
       categoryName: '',
@@ -437,11 +447,10 @@ export default function InquiryFormPage() {
     if (e && e.preventDefault) e.preventDefault();
 
     if (!validateItemForm()) {
-      toast.error('Please enter required item code and a valid quantity (> 0)');
       return;
     }
 
-    const selectedCatId = itemFormState.categoryId || '';
+    const selectedCatId = itemFormState.categoryId || itemFormState.parentCategoryId || '';
     const currentCatName = selectedCatId ? getCategoryPathName(selectedCatId, categories) : '';
     const selectedMat = MOCK_MATERIALS.find(
       (m) => String(m.itemId) === String(itemFormState.itemId)
@@ -449,7 +458,7 @@ export default function InquiryFormPage() {
     const resolvedItemCode = itemFormState.itemCode?.trim() || (selectedMat ? selectedMat.itemCode : '') || '—';
     const resolvedItemName = itemFormState.itemName?.trim() || (selectedMat ? selectedMat.itemName : '') || resolvedItemCode;
     const resolvedQty = Number(itemFormState.quantity) || 1;
-    const resolvedUom = itemFormState.uom || 'Nos';
+    const resolvedUom = normalizeUom(itemFormState.uom);
     const resolvedSpec = itemFormState.specification?.trim() || (selectedMat ? selectedMat.specification : '') || '';
 
     if (isEditingItem) {
@@ -502,7 +511,6 @@ export default function InquiryFormPage() {
       }));
       toast.success('Item added to inquiry');
       resetItemForm();
-
     }
   };
 
@@ -514,9 +522,21 @@ export default function InquiryFormPage() {
         : index;
 
     const foundCat = item.categoryId ? categories.find((c) => c.categoryId === item.categoryId) : null;
-    const parentCatId = foundCat && foundCat.parentCategoryId
-      ? foundCat.parentCategoryId
-      : (foundCat ? foundCat.categoryId : (item.parentCategoryId || ''));
+    let parentCatId = '';
+    let subCatId = '';
+
+    if (foundCat) {
+      if (foundCat.parentCategoryId) {
+        parentCatId = foundCat.parentCategoryId;
+        subCatId = foundCat.categoryId;
+      } else {
+        parentCatId = foundCat.categoryId;
+        subCatId = '';
+      }
+    } else {
+      parentCatId = item.parentCategoryId || '';
+      subCatId = item.categoryId || '';
+    }
 
     setEditingItemId(id);
     setItemFieldErrors({});
@@ -527,9 +547,9 @@ export default function InquiryFormPage() {
       itemName: item.itemName || '',
       specification: item.specification || '',
       quantity: item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? String(item.quantity) : '1',
-      uom: item.uom || 'Nos',
+      uom: normalizeUom(item.uom),
       parentCategoryId: parentCatId,
-      categoryId: item.categoryId || '',
+      categoryId: subCatId,
       categoryName: item.categoryName || (item.categoryId ? getCategoryPathName(item.categoryId, categories) : '') || '—',
     });
   };
@@ -549,7 +569,7 @@ export default function InquiryFormPage() {
 
   // Toggle select all items in table
   const handleToggleSelectAllItems = () => {
-    const allIds = (form.items || []).map((it, idx) => it.prItemId || it.id || idx);
+    const allIds = (form.items || []).map((it, idx) => (it.prItemId !== undefined && it.prItemId !== null ? it.prItemId : (it.id !== undefined && it.id !== null ? it.id : idx)));
     if (selectedItemIds.size === allIds.length && allIds.length > 0) {
       setSelectedItemIds(new Set());
     } else {
@@ -567,6 +587,8 @@ export default function InquiryFormPage() {
       ...prev,
       items: updated,
       Quantity: String(totalQty || 1),
+      CategoryId: updated.length > 0 ? (updated[0].categoryId || prev.CategoryId) : '',
+      UOM: updated.length > 0 ? (updated[0].uom || prev.UOM) : 'PCS',
     }));
 
     if (editingItemIndex === targetIndex || (itemToDelete.item && (editingItemId === itemToDelete.item.prItemId || editingItemId === itemToDelete.item.id))) {
@@ -580,7 +602,7 @@ export default function InquiryFormPage() {
   const handleConfirmBulkDelete = () => {
     const count = selectedItemIds.size;
     const updated = (form.items || []).filter((it, idx) => {
-      const id = it.prItemId || it.id || idx;
+      const id = it.prItemId !== undefined && it.prItemId !== null ? it.prItemId : (it.id !== undefined && it.id !== null ? it.id : idx);
       return !selectedItemIds.has(id);
     });
     const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
@@ -588,6 +610,8 @@ export default function InquiryFormPage() {
       ...prev,
       items: updated,
       Quantity: String(totalQty || 1),
+      CategoryId: updated.length > 0 ? (updated[0].categoryId || prev.CategoryId) : '',
+      UOM: updated.length > 0 ? (updated[0].uom || prev.UOM) : 'PCS',
     }));
 
     toast.success(`Removed ${count} item${count === 1 ? '' : 's'} from inquiry`);
@@ -631,7 +655,11 @@ export default function InquiryFormPage() {
       if (existingInquiry && initializedIdRef.current !== id) {
         initializedIdRef.current = id;
         const mappedItems = Array.isArray(existingInquiry.items)
-          ? existingInquiry.items
+          ? existingInquiry.items.map((it) => ({
+            ...it,
+            uom: normalizeUom(it.uom),
+            categoryName: it.categoryName || (it.categoryId ? getCategoryPathName(it.categoryId, categories) : '—'),
+          }))
           : existingInquiry.Quantity
             ? [
               {
@@ -640,7 +668,9 @@ export default function InquiryFormPage() {
                 itemName: existingInquiry.Subject || 'Main Product Requirement',
                 specification: existingInquiry.Specification || '',
                 quantity: Number(existingInquiry.Quantity) || 1,
-                uom: existingInquiry.UOM || 'Nos',
+                uom: normalizeUom(existingInquiry.UOM),
+                categoryId: existingInquiry.CategoryId || '',
+                categoryName: existingInquiry.CategoryId ? getCategoryPathName(existingInquiry.CategoryId, categories) : '—',
               },
             ]
             : [];
@@ -670,9 +700,9 @@ export default function InquiryFormPage() {
           Country: existingInquiry.Country || 'India',
           parentRegionId: resolvedParentRegId,
           RegionId: existingInquiry.RegionId || '',
-          CategoryId: existingInquiry.CategoryId || '',
+          CategoryId: existingInquiry.CategoryId || (mappedItems[0]?.categoryId || ''),
           Quantity: existingInquiry.Quantity !== undefined ? String(existingInquiry.Quantity) : '1',
-          UOM: existingInquiry.UOM || 'PCS',
+          UOM: normalizeUom(existingInquiry.UOM || mappedItems[0]?.uom || 'PCS'),
           EstimatedValue: existingInquiry.EstimatedValue !== undefined ? String(existingInquiry.EstimatedValue) : '',
           RequiredByDate: existingInquiry.RequiredByDate || existingInquiry.EstimateDate || '',
           items: mappedItems,
@@ -738,15 +768,6 @@ export default function InquiryFormPage() {
   }
 
   function handleCancel() {
-    if (isDirty) {
-      setShowDiscardConfirm(true);
-      return;
-    }
-    navigate(isEdit && existingInquiry ? `/inquiries/${existingInquiry.id || existingInquiry.InquiryId}` : '/inquiries');
-  }
-
-  function handleConfirmDiscard() {
-    setShowDiscardConfirm(false);
     navigate(isEdit && existingInquiry ? `/inquiries/${existingInquiry.id || existingInquiry.InquiryId}` : '/inquiries');
   }
 
@@ -762,6 +783,17 @@ export default function InquiryFormPage() {
       }
       return;
     }
+
+    if (itemFormState.itemId || itemFormState.itemCode?.trim()) {
+      toast.error('You have an unadded product item in progress. Please click "+ Add Item" or Cancel before continuing.');
+      const el = document.getElementById('item-catalog-preset');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus?.();
+      }
+      return;
+    }
+
     setErrors({});
     setCurrentStep(2);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -868,7 +900,6 @@ export default function InquiryFormPage() {
       const step1Fields = [
         'InquiryNo',
         'InquiryDate',
-        'Subject',
         'CustomerName',
         'Email',
         'Phone',
@@ -891,11 +922,28 @@ export default function InquiryFormPage() {
       return;
     }
 
+    if (itemFormState.itemId || itemFormState.itemCode?.trim()) {
+      toast.error('You have an unadded product item in progress. Please click "+ Add Item" or Cancel before submitting.');
+      if (currentStep !== 1) setCurrentStep(1);
+      const el = document.getElementById('item-catalog-preset');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus?.();
+      }
+      return;
+    }
+
+    const resolvedSubject = form.Subject?.trim() || form.items?.[0]?.itemName || form.items?.[0]?.itemCode || form.CustomerName || 'Inquiry';
+    const submissionForm = {
+      ...form,
+      Subject: resolvedSubject,
+    };
+
     setLoading(true);
     try {
       if (isEdit && existingInquiry) {
         const inquiryId = existingInquiry.id || existingInquiry.InquiryId;
-        const res = await updateInquiry(inquiryId, form);
+        const res = await updateInquiry(inquiryId, submissionForm);
         if (res.ok) {
           if (form.initialComment?.trim()) {
             addInquiryComment(inquiryId, form.initialComment.trim());
@@ -914,7 +962,7 @@ export default function InquiryFormPage() {
           navigate(`/inquiries/${inquiryId}`);
         }
       } else {
-        const res = await addInquiry(form);
+        const res = await addInquiry(submissionForm);
         if (res.ok && res.inquiry) {
           const newInquiryId = res.inquiry.id || res.inquiry.InquiryId;
           // Add attached documents to new inquiry
@@ -1117,7 +1165,7 @@ export default function InquiryFormPage() {
                 <span>1. Inquiry Details</span>
               </div>
               <span className="text-xs text-text-muted font-normal">
-                Reference code, date, estimate date, subject title & priority
+                Reference code, date, estimate date & priority
               </span>
             </div>
 
@@ -1234,20 +1282,6 @@ export default function InquiryFormPage() {
                   </div>
                 )}
               </div>
-
-              {/* Subject */}
-              <Input
-                id="Subject"
-                name="Subject"
-                type="text"
-                label="Inquiry Subject / Item Description Title"
-                placeholder="e.g. Custom Cast Iron Surface Plate 2000x1000mm Grade 0"
-                required
-                value={form.Subject}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                error={errors.Subject}
-              />
 
               {/* Description (Rich Text Editor) */}
               <RichTextEditor
@@ -1423,9 +1457,12 @@ export default function InquiryFormPage() {
               <div className="flex items-center gap-2 text-heading font-semibold text-base">
                 <Package size={18} className="text-primary shrink-0" aria-hidden="true" />
                 <span>3. Product Selection</span>
+                <span className="text-[11px] font-medium text-text-muted bg-surface border border-border px-2 py-0.5 rounded-full">
+                  Optional
+                </span>
               </div>
               <span className="text-xs text-text-muted font-normal">
-                Category classification & multiple item specifications
+                Category classification & optional item specifications (can be specified later)
               </span>
             </div>
 
@@ -1519,16 +1556,18 @@ export default function InquiryFormPage() {
                     />
                   </div>
 
-                  {/* Item Code */}
+                  {/* Item Code (Disabled: Auto-populated from Catalog) */}
                   <div>
                     <Input
                       id="item-form-code"
                       label="Item Code"
-                      required
-                      placeholder="e.g. MAT-FST-M6-125"
+                      placeholder="Auto-populated from Product Catalog"
                       value={itemFormState.itemCode || ''}
                       error={itemFieldErrors.itemCode}
-                      onChange={(e) => handleItemFieldChange('itemCode', e.target.value)}
+                      disabled
+                      readOnly
+                      className="font-mono text-xs bg-surface/70 text-text-muted cursor-not-allowed opacity-90 select-none placeholder:text-text-muted/50"
+                      hint="Auto-assigned when selecting a product above"
                     />
                   </div>
 
@@ -2244,18 +2283,6 @@ export default function InquiryFormPage() {
           </div>
         </Modal>
       )}
-
-      {/* ── Discard Changes Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={showDiscardConfirm}
-        onClose={() => setShowDiscardConfirm(false)}
-        onConfirm={handleConfirmDiscard}
-        title="Discard Unsaved Changes?"
-        message="You have unsaved changes in this inquiry form. Are you sure you want to discard them? All entered details will be lost."
-        confirmText="Discard Changes"
-        cancelText="Keep Editing"
-        variant="danger"
-      />
 
       {/* ── Single Product Item Delete Confirmation Modal ── */}
       <ConfirmModal

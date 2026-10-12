@@ -14,6 +14,8 @@ export { default as ConfirmModal }     from './ConfirmModal';
 export { default as DatePicker }       from './DatePicker';
 export { default as RichTextEditor }   from './RichTextEditor';
 export { default as TagInput }         from './TagInput';
+export { default as Textarea }         from './Textarea';
+export { default as DetailField }      from './DetailField';
 export { TableContainer, Th, Td }     from './Table';
 
 

@@ -161,10 +161,10 @@ export default function RichTextEditor({
         <div className="flex items-center justify-between">
           <label
             htmlFor={id}
-            className="text-sm font-medium text-heading leading-none flex items-center gap-1"
+            className="form-label flex items-center gap-1"
           >
             {label}
-            {required && <span className="text-danger">*</span>}
+            {required && <span className="form-label-required">*</span>}
           </label>
           <span className="text-xs text-text-muted">Rich Text Editor</span>
         </div>

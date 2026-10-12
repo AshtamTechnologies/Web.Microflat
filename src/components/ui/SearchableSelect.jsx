@@ -176,11 +176,11 @@ export default function SearchableSelect({
       {label && (
         <label
           htmlFor={id}
-          className="text-sm font-medium text-heading leading-none"
+          className="form-label"
         >
           {label}
           {required && (
-            <span className="text-danger ml-0.5" aria-hidden="true">
+            <span className="form-label-required" aria-hidden="true">
               *
             </span>
           )}
@@ -217,7 +217,7 @@ export default function SearchableSelect({
           className={
             selectedOption
               ? 'text-heading font-medium truncate'
-              : 'text-text-muted truncate'
+              : 'text-text-muted/50 font-normal truncate'
           }
         >
           {selectedOption ? selectedOption.label : placeholder}
@@ -264,7 +264,7 @@ export default function SearchableSelect({
                 }}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={searchPlaceholder}
-                className="w-full bg-transparent text-sm text-heading placeholder:text-text-muted outline-none py-0.5"
+                className="w-full bg-transparent text-sm text-heading placeholder:text-text-muted/50 placeholder:font-normal outline-none py-0.5"
               />
               {searchQuery && (
                 <button

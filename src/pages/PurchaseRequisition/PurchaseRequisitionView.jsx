@@ -27,6 +27,7 @@ import {
   Button,
   Card,
   Badge,
+  DetailField,
   TableContainer,
   Th,
   Td,
@@ -251,73 +252,53 @@ export default function PurchaseRequisitionView() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
           {/* PR Number */}
-          <div>
-            <span className="text-xs font-medium text-text-muted uppercase tracking-wider block">
-              PR Number
-            </span>
-            <span className="font-semibold text-primary text-base">
-              {pr.prNumber}
-            </span>
-          </div>
+          <DetailField
+            label="PR Number"
+            value={pr.prNumber}
+            mono
+            valueClassName="text-primary font-semibold text-base"
+          />
 
           {/* PR Date */}
-          <div>
-            <span className="text-xs font-medium text-text-muted uppercase tracking-wider block">
-              PR Date
-            </span>
-            <span className="font-medium text-text">
-              {formatPRDate(pr.prDate)}
-            </span>
-          </div>
+          <DetailField
+            label="PR Date"
+            value={formatPRDate(pr.prDate)}
+            mono
+          />
 
           {/* Requested By */}
-          <div>
-            <span className="text-xs font-medium text-text-muted uppercase tracking-wider block">
-              Requested By
-            </span>
-            <span className="font-medium text-text">
-              {pr.requestedBy || '--'}
-            </span>
-          </div>
+          <DetailField
+            label="Requested By"
+            value={pr.requestedBy}
+          />
 
           {/* Department */}
-          <div>
-            <span className="text-xs font-medium text-text-muted uppercase tracking-wider block">
-              Department
-            </span>
-            <span className="font-medium text-text">
-              {pr.department || '--'}
-            </span>
-          </div>
+          <DetailField
+            label="Department"
+            value={pr.department}
+          />
 
           {/* Required Date */}
-          <div>
-            <span className="text-xs font-medium text-text-muted uppercase tracking-wider block">
-              Required Date
-            </span>
-            <span className="font-medium text-text">
-              {formatPRDate(pr.requiredDate)}
-            </span>
-          </div>
+          <DetailField
+            label="Required Date"
+            value={formatPRDate(pr.requiredDate)}
+            mono
+          />
 
           {/* Priority */}
-          <div>
-            <span className="text-xs font-medium text-text-muted uppercase tracking-wider block mb-1">
-              Priority
-            </span>
+          <DetailField label="Priority">
             <Badge variant={priorityVariant}>
               {pr.priority || 'Normal'}
             </Badge>
-          </div>
+          </DetailField>
 
           {/* Remarks */}
           <div className="sm:col-span-2 md:col-span-3">
-            <span className="text-xs font-medium text-text-muted uppercase tracking-wider block">
-              Remarks
-            </span>
-            <p className="font-medium text-text mt-0.5 whitespace-pre-wrap">
-              {pr.remarks || '--'}
-            </p>
+            <DetailField
+              label="Remarks"
+              value={pr.remarks}
+              valueClassName="font-medium text-text mt-0.5 whitespace-pre-wrap"
+            />
           </div>
         </div>
       </Card>

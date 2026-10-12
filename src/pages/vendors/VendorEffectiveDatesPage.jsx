@@ -53,6 +53,7 @@ import {
   SearchableSelect,
   Badge,
   Card,
+  DetailField,
   TableContainer,
   Th,
   Td,
@@ -134,35 +135,6 @@ function getApprovalBadgeVariant(status) {
     default:
       return 'pending';
   }
-}
-
-function DetailField({ label, value, mono = false, isLink = false, href = '' }) {
-  return (
-    <div className="space-y-1">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted block">
-        {label}
-      </span>
-      {isLink && href ? (
-        <a
-          href={href.startsWith('http') ? href : `https://${href}`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 break-all"
-        >
-          {value}
-          <ExternalLink size={12} className="shrink-0" />
-        </a>
-      ) : (
-        <div
-          className={`text-xs text-heading font-medium break-words ${
-            mono ? 'font-mono' : ''
-          }`}
-        >
-          {value || '—'}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function VendorEffectiveDatesPage() {

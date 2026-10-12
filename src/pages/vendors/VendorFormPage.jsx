@@ -42,7 +42,6 @@ import {
   Badge,
   Card,
   Modal,
-  ConfirmModal,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import {
@@ -235,7 +234,6 @@ export default function VendorFormPage() {
   const [initialSnapshot, setInitialSnapshot] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [isAuditCollapsed, setIsAuditCollapsed] = useState(true);
 
   // Attachment upload helper state
@@ -440,15 +438,6 @@ export default function VendorFormPage() {
   }
 
   function handleCancel() {
-    if (isDirty) {
-      setShowDiscardConfirm(true);
-      return;
-    }
-    navigate('/vendors');
-  }
-
-  function handleConfirmDiscard() {
-    setShowDiscardConfirm(false);
     navigate('/vendors');
   }
 
@@ -1241,18 +1230,6 @@ export default function VendorFormPage() {
           </div>
         </Modal>
       )}
-
-      {/* ── Discard Changes Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={showDiscardConfirm}
-        onClose={() => setShowDiscardConfirm(false)}
-        onConfirm={handleConfirmDiscard}
-        title="Discard Unsaved Changes?"
-        message="You have unsaved changes in this vendor form. Are you sure you want to discard them? All entered details will be lost."
-        confirmText="Discard Changes"
-        cancelText="Keep Editing"
-        variant="danger"
-      />
     </form>
   );
 }

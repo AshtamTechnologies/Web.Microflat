@@ -319,11 +319,11 @@ export default function DatePicker({
       {label && (
         <label
           htmlFor={id}
-          className="text-sm font-medium text-text leading-none flex items-center justify-between"
+          className="form-label flex items-center justify-between"
         >
           <span>
             {label}
-            {required && <span className="text-danger ml-0.5" aria-hidden="true">*</span>}
+            {required && <span className="form-label-required" aria-hidden="true">*</span>}
           </span>
         </label>
       )}
@@ -371,7 +371,7 @@ export default function DatePicker({
                 </span>
               </span>
             ) : (
-              <span className="text-text-muted truncate">{placeholder}</span>
+              <span className="text-text-muted/50 font-normal truncate">{placeholder}</span>
             )}
           </div>
 

@@ -128,9 +128,10 @@ export function useInquiries(usersList = mockUsers) {
         });
       }
 
+      const genId = `inq-${nextIdNumber++}`;
       const newInquiry = {
-        id: `inq-${nextIdNumber++}`,
-        InquiryId: `inq-${nextIdNumber}`,
+        id: genId,
+        InquiryId: genId,
         InquiryNo: generatedNo,
         InquiryDate: formData.InquiryDate || new Date().toISOString().slice(0, 10),
         CustomerName: formData.CustomerName?.trim() || '',
@@ -144,8 +145,8 @@ export function useInquiries(usersList = mockUsers) {
         State: formData.State?.trim() || '',
         Country: formData.Country?.trim() || 'India',
         RegionId: formData.RegionId || '',
-        CategoryId: formData.CategoryId || '',
-        Subject: formData.Subject?.trim() || '',
+        CategoryId: formData.CategoryId || (formData.items?.[0]?.categoryId || ''),
+        Subject: formData.Subject?.trim() || (formData.items?.[0]?.itemName || formData.items?.[0]?.itemCode || formData.CustomerName || 'Inquiry'),
         Description: formData.Description?.trim() || '',
         Source: formData.Source || 'Website',
         DistributorName: formData.Source === 'Distributor' ? (formData.DistributorName?.trim() || '') : '',
@@ -154,6 +155,7 @@ export function useInquiries(usersList = mockUsers) {
         UOM: formData.UOM || 'PCS',
         EstimatedValue: formData.EstimatedValue ? Number(formData.EstimatedValue) : 0,
         RequiredByDate: formData.RequiredByDate || '',
+        items: Array.isArray(formData.items) ? formData.items : [],
         StatusId: defaultStatus,
         AssignedTo: assignedUserId,
         CreatedBy: 'Ian Chesnut',

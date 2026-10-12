@@ -15,7 +15,7 @@ export default function Checkbox({ id, label, checked, onChange, className = '',
       htmlFor={id}
       className={[
         'inline-flex items-center gap-2.5 cursor-pointer select-none',
-        'text-sm text-text',
+        'form-label',
         className,
       ]
         .filter(Boolean)
