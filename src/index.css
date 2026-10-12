@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/tokens.css";
+@import "./styles/common.css";
 
 @theme inline {
   --font-sans:            var(--font-sans);
@@ -193,7 +194,9 @@ label:not(.sr-only):not([class*="text-xs"]):not([class*="text-[1"]):not([class*=
 }
 
 .view-field-value {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
   font-size: var(--view-value-font-size, 0.875rem);
   font-weight: var(--view-value-font-weight, 600);
   color: var(--view-value-color, var(--heading));

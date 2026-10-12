@@ -82,7 +82,7 @@ export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
         {/* Current State Info Banner */}
         <div className="p-3.5 bg-surface rounded-xl border border-border flex items-center justify-between gap-3">
           <div>
-            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider block">
+            <span className="view-field-label mf-detail-label">
               Inquiry Reference
             </span>
             <span className="font-mono text-xs font-bold text-primary">
@@ -94,7 +94,7 @@ export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
           </div>
 
           <div className="text-right">
-            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider block">
+            <span className="view-field-label mf-detail-label">
               Current Assignee
             </span>
             <span className="text-xs font-medium text-heading">

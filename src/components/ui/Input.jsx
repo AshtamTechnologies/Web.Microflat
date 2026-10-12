@@ -51,6 +51,8 @@ export default function Input({
         <input
           id={id}
           className={[
+            'mf-input',
+            hasError ? 'mf-input--err' : '',
             'w-full rounded-lg border bg-bg text-text text-sm',
             'px-3 py-2.5 leading-snug',
             'placeholder:text-text-muted/50 placeholder:font-normal',
@@ -62,12 +64,13 @@ export default function Input({
               ? 'border-danger focus:ring-danger/20 focus:border-danger'
               : 'border-border hover:border-text-muted',
             /* icon padding */
-            leftIcon ? 'pl-10' : '',
-            rightElement ? 'pr-10' : '',
+            leftIcon ? '!pl-10 pl-10' : '',
+            rightElement ? '!pr-10 pr-10' : '',
             className,
           ]
             .filter(Boolean)
             .join(' ')}
+          data-has-left-icon={leftIcon ? 'true' : undefined}
           aria-describedby={
             error ? `${id}-error` : hint ? `${id}-hint` : undefined
           }

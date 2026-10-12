@@ -15,8 +15,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Clock,
   FileText,
+  AlertCircle,
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -25,7 +25,7 @@ import {
   Card,
   Button,
   Input,
-  Textarea,
+  RichTextEditor,
   Toggle,
   Modal,
   ConfirmModal,
@@ -35,13 +35,12 @@ import {
   StatusSwitch,
 } from '../../components/ui';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
+import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
 const INITIAL_FORM = {
   termCode: '',
-  termName: '',
-  dueDays: 30,
   description: '',
   isActive: true,
 };
@@ -67,7 +66,7 @@ export default function PaymentTermsPage() {
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
 
   // TanStack table state for resizable columns and sorting
-  const [sorting, setSorting] = useState([{ id: 'dueDays', desc: false }]);
+  const [sorting, setSorting] = useState([{ id: 'termCode', desc: false }]);
   const [columnSizing, setColumnSizing] = useState({});
 
   // Modal states
@@ -81,6 +80,13 @@ export default function PaymentTermsPage() {
   const [termToDelete, setTermToDelete] = useState(null);
 
   /* ── Form Validation ── */
+  function isRichTextEmpty(val) {
+    if (!val) return true;
+    const str = typeof val === 'string' ? val : (val?.target?.value ?? '');
+    const stripped = str.replace(/<[^>]*>/g, '').trim();
+    return stripped.length === 0;
+  }
+
   function validateField(name, value) {
     const targetId = editingTerm?.paymentTermId || editingTerm?.id;
 
@@ -102,36 +108,9 @@ export default function PaymentTermsPage() {
         if (duplicate) return 'A payment term with this code already exists.';
         return '';
       }
-      case 'termName': {
-        const str = typeof value === 'string' ? value.trim() : '';
-        if (!str) return 'Term name is required.';
-        if (str.length > 100) return 'Term name cannot exceed 100 characters.';
-
-        // Check unique name (case-insensitive)
-        const duplicate = paymentTerms.find((pt) => {
-          const currentId = pt.paymentTermId || pt.id;
-          if (editingTerm && currentId === targetId) return false;
-          return pt.termName.toLowerCase() === str.toLowerCase();
-        });
-        if (duplicate) return 'A payment term with this name already exists.';
-        return '';
-      }
-      case 'dueDays': {
-        if (value === '' || value === null || value === undefined) {
-          return 'Due days is required.';
-        }
-        const num = Number(value);
-        if (isNaN(num) || !Number.isInteger(num)) {
-          return 'Due days must be an integer.';
-        }
-        if (num < 0 || num > 365) {
-          return 'Due days must be between 0 and 365.';
-        }
-        return '';
-      }
       case 'description': {
-        if (value && value.length > 250) {
-          return 'Description cannot exceed 250 characters.';
+        if (isRichTextEmpty(value)) {
+          return 'Description is required.';
         }
         return '';
       }
@@ -142,7 +121,7 @@ export default function PaymentTermsPage() {
 
   function validateAll(data) {
     const errors = {};
-    ['termCode', 'termName', 'dueDays', 'description'].forEach((field) => {
+    ['termCode', 'description'].forEach((field) => {
       const err = validateField(field, data[field]);
       if (err) errors[field] = err;
     });
@@ -161,8 +140,6 @@ export default function PaymentTermsPage() {
     setEditingTerm(term);
     setFormData({
       termCode: term.termCode || '',
-      termName: term.termName || '',
-      dueDays: term.dueDays !== undefined ? term.dueDays : 30,
       description: term.description || '',
       isActive: Boolean(term.isActive),
     });
@@ -180,7 +157,17 @@ export default function PaymentTermsPage() {
 
   async function handleFormSubmit(e) {
     if (e) e.preventDefault();
-    const errors = validateAll(formData);
+    const cleanDescription =
+      typeof formData.description === 'string'
+        ? formData.description
+        : (formData.description?.target?.value ?? '');
+
+    const normalizedData = {
+      ...formData,
+      description: cleanDescription,
+    };
+
+    const errors = validateAll(normalizedData);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -190,9 +177,9 @@ export default function PaymentTermsPage() {
     try {
       if (editingTerm) {
         const id = editingTerm.paymentTermId || editingTerm.id;
-        await updatePaymentTerm(id, formData);
+        await updatePaymentTerm(id, normalizedData);
       } else {
-        await addPaymentTerm(formData);
+        await addPaymentTerm(normalizedData);
       }
       setIsModalOpen(false);
       setEditingTerm(null);
@@ -228,7 +215,6 @@ export default function PaymentTermsPage() {
       const matchesSearch =
         !q ||
         term.termCode.toLowerCase().includes(q) ||
-        term.termName.toLowerCase().includes(q) ||
         (term.description && term.description.toLowerCase().includes(q));
 
       const matchesStatus =
@@ -255,60 +241,22 @@ export default function PaymentTermsPage() {
           </span>
         ),
       }),
-      columnHelper.accessor('termName', {
-        id: 'termName',
-        header: 'Term Name',
-        size: 240,
-        minSize: 180,
-        cell: ({ row }) => {
-          const term = row.original;
-          return (
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <HandCoins size={15} />
-              </div>
-              <span
-                className={`text-sm font-semibold truncate ${
-                  term.isActive ? 'text-heading' : 'text-text-muted line-through'
-                }`}
-                title={term.termName}
-              >
-                {term.termName}
-              </span>
-            </div>
-          );
-        },
-      }),
-      columnHelper.accessor('dueDays', {
-        id: 'dueDays',
-        header: 'Due Days',
-        size: 140,
-        minSize: 120,
-        cell: ({ row }) => {
-          const days = Number(row.original.dueDays);
-          return (
-            <div className="flex items-center gap-1.5 font-mono tabular-nums text-xs">
-              <Clock size={13} className="text-text-muted shrink-0" />
-              <span className="font-semibold text-heading">
-                {days === 0 ? 'Immediate' : `${days} days`}
-              </span>
-            </div>
-          );
-        },
-      }),
       columnHelper.accessor('description', {
         id: 'description',
-        header: 'Description',
-        size: 340,
-        minSize: 220,
-        cell: ({ row }) => (
-          <span
-            className="text-xs text-text-muted truncate block"
-            title={row.original.description || '—'}
-          >
-            {row.original.description || '—'}
-          </span>
-        ),
+        header: 'Payment Terms / Description',
+        size: 460,
+        minSize: 260,
+        cell: ({ row }) => {
+          const desc = row.original.description || '';
+          return (
+            <div
+              className="text-xs text-text max-h-24 overflow-y-auto pr-1 prose prose-xs max-w-none leading-relaxed [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
+              dangerouslySetInnerHTML={{
+                __html: desc || '<span class="text-text-muted italic">No terms specified</span>',
+              }}
+            />
+          );
+        },
       }),
       columnHelper.accessor('isActive', {
         id: 'isActive',
@@ -339,12 +287,12 @@ export default function PaymentTermsPage() {
       }),
       columnHelper.accessor('createdOn', {
         id: 'createdOn',
-        header: 'Created On',
+        header: 'Created Date',
         size: 130,
         minSize: 110,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
-            {row.original.createdOn || '—'}
+            {formatDate(row.original.createdOn)}
           </span>
         ),
       }),
@@ -433,7 +381,7 @@ export default function PaymentTermsPage() {
             />
             <input
               type="text"
-              placeholder="Search by code, term name or description..."
+              placeholder="Search by code or description..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-bg border border-border rounded-lg text-text placeholder:text-text-muted/70 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
@@ -603,30 +551,15 @@ export default function PaymentTermsPage() {
         ) : filteredData.length > 0 ? (
           filteredData.map((term) => {
             const id = term.paymentTermId || term.id;
-            const days = Number(term.dueDays);
             return (
               <div
                 key={id}
                 className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
-                        {term.termCode}
-                      </span>
-                      <span className="font-mono text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">
-                        {days === 0 ? 'Immediate' : `${days} days`}
-                      </span>
-                    </div>
-                    <h3
-                      className={`text-sm font-semibold mt-1 ${
-                        term.isActive ? 'text-heading' : 'text-text-muted line-through'
-                      }`}
-                    >
-                      {term.termName}
-                    </h3>
-                  </div>
+                  <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md shadow-2xs">
+                    {term.termCode}
+                  </span>
 
                   <span
                     className={[
@@ -647,13 +580,14 @@ export default function PaymentTermsPage() {
                 </div>
 
                 {term.description && (
-                  <p className="text-xs text-text-muted line-clamp-2">
-                    {term.description}
-                  </p>
+                  <div
+                    className="text-xs text-text max-h-24 overflow-y-auto prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
+                    dangerouslySetInnerHTML={{ __html: term.description }}
+                  />
                 )}
 
                 <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-text-muted">
-                  <span className="font-mono tabular-nums">{term.createdOn || '—'}</span>
+                  <span className="font-mono tabular-nums">{formatDate(term.createdOn)}</span>
 
                   <div className="flex items-center gap-1.5">
                     <button
@@ -695,7 +629,7 @@ export default function PaymentTermsPage() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         title={editingTerm ? 'Edit Payment Term' : 'Add New Payment Term'}
-        maxWidth="max-w-md"
+        maxWidth="max-w-xl"
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
           {/* Term Code */}
@@ -723,84 +657,48 @@ export default function PaymentTermsPage() {
             hint="Unique identifier (letters, numbers, hyphens only)"
           />
 
-          {/* Term Name */}
-          <Input
-            id="termName"
-            name="termName"
-            type="text"
-            label="Term Name"
-            placeholder="e.g. Net 30 Days"
-            required
-            value={formData.termName}
-            onChange={(e) => {
-              const val = e.target.value;
-              setFormData((prev) => ({ ...prev, termName: val }));
-              if (formErrors.termName) {
-                setFormErrors((prev) => ({ ...prev, termName: '' }));
+          {/* Description / Payment Terms (Compulsory Rich Text Editor) */}
+          <div className="space-y-1.5">
+            <label
+              htmlFor="payment-terms-description"
+              className="text-xs font-semibold text-heading block"
+            >
+              Description <span className="text-danger">*</span>
+            </label>
+            <RichTextEditor
+              id="payment-terms-description"
+              value={
+                typeof formData.description === 'string'
+                  ? formData.description
+                  : (formData.description?.target?.value ?? '')
               }
-            }}
-            onBlur={(e) => {
-              const err = validateField('termName', e.target.value);
-              if (err) setFormErrors((prev) => ({ ...prev, termName: err }));
-            }}
-            error={formErrors.termName}
-          />
+              onChange={(e) => {
+                const val = typeof e === 'string' ? e : (e?.target?.value ?? '');
+                setFormData((prev) => ({ ...prev, description: val }));
+                if (formErrors.description) {
+                  setFormErrors((prev) => ({ ...prev, description: '' }));
+                }
+              }}
+              placeholder="Enter payment terms in order, e.g.:&#10;1. payment term-1&#10;2. payment term-2"
+              minHeight="min-h-[160px]"
+            />
+            {formErrors.description && (
+              <p className="text-xs text-danger flex items-center gap-1 mt-1">
+                <AlertCircle size={13} className="shrink-0" />
+                <span>{formErrors.description}</span>
+              </p>
+            )}
+            <p className="text-[11px] text-text-muted">
+              Use the numbered list toolbar icon to structure ordered payment terms (1., 2., 3.).
+            </p>
+          </div>
 
-          {/* Due Days */}
-          <Input
-            id="dueDays"
-            name="dueDays"
-            type="number"
-            min={0}
-            max={365}
-            step={1}
-            label="Due Days (Calendar Days)"
-            placeholder="30"
-            required
-            value={formData.dueDays}
-            onChange={(e) => {
-              const val = e.target.value;
-              setFormData((prev) => ({ ...prev, dueDays: val }));
-              if (formErrors.dueDays) {
-                setFormErrors((prev) => ({ ...prev, dueDays: '' }));
-              }
-            }}
-            onBlur={(e) => {
-              const err = validateField('dueDays', e.target.value);
-              if (err) setFormErrors((prev) => ({ ...prev, dueDays: err }));
-            }}
-            error={formErrors.dueDays}
-            className="font-mono tabular-nums text-sm"
-            hint="0 means payment is due immediately."
-          />
-
-          {/* Description */}
-          <Textarea
-            id="description"
-            name="description"
-            label="Description (Optional)"
-            rows={3}
-            maxLength={250}
-            showCharCount
-            placeholder="e.g. Standard 30 days commercial credit period from invoice date..."
-            value={formData.description}
-            onChange={(e) => {
-              const val = e.target.value;
-              setFormData((prev) => ({ ...prev, description: val }));
-              if (formErrors.description) {
-                setFormErrors((prev) => ({ ...prev, description: '' }));
-              }
-            }}
-            error={formErrors.description}
-            hint="Short description or billing agreement note"
-          />
-
-          {/* Created On (Read-only in edit mode) */}
+          {/* Created Date (Read-only in edit mode) */}
           {editingTerm && (
             <div className="text-xs text-text-muted flex items-center justify-between p-2.5 bg-surface/60 rounded-lg border border-border">
-              <span>Created Timestamp:</span>
+              <span>Created Date:</span>
               <span className="font-mono font-medium text-heading">
-                {editingTerm.createdOn}
+                {formatDate(editingTerm.createdOn)}
               </span>
             </div>
           )}
@@ -863,11 +761,11 @@ export default function PaymentTermsPage() {
         message={
           termToDelete ? (
             <span>
-              Are you sure you want to delete{' '}
+              Are you sure you want to delete payment term{' '}
               <strong className="text-heading font-semibold">
-                {termToDelete.termName}
-              </strong>{' '}
-              ({termToDelete.termCode})? This action cannot be undone.
+                {termToDelete.termCode}
+              </strong>
+              ? This action cannot be undone.
             </span>
           ) : (
             'Are you sure you want to delete this payment term?'

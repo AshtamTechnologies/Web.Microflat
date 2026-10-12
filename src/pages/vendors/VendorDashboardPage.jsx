@@ -52,6 +52,7 @@ import {
 import { useVendorsContext } from '../../context/VendorsContext';
 import { chartColors } from '../../config/chartColors';
 import { getStateName } from '../../mocks/vendors';
+import { formatDate } from '../../utils/dateUtils';
 
 /* ── Custom Pie Tooltip ─────────────────────────────────────────────────────── */
 function CustomPieTooltip({ active, payload }) {
@@ -521,7 +522,7 @@ export default function VendorDashboardPage() {
                       </div>
                       <p className="text-[10.5px] sm:text-[11px] text-text-muted flex items-center gap-1.5 font-mono flex-wrap">
                         <Calendar size={11} className="shrink-0" />
-                        <span>Submitted: {vendor.createdOn ? vendor.createdOn.slice(0, 10) : vendor.effectiveDate || 'Recent'}</span>
+                        <span>Submitted: {formatDate(vendor.createdOn || vendor.effectiveDate)}</span>
                         {vendor.city && (
                           <>
                             <span>•</span>

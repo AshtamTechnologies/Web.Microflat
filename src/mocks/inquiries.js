@@ -145,6 +145,18 @@ export const mockInquiries = [
     UOM: 'SETS',
     EstimatedValue: 485000,
     RequiredByDate: '2026-11-15',
+    items: [
+      {
+        prItemId: 1,
+        itemCode: 'MAT-CAT-001',
+        itemName: 'Granite Surface Plate Grade 0 (2000 x 1000 x 250 mm) with Stand',
+        specification: '—',
+        quantity: 2,
+        uom: 'SETS',
+        categoryId: 'cat_surface',
+        categoryName: 'Cast Iron & Granite Surface Plates',
+      },
+    ],
     StatusId: 'In Progress',
     AssignedTo: 'u11', // Arjun Sharma
     CreatedBy: 'Ian Chesnut',

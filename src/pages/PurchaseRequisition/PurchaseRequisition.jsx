@@ -194,39 +194,37 @@ export default function PurchaseRequisition() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 185,
-        size: 200,
+        minSize: 100,
+        size: 110,
         enableResizing: false,
         enableSorting: false,
         cell: (info) => {
           const pr = info.row.original;
           return (
-            <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+            <div className="flex items-center justify-end gap-1 whitespace-nowrap">
               <Button
-                variant="secondary"
-                size="sm"
+                variant="ghost"
+                size="icon"
                 onClick={() =>
                   navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)
                 }
                 title="View Requisition"
-                className="h-8 px-2.5 text-xs text-text hover:text-primary hover:border-primary shrink-0 inline-flex items-center gap-1 font-medium"
+                className="text-text-muted hover:text-primary hover:bg-surface cursor-pointer"
               >
-                <Eye size={13} className="text-primary/70 shrink-0" />
-                <span>View</span>
+                <Eye size={15} aria-hidden="true" />
               </Button>
               <Button
-                variant="secondary"
-                size="sm"
+                variant="ghost"
+                size="icon"
                 onClick={() =>
                   navigate(
                     `/purchase-requisition/${pr.prNumber || pr.prId}/edit`
                   )
                 }
                 title="Edit Requisition"
-                className="h-8 px-2.5 text-xs text-text hover:text-primary hover:border-primary shrink-0 inline-flex items-center gap-1 font-medium"
+                className="text-text-muted hover:text-primary hover:bg-surface cursor-pointer"
               >
-                <Pencil size={13} className="text-primary/70 shrink-0" />
-                <span>Edit</span>
+                <Pencil size={15} aria-hidden="true" />
               </Button>
             </div>
           );

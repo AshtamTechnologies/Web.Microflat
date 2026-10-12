@@ -27,9 +27,9 @@ export function PaymentTermsProvider({ children }) {
 
     const newTerm = {
       paymentTermId: newId,
-      termCode: data.termCode.trim().toUpperCase(),
-      termName: data.termName.trim(),
-      dueDays: Number(data.dueDays) || 0,
+      termCode: data.termCode ? data.termCode.trim().toUpperCase() : '',
+      termName: data.termName ? data.termName.trim() : (data.termCode ? data.termCode.trim().toUpperCase() : ''),
+      dueDays: data.dueDays !== undefined ? (Number(data.dueDays) || 0) : 0,
       description: data.description ? data.description.trim() : '',
       isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
       createdOn: today,
@@ -50,7 +50,7 @@ export function PaymentTermsProvider({ children }) {
           return {
             ...pt,
             termCode: data.termCode ? data.termCode.trim().toUpperCase() : pt.termCode,
-            termName: data.termName ? data.termName.trim() : pt.termName,
+            termName: data.termName !== undefined ? data.termName.trim() : pt.termName,
             dueDays: data.dueDays !== undefined ? (Number(data.dueDays) || 0) : pt.dueDays,
             description: data.description !== undefined ? data.description.trim() : pt.description,
             isActive: data.isActive !== undefined ? Boolean(data.isActive) : pt.isActive,

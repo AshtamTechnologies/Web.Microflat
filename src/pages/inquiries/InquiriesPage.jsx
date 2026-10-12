@@ -49,6 +49,7 @@ import {
   getPriorityBadgeVariant,
 } from '../../mocks/inquiries';
 import AssignInquiryModal from './components/AssignInquiryModal';
+import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
@@ -261,10 +262,10 @@ export default function InquiriesPage() {
         minSize: 140,
         size: 150,
         cell: (info) => {
-          const createdOn = info.getValue() || '—';
+          const createdOn = info.getValue();
           return (
             <span className="font-mono tabular-nums text-xs text-text-muted whitespace-nowrap">
-              {createdOn}
+              {formatDate(createdOn)}
             </span>
           );
         },
@@ -705,7 +706,7 @@ export default function InquiriesPage() {
                     </div>
                     <div className="flex items-center justify-between font-mono tabular-nums text-[11px]">
                       <span>Date:</span>
-                      <span>{inq.InquiryDate}</span>
+                      <span>{formatDate(inq.InquiryDate)}</span>
                     </div>
                   </div>
 

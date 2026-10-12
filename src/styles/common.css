@@ -1,0 +1,396 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   MICROFLAT ERP – SHARED COMPONENT STYLES (common.css)
+   Central stylesheet for all reusable UI components and page layouts.
+   All values reference design tokens from tokens.css.
+───────────────────────────────────────────────────────────────────────────── */
+
+/* ── 1. Buttons (.mf-btn) ─────────────────────────────────────────────────── */
+.mf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--field-radius, 0.5rem);
+  cursor: pointer;
+  transition: all 150ms ease-in-out;
+  outline: none;
+  user-select: none;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.mf-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.mf-btn--sm {
+  height: 2rem;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
+  border-radius: 0.375rem;
+}
+
+.mf-btn--md {
+  height: 2.5rem;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+}
+
+.mf-btn--lg {
+  height: 2.75rem;
+  padding: 0 1.25rem;
+  font-size: 1rem;
+}
+
+.mf-btn--primary {
+  background-color: var(--primary);
+  color: #FFFFFF;
+  border: 1px solid var(--primary);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.mf-btn--primary:hover:not(:disabled) {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.mf-btn--primary:active:not(:disabled) {
+  background-color: var(--primary-active);
+  border-color: var(--primary-active);
+}
+
+.mf-btn--secondary {
+  background-color: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.mf-btn--secondary:hover:not(:disabled) {
+  background-color: var(--surface);
+  border-color: var(--text-muted);
+}
+
+.mf-btn--danger {
+  background-color: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.mf-btn--danger:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.mf-btn--ghost {
+  background-color: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+}
+
+.mf-btn--ghost:hover:not(:disabled) {
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+/* ── 2. Form Fields & Labels (.mf-field) ─────────────────────────────────── */
+.mf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  width: 100%;
+}
+
+.mf-label {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--label-font-size, 0.875rem);
+  font-weight: var(--label-font-weight, 500);
+  color: var(--label-color, var(--heading));
+  line-height: var(--label-line-height, 1);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.mf-required {
+  color: var(--danger);
+  margin-left: 0.125rem;
+}
+
+.mf-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.mf-error {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--danger);
+  line-height: 1;
+}
+
+.mf-input,
+.mf-textarea {
+  width: 100%;
+  border-radius: var(--field-radius, 0.5rem);
+  border: 1px solid var(--field-border, var(--border));
+  background-color: var(--field-bg, var(--bg));
+  color: var(--field-text, var(--text));
+  font-size: 0.875rem;
+  padding: 0.625rem 0.75rem;
+  line-height: 1.375;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  outline: none;
+}
+
+.mf-input::placeholder,
+.mf-textarea::placeholder {
+  color: color-mix(in srgb, var(--field-placeholder, var(--text-muted)) 50%, transparent);
+  font-weight: 400;
+}
+
+.mf-input:hover:not(:disabled),
+.mf-textarea:hover:not(:disabled) {
+  border-color: var(--field-border-hover, var(--text-muted));
+}
+
+.mf-input:focus,
+.mf-textarea:focus {
+  border-color: var(--field-border-focus, var(--primary));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.mf-input[data-has-left-icon="true"],
+.mf-input.has-left-icon,
+.mf-input.\!pl-10,
+.mf-input.pl-10 {
+  padding-left: 2.5rem !important;
+}
+
+.mf-input[data-has-right-element="true"],
+.mf-input.\!pr-10,
+.mf-input.pr-10 {
+  padding-right: 2.5rem !important;
+}
+
+.mf-input--err,
+.mf-textarea--err {
+  border-color: var(--danger) !important;
+}
+
+.mf-input--err:focus,
+.mf-textarea--err:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 20%, transparent) !important;
+}
+
+.mf-textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* ── 3. Cards & Elevated Containers (.mf-card) ───────────────────────────── */
+.mf-card {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background-color: var(--bg);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+}
+
+.mf-card-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.875rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mf-card-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--heading);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── 4. Page Layout & Headers (.mf-page-header) ──────────────────────────── */
+.mf-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+}
+
+@media (min-width: 640px) {
+  .mf-page-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+  }
+}
+
+.mf-page-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--heading);
+  letter-spacing: -0.025em;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  line-height: 1.2;
+}
+
+@media (min-width: 640px) {
+  .mf-page-title {
+    font-size: 1.5rem;
+  }
+}
+
+.mf-page-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+@media (min-width: 640px) {
+  .mf-page-subtitle {
+    font-size: 0.875rem;
+  }
+}
+
+.mf-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+
+/* ── 5. Form Actions Bar (.mf-form-actions) ───────────────────────────────── */
+.mf-form-actions {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .mf-form-actions {
+    flex-direction: row;
+  }
+}
+
+/* ── 6. Filter & Search Bar (.mf-filter-bar) ─────────────────────────────── */
+.mf-filter-bar {
+  padding: 0.875rem 1rem;
+  background-color: var(--surface);
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .mf-filter-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+/* ── 7. Modals (.mf-modal) ───────────────────────────────────────────────── */
+.mf-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.mf-modal-dialog {
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* ── 8. View / Detail Display (.mf-detail) ────────────────────────────────── */
+.mf-detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.mf-detail-label {
+  font-size: var(--view-label-font-size, 0.75rem);
+  font-weight: var(--view-label-font-weight, 500);
+  color: var(--view-label-color, var(--text-muted));
+  text-transform: var(--view-label-transform, none);
+  letter-spacing: var(--view-label-spacing, normal);
+  line-height: 1.25;
+}
+
+.mf-detail-value {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--view-value-font-size, 0.875rem);
+  font-weight: var(--view-value-font-weight, 600);
+  color: var(--view-value-color, var(--heading));
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+/* ── 9. Tables (.mf-table) ───────────────────────────────────────────────── */
+.mf-table-container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background-color: var(--bg);
+}
+
+.mf-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.mf-th {
+  padding: 0.75rem 1rem;
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mf-td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  color: var(--text);
+  font-size: 0.875rem;
+}

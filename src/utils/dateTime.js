@@ -1,29 +1,18 @@
-/**
- * dateTime.js — Shared date, time, relative time, and duration formatting utilities.
- */
+import {
+  formatDate as dateUtilsFormatDate,
+  formatDateTime as dateUtilsFormatDateTime,
+  SYSTEM_DATE_CONFIG,
+} from './dateUtils';
 
-const MONTH_NAMES = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
+export { dateUtilsFormatDate as formatDate, SYSTEM_DATE_CONFIG };
 
 /**
- * Formats an ISO date string to "12 Oct 2026, 09:42"
+ * Formats an ISO date string to system datetime standard (e.g. "12-10-2026, 09:42 AM")
  * @param {string|Date} iso
  * @returns {string}
  */
 export function formatDateTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
-
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = MONTH_NAMES[d.getMonth()];
-  const year = d.getFullYear();
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-
-  return `${day} ${month} ${year}, ${hours}:${minutes}`;
+  return dateUtilsFormatDateTime(iso);
 }
 
 /**

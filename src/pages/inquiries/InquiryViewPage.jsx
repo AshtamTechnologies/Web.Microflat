@@ -72,6 +72,7 @@ import { formatFileSizeKB } from '../../mocks/inquiryDocuments';
 import AssignInquiryModal from './components/AssignInquiryModal';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import UploadDocumentModal from './components/UploadDocumentModal';
+import { formatDate, formatDateTime } from '../../utils/dateUtils';
 
 export default function InquiryViewPage() {
   const navigate = useNavigate();
@@ -104,6 +105,9 @@ export default function InquiryViewPage() {
   // Accordion state for document version history
   const [expandedDocIds, setExpandedDocIds] = useState(new Set());
 
+  // Mobile view switcher for line items table (cards vs scrollable table on small screens)
+  const [mobileViewMode, setMobileViewMode] = useState('cards');
+
   // Documents attached to this inquiry
   const inquiryDocuments = useMemo(() => {
     return inquiry ? getDocumentsByInquiryId(inquiry.id || inquiry.InquiryId) : [];
@@ -115,6 +119,41 @@ export default function InquiryViewPage() {
       ? getMissingMandatoryDocumentTypes(inquiry.id || inquiry.InquiryId, documentTypes)
       : [];
   }, [inquiry, getMissingMandatoryDocumentTypes, documentTypes]);
+
+  // Line items for Product Selection table — always provides structured items even for legacy single-item records
+  const inquiryItems = useMemo(() => {
+    if (!inquiry) return [];
+    if (Array.isArray(inquiry.items) && inquiry.items.length > 0) {
+      return inquiry.items.map((it, idx) => ({
+        ...it,
+        prItemId: it.prItemId || it.id || idx + 1,
+        itemCode: it.itemCode || it.ItemCode || `MAT-CAT-${String(idx + 1).padStart(3, '0')}`,
+        specification: it.specification || it.Specification || '—',
+        quantity: it.quantity !== undefined && it.quantity !== null && it.quantity !== '' ? it.quantity : (it.Quantity || 1),
+        uom: it.uom || it.UOM || 'PCS',
+        categoryName: it.categoryName || (it.categoryId ? getCategoryPathName(it.categoryId, categories) : getCategoryPathName(inquiry.CategoryId, categories)) || '—',
+      }));
+    }
+    if (inquiry.CategoryId || inquiry.Quantity) {
+      return [
+        {
+          prItemId: 1,
+          itemCode: inquiry.ItemCode || 'MAT-CAT-001',
+          itemName: inquiry.Subject || 'Main Product Requirement',
+          specification: inquiry.Specification || '—',
+          quantity: inquiry.Quantity !== undefined && inquiry.Quantity !== null && inquiry.Quantity !== '' ? inquiry.Quantity : 1,
+          uom: inquiry.UOM || 'PCS',
+          categoryId: inquiry.CategoryId || '',
+          categoryName: inquiry.CategoryId ? getCategoryPathName(inquiry.CategoryId, categories) : '—',
+        },
+      ];
+    }
+    return [];
+  }, [inquiry, categories]);
+
+  const totalItemQty = useMemo(() => {
+    return inquiryItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+  }, [inquiryItems]);
 
   // Helper to resolve user name
   const resolveUserName = (userId) => {
@@ -178,7 +217,7 @@ export default function InquiryViewPage() {
           `Requirement      : ${inquiry.Subject || 'N/A'}`,
           `Customer         : ${inquiry.CustomerName}`,
           `Uploaded By      : ${item.uploadedBy || 'Ian Chesnut'}`,
-          `Uploaded Date    : ${item.uploadedOn || 'N/A'}`,
+          `Uploaded Date    : ${formatDate(item.uploadedOn)}`,
           `Revision Remarks : ${item.changeRemarks || 'N/A'}`,
           `================================================================`,
           `Exported On      : ${new Date().toLocaleString()}`,
@@ -338,9 +377,9 @@ export default function InquiryViewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 1. Inquiry Details Card */}
         <Card padding="md" className="bg-bg">
-          <div className="border-b border-border pb-3 mb-4 flex items-center justify-between">
+          <div className="border-b border-border pb-3 mb-4 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-              <FileText size={17} className="text-primary" />
+              <FileText size={17} className="text-primary shrink-0" />
               <span>1. Inquiry Master Details</span>
             </div>
             <span className="font-mono text-xs text-text-muted">
@@ -351,13 +390,13 @@ export default function InquiryViewPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <DetailField
               label="Inquiry Date"
-              value={inquiry.InquiryDate}
+              value={formatDate(inquiry.InquiryDate)}
               mono
             />
 
             <DetailField
               label="Estimate Date"
-              value={inquiry.RequiredByDate || inquiry.EstimateDate || 'Not specified'}
+              value={inquiry.RequiredByDate || inquiry.EstimateDate ? formatDate(inquiry.RequiredByDate || inquiry.EstimateDate) : 'Not specified'}
               icon={Calendar}
               mono
             />
@@ -400,9 +439,9 @@ export default function InquiryViewPage() {
 
         {/* 2. Customer Information Card */}
         <Card padding="md" className="bg-bg">
-          <div className="border-b border-border pb-3 mb-4 flex items-center justify-between">
+          <div className="border-b border-border pb-3 mb-4 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-              <Building2 size={17} className="text-primary" />
+              <Building2 size={17} className="text-primary shrink-0" />
               <span>2. Customer Information</span>
             </div>
             <span className="text-xs text-text-muted">Client Profile</span>
@@ -454,7 +493,7 @@ export default function InquiryViewPage() {
 
             {(inquiry.AddressLine1 || inquiry.AddressLine2 || inquiry.City || inquiry.State || inquiry.Country) && (
               <div className="sm:col-span-2 pt-2 border-t border-border/60">
-                <span className="text-text-muted block mb-1">Customer Address</span>
+                <span className="view-field-label">Customer Address</span>
                 <div className="flex items-start gap-1.5 text-heading text-xs">
                   <MapPin size={14} className="text-primary mt-0.5 shrink-0" />
                   <span>
@@ -476,77 +515,145 @@ export default function InquiryViewPage() {
 
         {/* 3. Product Selection Card (Full Width) */}
         <Card padding="md" className="lg:col-span-2 bg-bg space-y-4">
-          <div className="border-b border-border pb-3 flex items-center justify-between">
+          <div className="border-b border-border pb-3 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-              <Package size={17} className="text-primary" />
+              <Package size={17} className="text-primary shrink-0" />
               <span>3. Product Selection</span>
             </div>
             <span className="text-xs text-text-muted">Scope & Line Items</span>
           </div>
 
-          {/* Line Items Table if multiple items exist */}
-          {Array.isArray(inquiry.items) && inquiry.items.length > 0 ? (
-            <div className="rounded-xl border border-border overflow-hidden bg-surface/40">
-              <div className="px-4 py-2.5 bg-surface border-b border-border flex items-center justify-between text-xs font-semibold text-heading">
-                <span>Inquiry Items ({inquiry.items.length})</span>
+          {/* Line Items Container — fully responsive with mobile cards & scrollable table */}
+          <div className="rounded-xl border border-border overflow-hidden bg-surface/40">
+            {/* Header bar with count, total qty & mobile view switcher */}
+            <div className="px-3.5 py-2.5 bg-surface border-b border-border flex items-center justify-between text-xs font-semibold text-heading flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span>Inquiry Items ({inquiryItems.length})</span>
                 <span className="font-mono text-text-muted text-xs">
-                  Total Qty: <strong className="text-heading">{inquiry.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)}</strong>
+                  Total Qty: <strong className="text-heading">{totalItemQty}</strong>
                 </span>
               </div>
-              <TableContainer>
+
+              {/* Mobile View Switcher (Cards vs Table on small screens) */}
+              <div className="sm:hidden flex items-center bg-bg border border-border rounded-lg p-0.5 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setMobileViewMode('cards')}
+                  className={`px-2 py-0.5 text-[11px] font-medium rounded transition-colors ${
+                    mobileViewMode === 'cards'
+                      ? 'bg-primary text-white shadow-2xs'
+                      : 'text-text-muted hover:text-heading'
+                  }`}
+                >
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileViewMode('table')}
+                  className={`px-2 py-0.5 text-[11px] font-medium rounded transition-colors ${
+                    mobileViewMode === 'table'
+                      ? 'bg-primary text-white shadow-2xs'
+                      : 'text-text-muted hover:text-heading'
+                  }`}
+                >
+                  Table
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Card List View (rendered when mobileViewMode === 'cards' on mobile) */}
+            <div className={`${mobileViewMode === 'cards' ? 'block sm:hidden' : 'hidden'} divide-y divide-border`}>
+              {inquiryItems.length > 0 ? (
+                inquiryItems.map((item, idx) => (
+                  <div key={item.prItemId || item.id || idx} className="p-3.5 space-y-2.5 bg-surface/20">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-surface border border-border flex items-center justify-center text-[10px] font-mono text-text-muted shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <span className="text-[10px] uppercase font-semibold text-text-muted block">Product Category</span>
+                          <span className="font-semibold text-xs text-heading leading-snug">
+                            {item.categoryName || getCategoryPathName(item.categoryId || inquiry.CategoryId, categories) || '—'}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-[11px] shrink-0">
+                        {item.itemCode || 'MAT-CAT-001'}
+                      </span>
+                    </div>
+
+                    {item.specification && item.specification !== '—' && (
+                      <div className="text-xs text-text-muted bg-surface/50 p-2.5 rounded-lg border border-border/60 pl-3">
+                        <span className="text-[10px] uppercase font-semibold text-text-muted block mb-0.5">Specification</span>
+                        <span className="leading-relaxed">{item.specification}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40">
+                      <span className="text-text-muted">Quantity & UOM:</span>
+                      <span className="font-mono font-bold text-heading bg-surface px-2.5 py-0.5 rounded border border-border">
+                        {item.quantity} <span className="font-medium text-text-muted">{item.uom}</span>
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-6 text-center text-xs text-text-muted italic">
+                  No items added to inquiry yet.
+                </div>
+              )}
+            </div>
+
+            {/* Desktop Table & Mobile Horizontal-Scrollable Table */}
+            <div className={mobileViewMode === 'cards' ? 'hidden sm:block' : 'block'}>
+              <TableContainer tableClassName="min-w-[620px] w-full">
                 <thead>
                   <tr>
-                    <Th className="w-12 text-center text-xs py-2.5">#</Th>
-                    <Th className="text-xs py-2.5">PRODUCT CATEGORY</Th>
-                    <Th className="text-xs py-2.5">ITEM CODE</Th>
-                    <Th className="text-xs py-2.5">SPECIFICATION</Th>
-                    <Th className="text-right text-xs py-2.5">QTY</Th>
-                    <Th className="text-xs py-2.5">UOM</Th>
+                    <Th className="w-12 min-w-[48px] text-center text-xs py-2.5">#</Th>
+                    <Th className="min-w-[180px] text-xs py-2.5">PRODUCT CATEGORY</Th>
+                    <Th className="w-32 min-w-[130px] text-xs py-2.5">ITEM CODE</Th>
+                    <Th className="min-w-[180px] text-xs py-2.5">SPECIFICATION</Th>
+                    <Th className="w-20 min-w-[75px] text-right text-xs py-2.5">QTY</Th>
+                    <Th className="w-20 min-w-[75px] text-xs py-2.5">UOM</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border text-xs">
-                  {inquiry.items.map((item, idx) => (
-                    <tr key={item.prItemId || item.id || idx} className="hover:bg-surface/60 transition-colors">
-                      <Td className="text-center font-mono text-text-muted py-2.5">{idx + 1}</Td>
-                      <Td className="font-medium text-heading text-xs py-2.5">
-                        {item.categoryName || getCategoryPathName(item.categoryId || inquiry.CategoryId, categories) || '—'}
+                  {inquiryItems.length > 0 ? (
+                    inquiryItems.map((item, idx) => (
+                      <tr key={item.prItemId || item.id || idx} className="hover:bg-surface/60 transition-colors">
+                        <Td className="text-center font-mono text-text-muted py-2.5 whitespace-nowrap">{idx + 1}</Td>
+                        <Td className="font-medium text-heading text-xs py-2.5">
+                          {item.categoryName || getCategoryPathName(item.categoryId || inquiry.CategoryId, categories) || '—'}
+                        </Td>
+                        <Td className="py-2.5 whitespace-nowrap">
+                          <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-xs">
+                            {item.itemCode || 'MAT-CAT-001'}
+                          </span>
+                        </Td>
+                        <Td className="text-text-muted py-2.5">{item.specification || '—'}</Td>
+                        <Td className="text-right font-mono font-bold text-heading text-xs py-2.5 whitespace-nowrap">{item.quantity}</Td>
+                        <Td className="text-text-muted font-mono text-xs py-2.5 whitespace-nowrap">{item.uom}</Td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <Td colSpan={6} className="text-center py-6 text-text-muted italic">
+                        No items added to inquiry yet.
                       </Td>
-                      <Td className="py-2.5">
-                        <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-xs">
-                          {item.itemCode || '—'}
-                        </span>
-                      </Td>
-                      <Td className="text-text-muted py-2.5">{item.specification || '—'}</Td>
-                      <Td className="text-right font-mono font-bold text-heading text-xs py-2.5">{item.quantity}</Td>
-                      <Td className="text-text-muted font-mono text-xs py-2.5">{item.uom}</Td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </TableContainer>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div>
-                <span className="text-text-muted block mb-0.5">Product Category</span>
-                <span className="font-medium text-heading text-sm block">
-                  {getCategoryPathName(inquiry.CategoryId, categories)}
-                </span>
-              </div>
-              <div>
-                <span className="text-text-muted block mb-0.5">Quantity & UOM</span>
-                <span className="font-mono tabular-nums font-bold text-heading text-sm">
-                  {inquiry.Quantity || '1'} {inquiry.UOM || 'PCS'}
-                </span>
-              </div>
-            </div>
-          )}
+          </div>
         </Card>
 
         {/* 4. Assignment & Audit Card (Full Width) */}
         <Card padding="md" className="lg:col-span-2 bg-bg">
-          <div className="border-b border-border pb-3 mb-4 flex items-center justify-between">
+          <div className="border-b border-border pb-3 mb-4 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-              <UserCheck size={17} className="text-primary" />
+              <UserCheck size={17} className="text-primary shrink-0" />
               <span>4. Assignment & Audit History</span>
             </div>
             <button
@@ -558,10 +665,10 @@ export default function InquiryViewPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2 p-3 bg-surface rounded-xl border border-border flex items-center justify-between">
               <div>
-                <span className="text-text-muted block text-[11px]">Current Assignee</span>
+                <span className="view-field-label">Current Assignee</span>
                 <span className="text-sm font-bold text-heading">
                   {assigneeName}
                 </span>
@@ -576,33 +683,27 @@ export default function InquiryViewPage() {
               </Button>
             </div>
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Created By</span>
-              <span className="font-medium text-heading text-sm">
-                {inquiry.CreatedBy || 'Ian Chesnut'}
-              </span>
-            </div>
+            <DetailField
+              label="Created By"
+              value={inquiry.CreatedBy || 'Ian Chesnut'}
+            />
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Created On</span>
-              <span className="font-mono tabular-nums text-text-muted text-xs">
-                {inquiry.CreatedOn || '—'}
-              </span>
-            </div>
+            <DetailField
+              label="Created On"
+              value={formatDateTime(inquiry.CreatedOn)}
+              mono
+            />
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Last Modified By</span>
-              <span className="font-medium text-heading text-sm">
-                {inquiry.ModifiedBy || 'Ian Chesnut'}
-              </span>
-            </div>
+            <DetailField
+              label="Last Modified By"
+              value={inquiry.ModifiedBy || 'Ian Chesnut'}
+            />
 
-            <div>
-              <span className="text-text-muted block mb-0.5">Last Modified On</span>
-              <span className="font-mono tabular-nums text-text-muted text-xs">
-                {inquiry.ModifiedOn || '—'}
-              </span>
-            </div>
+            <DetailField
+              label="Last Modified On"
+              value={formatDateTime(inquiry.ModifiedOn)}
+              mono
+            />
           </div>
         </Card>
       </div>
@@ -838,7 +939,7 @@ export default function InquiryViewPage() {
                               {currentVersion.uploadedBy || doc.createdBy}
                             </span>
                             <span className="font-mono text-[11px] text-text-muted tabular-nums block mt-0.5">
-                              {currentVersion.uploadedOn || doc.createdOn}
+                              {formatDate(currentVersion.uploadedOn || doc.createdOn)}
                             </span>
                           </Td>
 
@@ -935,7 +1036,7 @@ export default function InquiryViewPage() {
 
                                           <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted tabular-nums">
                                             <div>{ver.uploadedBy}</div>
-                                            <div>{ver.uploadedOn}</div>
+                                            <div>{formatDate(ver.uploadedOn)}</div>
                                           </td>
 
                                           <td className="py-2.5 px-3 text-text italic">
@@ -1038,7 +1139,7 @@ export default function InquiryViewPage() {
                   Size: <strong className="text-heading font-mono">{formatFileSizeKB(previewItem.fileSizeKB)}</strong>
                 </span>
                 <span>
-                  Uploaded: <strong className="text-heading font-mono">{previewItem.uploadedOn}</strong> by{' '}
+                  Uploaded: <strong className="text-heading font-mono">{formatDate(previewItem.uploadedOn)}</strong> by{' '}
                   <strong className="text-heading">{previewItem.uploadedBy}</strong>
                 </span>
               </div>

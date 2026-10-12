@@ -89,6 +89,7 @@ export function usePurchaseRequisitions() {
               status: item.status || 'Pending',
             }))
           : [],
+        attachments: Array.isArray(formData.attachments) ? formData.attachments : [],
       };
 
       setRequisitions((prev) => [newRecord, ...prev]);
@@ -128,6 +129,9 @@ export function usePurchaseRequisitions() {
                   status: item.status || 'Pending',
                 }))
               : pr.items,
+            attachments: Array.isArray(formData.attachments)
+              ? formData.attachments
+              : pr.attachments || [],
           };
           return updatedRecord;
         }

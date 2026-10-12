@@ -21,6 +21,10 @@ import {
   CheckCircle2,
   Check,
   X,
+  Paperclip,
+  Download,
+  Eye,
+  File,
 } from 'lucide-react';
 
 import {
@@ -129,6 +133,73 @@ export default function PurchaseRequisitionView() {
       setIsSubmittingReject(false);
     }
   }
+
+  /* ── Download Attachment Handler ── */
+  const handleDownloadAttachment = (att) => {
+    if (!att) return;
+    try {
+      const fileName = att.fileName || att.name || 'requisition-document.pdf';
+      const fileUrl = att.url || att.fileUrl;
+
+      if (att.file instanceof File || att.file instanceof Blob) {
+        const blobUrl = URL.createObjectURL(att.file);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      } else if (fileUrl && fileUrl !== '#') {
+        const a = document.createElement('a');
+        a.href = fileUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        const fileContent = [
+          `================================================================`,
+          ` MICROFLAT ERP - PURCHASE REQUISITION ATTACHMENT`,
+          `================================================================`,
+          `PR Number        : ${pr?.prNumber || 'N/A'}`,
+          `File Name        : ${fileName}`,
+          `File Size        : ${att.fileSizeKB ? `${att.fileSizeKB} KB` : '150 KB'}`,
+          `Requested By     : ${pr?.requestedBy || 'N/A'}`,
+          `Department       : ${pr?.department || 'N/A'}`,
+          `Uploaded By      : ${att.uploadedBy || pr?.requestedBy || 'Ian Chesnut'}`,
+          `Uploaded Date    : ${att.uploadedDate || 'N/A'}`,
+          `================================================================`,
+          `Exported On      : ${new Date().toLocaleString()}`,
+          `Status           : Verified Requisition Document`,
+          `================================================================\n`,
+        ].join('\n');
+
+        const mimeType = fileName.toLowerCase().endsWith('.pdf')
+          ? 'application/pdf'
+          : fileName.toLowerCase().endsWith('.docx')
+          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : fileName.toLowerCase().endsWith('.dwg')
+          ? 'application/acad'
+          : 'text/plain;charset=utf-8';
+
+        const blob = new Blob([fileContent], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      toast.success(`Downloaded ${fileName}`);
+    } catch (err) {
+      console.error('Download error:', err);
+      toast.error('Failed to download document attachment.');
+    }
+  };
 
   if (!pr) {
     return (
@@ -292,13 +363,19 @@ export default function PurchaseRequisitionView() {
             </Badge>
           </DetailField>
 
-          {/* Remarks */}
+          {/* Remarks / Justification */}
           <div className="sm:col-span-2 md:col-span-3">
-            <DetailField
-              label="Remarks"
-              value={pr.remarks}
-              valueClassName="font-medium text-text mt-0.5 whitespace-pre-wrap"
-            />
+            <span className="view-field-label">Remarks / Justification</span>
+            {pr.remarks && pr.remarks.includes('<') ? (
+              <div
+                className="rich-text-content text-text bg-bg p-3.5 rounded-lg border border-border leading-relaxed text-sm overflow-x-auto mt-1"
+                dangerouslySetInnerHTML={{ __html: pr.remarks }}
+              />
+            ) : (
+              <p className="view-field-value font-medium text-text mt-0.5 whitespace-pre-wrap">
+                {pr.remarks || 'No remarks provided.'}
+              </p>
+            )}
           </div>
         </div>
       </Card>
@@ -379,7 +456,63 @@ export default function PurchaseRequisitionView() {
         </TableContainer>
       </Card>
 
-      {/* ── Section 3: Audit Information Card ── */}
+      {/* ── Section 3: Document Attachments Card ── */}
+      <Card padding="md" className="space-y-4 shadow-xs border-border bg-surface">
+        <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Paperclip size={18} className="text-primary" />
+            <h2 className="text-base font-bold text-heading">
+              Document Attachments
+            </h2>
+          </div>
+          <Badge variant="role" className="text-xs">
+            {pr.attachments?.length || 0} {pr.attachments?.length === 1 ? 'Attachment' : 'Attachments'}
+          </Badge>
+        </div>
+
+        {Array.isArray(pr.attachments) && pr.attachments.length > 0 ? (
+          <div className="rounded-xl border border-border overflow-hidden divide-y divide-border bg-bg/50">
+            {pr.attachments.map((att, idx) => (
+              <div
+                key={att.id || idx}
+                className="p-3.5 flex items-center justify-between gap-3 text-xs hover:bg-surface/60 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <FileText size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-heading truncate">
+                      {att.fileName}
+                    </p>
+                    <p className="text-[11px] text-text-muted font-mono mt-0.5">
+                      {att.fileSizeKB ? `${att.fileSizeKB} KB` : '150 KB'} • Uploaded by {att.uploadedBy || pr.requestedBy} {att.uploadedDate ? `• ${formatPRDate(att.uploadedDate)}` : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDownloadAttachment(att)}
+                    className="h-8 px-2.5 text-xs text-text hover:text-primary flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download size={13} />
+                    <span>Download</span>
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-6 text-center text-xs text-text-muted italic bg-bg/40 rounded-xl border border-border/60">
+            No document attachments uploaded for this requisition.
+          </div>
+        )}
+      </Card>
+
+      {/* ── Section 4: Audit Information Card ── */}
       <Card padding="md" className="space-y-4 shadow-xs border-border bg-surface">
         <div className="flex items-center gap-2 pb-3 border-b border-border">
           <Clock size={18} className="text-text-muted" />
@@ -388,34 +521,25 @@ export default function PurchaseRequisitionView() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-          <div>
-            <span className="text-text-muted block">Created By</span>
-            <div className="font-semibold text-text mt-0.5">
-              {pr.createdBy || '--'}
-            </div>
-          </div>
-
-          <div>
-            <span className="text-text-muted block">Created Date</span>
-            <div className="font-semibold text-text mt-0.5">
-              {formatPRDateTime(pr.createdDate)}
-            </div>
-          </div>
-
-          <div>
-            <span className="text-text-muted block">Modified By</span>
-            <div className="font-semibold text-text mt-0.5">
-              {pr.modifiedBy || '--'}
-            </div>
-          </div>
-
-          <div>
-            <span className="text-text-muted block">Modified Date</span>
-            <div className="font-semibold text-text mt-0.5">
-              {formatPRDateTime(pr.modifiedDate)}
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <DetailField
+            label="Created By"
+            value={pr.createdBy || '—'}
+          />
+          <DetailField
+            label="Created Date"
+            value={formatPRDateTime(pr.createdDate)}
+            mono
+          />
+          <DetailField
+            label="Modified By"
+            value={pr.modifiedBy || '—'}
+          />
+          <DetailField
+            label="Modified Date"
+            value={formatPRDateTime(pr.modifiedDate)}
+            mono
+          />
         </div>
       </Card>
 

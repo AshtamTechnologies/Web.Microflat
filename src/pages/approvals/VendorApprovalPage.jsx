@@ -51,6 +51,7 @@ import {
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { getStateName } from '../../mocks/vendors';
+import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
@@ -249,7 +250,7 @@ export default function VendorApprovalPage() {
           return (
             <div className="flex items-center gap-1.5 text-xs text-text-muted font-mono tabular-nums">
               <Clock size={13} className="text-text-muted/70 shrink-0" aria-hidden="true" />
-              <span>{val || '—'}</span>
+              <span>{formatDate(val)}</span>
             </div>
           );
         },
@@ -578,7 +579,7 @@ export default function VendorApprovalPage() {
                       <MapPin size={12} className="shrink-0 text-text-muted/70" />
                       <span>{vendor.city ? `${vendor.city}, ${state}` : state || '—'}</span>
                     </div>
-                    <span className="font-mono">{vendor.effectiveDate || vendor.createdOn || '—'}</span>
+                    <span className="font-mono">{formatDate(vendor.effectiveDate || vendor.createdOn)}</span>
                   </div>
 
                   {/* Actions Footer */}

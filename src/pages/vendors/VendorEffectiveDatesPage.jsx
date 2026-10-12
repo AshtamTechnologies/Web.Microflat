@@ -676,9 +676,6 @@ export default function VendorEffectiveDatesPage() {
               <span className="font-mono text-xs font-semibold text-heading">
                 {formatDateDisplay(row.effectiveDate)}
               </span>
-              <span className="font-mono text-[11px] text-text-muted">
-                ({row.effectiveDate})
-              </span>
               {isCurrent && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-success/15 text-success border border-success/30 select-none">
                   Current
@@ -717,7 +714,7 @@ export default function VendorEffectiveDatesPage() {
         size: 220,
         cell: (info) => (
           <span className="font-mono text-xs text-text-muted py-0.5 block">
-            {info.getValue() || '—'}
+            {formatDateDisplay(info.getValue())}
           </span>
         ),
       }),
@@ -954,9 +951,6 @@ export default function VendorEffectiveDatesPage() {
                         <span className="font-mono text-xs font-bold text-heading">
                           {formatDateDisplay(ver.effectiveDate)}
                         </span>
-                        <span className="font-mono text-[10px] text-text-muted">
-                          ({ver.effectiveDate})
-                        </span>
                         {isCurrent && (
                           <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold bg-success/15 text-success border border-success/30">
                             Current
@@ -1020,7 +1014,7 @@ export default function VendorEffectiveDatesPage() {
                     <div className="flex items-center justify-between sm:justify-end gap-2">
                       <div className="flex items-center gap-1.5 font-mono text-[10px]">
                         <Clock size={11} className="shrink-0 text-text-muted/70" />
-                        <span>{ver.createdOn || '—'}</span>
+                        <span>{formatDateDisplay(ver.createdOn)}</span>
                       </div>
 
                       {verAtts.length > 0 && (
@@ -1244,7 +1238,7 @@ export default function VendorEffectiveDatesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-1">
                 <DetailField
                   label="Effective Date"
-                  value={`${formatDateDisplay(selectedVersion.effectiveDate)} (${selectedVersion.effectiveDate || '—'})`}
+                  value={formatDateDisplay(selectedVersion.effectiveDate)}
                   mono
                 />
                 <DetailField
@@ -1333,7 +1327,7 @@ export default function VendorEffectiveDatesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                   <DetailField
                     label="Version Created On"
-                    value={selectedVersion.createdOn || '—'}
+                    value={formatDateDisplay(selectedVersion.createdOn)}
                     mono
                   />
                   <DetailField
@@ -1909,7 +1903,7 @@ export default function VendorEffectiveDatesPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-text-muted">Effective Scope:</span>
-                      <span className="font-mono text-heading">{selectedVersion?.effectiveDate || 'Master'}</span>
+                      <span className="font-mono text-heading">{selectedVersion?.effectiveDate ? formatDateDisplay(selectedVersion.effectiveDate) : 'Master'}</span>
                     </div>
                   </div>
                 </div>

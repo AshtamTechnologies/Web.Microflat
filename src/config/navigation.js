@@ -32,6 +32,7 @@ import {
   Scale,
   MapPin,
   HandCoins,
+  Handshake,
 } from 'lucide-react';
 
 export const navigation = [
@@ -102,6 +103,12 @@ export const navigation = [
             },
           },
         ],
+      },
+      {
+        label: 'Clients',
+        icon: Handshake,
+        path: '/clients',
+        roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
       },
       {
         label: 'Approval',

@@ -19,6 +19,7 @@ import {
   Activity as ActivityIcon,
 } from 'lucide-react';
 import Badge from './ui/Badge';
+import { formatDateTime } from '../utils/dateUtils';
 
 function getActivityConfig(type = '') {
   switch (type.toLowerCase()) {
@@ -122,7 +123,7 @@ export default function ActivityTimeline({
 
                 {item.timestamp && (
                   <span className="font-mono text-[11px] text-text-muted shrink-0 tabular-nums">
-                    {item.timestamp}
+                    {formatDateTime(item.timestamp)}
                   </span>
                 )}
               </div>

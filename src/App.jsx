@@ -45,6 +45,11 @@ import { PaymentTermsProvider } from './context/PaymentTermsContext';
 import UserViewPage from './pages/users/UserViewPage';
 import { UserSessionsProvider } from './context/UserSessionsContext';
 
+import ClientsPage from './pages/clients/ClientsPage';
+import ClientFormPage from './pages/clients/ClientFormPage';
+import ClientViewPage from './pages/clients/ClientViewPage';
+import { ClientsProvider } from './context/ClientsContext';
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -60,25 +65,27 @@ export default function App() {
           element={
             <UsersProvider>
               <VendorsProvider>
-                <PurchaseRequisitionProvider>
-                  <InquiriesProvider>
-                    <InquiryDocumentsProvider>
-                      <DocumentTypesProvider>
-                        <ProductCategoriesProvider>
-                          <UomProvider>
-                            <RegionsProvider>
-                              <PaymentTermsProvider>
-                                <SeriesProvider>
-                                  <AppLayout />
-                                </SeriesProvider>
-                              </PaymentTermsProvider>
-                            </RegionsProvider>
-                          </UomProvider>
-                        </ProductCategoriesProvider>
-                      </DocumentTypesProvider>
-                    </InquiryDocumentsProvider>
-                  </InquiriesProvider>
-                </PurchaseRequisitionProvider>
+                <ClientsProvider>
+                  <PurchaseRequisitionProvider>
+                    <InquiriesProvider>
+                      <InquiryDocumentsProvider>
+                        <DocumentTypesProvider>
+                          <ProductCategoriesProvider>
+                            <UomProvider>
+                              <RegionsProvider>
+                                <PaymentTermsProvider>
+                                  <SeriesProvider>
+                                    <AppLayout />
+                                  </SeriesProvider>
+                                </PaymentTermsProvider>
+                              </RegionsProvider>
+                            </UomProvider>
+                          </ProductCategoriesProvider>
+                        </DocumentTypesProvider>
+                      </InquiryDocumentsProvider>
+                    </InquiriesProvider>
+                  </PurchaseRequisitionProvider>
+                </ClientsProvider>
               </VendorsProvider>
             </UsersProvider>
           }
@@ -94,6 +101,12 @@ export default function App() {
           <Route path="/vendors/:id/effective-dates" element={<VendorEffectiveDatesPage />} />
           <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
           <Route path="/approvals/purchase-requisitions" element={<PurchaseRequisitionApprovalPage />} />
+
+          {/* Client Routes */}
+          <Route path="/clients" element={<ClientsPage />} />
+          <Route path="/clients/new" element={<ClientFormPage />} />
+          <Route path="/clients/:id" element={<ClientViewPage />} />
+          <Route path="/clients/:id/edit" element={<ClientFormPage />} />
 
           {/* Purchase Requisition Routes */}
           <Route path="/purchase-requisition" element={<PurchaseRequisition />} />

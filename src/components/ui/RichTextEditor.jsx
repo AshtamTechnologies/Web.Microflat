@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -20,7 +21,75 @@ import {
   Redo2,
   Eraser,
   Type,
+  Palette,
+  ChevronDown,
 } from 'lucide-react';
+
+const TextColor = Mark.create({
+  name: 'textColor',
+
+  addOptions() {
+    return {
+      HTMLAttributes: {},
+    };
+  },
+
+  addAttributes() {
+    return {
+      color: {
+        default: null,
+        parseHTML: (element) => element.style.color || null,
+        renderHTML: (attributes) => {
+          if (!attributes.color) {
+            return {};
+          }
+          return {
+            style: `color: ${attributes.color}`,
+          };
+        },
+      },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[style*=color]',
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes), 0];
+  },
+
+  addCommands() {
+    return {
+      setColor:
+        (color) =>
+        ({ chain }) => {
+          return chain().setMark(this.name, { color }).run();
+        },
+      unsetColor:
+        () =>
+        ({ chain }) => {
+          return chain().unsetMark(this.name).run();
+        },
+    };
+  },
+});
+
+const PRESET_COLORS = [
+  { name: 'Default', value: '' },
+  { name: 'Primary Blue', value: '#2563eb' },
+  { name: 'Sky Blue', value: '#0284c7' },
+  { name: 'Green', value: '#16a34a' },
+  { name: 'Amber', value: '#d97706' },
+  { name: 'Red', value: '#dc2626' },
+  { name: 'Purple', value: '#7c3aed' },
+  { name: 'Muted Slate', value: '#64748b' },
+  { name: 'Dark', value: '#0f172a' },
+];
 
 export default function RichTextEditor({
   id,
@@ -38,6 +107,21 @@ export default function RichTextEditor({
   minHeight = 'min-h-[160px]',
 }) {
   const isUpdatingFromEditorRef = useRef(false);
+  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
+  const colorMenuRef = useRef(null);
+
+  // Close color menu on outside click
+  useEffect(() => {
+    function handleDocClick(e) {
+      if (colorMenuRef.current && !colorMenuRef.current.contains(e.target)) {
+        setIsColorMenuOpen(false);
+      }
+    }
+    if (isColorMenuOpen) {
+      document.addEventListener('mousedown', handleDocClick);
+      return () => document.removeEventListener('mousedown', handleDocClick);
+    }
+  }, [isColorMenuOpen]);
 
   const editor = useEditor({
     extensions: [
@@ -55,6 +139,7 @@ export default function RichTextEditor({
         },
       }),
       Underline,
+      TextColor,
       Placeholder.configure({
         placeholder,
         emptyEditorClass: 'is-editor-empty',
@@ -254,6 +339,69 @@ export default function RichTextEditor({
           >
             <Strikethrough size={14} />
           </ToolbarButton>
+
+          {/* Text Color Picker */}
+          <div className="relative" ref={colorMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsColorMenuOpen((prev) => !prev)}
+              title="Text Color"
+              className="px-2 py-1 text-xs rounded-md font-medium transition-colors cursor-pointer flex items-center gap-1 text-text-muted hover:text-heading hover:bg-surface active:bg-surface/80"
+            >
+              <Palette size={14} className="text-primary" />
+              <span className="text-[11px] hidden sm:inline">Color</span>
+              <ChevronDown size={11} className="text-text-muted/70" />
+            </button>
+
+            {isColorMenuOpen && (
+              <div className="absolute top-full left-0 mt-1 p-2 bg-surface border border-border rounded-lg shadow-lg z-50 w-48 space-y-2">
+                <div className="text-[10.5px] font-semibold text-text-muted uppercase tracking-wider px-1">
+                  Preset Colors
+                </div>
+                <div className="grid grid-cols-5 gap-1.5 px-1">
+                  {PRESET_COLORS.map((col) => (
+                    <button
+                      key={col.name}
+                      type="button"
+                      title={col.name}
+                      onClick={() => {
+                        if (col.value) {
+                          editor.chain().focus().setColor(col.value).run();
+                        } else {
+                          editor.chain().focus().unsetColor().run();
+                        }
+                        setIsColorMenuOpen(false);
+                      }}
+                      className="w-6 h-6 rounded-md border border-border/70 flex items-center justify-center hover:scale-110 transition-transform cursor-pointer shadow-2xs"
+                      style={{
+                        backgroundColor: col.value || 'var(--text)',
+                      }}
+                    >
+                      {!col.value && (
+                        <span className="text-[10px] text-bg font-bold">×</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom Color Input */}
+                <div className="pt-1.5 border-t border-border flex items-center justify-between gap-2 px-1">
+                  <span className="text-xs text-text-muted">Custom:</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs font-mono text-heading">
+                    <input
+                      type="color"
+                      onChange={(e) => {
+                        editor.chain().focus().setColor(e.target.value).run();
+                        setIsColorMenuOpen(false);
+                      }}
+                      className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
+                    />
+                    <span className="text-[11px] text-primary hover:underline">Pick</span>
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="w-px h-4 bg-border mx-0.5" />
 

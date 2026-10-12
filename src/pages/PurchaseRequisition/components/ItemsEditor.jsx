@@ -4,7 +4,7 @@
  * Manages adding, editing, and deleting items with full field validation.
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Package,
   Plus,
@@ -76,6 +76,9 @@ export default function ItemsEditor({
   const [editingId, setEditingId] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // Track error attempt count when user clicks Add Item without filling required fields
+  const errorCountRef = useRef(0);
+
   // Multiple selection and Delete Confirmation state
   const [selectedIds, setSelectedIds] = useState([]);
   const [itemToDelete, setItemToDelete] = useState(null);
@@ -137,6 +140,7 @@ export default function ItemsEditor({
     if (fieldErrors[field]) {
       setFieldErrors((prev) => ({ ...prev, [field]: null }));
     }
+    errorCountRef.current = 0;
   };
 
   // Validate form fields before Add / Update
@@ -167,6 +171,7 @@ export default function ItemsEditor({
     setEditingId(null);
     setFieldErrors({});
     setFormState({ ...INITIAL_ITEM_FORM });
+    errorCountRef.current = 0;
   };
 
   // Submit Form (Add or Update)
@@ -176,9 +181,16 @@ export default function ItemsEditor({
     }
 
     if (!validateItemForm()) {
-      toast.error('Please fix item validation errors before submitting.');
+      errorCountRef.current += 1;
+      const count = errorCountRef.current;
+      toast.error(
+        `Please fix item validation errors before submitting (${count})`,
+        { id: 'pr-item-validation-error' }
+      );
       return;
     }
+
+    errorCountRef.current = 0;
 
     if (isEditing) {
       // Update existing item in place
@@ -348,6 +360,7 @@ export default function ItemsEditor({
                 value={formState.itemId ? String(formState.itemId) : ''}
                 placeholder="-- Select Material from Catalog --"
                 searchPlaceholder="Search catalog..."
+                error={fieldErrors.itemCode || fieldErrors.itemName}
                 onChange={(e) => handleFieldChange('itemId', e.target.value)}
               />
             </div>

@@ -6,21 +6,13 @@ import { useState, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { mockInquiries, STATUS_OPTIONS } from '../../mocks/inquiries';
 import { mockUsers } from '../../mocks/users';
+import { formatDateTime } from '../../utils/dateUtils';
 
 let nextSeqNumber = mockInquiries.length + 101 + 1;
 let nextIdNumber = mockInquiries.length + 1;
 
 function formatAuditTimestamp(date = new Date()) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  let hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  const formattedHours = String(hours).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd} ${formattedHours}:${minutes} ${ampm}`;
+  return formatDateTime(date);
 }
 
 function resolveUserName(userId, usersList = mockUsers) {

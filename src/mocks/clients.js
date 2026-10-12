@@ -1,0 +1,629 @@
+/**
+ * clients.js — Mock Data and Constants for Client Registration Module.
+ *
+ * MicroFlat ERP: Precision metrology clients, distributors, dealers, and agents.
+ * Child entities (addresses, contacts) are nested inside each client record.
+ */
+
+import {
+  COUNTRY_OPTIONS,
+  STATE_OPTIONS,
+  getCountryName,
+  getStateName,
+} from './vendors';
+
+export {
+  COUNTRY_OPTIONS,
+  STATE_OPTIONS,
+  getCountryName,
+  getStateName,
+};
+
+// ── Contact Type Options (could become a Configuration master later) ─────────
+export const CONTACT_TYPE_OPTIONS = [
+  { value: 'Customer', label: 'Customer' },
+  { value: 'Distributor', label: 'Distributor' },
+  { value: 'Dealer', label: 'Dealer' },
+  { value: 'Agent', label: 'Agent' },
+  { value: 'Prospect', label: 'Prospect' },
+];
+
+export function getContactTypeBadgeVariant(type) {
+  switch (type) {
+    case 'Customer':
+      return 'role';
+    case 'Distributor':
+      return 'info';
+    case 'Dealer':
+      return 'warning';
+    case 'Agent':
+      return 'neutral';
+    case 'Prospect':
+      return 'pending';
+    default:
+      return 'neutral';
+  }
+}
+
+// ── Currency Options (could become a Configuration master later) ─────────────
+export const CURRENCY_OPTIONS = [
+  { id: 'curr_inr', code: 'INR', name: 'Indian Rupee', value: 'INR', label: 'INR - Indian Rupee' },
+  { id: 'curr_usd', code: 'USD', name: 'US Dollar', value: 'USD', label: 'USD - US Dollar' },
+  { id: 'curr_eur', code: 'EUR', name: 'Euro', value: 'EUR', label: 'EUR - Euro' },
+  { id: 'curr_gbp', code: 'GBP', name: 'British Pound', value: 'GBP', label: 'GBP - British Pound' },
+  { id: 'curr_aed', code: 'AED', name: 'UAE Dirham', value: 'AED', label: 'AED - UAE Dirham' },
+];
+
+export function getCurrencyLabel(code) {
+  if (!code) return '—';
+  const found = CURRENCY_OPTIONS.find((c) => c.code === code || c.value === code);
+  return found ? found.label : code;
+}
+
+// ── Address Type Options ─────────────────────────────────────────────────────
+export const ADDRESS_TYPE_OPTIONS = [
+  { value: 'Billing', label: 'Billing' },
+  { value: 'Shipping', label: 'Shipping' },
+  { value: 'Registered Office', label: 'Registered Office' },
+  { value: 'Works', label: 'Works' },
+];
+
+export function getAddressTypeBadgeVariant(type) {
+  switch (type) {
+    case 'Billing':
+      return 'role';
+    case 'Shipping':
+      return 'info';
+    case 'Registered Office':
+      return 'neutral';
+    case 'Works':
+      return 'warning';
+    default:
+      return 'neutral';
+  }
+}
+
+// ── Seed Clients (~10 realistic precision metrology clients) ─────────────────
+export const mockClients = [
+  {
+    clientId: 'cli-001',
+    companyName: 'Bharat Precision Machining Ltd',
+    billingName: 'Bharat Precision Machining Limited',
+    email: 'procurement@bharatprecision.in',
+    contactTypeId: 'Customer',
+    countryId: 'IN',
+    currencyId: 'INR',
+    salesCommission: '2.50',
+    gstNo: '24AAACB1234F1Z5',
+    comments: 'Tier-1 aerospace automotive vendor. Requires calibration certificates with every shipment.',
+    paymentTerms: '30 Days Net from date of invoice submission',
+    deliveryTerms: 'Ex-Works Vallabh Vidyanagar, freight on customer account',
+    isActive: true,
+    createdAt: '2026-03-15T09:30:00Z',
+    updatedAt: '2026-09-20T14:15:00Z',
+    addresses: [
+      {
+        clientAddressId: 'caddr-101',
+        addressType: 'Registered Office',
+        address1: 'Plot 42, GIDC Industrial Estate, Phase 2',
+        address2: 'Near Narmada Canal Bridge',
+        countryId: 'IN',
+        stateId: 'GJ',
+        city: 'Ahmedabad',
+        zipCode: '382445',
+        isActive: true,
+        createdAt: '2026-03-15T09:30:00Z',
+        updatedAt: null,
+      },
+      {
+        clientAddressId: 'caddr-102',
+        addressType: 'Works',
+        address1: 'Survey No. 118, Sanand Industrial Area',
+        address2: 'Block C, Heavy Engineering Wing',
+        countryId: 'IN',
+        stateId: 'GJ',
+        city: 'Sanand',
+        zipCode: '382170',
+        isActive: true,
+        createdAt: '2026-03-15T09:30:00Z',
+        updatedAt: null,
+      },
+      {
+        clientAddressId: 'caddr-103',
+        addressType: 'Billing',
+        address1: 'Corporate Tower 4, Prahlad Nagar',
+        address2: 'SG Highway',
+        countryId: 'IN',
+        stateId: 'GJ',
+        city: 'Ahmedabad',
+        zipCode: '380015',
+        isActive: true,
+        createdAt: '2026-03-15T09:30:00Z',
+        updatedAt: null,
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-101',
+        firstName: 'Rajesh',
+        lastName: 'Panchal',
+        mobile1: '+91 98250 12345',
+        mobile2: '+91 79 2658 9900',
+        email: 'rajesh.panchal@bharatprecision.in',
+        isActive: true,
+        createdAt: '2026-03-15T09:30:00Z',
+        updatedAt: null,
+      },
+      {
+        clientContactPersonId: 'ccon-102',
+        firstName: 'Meera',
+        lastName: 'Desai',
+        mobile1: '+91 94260 54321',
+        mobile2: '',
+        email: 'quality@bharatprecision.in',
+        isActive: true,
+        createdAt: '2026-03-15T09:30:00Z',
+        updatedAt: null,
+      },
+    ],
+  },
+  {
+    clientId: 'cli-002',
+    companyName: 'Apex Metrology & Tooling Solutions',
+    billingName: 'Apex Metrology & Tooling Solutions Pvt Ltd',
+    email: 'info@apexmetrology.com',
+    contactTypeId: 'Distributor',
+    countryId: 'IN',
+    currencyId: 'INR',
+    salesCommission: '5.00',
+    gstNo: '27AABCA9876E1ZT',
+    comments: 'Authorized western region distributor for granite plates and comparator stands.',
+    paymentTerms: '45 Days credit with 1% prompt payment discount within 10 days',
+    deliveryTerms: 'Door delivery including transit insurance',
+    isActive: true,
+    createdAt: '2026-04-10T11:00:00Z',
+    updatedAt: '2026-08-11T16:20:00Z',
+    addresses: [
+      {
+        clientAddressId: 'caddr-201',
+        addressType: 'Billing',
+        address1: 'Shop 14-16, MIDC Commercial Complex',
+        address2: 'Bhosari Industrial Area',
+        countryId: 'IN',
+        stateId: 'MH',
+        city: 'Pune',
+        zipCode: '411026',
+        isActive: true,
+        createdAt: '2026-04-10T11:00:00Z',
+        updatedAt: null,
+      },
+      {
+        clientAddressId: 'caddr-202',
+        addressType: 'Shipping',
+        address1: 'Central Warehouse, Gate No. 3',
+        address2: 'Chakan MIDC Phase 2',
+        countryId: 'IN',
+        stateId: 'MH',
+        city: 'Pune',
+        zipCode: '410501',
+        isActive: true,
+        createdAt: '2026-04-10T11:00:00Z',
+        updatedAt: null,
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-201',
+        firstName: 'Sanjay',
+        lastName: 'Kulkarni',
+        mobile1: '+91 98901 44332',
+        mobile2: '+91 20 2712 3456',
+        email: 'sanjay@apexmetrology.com',
+        isActive: true,
+        createdAt: '2026-04-10T11:00:00Z',
+        updatedAt: null,
+      },
+    ],
+  },
+  {
+    clientId: 'cli-003',
+    companyName: 'Kalyani Calibration Services',
+    billingName: 'Kalyani Calibration Services',
+    email: 'lab@kalyanicalib.com',
+    contactTypeId: 'Dealer',
+    countryId: 'IN',
+    currencyId: 'INR',
+    salesCommission: '3.75',
+    gstNo: '29AABCK5544D1ZB',
+    comments: 'NABL accredited calibration laboratory. Regular buyer of Grade 00 surface plates.',
+    paymentTerms: '100% advance against Proforma Invoice',
+    deliveryTerms: 'Ex-Works Vallabh Vidyanagar',
+    isActive: true,
+    createdAt: '2026-05-02T14:40:00Z',
+    updatedAt: null,
+    addresses: [
+      {
+        clientAddressId: 'caddr-301',
+        addressType: 'Registered Office',
+        address1: '88, 4th Cross, Peenya Industrial Area 1st Stage',
+        address2: '',
+        countryId: 'IN',
+        stateId: 'KA',
+        city: 'Bengaluru',
+        zipCode: '560058',
+        isActive: true,
+        createdAt: '2026-05-02T14:40:00Z',
+        updatedAt: null,
+      },
+      // Inactive address test case
+      {
+        clientAddressId: 'caddr-302',
+        addressType: 'Works',
+        address1: 'Old Peenya Shed 12',
+        address2: 'Subhash Nagar Road',
+        countryId: 'IN',
+        stateId: 'KA',
+        city: 'Bengaluru',
+        zipCode: '560057',
+        isActive: false,
+        createdAt: '2026-05-02T14:40:00Z',
+        updatedAt: '2026-06-01T10:00:00Z',
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-301',
+        firstName: 'Venkat',
+        lastName: 'Rao',
+        mobile1: '+91 98450 77889',
+        mobile2: '',
+        email: 'vrao@kalyanicalib.com',
+        isActive: true,
+        createdAt: '2026-05-02T14:40:00Z',
+        updatedAt: null,
+      },
+      // Inactive contact test case
+      {
+        clientContactPersonId: 'ccon-302',
+        firstName: 'Karthik',
+        lastName: 'S',
+        mobile1: '+91 97410 22334',
+        mobile2: '',
+        email: 'karthik.former@kalyanicalib.com',
+        isActive: false,
+        createdAt: '2026-05-02T14:40:00Z',
+        updatedAt: '2026-07-15T12:00:00Z',
+      },
+    ],
+  },
+  {
+    clientId: 'cli-004',
+    companyName: 'Gulf Metrology & Tooling LLC',
+    billingName: 'Gulf Metrology & Tooling LLC',
+    email: 'orders@gulfmetrology.ae',
+    contactTypeId: 'Agent',
+    countryId: 'AE',
+    currencyId: 'AED',
+    salesCommission: '6.00',
+    gstNo: '',
+    comments: 'Middle East regional agent managing contracts across Dubai and Abu Dhabi.',
+    paymentTerms: 'Letter of Credit (LC) at sight or 60 days PDC',
+    deliveryTerms: 'FOB Nhava Sheva (JNPT) Sea Freight',
+    isActive: true,
+    createdAt: '2026-06-18T10:15:00Z',
+    updatedAt: '2026-09-01T08:30:00Z',
+    addresses: [
+      {
+        clientAddressId: 'caddr-401',
+        addressType: 'Registered Office',
+        address1: 'Warehouse 12, Al Quoz Industrial Area 3',
+        address2: 'PO Box 45210',
+        countryId: 'AE',
+        stateId: 'DXB',
+        city: 'Dubai',
+        zipCode: '00000',
+        isActive: true,
+        createdAt: '2026-06-18T10:15:00Z',
+        updatedAt: null,
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-401',
+        firstName: 'Tariq',
+        lastName: 'Al-Mansoor',
+        mobile1: '+971 50 123 4567',
+        mobile2: '+971 4 338 9911',
+        email: 'tariq@gulfmetrology.ae',
+        isActive: true,
+        createdAt: '2026-06-18T10:15:00Z',
+        updatedAt: null,
+      },
+    ],
+  },
+  {
+    clientId: 'cli-005',
+    companyName: 'Nordic Precision Instruments GmbH',
+    billingName: 'Nordic Precision Instruments GmbH',
+    email: 'purchasing@nordic-precision.de',
+    contactTypeId: 'Customer',
+    countryId: 'DE',
+    currencyId: 'EUR',
+    salesCommission: '1.50',
+    gstNo: 'DE123456789',
+    comments: 'German high-precision machine manufacturer. Specialized custom granite bases.',
+    paymentTerms: '30 Days Net from BL date',
+    deliveryTerms: 'CIF Hamburg Port by Sea',
+    isActive: true,
+    createdAt: '2026-07-01T15:20:00Z',
+    updatedAt: null,
+    addresses: [
+      {
+        clientAddressId: 'caddr-501',
+        addressType: 'Works',
+        address1: 'Industriestraße 88',
+        address2: 'Gebäude B',
+        countryId: 'DE',
+        stateId: 'BW',
+        city: 'Stuttgart',
+        zipCode: '70173',
+        isActive: true,
+        createdAt: '2026-07-01T15:20:00Z',
+        updatedAt: null,
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-501',
+        firstName: 'Stefan',
+        lastName: 'Müller',
+        mobile1: '+49 170 9876543',
+        mobile2: '+49 711 543210',
+        email: 's.mueller@nordic-precision.de',
+        isActive: true,
+        createdAt: '2026-07-01T15:20:00Z',
+        updatedAt: null,
+      },
+    ],
+  },
+  {
+    clientId: 'cli-006',
+    companyName: 'Sun Valley Aerospace Works',
+    billingName: 'Sun Valley Aerospace Works Inc.',
+    email: 'vendor-ops@sunvalleyaero.com',
+    contactTypeId: 'Prospect',
+    countryId: 'US',
+    currencyId: 'USD',
+    salesCommission: '0.00',
+    gstNo: '',
+    comments: 'Potential aerospace tooling partner evaluating sample granite squares.',
+    paymentTerms: 'Wire transfer in advance',
+    deliveryTerms: 'FOB Mumbai Air Cargo',
+    isActive: true,
+    createdAt: '2026-08-05T12:00:00Z',
+    updatedAt: null,
+    addresses: [
+      {
+        clientAddressId: 'caddr-601',
+        addressType: 'Registered Office',
+        address1: '742 Aviation Boulevard, Suite 100',
+        address2: '',
+        countryId: 'US',
+        stateId: 'CA',
+        city: 'Long Beach',
+        zipCode: '90806',
+        isActive: true,
+        createdAt: '2026-08-05T12:00:00Z',
+        updatedAt: null,
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-601',
+        firstName: 'David',
+        lastName: 'Miller',
+        mobile1: '+1 562 555 0198',
+        mobile2: '',
+        email: 'dmiller@sunvalleyaero.com',
+        isActive: true,
+        createdAt: '2026-08-05T12:00:00Z',
+        updatedAt: null,
+      },
+    ],
+  },
+  // INACTIVE CLIENT TEST CASE
+  {
+    clientId: 'cli-007',
+    companyName: 'Deccan Heavy Industries',
+    billingName: 'Deccan Heavy Industries Ltd',
+    email: 'accounts@deccanheavy.in',
+    contactTypeId: 'Customer',
+    countryId: 'IN',
+    currencyId: 'INR',
+    salesCommission: '2.00',
+    gstNo: '36AAACD9988H1ZZ',
+    comments: 'Account on temporary hold due to overdue receivables clearance.',
+    paymentTerms: 'Immediate upon delivery',
+    deliveryTerms: 'Ex-Works',
+    isActive: false,
+    createdAt: '2026-02-10T08:00:00Z',
+    updatedAt: '2026-07-20T17:00:00Z',
+    addresses: [
+      {
+        clientAddressId: 'caddr-701',
+        addressType: 'Billing',
+        address1: 'Plot 10, Industrial Park, IDA Bollaram',
+        address2: 'Jinnaram Mandal',
+        countryId: 'IN',
+        stateId: 'TS',
+        city: 'Hyderabad',
+        zipCode: '502325',
+        isActive: true,
+        createdAt: '2026-02-10T08:00:00Z',
+        updatedAt: null,
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-701',
+        firstName: 'Raghavendra',
+        lastName: 'Rao',
+        mobile1: '+91 99890 11223',
+        mobile2: '',
+        email: 'raghav@deccanheavy.in',
+        isActive: true,
+        createdAt: '2026-02-10T08:00:00Z',
+        updatedAt: null,
+      },
+    ],
+  },
+  // EMPTY COMMERCIAL / GST TEST CASE (No currency, commission, or GST)
+  {
+    clientId: 'cli-008',
+    companyName: 'Metro Calibration & Testing Co',
+    billingName: 'Metro Calibration & Testing Co',
+    email: 'info@metrocalib.org',
+    contactTypeId: 'Prospect',
+    countryId: 'IN',
+    currencyId: '',
+    salesCommission: '',
+    gstNo: '',
+    comments: '',
+    paymentTerms: '',
+    deliveryTerms: '',
+    isActive: true,
+    createdAt: '2026-09-01T10:00:00Z',
+    updatedAt: null,
+    addresses: [
+      {
+        clientAddressId: 'caddr-801',
+        addressType: 'Works',
+        address1: 'Plot 5, Sector 18, Electronic City',
+        address2: '',
+        countryId: 'IN',
+        stateId: 'HR',
+        city: 'Gurugram',
+        zipCode: '122015',
+        isActive: true,
+        createdAt: '2026-09-01T10:00:00Z',
+        updatedAt: null,
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-801',
+        firstName: 'Amit',
+        lastName: 'Verma',
+        mobile1: '+91 98111 22334',
+        mobile2: '',
+        email: 'amit.verma@metrocalib.org',
+        isActive: true,
+        createdAt: '2026-09-01T10:00:00Z',
+        updatedAt: null,
+      },
+    ],
+  },
+  {
+    clientId: 'cli-009',
+    companyName: 'Larsen Quality Inspection Hub',
+    billingName: 'Larsen Quality Inspection Hub LLP',
+    email: 'contact@larsenquality.in',
+    contactTypeId: 'Dealer',
+    countryId: 'IN',
+    currencyId: 'INR',
+    salesCommission: '4.00',
+    gstNo: '33AAACL1122K1Z9',
+    comments: 'Automotive QA lab in Sriperumbudur corridor. Repeat orders for master cylinders & squares.',
+    paymentTerms: '45 Days Net',
+    deliveryTerms: 'Door delivery through V-Trans Logistics',
+    isActive: true,
+    createdAt: '2026-08-14T09:15:00Z',
+    updatedAt: null,
+    addresses: [
+      {
+        clientAddressId: 'caddr-901',
+        addressType: 'Billing',
+        address1: 'SIPCOT Industrial Park, Phase 1',
+        address2: 'Irungattukottai',
+        countryId: 'IN',
+        stateId: 'TN',
+        city: 'Chennai',
+        zipCode: '602117',
+        isActive: true,
+        createdAt: '2026-08-14T09:15:00Z',
+        updatedAt: null,
+      },
+      {
+        clientAddressId: 'caddr-902',
+        addressType: 'Works',
+        address1: 'Testing Facility 3, Mambakkam Road',
+        address2: '',
+        countryId: 'IN',
+        stateId: 'TN',
+        city: 'Sriperumbudur',
+        zipCode: '602105',
+        isActive: true,
+        createdAt: '2026-08-14T09:15:00Z',
+        updatedAt: null,
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-901',
+        firstName: 'Narayanan',
+        lastName: 'Swamy',
+        mobile1: '+91 94440 98765',
+        mobile2: '+91 44 2715 4433',
+        email: 'n.swamy@larsenquality.in',
+        isActive: true,
+        createdAt: '2026-08-14T09:15:00Z',
+        updatedAt: null,
+      },
+    ],
+  },
+  {
+    clientId: 'cli-010',
+    companyName: 'Pacific Tool & Gauge UK',
+    billingName: 'Pacific Tool & Gauge UK Limited',
+    email: 'enquiries@pacifictool.co.uk',
+    contactTypeId: 'Distributor',
+    countryId: 'GB',
+    currencyId: 'GBP',
+    salesCommission: '7.50',
+    gstNo: 'GB987654321',
+    comments: 'Sole distributor covering England and Scotland engineering sectors.',
+    paymentTerms: '60 Days Open Account with credit limit GBP 50,000',
+    deliveryTerms: 'FOB Mumbai Seaport with export seaworthy wooden crating',
+    isActive: true,
+    createdAt: '2026-04-25T14:30:00Z',
+    updatedAt: '2026-09-12T11:45:00Z',
+    addresses: [
+      {
+        clientAddressId: 'caddr-1001',
+        addressType: 'Registered Office',
+        address1: 'Unit 4, Precision Park, Vulcan Road',
+        address2: '',
+        countryId: 'GB',
+        stateId: 'ENG',
+        city: 'Sheffield',
+        zipCode: 'S9 1EW',
+        isActive: true,
+        createdAt: '2026-04-25T14:30:00Z',
+        updatedAt: null,
+      },
+    ],
+    contacts: [
+      {
+        clientContactPersonId: 'ccon-1001',
+        firstName: 'Oliver',
+        lastName: 'Wright',
+        mobile1: '+44 7911 123456',
+        mobile2: '+44 114 496 0123',
+        email: 'oliver.wright@pacifictool.co.uk',
+        isActive: true,
+        createdAt: '2026-04-25T14:30:00Z',
+        updatedAt: null,
+      },
+    ],
+  },
+];

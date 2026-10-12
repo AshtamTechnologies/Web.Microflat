@@ -43,6 +43,7 @@ import {
   Card,
   Modal,
 } from '../../components/ui';
+import { formatDate } from '../../utils/dateUtils';
 import { useVendorsContext } from '../../context/VendorsContext';
 import {
   COUNTRY_OPTIONS,
@@ -1110,11 +1111,11 @@ export default function VendorFormPage() {
               <div className="text-xs text-text-muted pt-2 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <span>
                   Created by <strong className="text-heading font-medium">{existingVendor.createdBy || 'Ian Chesnut'}</strong> on{' '}
-                  <span className="font-mono tabular-nums">{existingVendor.createdOn || '—'}</span>
+                  <span className="font-mono tabular-nums">{formatDate(existingVendor.createdOn)}</span>
                 </span>
                 <span>
                   Last updated by <strong className="text-heading font-medium">{existingVendor.lastUpdatedBy || 'Ian Chesnut'}</strong> on{' '}
-                  <span className="font-mono tabular-nums">{existingVendor.lastUpdatedOn || '—'}</span>
+                  <span className="font-mono tabular-nums">{formatDate(existingVendor.lastUpdatedOn)}</span>
                 </span>
               </div>
             </div>

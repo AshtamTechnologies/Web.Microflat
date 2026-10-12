@@ -38,6 +38,7 @@ import {
   Td,
   StatusSwitch,
 } from '../../components/ui';
+import { formatDate } from '../../utils/dateUtils';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import {
@@ -466,7 +467,7 @@ export default function ProductCategoriesPage() {
         minSize: 110,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
-            {row.original.createdOn}
+            {formatDate(row.original.createdOn)}
           </span>
         ),
       }),
@@ -798,7 +799,7 @@ export default function ProductCategoriesPage() {
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-text-muted pt-2 border-t border-border">
-                <span className="font-mono">Created: {cat.createdOn}</span>
+                <span className="font-mono">Created: {formatDate(cat.createdOn)}</span>
                 <div className="flex items-center gap-1.5">
                   {!cat.parentCategoryId && (
                     <button
@@ -914,9 +915,9 @@ export default function ProductCategoriesPage() {
           {/* Created On (Read-only in edit mode) */}
           {editingCategory && (
             <div className="text-xs text-text-muted flex items-center justify-between p-2.5 bg-surface/60 rounded-lg border border-border">
-              <span>Created Timestamp:</span>
+              <span>Created Date:</span>
               <span className="font-mono font-medium text-heading">
-                {editingCategory.createdOn}
+                {formatDate(editingCategory.createdOn)}
               </span>
             </div>
           )}

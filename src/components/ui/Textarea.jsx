@@ -51,6 +51,8 @@ export default function Textarea({
         maxLength={maxLength}
         value={value}
         className={[
+          'mf-textarea',
+          hasError ? 'mf-textarea--err' : '',
           'w-full rounded-lg border bg-bg text-text text-sm',
           'px-3 py-2.5 leading-relaxed resize-y',
           'placeholder:text-text-muted/50 placeholder:font-normal',

@@ -37,6 +37,7 @@ import {
   normalizeDateString,
   getSeriesStatus,
 } from '../../utils/seriesUtils';
+import { formatDate } from '../../utils/dateUtils';
 
 const SEPARATOR_OPTIONS = [
   { value: '-', label: 'Hyphen ( - )' },
@@ -672,7 +673,7 @@ export default function SeriesSetupPage() {
                               Effective Date
                             </span>
                             <span className="font-mono font-bold text-sm text-heading tabular-nums">
-                              {ver.effectiveDate}
+                              {formatDate(ver.effectiveDate)}
                             </span>
                           </div>
 
@@ -722,7 +723,7 @@ export default function SeriesSetupPage() {
                         {/* Audit Details & Actions */}
                         <div className="flex items-center justify-between gap-2.5 pt-1">
                           <div className="text-[11px] text-text-muted truncate">
-                            By <span className="font-medium text-text">{ver.createdBy || 'Ian Chesnut'}</span> • {ver.createdOn || '—'}
+                            By <span className="font-medium text-text">{ver.createdBy || 'Ian Chesnut'}</span> • {formatDate(ver.createdOn)}
                           </div>
 
                           <Button
@@ -779,7 +780,7 @@ export default function SeriesSetupPage() {
                           >
                             {/* Effective Date */}
                             <Td className="py-3.5 px-4 font-mono font-semibold text-heading tabular-nums whitespace-nowrap">
-                              {ver.effectiveDate}
+                              {formatDate(ver.effectiveDate)}
                             </Td>
 
                             {/* Prefix */}
@@ -839,7 +840,7 @@ export default function SeriesSetupPage() {
 
                             {/* Created On */}
                             <Td className="py-3.5 px-4 font-mono text-[11px] text-text-muted tabular-nums whitespace-nowrap">
-                              {ver.createdOn || '—'}
+                              {formatDate(ver.createdOn)}
                             </Td>
 
                             {/* Actions Column */}

@@ -23,6 +23,7 @@ import {
   X,
   RotateCcw,
 } from 'lucide-react';
+import { formatDate } from '../../utils/dateUtils';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -62,12 +63,7 @@ function formatDateToISO(date) {
 
 function formatDisplayDate(isoString) {
   if (!isoString) return '';
-  const date = parseDateString(isoString);
-  if (!date) return isoString;
-  const d = String(date.getDate()).padStart(2, '0');
-  const m = SHORT_MONTH_NAMES[date.getMonth()];
-  const y = date.getFullYear();
-  return `${d} ${m} ${y}`;
+  return formatDate(isoString);
 }
 
 export default function DatePicker({
@@ -366,9 +362,6 @@ export default function DatePicker({
             {value ? (
               <span className="font-mono tabular-nums text-heading font-medium truncate">
                 {formatDisplayDate(value)}
-                <span className="text-xs text-text-muted font-normal ml-2 hidden sm:inline">
-                  ({value})
-                </span>
               </span>
             ) : (
               <span className="text-text-muted/50 font-normal truncate">{placeholder}</span>

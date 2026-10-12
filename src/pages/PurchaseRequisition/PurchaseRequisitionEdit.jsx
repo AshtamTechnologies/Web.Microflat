@@ -4,7 +4,7 @@
  * Pre-populates the selected PR, retains PR Number as read-only, and saves updates to local state.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -12,6 +12,11 @@ import {
   Send,
   X,
   AlertCircle,
+  User,
+  Paperclip,
+  Upload,
+  Trash2,
+  FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -19,7 +24,7 @@ import {
   Button,
   Card,
   Input,
-  Textarea,
+  RichTextEditor,
   DatePicker,
   Select,
   SearchableSelect,
@@ -56,6 +61,8 @@ export default function PurchaseRequisitionEdit() {
   });
 
   const [items, setItems] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+  const fileInputRef = useRef(null);
   const [errors, setErrors] = useState({});
 
   // Populate form with existing PR data when available
@@ -64,7 +71,7 @@ export default function PurchaseRequisitionEdit() {
       setFormData({
         prNumber: originalPR.prNumber || '',
         prDate: originalPR.prDate ? originalPR.prDate.split('T')[0] : '',
-        requestedBy: originalPR.requestedBy || '',
+        requestedBy: originalPR.requestedBy || 'Ian Chesnut',
         department: originalPR.department || '',
         requiredDate: originalPR.requiredDate ? originalPR.requiredDate.split('T')[0] : '',
         priority: originalPR.priority || 'Normal',
@@ -79,6 +86,7 @@ export default function PurchaseRequisitionEdit() {
             }))
           : []
       );
+      setAttachments(Array.isArray(originalPR.attachments) ? originalPR.attachments : []);
     }
   }, [originalPR]);
 
@@ -146,6 +154,31 @@ export default function PurchaseRequisitionEdit() {
   };
 
 
+  // Attachment handlers
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const newAttachments = files.map((file) => ({
+      id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      fileName: file.name,
+      fileSizeKB: Math.round(file.size / 1024) || 1,
+      fileType: file.type || 'application/octet-stream',
+      uploadedBy: 'Ian Chesnut',
+      uploadedDate: new Date().toLocaleString(),
+      url: URL.createObjectURL(file),
+      file: file,
+    }));
+
+    setAttachments((prev) => [...prev, ...newAttachments]);
+    toast.success(`Attached ${files.length} file(s)`);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeAttachment = (indexToRemove) => {
+    setAttachments((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
   // Action: Submit for Approval
   const handleSubmitForApproval = () => {
     if (!validateForm()) {
@@ -157,6 +190,7 @@ export default function PurchaseRequisitionEdit() {
       ...formData,
       status: 'Pending Approval',
       items,
+      attachments,
     });
 
     toast.success('Purchase requisition submitted for approval.');
@@ -257,17 +291,16 @@ export default function PurchaseRequisitionEdit() {
             />
           </div>
 
-          {/* Row 1, Col 3: Requested By */}
+          {/* Row 1, Col 3: Requested By (Disabled with Logged-in User) */}
           <div>
-            <SearchableSelect
+            <Input
               id="edit-pr-requested-by"
               label="Requested By"
-              required
-              options={REQUESTED_BY_OPTIONS}
               value={formData.requestedBy}
-              error={errors.requestedBy}
-              placeholder="Select requester..."
-              onChange={(e) => handleFieldChange('requestedBy', e.target.value)}
+              disabled
+              leftIcon={<User size={15} />}
+              hint="Current logged-in user"
+              className="bg-border/30 font-medium text-text cursor-not-allowed"
             />
           </div>
 
@@ -310,15 +343,16 @@ export default function PurchaseRequisitionEdit() {
             />
           </div>
 
-          {/* Row 3: Remarks (Spans all 3 columns) */}
+          {/* Row 3: Remarks (Rich Text Editor with Text Color) */}
           <div className="md:col-span-3">
-            <Textarea
+            <RichTextEditor
               id="edit-pr-remarks"
+              name="remarks"
               label="Remarks / Justification"
-              rows={3}
-              placeholder="Enter any justification or notes..."
               value={formData.remarks}
               onChange={(e) => handleFieldChange('remarks', e.target.value)}
+              placeholder="Enter any justification or notes..."
+              minHeight="min-h-[140px]"
             />
           </div>
         </div>
@@ -330,8 +364,89 @@ export default function PurchaseRequisitionEdit() {
         onChange={setItems}
       />
 
+      {/* ── Section 3: Document Attachments ── */}
+      <Card padding="md" className="space-y-4 shadow-xs border-border">
+        <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Paperclip size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-heading">
+                Document Attachments
+              </h2>
+              <p className="text-xs text-text-muted">
+                Upload drawings, technical specifications, or quotation comparisons.
+              </p>
+            </div>
+          </div>
+          <Badge variant="role" className="text-xs">
+            {attachments.length} {attachments.length === 1 ? 'File' : 'Files'}
+          </Badge>
+        </div>
+
+        {/* Upload Drop Zone / Button */}
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-border hover:border-primary/60 hover:bg-surface/50 rounded-xl p-5 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 group"
+          >
+            <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Upload size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-heading">
+                Click to browse or drag and drop documents
+              </p>
+              <p className="text-xs text-text-muted mt-0.5">
+                Supports PDF, DOCX, XLSX, DWG, PNG, JPG (up to 25 MB per file)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Attached Files List */}
+        {attachments.length > 0 && (
+          <div className="rounded-xl border border-border overflow-hidden divide-y divide-border bg-surface/30">
+            {attachments.map((file, idx) => (
+              <div
+                key={file.id || idx}
+                className="p-3 flex items-center justify-between gap-3 text-xs"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <FileText size={16} className="text-primary shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-heading truncate">
+                      {file.fileName || file.name}
+                    </p>
+                    <p className="text-[11px] text-text-muted font-mono mt-0.5">
+                      {file.fileSizeKB ? `${file.fileSizeKB} KB` : `${(file.size / 1024).toFixed(1)} KB`} • Uploaded by {file.uploadedBy || 'Ian Chesnut'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(idx)}
+                  className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer shrink-0"
+                  title="Remove attachment"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       {/* ── Section 3: Bottom Form Actions ── */}
-      <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-4 border-t border-border">
+      <div className="mf-form-actions">
         <Button
           type="button"
           variant="secondary"

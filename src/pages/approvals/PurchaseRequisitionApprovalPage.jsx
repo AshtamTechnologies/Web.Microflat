@@ -42,6 +42,8 @@ import {
   Layers,
   Flame,
   Eye,
+  Paperclip,
+  Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -85,6 +87,8 @@ export default function PurchaseRequisitionApprovalPage() {
   const [prToReject, setPrToReject] = useState(null);
   const [rejectComments, setRejectComments] = useState('');
   const [isSubmittingReject, setIsSubmittingReject] = useState(false);
+
+  const [prToViewAttachments, setPrToViewAttachments] = useState(null);
 
   /* ── Filter all requisitions for Pending only & Search query ── */
   const pendingPRs = useMemo(() => {
@@ -202,6 +206,73 @@ export default function PurchaseRequisitionApprovalPage() {
     }
   }
 
+  /* ── Download Attachment Handler ── */
+  const handleDownloadAttachment = (file, pr) => {
+    if (!file) return;
+    try {
+      const fileName = file.fileName || file.name || 'requisition-document.pdf';
+      const fileUrl = file.url || file.fileUrl;
+
+      if (file.file instanceof File || file.file instanceof Blob) {
+        const blobUrl = URL.createObjectURL(file.file);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      } else if (fileUrl && fileUrl !== '#') {
+        const a = document.createElement('a');
+        a.href = fileUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        const fileContent = [
+          `================================================================`,
+          ` MICROFLAT ERP - PURCHASE REQUISITION ATTACHMENT`,
+          `================================================================`,
+          `PR Number        : ${pr?.prNumber || 'N/A'}`,
+          `File Name        : ${fileName}`,
+          `File Size        : ${file.fileSizeKB ? `${file.fileSizeKB} KB` : (file.size || '150 KB')}`,
+          `Requested By     : ${pr?.requestedBy || 'N/A'}`,
+          `Department       : ${pr?.department || 'N/A'}`,
+          `Uploaded By      : ${file.uploadedBy || pr?.requestedBy || 'Ian Chesnut'}`,
+          `Uploaded Date    : ${file.uploadedDate || 'N/A'}`,
+          `================================================================`,
+          `Exported On      : ${new Date().toLocaleString()}`,
+          `Status           : Verified Requisition Document`,
+          `================================================================\n`,
+        ].join('\n');
+
+        const mimeType = fileName.toLowerCase().endsWith('.pdf')
+          ? 'application/pdf'
+          : fileName.toLowerCase().endsWith('.docx')
+          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : fileName.toLowerCase().endsWith('.dwg')
+          ? 'application/acad'
+          : 'text/plain;charset=utf-8';
+
+        const blob = new Blob([fileContent], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      toast.success(`Downloaded ${fileName}`);
+    } catch (err) {
+      console.error('Download error:', err);
+      toast.error('Failed to download document attachment.');
+    }
+  };
+
   /* ── TanStack Table Columns ── */
   const columns = useMemo(
     () => [
@@ -279,7 +350,41 @@ export default function PurchaseRequisitionApprovalPage() {
         },
       }),
 
-      /* 4. SUBMITTED / REQUIRED DATE */
+      /* 4. ATTACHMENTS */
+      columnHelper.accessor('attachments', {
+        header: 'ATTACHMENTS',
+        minSize: 130,
+        size: 140,
+        enableSorting: false,
+        cell: (info) => {
+          const row = info.row.original;
+          const attachments = row.attachments || [];
+          const count = attachments.length;
+
+          if (count === 0) {
+            return <span className="text-xs text-text-muted/60">—</span>;
+          }
+
+          return (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPrToViewAttachments(row);
+              }}
+              className="text-xs font-semibold text-primary hover:text-primary hover:bg-primary/10 border border-primary/25 hover:border-primary/40 transition-all h-7 px-2.5 shadow-2xs flex items-center gap-1.5 cursor-pointer rounded-md"
+              title={`View ${count} attachment${count > 1 ? 's' : ''} for ${row.prNumber}`}
+            >
+              <Paperclip size={12} className="shrink-0" />
+              <span>{count} {count === 1 ? 'file' : 'files'}</span>
+            </Button>
+          );
+        },
+      }),
+
+      /* 5. SUBMITTED / REQUIRED DATE */
       columnHelper.accessor('prDate', {
         header: 'SUBMITTED ON',
         minSize: 140,
@@ -302,7 +407,7 @@ export default function PurchaseRequisitionApprovalPage() {
         },
       }),
 
-      /* 5. ACTIONS */
+      /* 6. ACTIONS */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
@@ -758,6 +863,22 @@ export default function PurchaseRequisitionApprovalPage() {
                         {items.map((i) => i.itemName || i.itemCode).join(', ')}
                       </p>
                     )}
+                    {pr.attachments?.length > 0 && (
+                      <div className="flex items-center justify-between text-[11px] pt-1">
+                        <span className="text-text-muted">Attachments:</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPrToViewAttachments(pr);
+                          }}
+                          className="text-primary font-medium hover:underline inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Paperclip size={11} />
+                          {pr.attachments.length} {pr.attachments.length === 1 ? 'file' : 'files'}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -986,6 +1107,103 @@ export default function PurchaseRequisitionApprovalPage() {
               </Button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* ── 3. ATTACHMENT VIEW MODAL ── */}
+      {prToViewAttachments && (
+        <Modal
+          isOpen={Boolean(prToViewAttachments)}
+          onClose={() => setPrToViewAttachments(null)}
+          title={`Attachments — ${prToViewAttachments.prNumber}`}
+          size="md"
+        >
+          <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-surface border border-border flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-heading">
+                  Requisition {prToViewAttachments.prNumber}
+                </p>
+                <p className="text-[11px] text-text-muted mt-0.5">
+                  Requested by <strong className="text-heading">{prToViewAttachments.requestedBy}</strong> ({prToViewAttachments.department})
+                </p>
+              </div>
+              <Badge variant="outline" className="text-xs font-mono">
+                {(prToViewAttachments.attachments || []).length} file{((prToViewAttachments.attachments || []).length !== 1 ? 's' : '')}
+              </Badge>
+            </div>
+
+            {(!prToViewAttachments.attachments || prToViewAttachments.attachments.length === 0) ? (
+              <div className="p-6 text-center text-text-muted text-xs border border-dashed border-border rounded-xl">
+                <Paperclip size={24} className="mx-auto mb-2 opacity-40" />
+                <p>No documents attached to this requisition.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border border border-border rounded-xl overflow-hidden bg-bg">
+                {prToViewAttachments.attachments.map((file, idx) => (
+                  <div
+                    key={file.id || idx}
+                    className="flex items-center justify-between p-3 hover:bg-surface/50 transition-colors gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-heading truncate" title={file.fileName || file.name}>
+                          {file.fileName || file.name}
+                        </p>
+                        <p className="text-[11px] text-text-muted mt-0.5 font-mono">
+                          {file.fileSizeKB ? `${file.fileSizeKB} KB` : (file.size || '120 KB')}
+                          {file.uploadedDate ? ` • ${file.uploadedDate}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDownloadAttachment(file, prToViewAttachments)}
+                        className="text-xs text-primary hover:bg-primary/10 h-7 px-2.5 flex items-center gap-1 border border-primary/20 cursor-pointer"
+                      >
+                        <Download size={12} />
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const pr = prToViewAttachments;
+                  setPrToViewAttachments(null);
+                  navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`, {
+                    state: { from: '/approvals/purchase-requisitions', backLabel: 'PR Approval', readOnly: true },
+                  });
+                }}
+                className="text-xs text-text-muted hover:text-primary"
+              >
+                <Eye size={13} className="mr-1.5" />
+                Open Full View
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setPrToViewAttachments(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

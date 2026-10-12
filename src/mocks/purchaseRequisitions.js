@@ -145,6 +145,24 @@ export const mockPurchaseRequisitions = [
         status: 'Pending',
       },
     ],
+    attachments: [
+      {
+        id: 'att_pr_1',
+        fileName: 'Fastener_Specs_Drawing_A12.pdf',
+        fileSizeKB: 412,
+        fileType: 'application/pdf',
+        uploadedBy: 'John Patel',
+        uploadedDate: '2026-09-11 10:30 AM',
+      },
+      {
+        id: 'att_pr_2',
+        fileName: 'Vendor_Quotation_BoltWorks.docx',
+        fileSizeKB: 185,
+        fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        uploadedBy: 'John Patel',
+        uploadedDate: '2026-09-11 10:32 AM',
+      },
+    ],
   },
   {
     prId: 1002,
@@ -259,60 +277,20 @@ export const mockPurchaseRequisitions = [
   },
 ];
 
+import { formatDate, formatDateTime } from '../utils/dateUtils';
+
 /**
- * Formats ISO date or string to readable display (e.g., "11 Sep 2026")
+ * Formats date using system-wide format (DD-MM-YYYY)
  */
 export function formatPRDate(dateStr) {
-  if (!dateStr || dateStr.trim() === '') return '—';
-  try {
-    const parts = dateStr.split('T')[0].split('-');
-    if (parts.length === 3) {
-      const year = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      const day = parseInt(parts[2], 10);
-      const date = new Date(year, month, day);
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString('en-GB', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-        });
-      }
-    }
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return dateStr;
-  }
+  return formatDate(dateStr);
 }
 
 /**
- * Formats datetime with time (e.g., "11 Sep 2026, 10:30 AM")
+ * Formats datetime using system-wide format (DD-MM-YYYY, hh:mm A)
  */
 export function formatPRDateTime(dateStr) {
-  if (!dateStr || dateStr.trim() === '') return '—';
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    const datePart = d.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-    const timePart = d.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-    return `${datePart}, ${timePart}`;
-  } catch {
-    return dateStr;
-  }
+  return formatDateTime(dateStr);
 }
 
 /**

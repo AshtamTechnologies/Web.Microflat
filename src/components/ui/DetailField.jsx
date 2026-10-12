@@ -89,8 +89,8 @@ export default function DetailField({
 
     return (
       <div
-        className={`view-field-value ${mono ? 'font-mono' : ''} ${
-          Icon ? 'flex items-center gap-1.5' : ''
+        className={`view-field-value mf-detail-value flex items-center gap-1.5 ${
+          mono ? 'font-mono' : ''
         } ${valueClassName}`}
       >
         {Icon && <Icon size={14} className="shrink-0 text-text-muted" />}
@@ -100,8 +100,8 @@ export default function DetailField({
   };
 
   return (
-    <div className={`space-y-1 min-w-0 ${className}`}>
-      {label && <span className="view-field-label">{label}</span>}
+    <div className={`mf-detail-field min-w-0 ${className}`}>
+      {label && <span className="view-field-label mf-detail-label">{label}</span>}
       <div className="min-w-0">{renderContent()}</div>
     </div>
   );

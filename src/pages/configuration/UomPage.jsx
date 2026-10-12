@@ -31,6 +31,7 @@ import {
   StatusSwitch,
 } from '../../components/ui';
 import { useUomContext } from '../../context/UomContext';
+import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
@@ -260,7 +261,7 @@ export default function UomPage() {
         minSize: 110,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
-            {row.original.createdOn || '—'}
+            {formatDate(row.original.createdOn)}
           </span>
         ),
       }),
@@ -548,7 +549,7 @@ export default function UomPage() {
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] text-text-muted pt-2 border-t border-border">
-                  <span className="font-mono">Created: {uom.createdOn || '—'}</span>
+                  <span className="font-mono">Created: {formatDate(uom.createdOn)}</span>
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"

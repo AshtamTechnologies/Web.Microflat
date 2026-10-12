@@ -38,6 +38,7 @@ import {
 } from '../../components/ui';
 import { useRegionsContext } from '../../context/RegionsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
+import { formatDate } from '../../utils/dateUtils';
 import {
   buildTree,
   flattenVisible,
@@ -463,7 +464,7 @@ export default function RegionsPage() {
         minSize: 110,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
-            {row.original.createdOn || '—'}
+            {formatDate(row.original.createdOn)}
           </span>
         ),
       }),
@@ -793,7 +794,7 @@ export default function RegionsPage() {
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-text-muted">
-                <span className="font-mono tabular-nums">{reg.createdOn || '—'}</span>
+                <span className="font-mono tabular-nums">{formatDate(reg.createdOn)}</span>
 
                 <div className="flex items-center gap-1.5">
                   {!reg.parentRegionId && (
@@ -912,7 +913,7 @@ export default function RegionsPage() {
             <div className="text-xs text-text-muted flex items-center justify-between p-2.5 bg-surface/60 rounded-lg border border-border">
               <span>Created Timestamp:</span>
               <span className="font-mono font-medium text-heading">
-                {editingRegion.createdOn}
+                {formatDate(editingRegion.createdOn)}
               </span>
             </div>
           )}

@@ -316,6 +316,7 @@ export default function InquiryFormPage() {
   const [itemFormState, setItemFormState] = useState({ ...INITIAL_ITEM_ENTRY });
   const [editingItemId, setEditingItemId] = useState(null);
   const [itemFieldErrors, setItemFieldErrors] = useState({});
+  const inquiryItemErrorCountRef = useRef(0);
 
   // 2-Level Parent and Sub-Category options
   const parentCategoryOptions = useMemo(() => {
@@ -405,6 +406,7 @@ export default function InquiryFormPage() {
     if (itemFieldErrors[field]) {
       setItemFieldErrors((prev) => ({ ...prev, [field]: null }));
     }
+    inquiryItemErrorCountRef.current = 0;
   };
 
   const validateItemForm = () => {
@@ -441,14 +443,23 @@ export default function InquiryFormPage() {
       categoryId: '',
       categoryName: '',
     });
+    inquiryItemErrorCountRef.current = 0;
   };
 
   const handleAddOrUpdateItem = (e) => {
     if (e && e.preventDefault) e.preventDefault();
 
     if (!validateItemForm()) {
+      inquiryItemErrorCountRef.current += 1;
+      const count = inquiryItemErrorCountRef.current;
+      toast.error(
+        `Please select a product and enter a valid quantity (${count})`,
+        { id: 'inquiry-item-validation-error' }
+      );
       return;
     }
+
+    inquiryItemErrorCountRef.current = 0;
 
     const selectedCatId = itemFormState.categoryId || itemFormState.parentCategoryId || '';
     const currentCatName = selectedCatId ? getCategoryPathName(selectedCatId, categories) : '';
@@ -1552,6 +1563,7 @@ export default function InquiryFormPage() {
                       value={itemFormState.itemId ? String(itemFormState.itemId) : ''}
                       placeholder="-- Select Product from Catalog --"
                       searchPlaceholder="Search catalog..."
+                      error={itemFieldErrors.itemCode}
                       onChange={(e) => handleItemFieldChange('itemId', e.target.value)}
                     />
                   </div>
