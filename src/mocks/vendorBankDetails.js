@@ -1,0 +1,158 @@
+/**
+ * vendorBankDetails.js — Mock Data and Constants for Vendor Bank Details Module.
+ */
+
+export const ACCOUNT_TYPE_OPTIONS = [
+  { value: 'Current', label: 'Current' },
+  { value: 'Savings', label: 'Savings' },
+  { value: 'Cash Credit', label: 'Cash Credit' },
+  { value: 'Overdraft', label: 'Overdraft' },
+];
+
+export const BANK_DOCUMENT_TYPE_OPTIONS = [
+  { value: 'Bank Cancelled Cheque', label: 'Bank Cancelled Cheque' },
+  { value: 'Bank Passbook Copy', label: 'Bank Passbook Copy' },
+  { value: 'Bank Confirmation Letter', label: 'Bank Confirmation Letter' },
+  { value: 'Bank Mandate Form', label: 'Bank Mandate Form' },
+  { value: 'Other Banking Document', label: 'Other Banking Document' },
+];
+
+/**
+ * Initial mock seed bank accounts linked to real vendors from src/mocks/vendors.js:
+ *   - v1 (Apex Precision Castings): 2 accounts (1 Active, 1 Inactive)
+ *   - v2 (Zeiss Metrology): 1 account (Foreign DE, Active)
+ *   - v3 (Kalyani Steels): 2 accounts (Both Active)
+ *   - v5 (Continental Linear): 1 account (Foreign US, Active)
+ *   - v4 and v6: 0 accounts (to exercise empty states)
+ */
+export const INITIAL_VENDOR_BANK_DETAILS = [
+  {
+    bankDetailId: 'bd_1',
+    vendorId: 'v1',
+    accountHolderName: 'Apex Precision Castings Pvt Ltd',
+    bankName: 'HDFC Bank',
+    branchName: 'GIDC Industrial Estate, Anand',
+    accountNumber: '50200012345678',
+    ifscCode: 'HDFC0001234',
+    swiftCode: 'HDFCINBB',
+    accountType: 'Current',
+    isActive: true,
+    attachments: [
+      {
+        id: 'att_bd1_1',
+        documentName: 'Bank Cancelled Cheque',
+        fileName: 'apex_hdfc_cancelled_cheque.pdf',
+        fileSize: '850 KB',
+        fileType: 'application/pdf',
+        uploadedAt: '2024-01-16',
+      },
+    ],
+    createdAt: '2024-01-16',
+    createdBy: 'Ian Chesnut',
+    updatedAt: '2024-06-10 03:45 PM',
+    updatedBy: 'Arjun Sharma',
+  },
+  {
+    bankDetailId: 'bd_2',
+    vendorId: 'v1',
+    accountHolderName: 'Apex Precision Castings Pvt Ltd',
+    bankName: 'State Bank of India',
+    branchName: 'Vallabh Vidyanagar SME Branch',
+    accountNumber: '31234567890',
+    ifscCode: 'SBIN0000456',
+    swiftCode: '',
+    accountType: 'Cash Credit',
+    isActive: false,
+    attachments: [],
+    createdAt: '2024-01-16',
+    createdBy: 'Ian Chesnut',
+    updatedAt: '2024-03-20 02:15 PM',
+    updatedBy: 'Ian Chesnut',
+  },
+  {
+    bankDetailId: 'bd_3',
+    vendorId: 'v2',
+    accountHolderName: 'Zeiss Industrial Metrology Solutions',
+    bankName: 'Deutsche Bank AG',
+    branchName: 'Oberkochen Corporate Branch',
+    accountNumber: '7890123456',
+    ifscCode: '',
+    swiftCode: 'DEUTDEDDFXX',
+    accountType: 'Current',
+    isActive: true,
+    attachments: [
+      {
+        id: 'att_bd3_1',
+        documentName: 'Bank Confirmation Letter',
+        fileName: 'deutsche_bank_confirmation.pdf',
+        fileSize: '1.2 MB',
+        fileType: 'application/pdf',
+        uploadedAt: '2024-02-01',
+      },
+    ],
+    createdAt: '2024-02-01',
+    createdBy: 'Ian Chesnut',
+    updatedAt: null,
+    updatedBy: null,
+  },
+  {
+    bankDetailId: 'bd_4',
+    vendorId: 'v3',
+    accountHolderName: 'Kalyani Steels & Forgings Ltd',
+    bankName: 'ICICI Bank',
+    branchName: 'Mundhwa Industrial Area, Pune',
+    accountNumber: '001205012345',
+    ifscCode: 'ICIC0000012',
+    swiftCode: 'ICICINBB',
+    accountType: 'Current',
+    isActive: true,
+    attachments: [
+      {
+        id: 'att_bd4_1',
+        documentName: 'Bank Cancelled Cheque',
+        fileName: 'kalyani_icici_cheque.png',
+        fileSize: '620 KB',
+        fileType: 'image/png',
+        uploadedAt: '2024-03-12',
+      },
+    ],
+    createdAt: '2024-03-12',
+    createdBy: 'Arjun Sharma',
+    updatedAt: '2024-05-12 01:20 PM',
+    updatedBy: 'Priya Mehta',
+  },
+  {
+    bankDetailId: 'bd_5',
+    vendorId: 'v3',
+    accountHolderName: 'Kalyani Steels & Forgings Ltd',
+    bankName: 'Axis Bank',
+    branchName: 'Bund Garden Road, Pune',
+    accountNumber: '918020054321678',
+    ifscCode: 'UTIB0000123',
+    swiftCode: '',
+    accountType: 'Overdraft',
+    isActive: true,
+    attachments: [],
+    createdAt: '2024-03-12',
+    createdBy: 'Arjun Sharma',
+    updatedAt: null,
+    updatedBy: null,
+  },
+  {
+    bankDetailId: 'bd_6',
+    vendorId: 'v5',
+    accountHolderName: 'Continental Linear Motion Systems',
+    bankName: 'JPMorgan Chase Bank',
+    branchName: 'Fulton Market Commercial Center, Chicago',
+    accountNumber: '4567890123',
+    ifscCode: '',
+    swiftCode: 'CHASUS33',
+    accountType: 'Current',
+    isActive: true,
+    attachments: [],
+    createdAt: '2024-05-01',
+    createdBy: 'Priya Mehta',
+    updatedAt: null,
+    updatedBy: null,
+  },
+];

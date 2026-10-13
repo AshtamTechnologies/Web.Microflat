@@ -5,7 +5,7 @@
  * Manages adding, editing, and toggling contact persons with field validation.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import {
   Users,
   Plus,
@@ -26,6 +26,8 @@ import {
   TableContainer,
   Th,
   Td,
+  Checkbox,
+  ConfirmModal,
 } from '../../../components/ui';
 import { useRowsEditor } from '../../../hooks/useRowsEditor';
 
@@ -56,6 +58,19 @@ function validatePhone(value, isRequired = false, fieldName = 'Phone number') {
 }
 
 export default function ContactsEditor({ rows = [], onChange }) {
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [contactToDelete, setContactToDelete] = useState(null);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+
+  // Sync selectedIds with active rows to prevent dangling selection
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = new Set(rows.map((r, i) => r.clientContactPersonId || r.id || `con_${i}`));
+      const next = prev.filter((id) => validIds.has(id));
+      return next.length !== prev.length ? next : prev;
+    });
+  }, [rows]);
+
   const validateContact = useCallback((form) => {
     const errors = {};
     if (!form.firstName?.trim()) errors.firstName = 'First name is required';
@@ -90,6 +105,7 @@ export default function ContactsEditor({ rows = [], onChange }) {
     handleStartEdit,
     handleCancelEdit,
     handleRemove,
+    handleRemoveMultiple,
     handleToggleRowActive,
   } = useRowsEditor({
     rows,
@@ -99,6 +115,42 @@ export default function ContactsEditor({ rows = [], onChange }) {
     rowName: 'Contact Person',
     validateRow: validateContact,
   });
+
+  // Multiple selection helpers
+  const allRowIds = useMemo(() => {
+    return rows.map((r, i) => r.clientContactPersonId || r.id || `con_${i}`);
+  }, [rows]);
+
+  const isAllSelected = rows.length > 0 && selectedIds.length === rows.length;
+
+  const handleToggleSelect = (rowId) => {
+    setSelectedIds((prev) =>
+      prev.includes(rowId) ? prev.filter((id) => id !== rowId) : [...prev, rowId]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds([...allRowIds]);
+    }
+  };
+
+  const handleConfirmSingleDelete = () => {
+    if (!contactToDelete) return;
+    const rowId = contactToDelete.clientContactPersonId || contactToDelete.id;
+    handleRemove(rowId);
+    setSelectedIds((prev) => prev.filter((id) => id !== rowId));
+    setContactToDelete(null);
+  };
+
+  const handleConfirmBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    handleRemoveMultiple(selectedIds);
+    setSelectedIds([]);
+    setIsBulkDeleteOpen(false);
+  };
 
   const onEdit = (row) => {
     handleStartEdit({
@@ -278,7 +330,26 @@ export default function ContactsEditor({ rows = [], onChange }) {
       </div>
 
       {/* ── Grid Below ── */}
-      <div>
+      <div className="space-y-2.5">
+        {selectedIds.length > 0 && (
+          <div className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-surface/90 border border-border shadow-2xs">
+            <span className="text-xs text-text-muted">
+              <strong className="text-heading font-semibold">{selectedIds.length}</strong> of{' '}
+              {rows.length} {rows.length === 1 ? 'contact' : 'contacts'} selected
+            </span>
+            <Button
+              type="button"
+              variant="danger-soft"
+              size="sm"
+              onClick={() => setIsBulkDeleteOpen(true)}
+              className="text-xs font-semibold shadow-2xs cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Trash2 size={13} />
+              <span>Delete Selected ({selectedIds.length})</span>
+            </Button>
+          </div>
+        )}
+
         {rows.length === 0 ? (
           <div className="text-center py-8 px-4 border border-dashed border-border rounded-xl bg-surface/20 space-y-1.5">
             <User size={22} className="mx-auto text-text-muted/60" />
@@ -294,6 +365,16 @@ export default function ContactsEditor({ rows = [], onChange }) {
           >
             <thead className="bg-surface/80 border-b border-border">
               <tr>
+                <Th className="w-10 text-center py-2.5 px-3">
+                  <div className="flex items-center justify-center">
+                    <Checkbox
+                      id="select-all-client-contacts"
+                      checked={isAllSelected}
+                      onChange={handleToggleSelectAll}
+                      aria-label="Select all contacts"
+                    />
+                  </div>
+                </Th>
                 <Th className="py-2.5 px-3 min-w-[180px]">NAME</Th>
                 <Th className="py-2.5 px-3 w-48 whitespace-nowrap">MOBILE 1 / MOBILE 2</Th>
                 <Th className="py-2.5 px-3 min-w-[200px] whitespace-nowrap">EMAIL</Th>
@@ -305,15 +386,32 @@ export default function ContactsEditor({ rows = [], onChange }) {
               {rows.map((row, index) => {
                 const rowId = row.clientContactPersonId || row.id || `con_${index}`;
                 const isCurrentEditing = editingId === rowId;
+                const isSelected = selectedIds.includes(rowId);
                 const fullName = `${row.firstName || ''} ${row.lastName || ''}`.trim() || '—';
 
                 return (
                   <tr
                     key={rowId}
                     className={`transition-colors hover:bg-surface/50 ${
-                      isCurrentEditing ? 'bg-primary/5 ring-1 ring-primary/20' : ''
+                      isCurrentEditing
+                        ? 'bg-primary/5 ring-1 ring-primary/20'
+                        : isSelected
+                        ? 'bg-primary/[0.04]'
+                        : ''
                     }`}
                   >
+                    {/* Checkbox */}
+                    <Td className="text-center py-3 px-3">
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          id={`select-contact-${rowId}`}
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(rowId)}
+                          aria-label={`Select contact ${fullName}`}
+                        />
+                      </div>
+                    </Td>
+
                     {/* Name */}
                     <Td className="py-3 px-3">
                       <span className="font-semibold text-heading text-xs">{fullName}</span>
@@ -375,7 +473,7 @@ export default function ContactsEditor({ rows = [], onChange }) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleRemove(rowId)}
+                          onClick={() => setContactToDelete(row)}
                           className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
                           title="Remove Contact"
                           aria-label="Remove Contact"
@@ -384,13 +482,47 @@ export default function ContactsEditor({ rows = [], onChange }) {
                         </button>
                       </div>
                     </Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+                  </tr>
+                );
+              })}
+            </tbody>
           </TableContainer>
         )}
       </div>
+
+      {/* ── Single Delete Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={Boolean(contactToDelete)}
+        onClose={() => setContactToDelete(null)}
+        onConfirm={handleConfirmSingleDelete}
+        title="Remove Contact Person"
+        message={
+          <span>
+            Are you sure you want to remove contact person{' '}
+            <strong className="text-heading font-semibold">
+              &quot;{`${contactToDelete?.firstName || ''} ${contactToDelete?.lastName || ''}`.trim()}&quot;
+            </strong>
+            ? This action cannot be undone.
+          </span>
+        }
+        confirmText="Remove Contact"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* ── Bulk Delete Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={isBulkDeleteOpen}
+        onClose={() => setIsBulkDeleteOpen(false)}
+        onConfirm={handleConfirmBulkDelete}
+        title={`Remove ${selectedIds.length} Contact Persons`}
+        message={`Are you sure you want to remove the ${selectedIds.length} selected contact person(s)? This action cannot be undone.`}
+        confirmText={`Remove ${selectedIds.length} ${
+          selectedIds.length === 1 ? 'Contact Person' : 'Contact Persons'
+        }`}
+        cancelText="Cancel"
+        variant="danger"
+      />
     </Card>
   );
 }

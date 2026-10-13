@@ -11,6 +11,7 @@
  *   - System audit timestamp footer formatted via central dateUtils
  */
 
+import { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -33,6 +34,7 @@ import {
   PageHeader,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
+import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
 import {
   getContactTypeBadgeVariant,
   getCountryName,
@@ -45,8 +47,38 @@ export default function ClientViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { getClientById } = useClientsContext();
+  const { paymentTerms = [] } = usePaymentTermsContext();
 
   const client = getClientById(id);
+
+  const clientPaymentTermsList = useMemo(() => {
+    if (!client?.paymentTerms) return [];
+    const raw = client.paymentTerms;
+    let items = [];
+    if (Array.isArray(raw)) {
+      items = raw;
+    } else if (typeof raw === 'string' && raw.trim()) {
+      if (raw.includes(',')) {
+        items = raw.split(',').map((s) => s.trim()).filter(Boolean);
+      } else {
+        items = [raw.trim()];
+      }
+    }
+
+    return items.map((val) => {
+      const match = paymentTerms.find(
+        (pt) =>
+          pt.termCode?.toUpperCase() === String(val).toUpperCase() ||
+          pt.paymentTermId === val
+      );
+      if (match) return match;
+      return {
+        paymentTermId: val,
+        termCode: val,
+        description: '',
+      };
+    });
+  }, [client?.paymentTerms, paymentTerms]);
 
   if (!client) {
     return (
@@ -162,7 +194,7 @@ export default function ClientViewPage() {
       </Card>
 
       {/* ── 2. Terms & Notes Card ── */}
-      {(client.paymentTerms || client.deliveryTerms || client.comments) && (
+      {(clientPaymentTermsList.length > 0 || client.deliveryTerms || client.comments) && (
         <Card padding="md" className="space-y-4">
           <div className="flex items-center gap-2.5 border-b border-border pb-3">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -171,8 +203,49 @@ export default function ClientViewPage() {
             <h3 className="text-sm font-semibold text-heading">Terms & Notes</h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <DetailField label="Payment Terms" value={client.paymentTerms || '—'} />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Payment Terms */}
+            <div>
+              <p className="text-xs font-medium text-text-muted mb-1.5">Payment Terms</p>
+              {clientPaymentTermsList.length === 0 ? (
+                <span className="text-sm font-semibold text-heading">—</span>
+              ) : (
+                <div className="space-y-2">
+                  {clientPaymentTermsList.map((term) => {
+                    const desc = term.description || '';
+                    const isHtml = /<[a-z][\s\S]*>/i.test(desc);
+
+                    return (
+                      <div
+                        key={term.paymentTermId || term.termCode}
+                        className="p-2.5 rounded-lg bg-surface/80 border border-border space-y-1.5 text-xs shadow-2xs"
+                      >
+                        <div>
+                          <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5">
+                            {term.termCode}
+                          </Badge>
+                        </div>
+                        {desc ? (
+                          isHtml ? (
+                            <div
+                              className="text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
+                              dangerouslySetInnerHTML={{ __html: desc }}
+                            />
+                          ) : (
+                            <p className="text-xs text-text whitespace-pre-line leading-relaxed">
+                              {desc}
+                            </p>
+                          )
+                        ) : (
+                          <p className="text-2xs text-text-muted italic">No terms description specified</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <DetailField label="Delivery Terms" value={client.deliveryTerms || '—'} />
             <DetailField label="Internal Comments" value={client.comments || '—'} />
           </div>

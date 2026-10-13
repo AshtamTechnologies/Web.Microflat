@@ -11,6 +11,9 @@ import VendorApprovalPage from './pages/approvals/VendorApprovalPage';
 import PurchaseRequisitionApprovalPage from './pages/approvals/PurchaseRequisitionApprovalPage';
 import VendorEffectiveDatesPage from './pages/vendors/VendorEffectiveDatesPage';
 import { VendorsProvider } from './context/VendorsContext';
+import VendorBankDetailsPage from './pages/vendorBankDetails/VendorBankDetailsPage';
+import VendorBankDetailsFormPage from './pages/vendorBankDetails/VendorBankDetailsFormPage';
+import { VendorBankDetailsProvider } from './context/VendorBankDetailsContext';
 
 import PurchaseRequisition from './pages/PurchaseRequisition/PurchaseRequisition';
 import PurchaseRequisitionCreate from './pages/PurchaseRequisition/PurchaseRequisitionCreate';
@@ -67,27 +70,29 @@ export default function App() {
           element={
             <UsersProvider>
               <VendorsProvider>
-                <ClientsProvider>
-                  <PurchaseRequisitionProvider>
-                    <InquiriesProvider>
-                      <InquiryDocumentsProvider>
-                        <DocumentTypesProvider>
-                          <ProductCategoriesProvider>
-                            <UomProvider>
-                              <RegionsProvider>
-                                <PaymentTermsProvider>
-                                  <SeriesProvider>
-                                    <AppLayout />
-                                  </SeriesProvider>
-                                </PaymentTermsProvider>
-                              </RegionsProvider>
-                            </UomProvider>
-                          </ProductCategoriesProvider>
-                        </DocumentTypesProvider>
-                      </InquiryDocumentsProvider>
-                    </InquiriesProvider>
-                  </PurchaseRequisitionProvider>
-                </ClientsProvider>
+                <VendorBankDetailsProvider>
+                  <ClientsProvider>
+                    <PurchaseRequisitionProvider>
+                      <InquiriesProvider>
+                        <InquiryDocumentsProvider>
+                          <DocumentTypesProvider>
+                            <ProductCategoriesProvider>
+                              <UomProvider>
+                                <RegionsProvider>
+                                  <PaymentTermsProvider>
+                                    <SeriesProvider>
+                                      <AppLayout />
+                                    </SeriesProvider>
+                                  </PaymentTermsProvider>
+                                </RegionsProvider>
+                              </UomProvider>
+                            </ProductCategoriesProvider>
+                          </DocumentTypesProvider>
+                        </InquiryDocumentsProvider>
+                      </InquiriesProvider>
+                    </PurchaseRequisitionProvider>
+                  </ClientsProvider>
+                </VendorBankDetailsProvider>
               </VendorsProvider>
             </UsersProvider>
           }
@@ -103,6 +108,11 @@ export default function App() {
           <Route path="/vendors/:id/effective-dates" element={<VendorEffectiveDatesPage />} />
           <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
           <Route path="/approvals/purchase-requisitions" element={<PurchaseRequisitionApprovalPage />} />
+
+          {/* Vendor Bank Details Routes */}
+          <Route path="/vendor-bank-details" element={<VendorBankDetailsPage />} />
+          <Route path="/vendor-bank-details/new" element={<VendorBankDetailsFormPage />} />
+          <Route path="/vendor-bank-details/:vendorId/edit" element={<VendorBankDetailsFormPage />} />
 
           {/* Client Routes */}
           <Route path="/clients" element={<ClientsPage />} />

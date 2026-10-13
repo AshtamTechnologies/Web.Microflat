@@ -47,9 +47,14 @@ export default function SearchableMultiSelect({
   const hasError = Boolean(error);
 
   // Filter options based on search query
-  const filteredOptions = options.filter((opt) =>
-    opt.label.toLowerCase().includes(searchQuery.trim().toLowerCase())
-  );
+  const filteredOptions = options.filter((opt) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const matchesLabel = String(opt.label || '').toLowerCase().includes(q);
+    const matchesSubtitle = String(opt.subtitle || '').toLowerCase().includes(q);
+    const matchesChip = String(opt.chipLabel || '').toLowerCase().includes(q);
+    return matchesLabel || matchesSubtitle || matchesChip;
+  });
 
   // Measure trigger element and update fixed coordinates synchronously
   const updateCoords = useCallback(() => {
@@ -224,11 +229,11 @@ export default function SearchableMultiSelect({
             <>
               {selectedValues.slice(0, maxDisplayTags).map((val) => {
                 const opt = options.find((o) => o.value === val);
-                const labelText = opt ? opt.label : val;
+                const labelText = opt ? (opt.chipLabel || opt.label) : val;
                 return (
                   <span
                     key={val}
-                    className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-xs font-medium px-2 py-0.5 rounded-badge leading-tight max-w-[140px] truncate"
+                    className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-xs font-semibold px-2 py-0.5 rounded-badge leading-tight max-w-[180px] shrink-0"
                   >
                     <span className="truncate">{labelText}</span>
                     <button
@@ -345,11 +350,11 @@ export default function SearchableMultiSelect({
                           : 'text-text hover:bg-surface/70',
                       ].join(' ')}
                     >
-                      <div className="flex items-center gap-2.5 truncate">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
                         {/* Custom checkbox box */}
                         <span
                           className={[
-                            'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                            'w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors mt-0.5',
                             isSelected
                               ? 'bg-primary border-primary text-white'
                               : 'border-border bg-bg',
@@ -357,7 +362,18 @@ export default function SearchableMultiSelect({
                         >
                           {isSelected && <Check size={12} strokeWidth={3} />}
                         </span>
-                        <span className="truncate">{option.label}</span>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-semibold text-heading text-xs block truncate">
+                            {option.chipLabel && option.chipLabel !== option.label
+                              ? `${option.chipLabel} — ${option.label}`
+                              : option.label}
+                          </span>
+                          {option.subtitle && (
+                            <span className="text-2xs text-text-muted block mt-0.5 leading-snug line-clamp-2">
+                              {option.subtitle}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </li>
                   );

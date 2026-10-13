@@ -5,7 +5,7 @@
  * Handles cascading Country -> State selection and validation.
  */
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   MapPin,
   Plus,
@@ -26,6 +26,8 @@ import {
   TableContainer,
   Th,
   Td,
+  Checkbox,
+  ConfirmModal,
 } from '../../../components/ui';
 import { useRowsEditor } from '../../../hooks/useRowsEditor';
 import {
@@ -50,6 +52,19 @@ const INITIAL_ADDRESS_FORM = {
 };
 
 export default function AddressesEditor({ rows = [], onChange }) {
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [addressToDelete, setAddressToDelete] = useState(null);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+
+  // Sync selectedIds with active rows to prevent dangling selection
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = new Set(rows.map((r, i) => r.clientAddressId || r.id || `addr_${i}`));
+      const next = prev.filter((id) => validIds.has(id));
+      return next.length !== prev.length ? next : prev;
+    });
+  }, [rows]);
+
   const validateAddress = useCallback((form) => {
     const errors = {};
     if (!form.addressType) errors.addressType = 'Address type is required';
@@ -74,6 +89,7 @@ export default function AddressesEditor({ rows = [], onChange }) {
     handleStartEdit,
     handleCancelEdit,
     handleRemove,
+    handleRemoveMultiple,
     handleToggleRowActive,
   } = useRowsEditor({
     rows,
@@ -83,6 +99,42 @@ export default function AddressesEditor({ rows = [], onChange }) {
     rowName: 'Address',
     validateRow: validateAddress,
   });
+
+  // Multiple selection helpers
+  const allRowIds = useMemo(() => {
+    return rows.map((r, i) => r.clientAddressId || r.id || `addr_${i}`);
+  }, [rows]);
+
+  const isAllSelected = rows.length > 0 && selectedIds.length === rows.length;
+
+  const handleToggleSelect = (rowId) => {
+    setSelectedIds((prev) =>
+      prev.includes(rowId) ? prev.filter((id) => id !== rowId) : [...prev, rowId]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds([...allRowIds]);
+    }
+  };
+
+  const handleConfirmSingleDelete = () => {
+    if (!addressToDelete) return;
+    const rowId = addressToDelete.clientAddressId || addressToDelete.id;
+    handleRemove(rowId);
+    setSelectedIds((prev) => prev.filter((id) => id !== rowId));
+    setAddressToDelete(null);
+  };
+
+  const handleConfirmBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    handleRemoveMultiple(selectedIds);
+    setSelectedIds([]);
+    setIsBulkDeleteOpen(false);
+  };
 
   // Filter states based on selected country
   const selectedCountryCode = useMemo(() => {
@@ -319,7 +371,26 @@ export default function AddressesEditor({ rows = [], onChange }) {
       </div>
 
       {/* ── Grid Below ── */}
-      <div>
+      <div className="space-y-2.5">
+        {selectedIds.length > 0 && (
+          <div className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-surface/90 border border-border shadow-2xs">
+            <span className="text-xs text-text-muted">
+              <strong className="text-heading font-semibold">{selectedIds.length}</strong> of{' '}
+              {rows.length} {rows.length === 1 ? 'address' : 'addresses'} selected
+            </span>
+            <Button
+              type="button"
+              variant="danger-soft"
+              size="sm"
+              onClick={() => setIsBulkDeleteOpen(true)}
+              className="text-xs font-semibold shadow-2xs cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Trash2 size={13} />
+              <span>Delete Selected ({selectedIds.length})</span>
+            </Button>
+          </div>
+        )}
+
         {rows.length === 0 ? (
           <div className="text-center py-8 px-4 border border-dashed border-border rounded-xl bg-surface/20 space-y-1.5">
             <Building size={22} className="mx-auto text-text-muted/60" />
@@ -335,6 +406,16 @@ export default function AddressesEditor({ rows = [], onChange }) {
           >
             <thead className="bg-surface/80 border-b border-border">
               <tr>
+                <Th className="w-10 text-center py-2.5 px-3">
+                  <div className="flex items-center justify-center">
+                    <Checkbox
+                      id="select-all-client-addresses"
+                      checked={isAllSelected}
+                      onChange={handleToggleSelectAll}
+                      aria-label="Select all addresses"
+                    />
+                  </div>
+                </Th>
                 <Th className="py-2.5 px-3 w-28 whitespace-nowrap">TYPE</Th>
                 <Th className="py-2.5 px-3 min-w-[200px]">ADDRESS</Th>
                 <Th className="py-2.5 px-3 min-w-[190px] whitespace-nowrap">CITY / STATE / COUNTRY</Th>
@@ -347,6 +428,7 @@ export default function AddressesEditor({ rows = [], onChange }) {
               {rows.map((row, index) => {
                 const rowId = row.clientAddressId || row.id || `addr_${index}`;
                 const isCurrentEditing = editingId === rowId;
+                const isSelected = selectedIds.includes(rowId);
                 const rowCountryId = typeof row.countryId === 'object' && row.countryId !== null
                   ? row.countryId.value || ''
                   : String(row.countryId || '');
@@ -359,9 +441,26 @@ export default function AddressesEditor({ rows = [], onChange }) {
                 return (
                   <tr
                     key={rowId}
-                    className={`transition-colors hover:bg-surface/50 ${isCurrentEditing ? 'bg-primary/5 ring-1 ring-primary/20' : ''
-                      }`}
+                    className={`transition-colors hover:bg-surface/50 ${
+                      isCurrentEditing
+                        ? 'bg-primary/5 ring-1 ring-primary/20'
+                        : isSelected
+                        ? 'bg-primary/[0.04]'
+                        : ''
+                    }`}
                   >
+                    {/* Checkbox */}
+                    <Td className="text-center py-3 px-3">
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          id={`select-addr-${rowId}`}
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(rowId)}
+                          aria-label={`Select address ${row.address1}`}
+                        />
+                      </div>
+                    </Td>
+
                     {/* Type */}
                     <Td className="py-3 px-3">
                       <Badge variant={getAddressTypeBadgeVariant(row.addressType)} className="text-2xs px-2 py-0.5">
@@ -427,7 +526,7 @@ export default function AddressesEditor({ rows = [], onChange }) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleRemove(rowId)}
+                          onClick={() => setAddressToDelete(row)}
                           className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
                           title="Remove Address"
                           aria-label="Remove Address"
@@ -443,6 +542,41 @@ export default function AddressesEditor({ rows = [], onChange }) {
           </TableContainer>
         )}
       </div>
+
+      {/* ── Single Delete Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={Boolean(addressToDelete)}
+        onClose={() => setAddressToDelete(null)}
+        onConfirm={handleConfirmSingleDelete}
+        title="Remove Address"
+        message={
+          <span>
+            Are you sure you want to remove the address{' '}
+            <strong className="text-heading font-semibold">
+              &quot;{addressToDelete?.address1 || ''}
+              {addressToDelete?.city ? `, ${addressToDelete.city}` : ''}&quot;
+            </strong>
+            ? This action cannot be undone.
+          </span>
+        }
+        confirmText="Remove Address"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* ── Bulk Delete Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={isBulkDeleteOpen}
+        onClose={() => setIsBulkDeleteOpen(false)}
+        onConfirm={handleConfirmBulkDelete}
+        title={`Remove ${selectedIds.length} Addresses`}
+        message={`Are you sure you want to remove the ${selectedIds.length} selected address(es)? This action cannot be undone.`}
+        confirmText={`Remove ${selectedIds.length} ${
+          selectedIds.length === 1 ? 'Address' : 'Addresses'
+        }`}
+        cancelText="Cancel"
+        variant="danger"
+      />
     </Card>
   );
 }

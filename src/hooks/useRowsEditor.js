@@ -20,6 +20,7 @@ export function useRowsEditor({
   idField = 'id',
   rowName = 'Row',
   validateRow,
+  canRemove = () => true,
 }) {
   const [formState, setFormState] = useState({ ...initialFormValues });
   const [editingId, setEditingId] = useState(null);
@@ -120,6 +121,12 @@ export function useRowsEditor({
   // Remove a row immediately
   const handleRemove = useCallback(
     (rowId) => {
+      const targetRow = rows.find((r) => (r[idField] || r.id) === rowId);
+      if (targetRow && typeof canRemove === 'function' && !canRemove(targetRow)) {
+        toast.error(`Cannot remove this ${rowName.toLowerCase()}`);
+        return;
+      }
+
       const nextRows = rows.filter((r) => (r[idField] || r.id) !== rowId);
       if (typeof onChange === 'function') {
         onChange(nextRows);
@@ -131,7 +138,40 @@ export function useRowsEditor({
         handleCancelEdit();
       }
     },
-    [editingId, handleCancelEdit, idField, onChange, rowName, rows]
+    [canRemove, editingId, handleCancelEdit, idField, onChange, rowName, rows]
+  );
+
+  // Remove multiple rows
+  const handleRemoveMultiple = useCallback(
+    (rowIds) => {
+      if (!Array.isArray(rowIds) || rowIds.length === 0) return;
+      const filteredIds = rowIds.filter((id) => {
+        const r = rows.find((row) => (row[idField] || row.id) === id);
+        return !r || (typeof canRemove === 'function' ? canRemove(r) : true);
+      });
+
+      if (filteredIds.length === 0) {
+        toast.error(`Selected ${rowName.toLowerCase()}s cannot be removed`);
+        return;
+      }
+
+      const idSet = new Set(filteredIds);
+      const nextRows = rows.filter((r) => !idSet.has(r[idField] || r.id));
+      if (typeof onChange === 'function') {
+        onChange(nextRows);
+      }
+      toast.success(
+        `${filteredIds.length} ${
+          filteredIds.length === 1 ? rowName.toLowerCase() : `${rowName.toLowerCase()}s`
+        } removed`
+      );
+
+      // If removing currently edited row, reset form
+      if (editingId && idSet.has(editingId)) {
+        handleCancelEdit();
+      }
+    },
+    [canRemove, editingId, handleCancelEdit, idField, onChange, rowName, rows]
   );
 
   // Toggle active status of a single row
@@ -170,6 +210,8 @@ export function useRowsEditor({
     handleStartEdit,
     handleCancelEdit,
     handleRemove,
+    handleRemoveMultiple,
     handleToggleRowActive,
+    canRemove,
   };
 }

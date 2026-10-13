@@ -121,9 +121,8 @@ function NavItem({ item, collapsed, onClick }) {
               <Icon
                 size={18}
                 strokeWidth={isActive ? 2.2 : 1.75}
-                className={`shrink-0 transition-transform duration-150 ${
-                  isActive ? 'text-primary' : 'text-text-muted group-hover/nav-item:text-heading'
-                }`}
+                className={`shrink-0 transition-transform duration-150 ${isActive ? 'text-primary' : 'text-text-muted group-hover/nav-item:text-heading'
+                  }`}
                 aria-hidden="true"
               />
             ) : null}
@@ -198,7 +197,11 @@ function SubNavItem({ item, onClick }) {
 
       <NavLink
         to={item.path}
-        end={item.path === '/vendors' || item.path === '/vendors/dashboard'}
+        end={
+          item.path === '/vendors' ||
+          item.path === '/vendors/dashboard' ||
+          item.path === '/vendor-bank-details'
+        }
         onClick={onClick}
         className={({ isActive }) =>
           [
@@ -314,8 +317,8 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
             isChildActive
               ? 'bg-primary/10 text-primary'
               : isFlyoutOpen
-              ? 'bg-surface text-heading'
-              : 'text-text-muted hover:bg-surface hover:text-heading',
+                ? 'bg-surface text-heading'
+                : 'text-text-muted hover:bg-surface hover:text-heading',
           ]
             .filter(Boolean)
             .join(' ')}

@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Pencil,
@@ -106,12 +106,18 @@ export default function UserViewPage() {
     return (
       <div className="space-y-6 pb-12 w-full">
         <div className="flex items-center gap-3">
-          <Link
-            to="/users"
-            className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-heading transition-colors"
+          <button
+            type="button"
+            onClick={() => navigate('/users')}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer shrink-0"
           >
-            <ArrowLeft size={14} /> Back to Users
-          </Link>
+            <ArrowLeft
+              size={14}
+              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform shrink-0"
+              aria-hidden="true"
+            />
+            <span>Back to Users</span>
+          </button>
         </div>
 
         <Card padding="lg" className="text-center py-16">
@@ -138,15 +144,10 @@ export default function UserViewPage() {
       {/* ── Top Navigation & Actions Bar ── */}
       <PageHeader
         title={`${user.firstName} ${user.lastName}`}
-        backButton={
-          <Link
-            to="/users"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-heading transition-colors"
-          >
-            <ArrowLeft size={14} />
-            Back to Users
-          </Link>
-        }
+        backButton={{
+          onClick: () => navigate('/users'),
+          label: 'Back to Users',
+        }}
         badge={
           <span
             className={[
@@ -177,10 +178,10 @@ export default function UserViewPage() {
               Edit User
             </Button>
             <Button
-              variant="ghost"
+              variant="danger-soft"
               size="md"
               onClick={() => setIsDeleteModalOpen(true)}
-              className="text-danger hover:bg-danger/10 hover:text-danger flex items-center gap-1.5"
+              className="flex items-center gap-1.5 shadow-2xs"
             >
               <Trash2 size={15} />
               Delete

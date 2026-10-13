@@ -26,6 +26,7 @@ import {
   Save,
   Building2,
   FileText,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -38,8 +39,11 @@ import {
   Checkbox,
   Textarea,
   PageHeader,
+  SearchableMultiSelect,
+  Badge,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
+import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
 import { CONTACT_TYPE_OPTIONS } from '../../mocks/clients';
 import AddressesEditor from './components/AddressesEditor';
 import ContactsEditor from './components/ContactsEditor';
@@ -51,7 +55,7 @@ const INITIAL_FORM = {
   email: '',
   gstNo: '',
   isActive: true,
-  paymentTerms: '',
+  paymentTerms: [],
   deliveryTerms: '',
   comments: '',
   addresses: [],
@@ -66,6 +70,7 @@ export default function ClientFormPage() {
   const isEdit = Boolean(id);
 
   const { getClientById, addClient, updateClient } = useClientsContext();
+  const { paymentTerms = [] } = usePaymentTermsContext();
 
   const [form, setForm] = useState(INITIAL_FORM);
   const [initialSnapshot, setInitialSnapshot] = useState(INITIAL_FORM);
@@ -78,6 +83,33 @@ export default function ClientFormPage() {
     if (isEdit) {
       const existing = getClientById(id);
       if (existing) {
+        let loadedPaymentTerms = [];
+        if (Array.isArray(existing.paymentTerms)) {
+          loadedPaymentTerms = existing.paymentTerms;
+        } else if (typeof existing.paymentTerms === 'string' && existing.paymentTerms.trim()) {
+          const raw = existing.paymentTerms.trim();
+          const directMatch = paymentTerms.find(
+            (pt) =>
+              pt.termCode?.toUpperCase() === raw.toUpperCase() ||
+              pt.paymentTermId === raw
+          );
+          if (directMatch) {
+            loadedPaymentTerms = [directMatch.termCode || directMatch.paymentTermId];
+          } else if (raw.includes(',')) {
+            const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+            loadedPaymentTerms = parts.map((part) => {
+              const m = paymentTerms.find(
+                (pt) =>
+                  pt.termCode?.toUpperCase() === part.toUpperCase() ||
+                  pt.paymentTermId === part
+              );
+              return m ? (m.termCode || m.paymentTermId) : part;
+            });
+          } else {
+            loadedPaymentTerms = [raw];
+          }
+        }
+
         const loadedData = {
           companyName: existing.companyName || '',
           billingName: existing.billingName || '',
@@ -85,7 +117,7 @@ export default function ClientFormPage() {
           email: existing.email || '',
           gstNo: existing.gstNo || '',
           isActive: existing.isActive !== false,
-          paymentTerms: existing.paymentTerms || '',
+          paymentTerms: loadedPaymentTerms,
           deliveryTerms: existing.deliveryTerms || '',
           comments: existing.comments || '',
           addresses: Array.isArray(existing.addresses) ? [...existing.addresses] : [],
@@ -99,7 +131,7 @@ export default function ClientFormPage() {
         navigate('/clients');
       }
     }
-  }, [id, isEdit, getClientById, navigate]);
+  }, [id, isEdit, getClientById, navigate, paymentTerms]);
 
   // Dirty detection
   const isDirty = useMemo(() => {
@@ -132,6 +164,59 @@ export default function ClientFormPage() {
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
+  };
+
+  // Payment Terms options from Configuration (only Code and Description)
+  const paymentTermOptions = useMemo(() => {
+    const stripHtml = (html) => {
+      if (!html) return '';
+      return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    };
+
+    return (paymentTerms || [])
+      .filter((pt) => pt.isActive !== false)
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+      .map((pt) => ({
+        value: pt.termCode || pt.paymentTermId,
+        label: pt.termCode,
+        chipLabel: pt.termCode,
+        subtitle: stripHtml(pt.description || ''),
+        termCode: pt.termCode,
+        description: pt.description || '',
+      }));
+  }, [paymentTerms]);
+
+  // Resolve selected payment terms objects for preview cards
+  const selectedPaymentTermsList = useMemo(() => {
+    const selected = Array.isArray(form.paymentTerms)
+      ? form.paymentTerms
+      : form.paymentTerms
+      ? [form.paymentTerms]
+      : [];
+
+    return selected.map((val) => {
+      const match = paymentTerms.find(
+        (pt) =>
+          pt.termCode?.toUpperCase() === String(val).toUpperCase() ||
+          pt.paymentTermId === val
+      );
+      if (match) return match;
+      return {
+        paymentTermId: val,
+        termCode: val,
+        description: '',
+      };
+    });
+  }, [form.paymentTerms, paymentTerms]);
+
+  const handleRemovePaymentTerm = (termValue) => {
+    setForm((prev) => {
+      const current = Array.isArray(prev.paymentTerms) ? prev.paymentTerms : [];
+      return {
+        ...prev,
+        paymentTerms: current.filter((t) => t !== termValue),
+      };
+    });
   };
 
   // Master validation
@@ -376,17 +461,79 @@ export default function ClientFormPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Payment Terms */}
-          <div>
-            <Textarea
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Payment Terms Multi-Select */}
+          <div className="space-y-2.5">
+            <SearchableMultiSelect
               label="Payment Terms"
               id="paymentTerms"
-              rows={3}
-              value={form.paymentTerms}
+              name="paymentTerms"
+              options={paymentTermOptions}
+              value={Array.isArray(form.paymentTerms) ? form.paymentTerms : form.paymentTerms ? [form.paymentTerms] : []}
               onChange={(e) => handleFieldChange('paymentTerms', e.target.value)}
-              placeholder="e.g. 30 Days Net from date of invoice"
+              placeholder="Select payment terms..."
+              searchPlaceholder="Search payment terms..."
+              emptyText="No payment terms found in Configuration"
+              hint="Multiple terms can be selected from Configuration"
             />
+
+            {/* Selected Terms Cards in Payment Terms Section */}
+            {selectedPaymentTermsList.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between text-2xs font-semibold text-text-muted uppercase tracking-wider">
+                  <span>Selected Terms ({selectedPaymentTermsList.length})</span>
+                  <button
+                    type="button"
+                    onClick={() => handleFieldChange('paymentTerms', [])}
+                    className="text-text-muted hover:text-danger cursor-pointer transition-colors"
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {selectedPaymentTermsList.map((term) => {
+                    const desc = term.description || '';
+                    const isHtml = /<[a-z][\s\S]*>/i.test(desc);
+
+                    return (
+                      <div
+                        key={term.paymentTermId || term.termCode}
+                        className="p-3 rounded-lg bg-surface/70 border border-border space-y-1.5 text-xs group hover:border-primary/30 transition-colors shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge variant="role" className="font-mono text-xs px-2 py-0.5 shrink-0">
+                            {term.termCode}
+                          </Badge>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePaymentTerm(term.termCode || term.paymentTermId)}
+                            className="text-text-muted hover:text-danger p-0.5 rounded cursor-pointer transition-colors shrink-0"
+                            title={`Remove ${term.termCode}`}
+                            aria-label={`Remove ${term.termCode}`}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                        {desc ? (
+                          isHtml ? (
+                            <div
+                              className="text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
+                              dangerouslySetInnerHTML={{ __html: desc }}
+                            />
+                          ) : (
+                            <p className="text-xs text-text whitespace-pre-line leading-relaxed">
+                              {desc}
+                            </p>
+                          )
+                        ) : (
+                          <p className="text-2xs text-text-muted italic">No terms description specified</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Delivery Terms */}

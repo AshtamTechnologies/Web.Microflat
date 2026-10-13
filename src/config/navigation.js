@@ -33,6 +33,7 @@ import {
   MapPin,
   HandCoins,
   Handshake,
+  Landmark,
 } from 'lucide-react';
 
 export const navigation = [
@@ -100,6 +101,17 @@ export const navigation = [
               icon: Plus,
               title: 'Add Vendor',
               path: '/vendors/new',
+            },
+          },
+          {
+            label: 'Bank Details',
+            icon: Landmark,
+            path: '/vendor-bank-details',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+            quickAction: {
+              icon: Plus,
+              title: 'Add Bank Details',
+              path: '/vendor-bank-details/new',
             },
           },
         ],
