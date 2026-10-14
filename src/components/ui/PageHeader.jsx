@@ -23,6 +23,7 @@ export default function PageHeader({
   icon,
   backButton,
   className = '',
+  truncateTitle = false,
   children,
 }) {
   const actionsContent = actions || children;
@@ -31,11 +32,17 @@ export default function PageHeader({
   const renderIcon = () => {
     if (!icon) return null;
     if (React.isValidElement(icon)) {
-      return icon;
+      const existingClass = icon.props.className || '';
+      const hasColorClass = /\btext-(primary|secondary|danger|success|warning|text|heading|text-muted)\b/.test(existingClass);
+      return React.cloneElement(icon, {
+        className: `shrink-0 ${hasColorClass ? '' : 'text-primary'} ${existingClass}`.trim(),
+        size: icon.props.size || 22,
+        'aria-hidden': true,
+      });
     }
     if (typeof icon === 'function' || typeof icon === 'object') {
       const IconComponent = icon;
-      return <IconComponent size={24} className="text-primary shrink-0" aria-hidden="true" />;
+      return <IconComponent size={22} className="text-primary shrink-0" aria-hidden="true" />;
     }
     return null;
   };
@@ -74,10 +81,10 @@ export default function PageHeader({
       )}
       <div className="mf-page-header">
         <div className="min-w-0 flex-1">
-          <h1 className="mf-page-title">
+          <h1 className="mf-page-title flex flex-wrap items-center gap-2">
             {renderIcon()}
-            <span className="truncate">{title}</span>
-            {badge}
+            <span className={truncateTitle ? 'truncate' : 'break-words'}>{title}</span>
+            {badge && <span className="inline-flex shrink-0">{badge}</span>}
           </h1>
           {subtitle && <p className="mf-page-subtitle">{subtitle}</p>}
         </div>

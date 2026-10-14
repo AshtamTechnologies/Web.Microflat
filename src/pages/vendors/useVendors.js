@@ -145,11 +145,15 @@ export function useVendors() {
       ? formData.effectiveVersions
       : [initialVersion];
 
+    const isActive = formData.isActive !== undefined ? formData.isActive : true;
+
     const newVendor = {
       id: `v${nextIdNumber++}`,
       vendorCode,
       vendorName: formData.vendorName.trim(),
-      isActive: formData.isActive !== undefined ? formData.isActive : true,
+      isActive,
+      inactiveComment: !isActive ? (formData.inactiveComment?.trim() || '') : '',
+      inactiveDate: !isActive ? (formData.inactiveDate || now) : null,
       approvalStatus: 'Pending',
       approvedBy: '',
       approvedByComments: '',
@@ -177,9 +181,18 @@ export function useVendors() {
     setVendors((prev) =>
       prev.map((v) => {
         if (v.id !== id) return v;
+        const willBeActive = formData.isActive !== undefined ? formData.isActive : v.isActive;
+        const nextInactiveComment = !willBeActive
+          ? (formData.inactiveComment !== undefined ? formData.inactiveComment.trim() : (v.inactiveComment || ''))
+          : '';
+        const nextInactiveDate = !willBeActive ? (v.inactiveDate || now) : null;
+
         updatedRecord = {
           ...v,
           ...formData,
+          isActive: willBeActive,
+          inactiveComment: nextInactiveComment,
+          inactiveDate: nextInactiveDate,
           effectiveVersions: formData.effectiveVersions || v.effectiveVersions || [],
           lastUpdatedBy: 'Ian Chesnut',
           lastUpdatedOn: now,
@@ -211,11 +224,20 @@ export function useVendors() {
   }, []);
 
   /* ── Toggle isActive ── */
-  const toggleStatus = useCallback((id) => {
+  const toggleStatus = useCallback((id, inactiveComment = '') => {
+    const now = formatAuditTimestamp();
     setVendors((prev) =>
       prev.map((v) => {
         if (v.id !== id) return v;
-        const next = { ...v, isActive: !v.isActive };
+        const nextIsActive = !v.isActive;
+        const next = {
+          ...v,
+          isActive: nextIsActive,
+          inactiveComment: nextIsActive ? '' : (inactiveComment?.trim() || v.inactiveComment || ''),
+          inactiveDate: nextIsActive ? null : now,
+          lastUpdatedBy: 'Ian Chesnut',
+          lastUpdatedOn: now,
+        };
         toast.success(
           `${next.vendorName} marked ${next.isActive ? 'Active' : 'Inactive'}.`
         );

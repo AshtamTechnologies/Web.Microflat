@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   useReactTable,
   getCoreRowModel,
@@ -25,16 +25,23 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Handshake,
   SearchX,
   RotateCcw,
   X,
+  Pencil,
+  Trash2,
+  Calendar,
+  MapPin,
+  Phone,
+  User,
 } from 'lucide-react';
+import { IconClient } from '../../constants/icons';
 import {
   Button,
   Input,
   Select,
   Card,
+  Badge,
   ConfirmModal,
   TableContainer,
   Th,
@@ -43,7 +50,12 @@ import {
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useClientsTable } from './useClientsTable.jsx';
-import { CONTACT_TYPE_OPTIONS } from '../../mocks/clients';
+import {
+  CONTACT_TYPE_OPTIONS,
+  getContactTypeBadgeVariant,
+  getCountryName,
+} from '../../mocks/clients';
+import { formatDateDisplay, getEffectiveDateStatus } from '../../utils/effectiveDateUtils';
 
 const STATUS_CHIPS = [
   { value: 'ALL', label: 'All Statuses' },
@@ -121,7 +133,7 @@ export default function ClientsPage() {
       <PageHeader
         title="Clients"
         subtitle="Register and manage customers, distributors, dealers, and agents"
-        icon={<Handshake size={20} />}
+        icon={<IconClient className="h-6 w-6 text-primary" aria-hidden="true" />}
         actions={
           <Button
             type="button"
@@ -213,11 +225,12 @@ export default function ClientsPage() {
         </div>
       </Card>
 
-      {/* ── Client TanStack Data Table ── */}
-      <Card padding="none" className="overflow-hidden border border-border bg-bg shadow-2xs">
-        <TableContainer tableClassName="w-full text-left border-collapse text-xs">
-          {/* Contrast Table Header */}
-          <thead className="bg-surface/90 border-b border-border">
+      {/* ── DESKTOP VIEW (>= md): Client TanStack Data Table ── */}
+      <div className="hidden md:block">
+        <Card padding="none" className="overflow-hidden border border-border bg-bg shadow-2xs">
+          <TableContainer tableClassName="w-full text-left border-collapse text-xs">
+            {/* Contrast Table Header */}
+            <thead className="bg-surface/90 border-b border-border">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -341,50 +354,263 @@ export default function ClientsPage() {
                 ))
               )}
             </tbody>
-        </TableContainer>
+          </TableContainer>
 
-        {/* ── Table Pagination Bar ── */}
-        {filteredClients.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-border bg-surface/30 text-xs text-text-muted">
-            <div>
-              Showing{' '}
-              <strong className="text-heading font-medium">
-                {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
-              </strong>{' '}
-              to{' '}
-              <strong className="text-heading font-medium">
-                {Math.min(
-                  (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                  filteredClients.length
-                )}
-              </strong>{' '}
-              of <strong className="text-heading font-medium">{filteredClients.length}</strong> clients
+          {/* ── Desktop Table Pagination Bar ── */}
+          {filteredClients.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-border bg-surface/30 text-xs text-text-muted">
+              <div>
+                Showing{' '}
+                <strong className="text-heading font-medium">
+                  {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
+                </strong>{' '}
+                to{' '}
+                <strong className="text-heading font-medium">
+                  {Math.min(
+                    (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                    filteredClients.length
+                  )}
+                </strong>{' '}
+                of <strong className="text-heading font-medium">{filteredClients.length}</strong> clients
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                  className="h-7 px-2"
+                >
+                  <ChevronLeft size={14} className="mr-0.5" />
+                  Previous
+                </Button>
+
+                <span className="font-mono tabular-nums px-2">
+                  Page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}
+                </span>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                  className="h-7 px-2"
+                >
+                  Next
+                  <ChevronRight size={14} className="ml-0.5" />
+                </Button>
+              </div>
             </div>
+          )}
+        </Card>
+      </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-auto">
+      {/* ── MOBILE VIEW (< md): Card List ── */}
+      <div className="block md:hidden space-y-3">
+        {table.getRowModel().rows.length === 0 ? (
+          <Card padding="lg" className="text-center py-12 space-y-3">
+            <SearchX size={28} className="mx-auto text-text-muted/60" />
+            <h4 className="text-sm font-semibold text-heading">No clients found</h4>
+            <p className="text-xs text-text-muted">
+              {hasActiveFilters
+                ? 'Try adjusting your search criteria or clearing active filters.'
+                : 'Get started by clicking "+ Add Client" above.'}
+            </p>
+            {hasActiveFilters ? (
               <Button
-                type="button"
                 variant="ghost"
-                size="xs"
+                size="sm"
+                onClick={resetFilters}
+                className="text-primary text-xs"
+              >
+                Clear all filters
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => navigate('/clients/new')}
+                className="shadow-2xs font-semibold inline-flex items-center gap-1.5"
+              >
+                <Plus size={14} className="mr-1.5" />
+                <span>Add Client</span>
+              </Button>
+            )}
+          </Card>
+        ) : (
+          table.getRowModel().rows.map((row) => {
+            const client = row.original;
+            const id = client.clientId || client.id;
+            const contactType = client.contactTypeId || 'Customer';
+            const countryVal = client.countryId;
+            const countryCode = typeof countryVal === 'object' && countryVal !== null ? countryVal.value || '' : countryVal;
+            const countryName = getCountryName(countryCode);
+
+            const contacts = client.contacts || [];
+            const primary = contacts.find((c) => c.isActive !== false) || contacts[0];
+            const primaryName = primary ? `${primary.firstName || ''} ${primary.lastName || ''}`.trim() : null;
+            const primaryPhone = primary?.mobile1 || primary?.phone;
+
+            const addresses = client.addresses || [];
+            const primaryAddr = addresses.find((a) => a.isDefault || a.isActive !== false) || addresses[0];
+            const city = primaryAddr?.city || client.city;
+
+            const effectiveDate =
+              client.effectiveDate ||
+              client.activeVersion?.effectiveDate ||
+              (client.createdAt ? client.createdAt.slice(0, 10) : '');
+            const statusInfo = getEffectiveDateStatus(effectiveDate);
+
+            return (
+              <div
+                key={id}
+                className="bg-surface border border-border rounded-xl p-4 shadow-2xs space-y-3"
+              >
+                {/* Header: ID, Type & Active/Inactive Status */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-bold text-primary">
+                        {id}
+                      </span>
+                      <Badge variant={getContactTypeBadgeVariant(contactType)}>
+                        {contactType}
+                      </Badge>
+                    </div>
+                    <Link
+                      to={`/clients/${id}`}
+                      className="block text-sm font-semibold text-heading leading-tight mt-1 hover:text-primary transition-colors"
+                    >
+                      {client.companyName}
+                    </Link>
+                    {client.email && (
+                      <p className="text-xs text-text-muted mt-0.5 truncate">
+                        {client.email}
+                      </p>
+                    )}
+                  </div>
+
+                  <span
+                    className={[
+                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
+                      client.isActive
+                        ? 'bg-success/10 text-success border border-success/20'
+                        : 'bg-danger/10 text-danger border border-danger/20',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        client.isActive ? 'bg-success' : 'bg-danger'
+                      }`}
+                      aria-hidden="true"
+                    />
+                    {client.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                {/* Details: Effective Date, Primary Contact, Location */}
+                <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                      <span>Eff:</span>
+                      <span className="font-mono text-2xs font-medium text-heading">
+                        {effectiveDate ? formatDateDisplay(effectiveDate) : '—'}
+                      </span>
+                    </div>
+                    {effectiveDate && (
+                      <Badge variant={statusInfo.badgeVariant} className="text-2xs px-1.5 py-0">
+                        {statusInfo.label}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {(primaryName || primaryPhone) && (
+                    <div className="flex items-center gap-2">
+                      {primaryPhone ? (
+                        <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                      ) : (
+                        <User size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                      )}
+                      <span className="truncate">
+                        {primaryName && <span className="text-heading font-medium">{primaryName}</span>}
+                        {primaryName && primaryPhone && <span className="mx-1">•</span>}
+                        {primaryPhone && <span className="font-mono tabular-nums">{primaryPhone}</span>}
+                      </span>
+                    </div>
+                  )}
+
+                  {(city || countryName) && (
+                    <div className="flex items-center gap-2">
+                      <MapPin size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                      <span className="truncate">
+                        {[city, countryName].filter(Boolean).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Action buttons footer */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => navigate(`/clients/${id}/effective-dates`)}
+                    className="flex-1 text-xs"
+                  >
+                    <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                    Edit
+                  </Button>
+
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setClientToDelete(client)}
+                    className="flex-1 text-xs"
+                  >
+                    <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {/* Mobile Pagination */}
+        {filteredClients.length > 0 && (
+          <div className="px-3.5 py-3 bg-surface border border-border rounded-xl flex items-center justify-between text-xs text-text-muted shadow-2xs">
+            <span>
+              {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}-
+              {Math.min(
+                (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                filteredClients.length
+              )}{' '}
+              of {filteredClients.length}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
-                className="h-7 px-2"
+                className="h-8 px-2.5 text-xs"
               >
                 <ChevronLeft size={14} className="mr-0.5" />
-                Previous
+                Prev
               </Button>
-
-              <span className="font-mono tabular-nums px-2">
-                Page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}
+              <span className="font-mono tabular-nums px-1">
+                {table.getState().pagination.pageIndex + 1}/{Math.max(1, table.getPageCount())}
               </span>
-
               <Button
-                type="button"
                 variant="ghost"
-                size="xs"
+                size="sm"
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
-                className="h-7 px-2"
+                className="h-8 px-2.5 text-xs"
               >
                 Next
                 <ChevronRight size={14} className="ml-0.5" />
@@ -392,7 +618,7 @@ export default function ClientsPage() {
             </div>
           </div>
         )}
-      </Card>
+      </div>
 
       {/* ── Delete Confirmation Modal ── */}
       <ConfirmModal

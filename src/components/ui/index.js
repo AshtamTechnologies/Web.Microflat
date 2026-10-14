@@ -24,3 +24,5 @@ export { default as FormGrid, FormGrid as FormGridComponent, FormSection } from 
 export { default as EmptyState }       from './EmptyState';
 export { default as FilterBar }        from './FilterBar';
 export { default as IconButton }       from './IconButton';
+export { default as ScrollableTabs }    from './ScrollableTabs';
+

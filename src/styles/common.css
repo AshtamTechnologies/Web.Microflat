@@ -408,6 +408,7 @@
   color: var(--heading);
   letter-spacing: -0.025em;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.625rem;
   line-height: var(--leading-tight);
@@ -613,3 +614,36 @@
   background-color: var(--surface);
   gap: 0.75rem;
 }
+
+/* ── 13. Mobile Scrollable Tabs (.mf-scrollable-tabs) ────────────────────── */
+.mf-scrollable-tabs {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mf-scrollable-tabs::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.mf-tab-btn {
+  touch-action: pan-x;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+

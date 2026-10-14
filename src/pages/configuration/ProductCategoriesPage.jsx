@@ -22,6 +22,7 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react';
+import { IconProductCategories } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -538,7 +539,7 @@ export default function ProductCategoriesPage() {
       {/* ── Top Header Bar ── */}
       <PageHeader
         title="Product Categories"
-        icon={FolderTree}
+        icon={IconProductCategories}
         subtitle="Manage hierarchical precision metrology categories, parent-child structures & inquiry classification options."
         actions={
           <Button

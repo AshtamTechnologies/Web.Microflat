@@ -21,7 +21,9 @@ import {
   MapPin,
   Users,
   AlertCircle,
+  Clock,
 } from 'lucide-react';
+import { IconClient } from '../../constants/icons';
 
 import {
   Button,
@@ -42,6 +44,7 @@ import {
   getAddressTypeBadgeVariant,
 } from '../../mocks/clients';
 import { formatDate } from '../../utils/dateUtils';
+import { getEffectiveDateStatus, formatDateDisplay } from '../../utils/effectiveDateUtils';
 
 export default function ClientViewPage() {
   const { id } = useParams();
@@ -109,6 +112,7 @@ export default function ClientViewPage() {
       <PageHeader
         title={client.companyName}
         subtitle={`Client ID: ${clientId}`}
+        icon={<IconClient className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
           <button
             type="button"
@@ -137,15 +141,26 @@ export default function ClientViewPage() {
           </div>
         }
         actions={
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => navigate(`/clients/${clientId}/edit`)}
-            className="text-xs font-semibold shadow-2xs"
-          >
-            <Pencil size={14} className="mr-1.5" />
-            Edit Client
-          </Button>
+          <div className="flex items-center gap-2.5">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => navigate(`/clients/${clientId}/effective-dates`)}
+              className="text-xs font-semibold shadow-2xs"
+            >
+              <Clock size={14} className="mr-1.5" />
+              Effective Date History
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => navigate(`/clients/${clientId}/edit`)}
+              className="text-xs font-semibold shadow-2xs"
+            >
+              <Pencil size={14} className="mr-1.5" />
+              Edit Client
+            </Button>
+          </div>
         }
       />
 
@@ -190,6 +205,30 @@ export default function ClientViewPage() {
               </span>
             }
           />
+          <DetailField
+            label="Effective Date"
+            value={
+              client.effectiveDate ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono tabular-nums">{formatDateDisplay(client.effectiveDate)}</span>
+                  {client.effectiveDate && (
+                    <Badge variant={getEffectiveDateStatus(client.effectiveDate).badgeVariant} className="text-2xs px-2 py-0.5">
+                      {getEffectiveDateStatus(client.effectiveDate).label}
+                    </Badge>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/clients/${clientId}/effective-dates`)}
+                    className="text-2xs text-primary hover:underline font-medium inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    (View History)
+                  </button>
+                </div>
+              ) : (
+                '—'
+              )
+            }
+          />
         </div>
       </Card>
 
@@ -226,16 +265,16 @@ export default function ClientViewPage() {
                           </Badge>
                         </div>
                         {desc ? (
-                          isHtml ? (
-                            <div
-                              className="text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
-                              dangerouslySetInnerHTML={{ __html: desc }}
-                            />
-                          ) : (
-                            <p className="text-xs text-text whitespace-pre-line leading-relaxed">
-                              {desc}
-                            </p>
-                          )
+                              isHtml ? (
+                                <div
+                                  className="text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
+                                  dangerouslySetInnerHTML={{ __html: desc }}
+                                />
+                              ) : (
+                                <p className="text-xs text-text whitespace-pre-line leading-relaxed">
+                                  {desc}
+                                </p>
+                              )
                         ) : (
                           <p className="text-2xs text-text-muted italic">No terms description specified</p>
                         )}
@@ -246,8 +285,43 @@ export default function ClientViewPage() {
               )}
             </div>
 
-            <DetailField label="Delivery Terms" value={client.deliveryTerms || '—'} />
-            <DetailField label="Internal Comments" value={client.comments || '—'} />
+            {/* Delivery Terms */}
+            <div>
+              <p className="text-xs font-medium text-text-muted mb-1.5">Delivery Terms</p>
+              {client.deliveryTerms ? (
+                /<[a-z][\s\S]*>/i.test(client.deliveryTerms) ? (
+                  <div
+                    className="p-3 rounded-lg bg-surface/60 border border-border text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5 shadow-2xs"
+                    dangerouslySetInnerHTML={{ __html: client.deliveryTerms }}
+                  />
+                ) : (
+                  <p className="text-xs text-heading font-medium whitespace-pre-line leading-relaxed p-3 rounded-lg bg-surface/60 border border-border shadow-2xs">
+                    {client.deliveryTerms}
+                  </p>
+                )
+              ) : (
+                <span className="text-xs text-text-muted">—</span>
+              )}
+            </div>
+
+            {/* Internal Comments */}
+            <div>
+              <p className="text-xs font-medium text-text-muted mb-1.5">Internal Comments</p>
+              {client.comments ? (
+                /<[a-z][\s\S]*>/i.test(client.comments) ? (
+                  <div
+                    className="p-3 rounded-lg bg-surface/60 border border-border text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5 shadow-2xs"
+                    dangerouslySetInnerHTML={{ __html: client.comments }}
+                  />
+                ) : (
+                  <p className="text-xs text-heading font-medium whitespace-pre-line leading-relaxed p-3 rounded-lg bg-surface/60 border border-border shadow-2xs">
+                    {client.comments}
+                  </p>
+                )
+              ) : (
+                <span className="text-xs text-text-muted">—</span>
+              )}
+            </div>
           </div>
         </Card>
       )}
@@ -287,12 +361,19 @@ export default function ClientViewPage() {
                   className="bg-surface/50 border border-border rounded-xl p-4 space-y-2.5 shadow-2xs relative"
                 >
                   <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
-                    <Badge
-                      variant={getAddressTypeBadgeVariant(addr.addressType)}
-                      className="text-2xs px-2 py-0.5 font-medium"
-                    >
-                      {addr.addressType}
-                    </Badge>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge
+                        variant={getAddressTypeBadgeVariant(addr.addressType)}
+                        className="text-2xs px-2 py-0.5 font-medium"
+                      >
+                        {addr.addressType}
+                      </Badge>
+                      {addr.addressLabel && (
+                        <span className="text-xs font-bold text-heading">
+                          {addr.addressLabel}
+                        </span>
+                      )}
+                    </div>
                     {!addr.isActive && (
                       <span className="text-2xs uppercase font-bold text-text-muted bg-surface px-1.5 py-0.5 rounded border border-border">
                         Inactive

@@ -12,6 +12,7 @@ export default function StatusSwitch({
   id = 'status-switch',
   disabled = false,
   className = '',
+  size = 'sm', // 'sm' (sleek/compact, default) | 'md'
 }) {
   function handleToggle() {
     if (!disabled && onChange) {
@@ -26,6 +27,8 @@ export default function StatusSwitch({
     }
   }
 
+  const isSmall = size === 'sm';
+
   return (
     <div
       role="switch"
@@ -37,9 +40,12 @@ export default function StatusSwitch({
       onKeyDown={handleKeyDown}
       className={[
         'relative inline-flex items-center justify-between',
-        'h-9 w-28 rounded-full p-1 cursor-pointer select-none',
+        isSmall
+          ? 'h-6.5 w-[84px] rounded-full p-0.5'
+          : 'h-8 w-24 rounded-full p-1',
+        'cursor-pointer select-none',
         'transition-colors duration-200 ease-in-out',
-        'shadow-xs border border-border',
+        'shadow-2xs border border-border',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         checked ? 'bg-primary border-primary' : 'bg-surface border-border',
         disabled ? 'opacity-50 cursor-not-allowed' : '',
@@ -51,8 +57,11 @@ export default function StatusSwitch({
       {/* ── Active text (left side) ── */}
       <span
         className={[
-          'text-xs font-bold tracking-tight text-on-primary pl-2.5 select-none transition-opacity duration-150',
-          checked ? 'opacity-100' : 'opacity-0 pointer-events-none',
+          'absolute inset-y-0 flex items-center select-none transition-opacity duration-150 pointer-events-none',
+          isSmall
+            ? 'left-2.5 text-[10px] font-bold tracking-tight text-on-primary'
+            : 'left-3 text-2xs font-bold tracking-tight text-on-primary',
+          checked ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
       >
         Active
@@ -61,8 +70,11 @@ export default function StatusSwitch({
       {/* ── Inactive text (right side) ── */}
       <span
         className={[
-          'text-xs font-bold tracking-tight text-text-muted pr-2 select-none transition-opacity duration-150 ml-auto',
-          !checked ? 'opacity-100' : 'opacity-0 pointer-events-none',
+          'absolute inset-y-0 flex items-center select-none transition-opacity duration-150 pointer-events-none',
+          isSmall
+            ? 'right-2.5 text-[10px] font-bold tracking-tight text-text-muted'
+            : 'right-3 text-2xs font-bold tracking-tight text-text-muted',
+          !checked ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
       >
         Inactive
@@ -71,21 +83,26 @@ export default function StatusSwitch({
       {/* ── Sliding Oval Thumb ── */}
       <div
         className={[
-          'absolute top-1 bottom-1 w-9 rounded-full bg-bg shadow-sm flex items-center justify-center',
+          'absolute rounded-full bg-bg shadow-2xs flex items-center justify-center',
           'transition-all duration-200 ease-in-out border border-border/40',
-          checked ? 'left-[calc(100%-40px)]' : 'left-1',
+          isSmall
+            ? 'top-0.5 bottom-0.5 w-5.5'
+            : 'top-1 bottom-1 w-6.5',
+          isSmall
+            ? checked ? 'left-[calc(100%-24px)]' : 'left-0.5'
+            : checked ? 'left-[calc(100%-28px)]' : 'left-1',
         ].join(' ')}
       >
         {checked ? (
           <Check
-            size={15}
+            size={isSmall ? 11 : 13}
             strokeWidth={3}
             className="text-primary animate-in zoom-in-75 duration-150"
             aria-hidden="true"
           />
         ) : (
           <Ban
-            size={14}
+            size={isSmall ? 10 : 12}
             strokeWidth={2.5}
             className="text-text-muted animate-in zoom-in-75 duration-150"
             aria-hidden="true"

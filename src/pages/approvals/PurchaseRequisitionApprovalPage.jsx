@@ -45,6 +45,7 @@ import {
   Paperclip,
   Download,
 } from 'lucide-react';
+import { IconPRApproval } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -502,6 +503,7 @@ export default function PurchaseRequisitionApprovalPage() {
       <PageHeader
         title="Purchase Requisition Approval"
         subtitle="Purchase requisitions awaiting review. Click the View button to inspect complete item specifications before deciding."
+        icon={<IconPRApproval className="h-6 w-6 text-primary" aria-hidden="true" />}
         badge={
           <Badge variant="warning">
             <Clock size={12} className="shrink-0 mr-1" />

@@ -33,6 +33,7 @@ import {
   ChevronDown,
   Filter,
 } from 'lucide-react';
+import { IconPR } from '../../constants/icons';
 
 import {
   Button,
@@ -262,6 +263,7 @@ export default function PurchaseRequisition() {
       <PageHeader
         title="Purchase Requisition"
         subtitle="Manage purchase requisitions and track their status."
+        icon={<IconPR className="h-6 w-6 text-primary" aria-hidden="true" />}
         badge={
           <Badge variant="role" className="text-xs">
             {filteredRequisitions.length}{' '}

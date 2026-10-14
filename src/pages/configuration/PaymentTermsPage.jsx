@@ -19,6 +19,7 @@ import {
   AlertCircle,
   X,
 } from 'lucide-react';
+import { IconPaymentTerms } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -392,7 +393,7 @@ export default function PaymentTermsPage() {
       {/* ── Top Header Bar ── */}
       <PageHeader
         title="Payment Terms"
-        icon={HandCoins}
+        icon={IconPaymentTerms}
         subtitle="Configure commercial payment credit periods, due day thresholds & billing agreements for purchase and sales contracts."
         actions={
           <Button

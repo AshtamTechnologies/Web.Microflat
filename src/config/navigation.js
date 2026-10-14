@@ -15,26 +15,25 @@
 import DashboardIconImg from '../assets/menuicon/Dashboardicon.png';
 import UserIconImg from '../assets/menuicon/UserIcon.png';
 import {
-  Truck,
-  LayoutDashboard,
-  ListTree,
-  Plus,
-  CheckSquare,
-  Building2,
-  FileText,
-  ClipboardList,
-  ClipboardCheck,
-  Inbox,
-  Settings,
-  Hash,
-  FileCheck,
-  FolderTree,
-  Scale,
-  MapPin,
-  HandCoins,
-  Handshake,
-  Landmark,
-} from 'lucide-react';
+  IconVendor,
+  IconClient,
+  IconBankDetails,
+  IconPR,
+  IconInquiry,
+  IconDashboard,
+  IconApproval,
+  IconVendorApproval,
+  IconPRApproval,
+  IconConfig,
+  IconSeriesSetup,
+  IconDocumentTypes,
+  IconProductCategories,
+  IconUOM,
+  IconRegions,
+  IconPaymentTerms,
+  IconList,
+  IconAdd,
+} from '../constants/icons';
 
 export const navigation = [
   {
@@ -48,7 +47,7 @@ export const navigation = [
       },
       {
         label: 'Inquiry',
-        icon: Inbox,
+        icon: IconInquiry,
         path: '/inquiries',
         roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
       },
@@ -59,57 +58,51 @@ export const navigation = [
     items: [
       {
         label: 'Purchase Requisition',
-        icon: ClipboardList,
+        icon: IconPR,
         roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
         children: [
           {
             label: 'All Requisitions',
-            icon: ListTree,
+            icon: IconList,
             path: '/purchase-requisition',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
             quickAction: {
-              icon: Plus,
+              icon: IconAdd,
               title: 'Create PR',
               path: '/purchase-requisition/create',
             },
           },
-          // {
-          //   label: 'Create Requisition',
-          //   icon: Plus,
-          //   path: '/purchase-requisition/create',
-          //   roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
-          // },
         ],
       },
       {
         label: 'Vendors',
-        icon: Truck,
+        icon: IconVendor,
         roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
         children: [
           {
             label: 'Dashboard',
-            icon: LayoutDashboard,
+            icon: IconDashboard,
             path: '/vendors/dashboard',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
           },
           {
             label: 'All Vendors',
-            icon: ListTree,
+            icon: IconList,
             path: '/vendors',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
             quickAction: {
-              icon: Plus,
+              icon: IconAdd,
               title: 'Add Vendor',
               path: '/vendors/new',
             },
           },
           {
             label: 'Bank Details',
-            icon: Landmark,
+            icon: IconBankDetails,
             path: '/vendor-bank-details',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
             quickAction: {
-              icon: Plus,
+              icon: IconAdd,
               title: 'Add Bank Details',
               path: '/vendor-bank-details/new',
             },
@@ -118,24 +111,24 @@ export const navigation = [
       },
       {
         label: 'Clients',
-        icon: Handshake,
+        icon: IconClient,
         path: '/clients',
         roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
       },
       {
         label: 'Approval',
-        icon: CheckSquare,
+        icon: IconApproval,
         roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
         children: [
           {
             label: 'Vendor Approval',
-            icon: Building2,
+            icon: IconVendorApproval,
             path: '/approvals/vendors',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
           },
           {
             label: 'PR Approval',
-            icon: ClipboardCheck,
+            icon: IconPRApproval,
             path: '/approvals/purchase-requisitions',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
           },
@@ -154,42 +147,42 @@ export const navigation = [
       },
       {
         label: 'Configuration',
-        icon: Settings,
+        icon: IconConfig,
         roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
         children: [
           {
             label: 'Series Setup',
-            icon: Hash,
+            icon: IconSeriesSetup,
             path: '/configuration/series',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {
             label: 'Inquiry Document Types',
-            icon: FileCheck,
+            icon: IconDocumentTypes,
             path: '/configuration/document-types',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {
             label: 'Product Categories',
-            icon: FolderTree,
+            icon: IconProductCategories,
             path: '/configuration/product-categories',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {
             label: 'Unit of Measurement (UOM)',
-            icon: Scale,
+            icon: IconUOM,
             path: '/configuration/uom',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {
             label: 'Regions',
-            icon: MapPin,
+            icon: IconRegions,
             path: '/configuration/regions',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {
             label: 'Payment Terms',
-            icon: HandCoins,
+            icon: IconPaymentTerms,
             path: '/configuration/payment-terms',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },

@@ -27,7 +27,10 @@ export function useRowsEditor({
   const [fieldErrors, setFieldErrors] = useState({});
 
   const editingIndex = editingId
-    ? rows.findIndex((row) => (row[idField] || row.id) === editingId)
+    ? rows.findIndex((row, idx) => {
+        const key = row[idField] || row.id || `${idField}_${idx}`;
+        return key === editingId || String(row[idField]) === String(editingId) || String(row.id) === String(editingId);
+      })
     : -1;
 
   const isEditing = editingIndex !== -1;
@@ -121,13 +124,19 @@ export function useRowsEditor({
   // Remove a row immediately
   const handleRemove = useCallback(
     (rowId) => {
-      const targetRow = rows.find((r) => (r[idField] || r.id) === rowId);
+      const targetRow = rows.find((r, idx) => {
+        const key = r[idField] || r.id || `${idField}_${idx}`;
+        return key === rowId || String(r[idField]) === String(rowId) || String(r.id) === String(rowId);
+      });
       if (targetRow && typeof canRemove === 'function' && !canRemove(targetRow)) {
         toast.error(`Cannot remove this ${rowName.toLowerCase()}`);
         return;
       }
 
-      const nextRows = rows.filter((r) => (r[idField] || r.id) !== rowId);
+      const nextRows = rows.filter((r, idx) => {
+        const key = r[idField] || r.id || `${idField}_${idx}`;
+        return key !== rowId && String(r[idField]) !== String(rowId) && String(r.id) !== String(rowId);
+      });
       if (typeof onChange === 'function') {
         onChange(nextRows);
       }
@@ -177,9 +186,10 @@ export function useRowsEditor({
   // Toggle active status of a single row
   const handleToggleRowActive = useCallback(
     (rowId) => {
-      const nextRows = rows.map((r) => {
-        if ((r[idField] || r.id) === rowId) {
-          const nextActive = !r.isActive;
+      const nextRows = rows.map((r, idx) => {
+        const key = r[idField] || r.id || `${idField}_${idx}`;
+        if (key === rowId || String(r[idField]) === String(rowId) || String(r.id) === String(rowId)) {
+          const nextActive = r.isActive === false ? true : false;
           toast.success(`${rowName} marked as ${nextActive ? 'Active' : 'Inactive'}`);
           return {
             ...r,

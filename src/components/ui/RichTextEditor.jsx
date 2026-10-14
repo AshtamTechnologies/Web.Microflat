@@ -91,6 +91,15 @@ const PRESET_COLORS = [
   { name: 'Dark', value: 'var(--color-dark)' },
 ];
 
+function getCleanStringContent(val) {
+  if (typeof val === 'string') return val;
+  if (!val) return '';
+  if (typeof val === 'object' && 'target' in val && val.target) {
+    return typeof val.target.value === 'string' ? val.target.value : '';
+  }
+  return String(val || '');
+}
+
 export default function RichTextEditor({
   id,
   name,
@@ -145,7 +154,7 @@ export default function RichTextEditor({
         emptyEditorClass: 'is-editor-empty',
       }),
     ],
-    content: value || '',
+    content: getCleanStringContent(value),
     editable: !disabled,
     onUpdate: ({ editor }) => {
       isUpdatingFromEditorRef.current = true;
@@ -182,7 +191,7 @@ export default function RichTextEditor({
 
     const currentHtml = editor.getHTML();
     const currentClean = editor.isEmpty ? '' : currentHtml;
-    const incomingClean = value || '';
+    const incomingClean = getCleanStringContent(value);
 
     if (incomingClean !== currentClean) {
       editor.commands.setContent(incomingClean, false);

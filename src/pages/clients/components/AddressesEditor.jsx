@@ -2,10 +2,10 @@
  * AddressesEditor.jsx — Child Address Rows Manager for Client Registration.
  *
  * Implements "form above, grid below, edit-in-place" pattern using useRowsEditor hook.
- * Handles cascading Country -> State selection and validation.
+ * Handles cascading Country -> State selection, active status switch, and responsive layout.
  */
 
-import { useMemo, useCallback, useState, useEffect } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import {
   MapPin,
   Plus,
@@ -19,14 +19,12 @@ import {
   Button,
   Card,
   Input,
-  Select,
   SearchableSelect,
-  Toggle,
+  StatusSwitch,
   Badge,
   TableContainer,
   Th,
   Td,
-  Checkbox,
   ConfirmModal,
 } from '../../../components/ui';
 import { useRowsEditor } from '../../../hooks/useRowsEditor';
@@ -42,6 +40,7 @@ import {
 const INITIAL_ADDRESS_FORM = {
   clientAddressId: null,
   addressType: 'Billing',
+  addressLabel: '',
   address1: '',
   address2: '',
   countryId: 'IN',
@@ -51,23 +50,19 @@ const INITIAL_ADDRESS_FORM = {
   isActive: true,
 };
 
-export default function AddressesEditor({ rows = [], onChange }) {
-  const [selectedIds, setSelectedIds] = useState([]);
+export default function AddressesEditor({ rows, addresses, onChange }) {
   const [addressToDelete, setAddressToDelete] = useState(null);
-  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
-  // Sync selectedIds with active rows to prevent dangling selection
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      const validIds = new Set(rows.map((r, i) => r.clientAddressId || r.id || `addr_${i}`));
-      const next = prev.filter((id) => validIds.has(id));
-      return next.length !== prev.length ? next : prev;
-    });
-  }, [rows]);
+  const effectiveRows = useMemo(() => {
+    if (Array.isArray(rows)) return rows;
+    if (Array.isArray(addresses)) return addresses;
+    return [];
+  }, [rows, addresses]);
 
   const validateAddress = useCallback((form) => {
     const errors = {};
     if (!form.addressType) errors.addressType = 'Address type is required';
+    if (form.addressLabel && form.addressLabel.length > 100) errors.addressLabel = 'Max 100 characters';
     if (!form.address1?.trim()) errors.address1 = 'Address line 1 is required';
     if (form.address1 && form.address1.length > 250) errors.address1 = 'Max 250 characters';
     if (form.address2 && form.address2.length > 250) errors.address2 = 'Max 250 characters';
@@ -89,10 +84,9 @@ export default function AddressesEditor({ rows = [], onChange }) {
     handleStartEdit,
     handleCancelEdit,
     handleRemove,
-    handleRemoveMultiple,
     handleToggleRowActive,
   } = useRowsEditor({
-    rows,
+    rows: effectiveRows,
     onChange,
     initialFormValues: INITIAL_ADDRESS_FORM,
     idField: 'clientAddressId',
@@ -100,40 +94,11 @@ export default function AddressesEditor({ rows = [], onChange }) {
     validateRow: validateAddress,
   });
 
-  // Multiple selection helpers
-  const allRowIds = useMemo(() => {
-    return rows.map((r, i) => r.clientAddressId || r.id || `addr_${i}`);
-  }, [rows]);
-
-  const isAllSelected = rows.length > 0 && selectedIds.length === rows.length;
-
-  const handleToggleSelect = (rowId) => {
-    setSelectedIds((prev) =>
-      prev.includes(rowId) ? prev.filter((id) => id !== rowId) : [...prev, rowId]
-    );
-  };
-
-  const handleToggleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds([...allRowIds]);
-    }
-  };
-
   const handleConfirmSingleDelete = () => {
     if (!addressToDelete) return;
     const rowId = addressToDelete.clientAddressId || addressToDelete.id;
     handleRemove(rowId);
-    setSelectedIds((prev) => prev.filter((id) => id !== rowId));
     setAddressToDelete(null);
-  };
-
-  const handleConfirmBulkDelete = () => {
-    if (selectedIds.length === 0) return;
-    handleRemoveMultiple(selectedIds);
-    setSelectedIds([]);
-    setIsBulkDeleteOpen(false);
   };
 
   // Filter states based on selected country
@@ -155,7 +120,6 @@ export default function AddressesEditor({ rows = [], onChange }) {
     const val = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
     const countryCode = typeof val === 'object' && val !== null ? val.value || '' : String(val || '');
     handleFieldChange('countryId', countryCode);
-    // Reset stateId whenever country changes
     handleFieldChange('stateId', '');
   };
 
@@ -183,7 +147,7 @@ export default function AddressesEditor({ rows = [], onChange }) {
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-heading">Client Addresses</h3>
               <Badge variant="neutral" className="text-xs font-mono px-2 py-0.5">
-                {rows.length}
+                {effectiveRows.length}
               </Badge>
             </div>
             <p className="text-xs text-text-muted mt-0.5">
@@ -199,10 +163,10 @@ export default function AddressesEditor({ rows = [], onChange }) {
             </span>
             <Button
               type="button"
-              variant="ghost"
-              size="xs"
+              variant="secondary"
+              size="sm"
               onClick={handleCancelEdit}
-              className="text-xs text-text-muted hover:text-danger"
+              className="text-xs shadow-2xs"
             >
               <X size={13} className="mr-1" />
               Cancel
@@ -226,6 +190,19 @@ export default function AddressesEditor({ rows = [], onChange }) {
               placeholder="Select address type..."
               searchPlaceholder="Search address types..."
               error={fieldErrors.addressType}
+            />
+          </div>
+
+          {/* Address Label */}
+          <div>
+            <Input
+              label="Address Label"
+              id="addr-label"
+              maxLength={100}
+              value={formState.addressLabel || ''}
+              onChange={(e) => handleFieldChange('addressLabel', e.target.value)}
+              placeholder="e.g. Head Office, Plant 1..."
+              error={fieldErrors.addressLabel}
             />
           </div>
 
@@ -279,6 +256,20 @@ export default function AddressesEditor({ rows = [], onChange }) {
             />
           </div>
 
+          {/* ZIP Code */}
+          <div>
+            <Input
+              label="ZIP / Postal Code"
+              id="addr-zip"
+              maxLength={20}
+              value={formState.zipCode}
+              onChange={(e) => handleFieldChange('zipCode', e.target.value)}
+              placeholder="e.g. 382445"
+              className="font-mono tabular-nums"
+              error={fieldErrors.zipCode}
+            />
+          </div>
+
           {/* Address 1 */}
           <div className="sm:col-span-2">
             <Input
@@ -294,7 +285,7 @@ export default function AddressesEditor({ rows = [], onChange }) {
           </div>
 
           {/* Address 2 */}
-          <div>
+          <div className="sm:col-span-2 lg:col-span-4">
             <Input
               label="Address Line 2"
               id="addr-line2"
@@ -305,33 +296,18 @@ export default function AddressesEditor({ rows = [], onChange }) {
               error={fieldErrors.address2}
             />
           </div>
-
-          {/* ZIP Code */}
-          <div>
-            <Input
-              label="ZIP / Postal Code"
-              id="addr-zip"
-              maxLength={20}
-              value={formState.zipCode}
-              onChange={(e) => handleFieldChange('zipCode', e.target.value)}
-              placeholder="e.g. 382445"
-              className="font-mono tabular-nums"
-              error={fieldErrors.zipCode}
-            />
-          </div>
         </div>
 
-        {/* Status Toggle & Submit Button */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-border/60">
+        {/* Status Switch & Submit Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border/60">
           <div className="flex items-center gap-3">
-            <Toggle
-              label="Address Active"
-              id="addr-active-toggle"
-              checked={formState.isActive}
+            <StatusSwitch
+              id="addr-active-switch"
+              checked={formState.isActive !== false}
               onChange={(checked) => handleFieldChange('isActive', checked)}
             />
             <span className="text-xs text-text-muted">
-              {formState.isActive ? 'Active for deliveries & billing' : 'Inactive address record'}
+              {formState.isActive !== false ? 'Active address for billing/shipping' : 'Inactive address record'}
             </span>
           </div>
 
@@ -339,11 +315,12 @@ export default function AddressesEditor({ rows = [], onChange }) {
             {isEditing && (
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 onClick={handleCancelEdit}
-                className="text-xs"
+                className="text-xs shadow-2xs"
               >
+                <X size={13} className="mr-1" />
                 Cancel
               </Button>
             )}
@@ -370,28 +347,9 @@ export default function AddressesEditor({ rows = [], onChange }) {
         </div>
       </div>
 
-      {/* ── Grid Below ── */}
+      {/* ── Grid Below (Responsive Table on Desktop/Tablet, Responsive Cards on Mobile) ── */}
       <div className="space-y-2.5">
-        {selectedIds.length > 0 && (
-          <div className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-surface/90 border border-border shadow-2xs">
-            <span className="text-xs text-text-muted">
-              <strong className="text-heading font-semibold">{selectedIds.length}</strong> of{' '}
-              {rows.length} {rows.length === 1 ? 'address' : 'addresses'} selected
-            </span>
-            <Button
-              type="button"
-              variant="danger-soft"
-              size="sm"
-              onClick={() => setIsBulkDeleteOpen(true)}
-              className="text-xs font-semibold shadow-2xs cursor-pointer inline-flex items-center gap-1.5"
-            >
-              <Trash2 size={13} />
-              <span>Delete Selected ({selectedIds.length})</span>
-            </Button>
-          </div>
-        )}
-
-        {rows.length === 0 ? (
+        {effectiveRows.length === 0 ? (
           <div className="text-center py-8 px-4 border border-dashed border-border rounded-xl bg-surface/20 space-y-1.5">
             <Building size={22} className="mx-auto text-text-muted/60" />
             <p className="text-xs font-medium text-heading">No addresses added</p>
@@ -400,35 +358,144 @@ export default function AddressesEditor({ rows = [], onChange }) {
             </p>
           </div>
         ) : (
-          <TableContainer
-            className="overflow-x-auto"
-            tableClassName="min-w-[780px] w-full text-left border-collapse text-xs table-auto sm:table-fixed"
-          >
-            <thead className="bg-surface/80 border-b border-border">
-              <tr>
-                <Th className="w-10 text-center py-2.5 px-3">
-                  <div className="flex items-center justify-center">
-                    <Checkbox
-                      id="select-all-client-addresses"
-                      checked={isAllSelected}
-                      onChange={handleToggleSelectAll}
-                      aria-label="Select all addresses"
-                    />
-                  </div>
-                </Th>
-                <Th className="py-2.5 px-3 w-28 whitespace-nowrap">TYPE</Th>
-                <Th className="py-2.5 px-3 min-w-[200px]">ADDRESS</Th>
-                <Th className="py-2.5 px-3 min-w-[190px] whitespace-nowrap">CITY / STATE / COUNTRY</Th>
-                <Th className="py-2.5 px-3 w-24 whitespace-nowrap">ZIP</Th>
-                <Th className="py-2.5 px-3 w-32 text-center whitespace-nowrap">STATUS</Th>
-                <Th className="py-2.5 px-3 w-24 text-right whitespace-nowrap">ACTIONS</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border bg-bg">
-              {rows.map((row, index) => {
-                const rowId = row.clientAddressId || row.id || `addr_${index}`;
+          <>
+            {/* Desktop & Tablet Table (md+) */}
+            <div className="hidden md:block">
+              <TableContainer
+                className="overflow-x-auto rounded-xl border border-border"
+                tableClassName="min-w-full text-left border-collapse text-xs table-auto"
+              >
+                <thead className="bg-surface/80 border-b border-border">
+                  <tr>
+                    <Th className="py-2.5 px-3.5 w-28 whitespace-nowrap">TYPE</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[150px] whitespace-nowrap">ADDRESS LABEL</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[200px]">ADDRESS</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[180px] whitespace-nowrap">CITY / STATE / COUNTRY</Th>
+                    <Th className="py-2.5 px-3.5 w-24 whitespace-nowrap">ZIP</Th>
+                    <Th className="py-2.5 px-3.5 w-28 text-center whitespace-nowrap">STATUS</Th>
+                    <Th className="py-2.5 px-3.5 w-24 text-right whitespace-nowrap">ACTIONS</Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border bg-bg">
+                  {effectiveRows.map((row, index) => {
+                    const rowId = row.clientAddressId || row.id || `clientAddressId_${index}`;
+                    const isCurrentEditing = editingId === rowId;
+                    const rowCountryId = typeof row.countryId === 'object' && row.countryId !== null
+                      ? row.countryId.value || ''
+                      : String(row.countryId || '');
+                    const rowStateId = typeof row.stateId === 'object' && row.stateId !== null
+                      ? row.stateId.value || ''
+                      : String(row.stateId || '');
+                    const countryName = getCountryName(rowCountryId);
+                    const stateName = getStateName(rowCountryId, rowStateId);
+
+                    return (
+                      <tr
+                        key={rowId}
+                        className={`transition-colors hover:bg-surface/50 ${
+                          isCurrentEditing ? 'bg-primary/5 ring-1 ring-primary/20' : ''
+                        }`}
+                      >
+                        {/* Type */}
+                        <Td className="py-3 px-3.5">
+                          <Badge variant={getAddressTypeBadgeVariant(row.addressType)} className="text-2xs px-2 py-0.5">
+                            {row.addressType}
+                          </Badge>
+                        </Td>
+
+                        {/* Address Label */}
+                        <Td className="py-3 px-3.5">
+                          {row.addressLabel ? (
+                            <span className="font-semibold text-heading text-xs">
+                              {row.addressLabel}
+                            </span>
+                          ) : (
+                            <span className="text-text-muted text-xs">—</span>
+                          )}
+                        </Td>
+
+                        {/* Address 1 & 2 */}
+                        <Td className="py-3 px-3.5">
+                          <p className="font-medium text-heading text-xs">{row.address1}</p>
+                          {row.address2 && (
+                            <p className="text-2xs text-text-muted mt-0.5">{row.address2}</p>
+                          )}
+                        </Td>
+
+                        {/* City / State / Country */}
+                        <Td className="py-3 px-3.5 text-xs text-text">
+                          <div>
+                            <span className="font-medium text-heading">{row.city}</span>
+                            {stateName && <span className="text-text-muted">, {stateName}</span>}
+                          </div>
+                          <div className="text-2xs text-text-muted">{countryName}</div>
+                        </Td>
+
+                        {/* ZIP */}
+                        <Td className="py-3 px-3.5 font-mono tabular-nums text-text-muted">
+                          {row.zipCode || '—'}
+                        </Td>
+
+                        {/* Status Switch Button */}
+                        <Td className="py-3 px-3.5 text-center">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={row.isActive !== false}
+                            onClick={() => handleToggleRowActive(rowId)}
+                            title={`Click to mark ${row.isActive !== false ? 'Inactive' : 'Active'}`}
+                            className={[
+                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium cursor-pointer transition-all duration-150 select-none shadow-2xs',
+                              row.isActive !== false
+                                ? 'bg-success/10 text-success border border-success/30 hover:bg-success/20'
+                                : 'bg-surface text-text-muted border border-border hover:bg-surface/80 hover:text-text',
+                            ].join(' ')}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                row.isActive !== false ? 'bg-success animate-pulse' : 'bg-text-muted/60'
+                              }`}
+                              aria-hidden="true"
+                            />
+                            {row.isActive !== false ? 'Active' : 'Inactive'}
+                          </button>
+                        </Td>
+
+                        {/* Actions */}
+                        <Td className="py-2.5 px-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(row)}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all shadow-2xs cursor-pointer"
+                              title="Edit Address"
+                              aria-label="Edit Address"
+                            >
+                              <Pencil size={14} className="shrink-0" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAddressToDelete(row)}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
+                              title="Remove Address"
+                              aria-label="Remove Address"
+                            >
+                              <Trash2 size={14} className="shrink-0" />
+                            </button>
+                          </div>
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </TableContainer>
+            </div>
+
+            {/* Mobile Responsive Cards (< md) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:hidden">
+              {effectiveRows.map((row, index) => {
+                const rowId = row.clientAddressId || row.id || `clientAddressId_${index}`;
                 const isCurrentEditing = editingId === rowId;
-                const isSelected = selectedIds.includes(rowId);
                 const rowCountryId = typeof row.countryId === 'object' && row.countryId !== null
                   ? row.countryId.value || ''
                   : String(row.countryId || '');
@@ -439,107 +506,87 @@ export default function AddressesEditor({ rows = [], onChange }) {
                 const stateName = getStateName(rowCountryId, rowStateId);
 
                 return (
-                  <tr
+                  <div
                     key={rowId}
-                    className={`transition-colors hover:bg-surface/50 ${
+                    className={`p-3.5 rounded-xl border transition-all space-y-2.5 bg-surface/40 ${
                       isCurrentEditing
-                        ? 'bg-primary/5 ring-1 ring-primary/20'
-                        : isSelected
-                        ? 'bg-primary/[0.04]'
-                        : ''
+                        ? 'border-primary ring-1 ring-primary/30 bg-primary/5'
+                        : 'border-border hover:border-primary/30'
                     }`}
                   >
-                    {/* Checkbox */}
-                    <Td className="text-center py-3 px-3">
-                      <div className="flex items-center justify-center">
-                        <Checkbox
-                          id={`select-addr-${rowId}`}
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(rowId)}
-                          aria-label={`Select address ${row.address1}`}
-                        />
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant={getAddressTypeBadgeVariant(row.addressType)} className="text-2xs px-2 py-0.5">
+                          {row.addressType}
+                        </Badge>
+                        {row.addressLabel && (
+                          <span className="text-xs font-bold text-heading">
+                            {row.addressLabel}
+                          </span>
+                        )}
                       </div>
-                    </Td>
-
-                    {/* Type */}
-                    <Td className="py-3 px-3">
-                      <Badge variant={getAddressTypeBadgeVariant(row.addressType)} className="text-2xs px-2 py-0.5">
-                        {row.addressType}
-                      </Badge>
-                    </Td>
-
-                    {/* Address 1 & 2 */}
-                    <Td className="py-3 px-3">
-                      <p className="font-medium text-heading text-xs">{row.address1}</p>
-                      {row.address2 && (
-                        <p className="text-2xs text-text-muted mt-0.5">{row.address2}</p>
-                      )}
-                    </Td>
-
-                    {/* City / State / Country */}
-                    <Td className="py-3 px-3 text-xs text-text">
-                      <div>
-                        <span className="font-medium text-heading">{row.city}</span>
-                        {stateName && <span className="text-text-muted">, {stateName}</span>}
-                      </div>
-                      <div className="text-2xs text-text-muted">{countryName}</div>
-                    </Td>
-
-                    {/* ZIP */}
-                    <Td className="py-3 px-3 font-mono tabular-nums text-text-muted">
-                      {row.zipCode || '—'}
-                    </Td>
-
-                    {/* Status */}
-                    <Td className="py-3 px-3 text-center">
                       <button
                         type="button"
+                        role="switch"
+                        aria-checked={row.isActive !== false}
                         onClick={() => handleToggleRowActive(rowId)}
-                        title={`Click to mark ${row.isActive ? 'Inactive' : 'Active'}`}
                         className={[
-                          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors select-none',
-                          row.isActive
-                            ? 'bg-success/10 text-success border border-success/20 hover:bg-success/20'
-                            : 'bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20',
+                          'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer transition-colors shadow-2xs',
+                          row.isActive !== false
+                            ? 'bg-success/10 text-success border border-success/30'
+                            : 'bg-surface text-text-muted border border-border',
                         ].join(' ')}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${row.isActive ? 'bg-success' : 'bg-danger'
-                            }`}
-                          aria-hidden="true"
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            row.isActive !== false ? 'bg-success' : 'bg-text-muted/60'
+                          }`}
                         />
-                        {row.isActive ? 'Active' : 'Inactive'}
+                        {row.isActive !== false ? 'Active' : 'Inactive'}
                       </button>
-                    </Td>
+                    </div>
 
-                    {/* Actions */}
-                    <Td className="py-2.5 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleStartEdit(row)}
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all shadow-2xs cursor-pointer"
-                          title="Edit Address"
-                          aria-label="Edit Address"
-                        >
-                          <Pencil size={14} className="shrink-0" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAddressToDelete(row)}
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
-                          title="Remove Address"
-                          aria-label="Remove Address"
-                        >
-                          <Trash2 size={14} className="shrink-0" />
-                        </button>
+                    <div>
+                      <p className="font-semibold text-heading text-xs">{row.address1}</p>
+                      {row.address2 && <p className="text-2xs text-text-muted mt-0.5">{row.address2}</p>}
+                    </div>
+
+                    <div className="text-2xs text-text-muted space-y-0.5 pt-1 border-t border-border/50">
+                      <div>
+                        <span className="font-medium text-heading">{row.city}</span>
+                        {stateName && <span>, {stateName}</span>}
+                        {row.zipCode && <span className="font-mono ml-1.5">({row.zipCode})</span>}
                       </div>
-                    </Td>
-                  </tr>
+                      <div>{countryName}</div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => handleStartEdit(row)}
+                        className="text-xs"
+                      >
+                        <Pencil size={13} className="mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger-soft"
+                        size="xs"
+                        onClick={() => setAddressToDelete(row)}
+                        className="text-xs text-danger"
+                      >
+                        <Trash2 size={13} className="mr-1" />
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </TableContainer>
+            </div>
+          </>
         )}
       </div>
 
@@ -560,20 +607,6 @@ export default function AddressesEditor({ rows = [], onChange }) {
           </span>
         }
         confirmText="Remove Address"
-        cancelText="Cancel"
-        variant="danger"
-      />
-
-      {/* ── Bulk Delete Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={isBulkDeleteOpen}
-        onClose={() => setIsBulkDeleteOpen(false)}
-        onConfirm={handleConfirmBulkDelete}
-        title={`Remove ${selectedIds.length} Addresses`}
-        message={`Are you sure you want to remove the ${selectedIds.length} selected address(es)? This action cannot be undone.`}
-        confirmText={`Remove ${selectedIds.length} ${
-          selectedIds.length === 1 ? 'Address' : 'Addresses'
-        }`}
         cancelText="Cancel"
         variant="danger"
       />

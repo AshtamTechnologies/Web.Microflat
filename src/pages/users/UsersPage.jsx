@@ -40,6 +40,7 @@ import {
   RotateCcw,
   Clock,
 } from 'lucide-react';
+import { IconUsers } from '../../constants/icons';
 
 import { Button, Input, Modal, SearchableSelect, ConfirmModal, TableContainer, Th, Td, PageHeader } from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
@@ -387,6 +388,7 @@ export default function UsersPage() {
       <PageHeader
         title="User Management"
         subtitle="Manage system users, role assignments, address details, and active account statuses."
+        icon={<IconUsers className="h-6 w-6 text-primary" aria-hidden="true" />}
         actions={
           <Button
             id="add-user-btn"

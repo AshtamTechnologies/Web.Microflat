@@ -19,6 +19,13 @@ export default function Toggle({
   className = '',
   ...rest
 }) {
+  const handleChange = (e) => {
+    if (disabled) return;
+    if (onChange) {
+      onChange(e.target.checked, e);
+    }
+  };
+
   return (
     <label
       htmlFor={id}
@@ -34,12 +41,12 @@ export default function Toggle({
       <input
         type="checkbox"
         id={id}
-        checked={checked}
-        onChange={onChange}
+        checked={Boolean(checked)}
+        onChange={handleChange}
         disabled={disabled}
         className="sr-only peer"
         role="switch"
-        aria-checked={checked}
+        aria-checked={Boolean(checked)}
         {...rest}
       />
 

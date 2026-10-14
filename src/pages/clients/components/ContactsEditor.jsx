@@ -2,10 +2,10 @@
  * ContactsEditor.jsx — Child Contact Person Rows Manager for Client Registration.
  *
  * Implements "form above, grid below, edit-in-place" pattern using useRowsEditor hook.
- * Manages adding, editing, and toggling contact persons with field validation.
+ * Manages adding, editing, and toggling contact persons with field validation and responsive design.
  */
 
-import { useCallback, useState, useEffect, useMemo } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import {
   Users,
   Plus,
@@ -21,12 +21,11 @@ import {
   Button,
   Card,
   Input,
-  Toggle,
+  StatusSwitch,
   Badge,
   TableContainer,
   Th,
   Td,
-  Checkbox,
   ConfirmModal,
 } from '../../../components/ui';
 import { useRowsEditor } from '../../../hooks/useRowsEditor';
@@ -57,19 +56,14 @@ function validatePhone(value, isRequired = false, fieldName = 'Phone number') {
   return '';
 }
 
-export default function ContactsEditor({ rows = [], onChange }) {
-  const [selectedIds, setSelectedIds] = useState([]);
+export default function ContactsEditor({ rows, contacts, onChange }) {
   const [contactToDelete, setContactToDelete] = useState(null);
-  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
-  // Sync selectedIds with active rows to prevent dangling selection
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      const validIds = new Set(rows.map((r, i) => r.clientContactPersonId || r.id || `con_${i}`));
-      const next = prev.filter((id) => validIds.has(id));
-      return next.length !== prev.length ? next : prev;
-    });
-  }, [rows]);
+  const effectiveRows = useMemo(() => {
+    if (Array.isArray(rows)) return rows;
+    if (Array.isArray(contacts)) return contacts;
+    return [];
+  }, [rows, contacts]);
 
   const validateContact = useCallback((form) => {
     const errors = {};
@@ -105,10 +99,9 @@ export default function ContactsEditor({ rows = [], onChange }) {
     handleStartEdit,
     handleCancelEdit,
     handleRemove,
-    handleRemoveMultiple,
     handleToggleRowActive,
   } = useRowsEditor({
-    rows,
+    rows: effectiveRows,
     onChange,
     initialFormValues: INITIAL_CONTACT_FORM,
     idField: 'clientContactPersonId',
@@ -116,40 +109,11 @@ export default function ContactsEditor({ rows = [], onChange }) {
     validateRow: validateContact,
   });
 
-  // Multiple selection helpers
-  const allRowIds = useMemo(() => {
-    return rows.map((r, i) => r.clientContactPersonId || r.id || `con_${i}`);
-  }, [rows]);
-
-  const isAllSelected = rows.length > 0 && selectedIds.length === rows.length;
-
-  const handleToggleSelect = (rowId) => {
-    setSelectedIds((prev) =>
-      prev.includes(rowId) ? prev.filter((id) => id !== rowId) : [...prev, rowId]
-    );
-  };
-
-  const handleToggleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds([...allRowIds]);
-    }
-  };
-
   const handleConfirmSingleDelete = () => {
     if (!contactToDelete) return;
     const rowId = contactToDelete.clientContactPersonId || contactToDelete.id;
     handleRemove(rowId);
-    setSelectedIds((prev) => prev.filter((id) => id !== rowId));
     setContactToDelete(null);
-  };
-
-  const handleConfirmBulkDelete = () => {
-    if (selectedIds.length === 0) return;
-    handleRemoveMultiple(selectedIds);
-    setSelectedIds([]);
-    setIsBulkDeleteOpen(false);
   };
 
   const onEdit = (row) => {
@@ -157,6 +121,7 @@ export default function ContactsEditor({ rows = [], onChange }) {
       ...row,
       mobile1: row.mobile1 ? String(row.mobile1).replace(/\D/g, '').slice(-10) : '',
       mobile2: row.mobile2 ? String(row.mobile2).replace(/\D/g, '').slice(-10) : '',
+      isActive: row.isActive !== false,
     });
   };
 
@@ -172,11 +137,11 @@ export default function ContactsEditor({ rows = [], onChange }) {
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-heading">Contact Persons</h3>
               <Badge variant="neutral" className="text-xs font-mono px-2 py-0.5">
-                {rows.length}
+                {effectiveRows.length}
               </Badge>
             </div>
             <p className="text-xs text-text-muted mt-0.5">
-              Key personnel, purchasing leads, accounts, and technical contacts
+              Add primary liaisons, sales points of contact, or finance coordinators
             </p>
           </div>
         </div>
@@ -188,10 +153,10 @@ export default function ContactsEditor({ rows = [], onChange }) {
             </span>
             <Button
               type="button"
-              variant="ghost"
-              size="xs"
+              variant="secondary"
+              size="sm"
               onClick={handleCancelEdit}
-              className="text-xs text-text-muted hover:text-danger"
+              className="text-xs shadow-2xs"
             >
               <X size={13} className="mr-1" />
               Cancel
@@ -207,7 +172,8 @@ export default function ContactsEditor({ rows = [], onChange }) {
           <div>
             <Input
               label="First Name"
-              id="con-first-name"
+              id="con-firstName"
+              name="firstName"
               required
               maxLength={100}
               value={formState.firstName}
@@ -221,7 +187,8 @@ export default function ContactsEditor({ rows = [], onChange }) {
           <div>
             <Input
               label="Last Name"
-              id="con-last-name"
+              id="con-lastName"
+              name="lastName"
               maxLength={100}
               value={formState.lastName}
               onChange={(e) => handleFieldChange('lastName', e.target.value)}
@@ -233,8 +200,9 @@ export default function ContactsEditor({ rows = [], onChange }) {
           {/* Email */}
           <div>
             <Input
-              label="Email"
+              label="Email Address"
               id="con-email"
+              name="email"
               type="email"
               maxLength={254}
               value={formState.email}
@@ -280,17 +248,21 @@ export default function ContactsEditor({ rows = [], onChange }) {
             />
           </div>
 
-          {/* Is Active Toggle */}
+          {/* Contact Status Switch */}
           <div className="flex flex-col justify-end pb-1.5">
-            <Toggle
-              label="Active Contact"
-              id="con-active-toggle"
-              checked={formState.isActive}
-              onChange={(checked) => handleFieldChange('isActive', checked)}
-            />
-            <span className="text-2xs text-text-muted mt-1">
-              {formState.isActive ? 'Active recipient for communications' : 'Inactive contact'}
-            </span>
+            <label className="text-xs font-medium text-heading block mb-1">
+              Contact Status
+            </label>
+            <div className="flex items-center gap-2.5">
+              <StatusSwitch
+                id="con-active-switch"
+                checked={formState.isActive !== false}
+                onChange={(checked) => handleFieldChange('isActive', checked)}
+              />
+              <span className="text-xs text-text-muted">
+                {formState.isActive !== false ? 'Active contact' : 'Inactive contact'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -299,11 +271,12 @@ export default function ContactsEditor({ rows = [], onChange }) {
           {isEditing && (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={handleCancelEdit}
-              className="text-xs"
+              className="text-xs shadow-2xs"
             >
+              <X size={13} className="mr-1" />
               Cancel
             </Button>
           )}
@@ -329,164 +302,255 @@ export default function ContactsEditor({ rows = [], onChange }) {
         </div>
       </div>
 
-      {/* ── Grid Below ── */}
+      {/* ── Grid Below (Responsive Table on Desktop/Tablet, Responsive Cards on Mobile) ── */}
       <div className="space-y-2.5">
-        {selectedIds.length > 0 && (
-          <div className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-surface/90 border border-border shadow-2xs">
-            <span className="text-xs text-text-muted">
-              <strong className="text-heading font-semibold">{selectedIds.length}</strong> of{' '}
-              {rows.length} {rows.length === 1 ? 'contact' : 'contacts'} selected
-            </span>
-            <Button
-              type="button"
-              variant="danger-soft"
-              size="sm"
-              onClick={() => setIsBulkDeleteOpen(true)}
-              className="text-xs font-semibold shadow-2xs cursor-pointer inline-flex items-center gap-1.5"
-            >
-              <Trash2 size={13} />
-              <span>Delete Selected ({selectedIds.length})</span>
-            </Button>
-          </div>
-        )}
-
-        {rows.length === 0 ? (
+        {effectiveRows.length === 0 ? (
           <div className="text-center py-8 px-4 border border-dashed border-border rounded-xl bg-surface/20 space-y-1.5">
             <User size={22} className="mx-auto text-text-muted/60" />
             <p className="text-xs font-medium text-heading">No contact persons added</p>
             <p className="text-2xs text-text-muted">
-              Add primary, finance, or technical contacts using the form above.
+              Use the form above to add primary coordinators or executives for this client.
             </p>
           </div>
         ) : (
-          <TableContainer
-            className="overflow-x-auto"
-            tableClassName="min-w-[720px] w-full text-left border-collapse text-xs table-auto sm:table-fixed"
-          >
-            <thead className="bg-surface/80 border-b border-border">
-              <tr>
-                <Th className="w-10 text-center py-2.5 px-3">
-                  <div className="flex items-center justify-center">
-                    <Checkbox
-                      id="select-all-client-contacts"
-                      checked={isAllSelected}
-                      onChange={handleToggleSelectAll}
-                      aria-label="Select all contacts"
-                    />
-                  </div>
-                </Th>
-                <Th className="py-2.5 px-3 min-w-[180px]">NAME</Th>
-                <Th className="py-2.5 px-3 w-48 whitespace-nowrap">MOBILE 1 / MOBILE 2</Th>
-                <Th className="py-2.5 px-3 min-w-[200px] whitespace-nowrap">EMAIL</Th>
-                <Th className="py-2.5 px-3 w-32 text-center whitespace-nowrap">STATUS</Th>
-                <Th className="py-2.5 px-3 w-24 text-right whitespace-nowrap">ACTIONS</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border bg-bg">
-              {rows.map((row, index) => {
-                const rowId = row.clientContactPersonId || row.id || `con_${index}`;
+          <>
+            {/* Desktop & Tablet Table (md+) */}
+            <div className="hidden md:block">
+              <TableContainer
+                className="overflow-x-auto rounded-xl border border-border"
+                tableClassName="min-w-full text-left border-collapse text-xs table-auto"
+              >
+                <thead className="bg-surface/80 border-b border-border">
+                  <tr>
+                    <Th className="py-2.5 px-3.5 min-w-[180px]">FULL NAME</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[140px] whitespace-nowrap">PRIMARY PHONE</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[140px] whitespace-nowrap">ALTERNATE PHONE</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[190px]">EMAIL</Th>
+                    <Th className="py-2.5 px-3.5 w-28 text-center whitespace-nowrap">STATUS</Th>
+                    <Th className="py-2.5 px-3.5 w-24 text-right whitespace-nowrap">ACTIONS</Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border bg-bg">
+                  {effectiveRows.map((row, index) => {
+                    const rowId = row.clientContactPersonId || row.id || `clientContactPersonId_${index}`;
+                    const isCurrentEditing = editingId === rowId;
+                    const fullName = `${row.firstName || ''} ${row.lastName || ''}`.trim() || '—';
+
+                    return (
+                      <tr
+                        key={rowId}
+                        className={`transition-colors hover:bg-surface/50 ${
+                          isCurrentEditing ? 'bg-primary/5 ring-1 ring-primary/20' : ''
+                        }`}
+                      >
+                        {/* Name */}
+                        <Td className="py-3 px-3.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-2xs font-bold">
+                              {row.firstName ? row.firstName[0].toUpperCase() : 'U'}
+                            </div>
+                            <span className="font-semibold text-heading text-xs">{fullName}</span>
+                          </div>
+                        </Td>
+
+                        {/* Mobile 1 */}
+                        <Td className="py-3 px-3.5 font-mono tabular-nums text-text">
+                          {row.mobile1 ? (
+                            <a
+                              href={`tel:${row.mobile1}`}
+                              className="hover:text-primary transition-colors inline-flex items-center gap-1"
+                            >
+                              <Phone size={12} className="text-text-muted shrink-0" />
+                              <span>{row.mobile1}</span>
+                            </a>
+                          ) : (
+                            <span className="text-text-muted">—</span>
+                          )}
+                        </Td>
+
+                        {/* Mobile 2 */}
+                        <Td className="py-3 px-3.5 font-mono tabular-nums text-text-muted">
+                          {row.mobile2 ? (
+                            <a
+                              href={`tel:${row.mobile2}`}
+                              className="hover:text-primary transition-colors inline-flex items-center gap-1"
+                            >
+                              <Phone size={12} className="text-text-muted/60 shrink-0" />
+                              <span>{row.mobile2}</span>
+                            </a>
+                          ) : (
+                            '—'
+                          )}
+                        </Td>
+
+                        {/* Email */}
+                        <Td className="py-3 px-3.5 text-xs">
+                          {row.email ? (
+                            <a
+                              href={`mailto:${row.email}`}
+                              className="text-text hover:text-primary transition-colors inline-flex items-center gap-1"
+                            >
+                              <Mail size={12} className="text-text-muted shrink-0" />
+                              <span className="truncate max-w-[200px]">{row.email}</span>
+                            </a>
+                          ) : (
+                            <span className="text-text-muted">—</span>
+                          )}
+                        </Td>
+
+                        {/* Status Switch */}
+                        <Td className="py-3 px-3.5 text-center">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={row.isActive !== false}
+                            onClick={() => handleToggleRowActive(rowId)}
+                            title={`Click to mark ${row.isActive !== false ? 'Inactive' : 'Active'}`}
+                            className={[
+                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium cursor-pointer transition-all duration-150 select-none shadow-2xs',
+                              row.isActive !== false
+                                ? 'bg-success/10 text-success border border-success/30 hover:bg-success/20'
+                                : 'bg-surface text-text-muted border border-border hover:bg-surface/80 hover:text-text',
+                            ].join(' ')}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                row.isActive !== false ? 'bg-success animate-pulse' : 'bg-text-muted/60'
+                              }`}
+                              aria-hidden="true"
+                            />
+                            {row.isActive !== false ? 'Active' : 'Inactive'}
+                          </button>
+                        </Td>
+
+                        {/* Actions */}
+                        <Td className="py-2.5 px-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => onEdit(row)}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all shadow-2xs cursor-pointer"
+                              title="Edit Contact"
+                              aria-label="Edit Contact"
+                            >
+                              <Pencil size={14} className="shrink-0" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setContactToDelete(row)}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
+                              title="Remove Contact"
+                              aria-label="Remove Contact"
+                            >
+                              <Trash2 size={14} className="shrink-0" />
+                            </button>
+                          </div>
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </TableContainer>
+            </div>
+
+            {/* Mobile Responsive Cards (< md) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:hidden">
+              {effectiveRows.map((row, index) => {
+                const rowId = row.clientContactPersonId || row.id || `clientContactPersonId_${index}`;
                 const isCurrentEditing = editingId === rowId;
-                const isSelected = selectedIds.includes(rowId);
                 const fullName = `${row.firstName || ''} ${row.lastName || ''}`.trim() || '—';
 
                 return (
-                  <tr
+                  <div
                     key={rowId}
-                    className={`transition-colors hover:bg-surface/50 ${
+                    className={`p-3.5 rounded-xl border transition-all space-y-2.5 bg-surface/40 ${
                       isCurrentEditing
-                        ? 'bg-primary/5 ring-1 ring-primary/20'
-                        : isSelected
-                        ? 'bg-primary/[0.04]'
-                        : ''
+                        ? 'border-primary ring-1 ring-primary/30 bg-primary/5'
+                        : 'border-border hover:border-primary/30'
                     }`}
                   >
-                    {/* Checkbox */}
-                    <Td className="text-center py-3 px-3">
-                      <div className="flex items-center justify-center">
-                        <Checkbox
-                          id={`select-contact-${rowId}`}
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(rowId)}
-                          aria-label={`Select contact ${fullName}`}
-                        />
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-2xs font-bold">
+                          {row.firstName ? row.firstName[0].toUpperCase() : 'U'}
+                        </div>
+                        <span className="font-semibold text-heading text-xs">{fullName}</span>
                       </div>
-                    </Td>
-
-                    {/* Name */}
-                    <Td className="py-3 px-3">
-                      <span className="font-semibold text-heading text-xs">{fullName}</span>
-                    </Td>
-
-                    {/* Mobile 1 / Mobile 2 */}
-                    <Td className="py-3 px-3 font-mono tabular-nums text-xs">
-                      <div className="text-heading font-medium">{row.mobile1 || '—'}</div>
-                      {row.mobile2 && (
-                        <div className="text-2xs text-text-muted mt-0.5">{row.mobile2}</div>
-                      )}
-                    </Td>
-
-                    {/* Email */}
-                    <Td className="py-3 px-3 text-xs">
-                      {row.email ? (
-                        <span className="text-text hover:text-primary transition-colors">
-                          {row.email}
-                        </span>
-                      ) : (
-                        <span className="text-text-muted">—</span>
-                      )}
-                    </Td>
-
-                    {/* Status */}
-                    <Td className="py-3 px-3 text-center">
                       <button
                         type="button"
+                        role="switch"
+                        aria-checked={row.isActive !== false}
                         onClick={() => handleToggleRowActive(rowId)}
-                        title={`Click to mark ${row.isActive ? 'Inactive' : 'Active'}`}
                         className={[
-                          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium cursor-pointer transition-colors select-none',
-                          row.isActive
-                            ? 'bg-success/10 text-success border border-success/20 hover:bg-success/20'
-                            : 'bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20',
+                          'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer transition-colors shadow-2xs',
+                          row.isActive !== false
+                            ? 'bg-success/10 text-success border border-success/30'
+                            : 'bg-surface text-text-muted border border-border',
                         ].join(' ')}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            row.isActive ? 'bg-success' : 'bg-danger'
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            row.isActive !== false ? 'bg-success' : 'bg-text-muted/60'
                           }`}
-                          aria-hidden="true"
                         />
-                        {row.isActive ? 'Active' : 'Inactive'}
+                        {row.isActive !== false ? 'Active' : 'Inactive'}
                       </button>
-                    </Td>
+                    </div>
 
-                    {/* Actions */}
-                    <Td className="py-2.5 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleStartEdit(row)}
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all shadow-2xs cursor-pointer"
-                          title="Edit Contact"
-                          aria-label="Edit Contact"
-                        >
-                          <Pencil size={14} className="shrink-0" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setContactToDelete(row)}
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
-                          title="Remove Contact"
-                          aria-label="Remove Contact"
-                        >
-                          <Trash2 size={14} className="shrink-0" />
-                        </button>
-                      </div>
-                    </Td>
-                  </tr>
+                    <div className="text-2xs text-text space-y-1.5 pt-1 border-t border-border/50">
+                      {row.mobile1 && (
+                        <div className="flex items-center gap-1.5">
+                          <Phone size={12} className="text-text-muted shrink-0" />
+                          <a href={`tel:${row.mobile1}`} className="font-mono text-heading hover:text-primary">
+                            {row.mobile1}
+                          </a>
+                        </div>
+                      )}
+                      {row.mobile2 && (
+                        <div className="flex items-center gap-1.5">
+                          <Phone size={12} className="text-text-muted/60 shrink-0" />
+                          <a href={`tel:${row.mobile2}`} className="font-mono text-text-muted hover:text-primary">
+                            {row.mobile2} (alt)
+                          </a>
+                        </div>
+                      )}
+                      {row.email && (
+                        <div className="flex items-center gap-1.5">
+                          <Mail size={12} className="text-text-muted shrink-0" />
+                          <a href={`mailto:${row.email}`} className="text-primary truncate hover:underline">
+                            {row.email}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => onEdit(row)}
+                        className="text-xs"
+                      >
+                        <Pencil size={13} className="mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger-soft"
+                        size="xs"
+                        onClick={() => setContactToDelete(row)}
+                        className="text-xs text-danger"
+                      >
+                        <Trash2 size={13} className="mr-1" />
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </TableContainer>
+            </div>
+          </>
         )}
       </div>
 
@@ -506,20 +570,6 @@ export default function ContactsEditor({ rows = [], onChange }) {
           </span>
         }
         confirmText="Remove Contact"
-        cancelText="Cancel"
-        variant="danger"
-      />
-
-      {/* ── Bulk Delete Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={isBulkDeleteOpen}
-        onClose={() => setIsBulkDeleteOpen(false)}
-        onConfirm={handleConfirmBulkDelete}
-        title={`Remove ${selectedIds.length} Contact Persons`}
-        message={`Are you sure you want to remove the ${selectedIds.length} selected contact person(s)? This action cannot be undone.`}
-        confirmText={`Remove ${selectedIds.length} ${
-          selectedIds.length === 1 ? 'Contact Person' : 'Contact Persons'
-        }`}
         cancelText="Cancel"
         variant="danger"
       />

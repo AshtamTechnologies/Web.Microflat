@@ -70,8 +70,12 @@ export function VendorBankDetailsProvider({ children }) {
             branchName: (row.branchName || '').trim(),
             accountNumber: String(row.accountNumber || '').trim(),
             ifscCode: (row.ifscCode || '').trim().toUpperCase(),
+            micrCode: (row.micrCode || '').trim(),
+            iban: (row.iban || '').trim().toUpperCase(),
             swiftCode: (row.swiftCode || '').trim().toUpperCase(),
             accountType: row.accountType || 'Current',
+            branchAddress: (row.branchAddress || '').trim(),
+            remarks: (row.remarks || '').trim(),
             isActive: row.isActive !== undefined ? Boolean(row.isActive) : true,
             attachments: Array.isArray(row.attachments) ? [...row.attachments] : [],
             createdAt: now,
@@ -90,8 +94,12 @@ export function VendorBankDetailsProvider({ children }) {
             branchName: (row.branchName || '').trim(),
             accountNumber: String(row.accountNumber || '').trim(),
             ifscCode: (row.ifscCode || '').trim().toUpperCase(),
+            micrCode: (row.micrCode || '').trim(),
+            iban: (row.iban || '').trim().toUpperCase(),
             swiftCode: (row.swiftCode || '').trim().toUpperCase(),
             accountType: row.accountType || 'Current',
+            branchAddress: (row.branchAddress || '').trim(),
+            remarks: (row.remarks || '').trim(),
             isActive: row.isActive !== undefined ? Boolean(row.isActive) : true,
             attachments: Array.isArray(row.attachments) ? [...row.attachments] : [],
             createdAt: row.createdAt || now,
@@ -112,6 +120,18 @@ export function VendorBankDetailsProvider({ children }) {
     },
     []
   );
+
+  /**
+   * Deletes a single bank account directly by ID.
+   */
+  const deleteBankDetail = useCallback((bankDetailId) => {
+    setBankDetails((prev) =>
+      prev.filter(
+        (b) => b.bankDetailId !== bankDetailId && b.id !== bankDetailId
+      )
+    );
+    toast.success('Bank account deleted successfully.');
+  }, []);
 
   /**
    * Toggles active status of a single bank account directly (from List page).
@@ -149,9 +169,10 @@ export function VendorBankDetailsProvider({ children }) {
       getBanksForVendor,
       getAllBanks,
       saveVendorBanks,
+      deleteBankDetail,
       toggleBankActive,
     }),
-    [bankDetails, getBanksForVendor, getAllBanks, saveVendorBanks, toggleBankActive]
+    [bankDetails, getBanksForVendor, getAllBanks, saveVendorBanks, deleteBankDetail, toggleBankActive]
   );
 
   return (

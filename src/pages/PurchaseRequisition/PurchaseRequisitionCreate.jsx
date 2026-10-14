@@ -20,6 +20,7 @@ import {
   Trash2,
   FileText,
 } from 'lucide-react';
+import { IconPR } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -159,6 +160,7 @@ export default function PurchaseRequisitionCreate() {
       <PageHeader
         title="Create Purchase Requisition"
         subtitle="Create a new purchase requisition."
+        icon={<IconPR className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
           <button
             type="button"

@@ -26,6 +26,7 @@ import {
   Eye,
   File,
 } from 'lucide-react';
+import { IconPR } from '../../constants/icons';
 
 import {
   Button,
@@ -238,6 +239,7 @@ export default function PurchaseRequisitionView() {
           label: backLabel,
         }}
         title={`Purchase Requisition ${pr.prNumber}`}
+        icon={<IconPR className="h-6 w-6 text-primary" aria-hidden="true" />}
         badge={
           <div className="flex items-center gap-2">
             <Badge variant={statusVariant} className="px-2.5 py-0.5 text-xs font-medium">

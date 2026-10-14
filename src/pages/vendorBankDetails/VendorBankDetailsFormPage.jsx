@@ -36,6 +36,7 @@ import {
   FileSpreadsheet,
   Download,
 } from 'lucide-react';
+import { IconBankDetails } from '../../constants/icons';
 
 import {
   Button,
@@ -57,6 +58,7 @@ import {
 import { useVendorsContext } from '../../context/VendorsContext';
 import { useVendorBankDetails } from '../../context/VendorBankDetailsContext';
 import { useRowsEditor } from '../../hooks/useRowsEditor';
+import AuthVerificationModal from './components/AuthVerificationModal';
 import {
   ACCOUNT_TYPE_OPTIONS,
   BANK_DOCUMENT_TYPE_OPTIONS,
@@ -72,6 +74,10 @@ const INITIAL_BANK_FORM = {
   accountNumber: '',
   ifscCode: '',
   swiftCode: '',
+  micrCode: '',
+  iban: '',
+  branchAddress: '',
+  remarks: '',
   accountType: 'Current',
   isActive: true,
   attachments: [],
@@ -80,6 +86,8 @@ const INITIAL_BANK_FORM = {
 const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const SWIFT_REGEX = /^[A-Z0-9]{8}([A-Z0-9]{3})?$/;
 const ACCOUNT_NUM_REGEX = /^\d{6,20}$/;
+const MICR_REGEX = /^\d{9}$/;
+const IBAN_REGEX = /^[A-Z0-9]{15,34}$/;
 
 function getApprovalBadgeVariant(status) {
   switch (status) {
@@ -119,7 +127,7 @@ export default function VendorBankDetailsFormPage() {
   const bankParamId = searchParams.get('bank');
 
   const { allVendors = [], getVendorById } = useVendorsContext();
-  const { getBanksForVendor, saveVendorBanks } = useVendorBankDetails();
+  const { getBanksForVendor, saveVendorBanks, deleteBankDetail } = useVendorBankDetails();
 
   const isEditMode = Boolean(routeVendorId);
 
@@ -143,6 +151,13 @@ export default function VendorBankDetailsFormPage() {
 
   // Set of account IDs that have eye reveal active
   const [revealedIds, setRevealedIds] = useState(new Set());
+
+  // Security Auth Modal State (Required for Update and Delete only; not for Add)
+  const [authModalState, setAuthModalState] = useState({
+    isOpen: false,
+    action: 'update', // 'update' | 'delete'
+    targetData: null,
+  });
 
   // Attachment upload controls inside the bank form
   const [attDocType, setAttDocType] = useState('Bank Cancelled Cheque');
@@ -218,6 +233,10 @@ export default function VendorBankDetailsFormPage() {
       const accNum = String(form.accountNumber || '').trim();
       const ifsc = (form.ifscCode || '').trim().toUpperCase();
       const swift = (form.swiftCode || '').trim().toUpperCase();
+      const micr = (form.micrCode || '').trim();
+      const iban = (form.iban || '').trim().toUpperCase();
+      const branchAddr = (form.branchAddress || '').trim();
+      const rem = (form.remarks || '').trim();
       const isIndiaVendor = currentVendor?.countryId === 'IN';
 
       if (!holder) {
@@ -258,6 +277,26 @@ export default function VendorBankDetailsFormPage() {
       // SWIFT validation
       if (swift && !SWIFT_REGEX.test(swift)) {
         errors.swiftCode = 'SWIFT / BIC must be 8 or 11 alphanumeric characters';
+      }
+
+      // MICR Code validation (optional, 9 digits)
+      if (micr && !MICR_REGEX.test(micr)) {
+        errors.micrCode = 'MICR Code must be exactly 9 digits';
+      }
+
+      // IBAN validation (optional, 15 to 34 chars)
+      if (iban && !IBAN_REGEX.test(iban)) {
+        errors.iban = 'IBAN must be 15 to 34 alphanumeric characters';
+      }
+
+      // Branch address validation (optional, max 250)
+      if (branchAddr && branchAddr.length > 250) {
+        errors.branchAddress = 'Max 250 characters';
+      }
+
+      // Remarks validation (optional, max 250)
+      if (rem && rem.length > 250) {
+        errors.remarks = 'Max 250 characters';
       }
 
       if (!form.accountType) {
@@ -311,6 +350,111 @@ export default function VendorBankDetailsFormPage() {
     canRemove: canRemoveRow,
   });
 
+  // Action Click Handler: New Add does NOT ask for credentials; Update DOES ask for credentials
+  const handleFormActionClick = () => {
+    if (!isEditing) {
+      // Adding new record: directly proceed without auth credentials
+      handleAddOrUpdate();
+      return;
+    }
+
+    // Updating existing record: Validate first, then require login username & password
+    const errors = validateBankRow(formState);
+    if (errors && Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const firstErr = Object.values(errors)[0];
+      toast.error(firstErr || 'Please check the form for errors');
+      return;
+    }
+    setFieldErrors({});
+
+    // Prompt security auth modal
+    setAuthModalState({
+      isOpen: true,
+      action: 'update',
+      targetData: formState,
+    });
+  };
+
+  // Prompt delete confirmation with auth
+  const handlePromptDeleteAccount = (row) => {
+    setAuthModalState({
+      isOpen: true,
+      action: 'delete',
+      targetData: row,
+    });
+  };
+
+  // Select an account from the grid to edit in the form above
+  const handleSelectAccountForEdit = (row) => {
+    handleStartEdit(row);
+    const formCard = document.getElementById('bank-account-form-card');
+    if (formCard) {
+      formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Callback on successful authentication (for Update or Delete)
+  const handleAuthSuccess = async (authenticatedUser) => {
+    if (authModalState.action === 'update') {
+      const targetId = editingId;
+      const updatedRow = {
+        ...formState,
+        updatedAt: new Date().toISOString(),
+        updatedBy: authenticatedUser?.name || 'Ian Chesnut',
+      };
+
+      const nextRows = draftRows.map((r) => {
+        const id = r.bankDetailId || r.id;
+        if (id === targetId) {
+          return { ...r, ...updatedRow };
+        }
+        return r;
+      });
+
+      setDraftRows(nextRows);
+
+      // Persist directly to store so the update is immediately saved across the app
+      if (selectedVendorId && saveVendorBanks) {
+        try {
+          await saveVendorBanks(selectedVendorId, nextRows);
+          setInitialSnapshot(JSON.parse(JSON.stringify(nextRows)));
+        } catch (err) {
+          console.error('Failed to auto-persist bank update:', err);
+        }
+      }
+
+      toast.success(`Bank details for ${formState.bankName || 'account'} updated successfully`);
+      setFormState({ ...updatedRow });
+    } else if (authModalState.action === 'delete') {
+      const targetRow = authModalState.targetData;
+      if (!targetRow) return;
+      const targetId = targetRow.bankDetailId || targetRow.id;
+
+      if (editingId === targetId) {
+        handleCancelEdit();
+      }
+
+      const nextRows = draftRows.filter((r) => (r.bankDetailId || r.id) !== targetId);
+      setDraftRows(nextRows);
+
+      if (deleteBankDetail && (savedRowIds.has(targetId) || String(targetId).startsWith('bd_'))) {
+        deleteBankDetail(targetId);
+      }
+      if (selectedVendorId && saveVendorBanks) {
+        try {
+          await saveVendorBanks(selectedVendorId, nextRows);
+          setInitialSnapshot(JSON.parse(JSON.stringify(nextRows)));
+        } catch (err) {
+          console.error('Failed to auto-persist bank delete:', err);
+        }
+      }
+
+      toast.success(`Bank account for ${targetRow.bankName} deleted successfully`);
+    }
+    setAuthModalState({ isOpen: false, action: 'update', targetData: null });
+  };
+
   // Auto-fill account holder name with vendor name when vendor is selected and form is blank
   const prevVendorIdRef = useRef('');
   useEffect(() => {
@@ -325,9 +469,17 @@ export default function VendorBankDetailsFormPage() {
     }
   }, [selectedVendorId, currentVendor, isEditing, formState.accountHolderName, setFormState]);
 
-  // Preload account if ?bank=<id> is in URL or edit mode
+  // Preload account once when draftRows are loaded (does not loop or fight with user selection)
+  const preloadedBankRef = useRef(false);
   useEffect(() => {
-    if (draftRows.length > 0) {
+    if (selectedVendorId) {
+      preloadedBankRef.current = false;
+    }
+  }, [selectedVendorId]);
+
+  useEffect(() => {
+    if (!preloadedBankRef.current && draftRows.length > 0) {
+      preloadedBankRef.current = true;
       if (bankParamId) {
         const match = draftRows.find(
           (r) => r.bankDetailId === bankParamId || r.id === bankParamId
@@ -337,18 +489,11 @@ export default function VendorBankDetailsFormPage() {
           return;
         }
       }
-      if (isEditMode && editingIndex === -1) {
+      if (isEditMode) {
         handleStartEdit(draftRows[0]);
       }
     }
-  }, [bankParamId, draftRows, isEditMode, editingIndex, handleStartEdit]);
-
-  // Reset to clean Add form when in Add mode
-  useEffect(() => {
-    if (!isEditMode && isEditing) {
-      handleCancelEdit();
-    }
-  }, [isEditMode, isEditing, handleCancelEdit]);
+  }, [bankParamId, draftRows, isEditMode, handleStartEdit]);
 
   // Handle vendor dropdown change in Add mode
   const handleVendorSelect = (newVendorId) => {
@@ -482,6 +627,7 @@ export default function VendorBankDetailsFormPage() {
       <PageHeader
         title={isEditMode ? 'Edit Bank Details' : 'Add Bank Details'}
         subtitle="Manage bank accounts, payment routes, and IFSC codes for vendor settlements"
+        icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
           <button
             type="button"
@@ -494,6 +640,20 @@ export default function VendorBankDetailsFormPage() {
             />
             <span>Back to Bank Details</span>
           </button>
+        }
+        actions={
+          selectedVendorId ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(`/vendor-bank-details/${selectedVendorId}/view`)}
+              className="text-xs shadow-2xs"
+            >
+              <Eye size={14} className="mr-1.5" />
+              View Details
+            </Button>
+          ) : null
         }
       />
 
@@ -584,26 +744,26 @@ export default function VendorBankDetailsFormPage() {
       </Card>
 
       {/* ── 2. Bank Account Form Card ── */}
-      <Card padding="md" className="space-y-4 shadow-2xs">
+      <Card id="bank-account-form-card" padding="md" className="space-y-4 shadow-2xs scroll-mt-20">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <Landmark size={17} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-semibold text-heading">
                   {isEditing ? 'Edit Bank Account' : 'Add Bank Account'}
                 </h3>
                 {isEditing && (
-                  <Badge variant="pending" size="sm">
-                    Editing account #{editingIndex + 1}
+                  <Badge variant="pending" size="sm" className="font-medium">
+                    Editing: {formState.bankName || 'Account'} {formState.accountNumber ? `(•••• ${String(formState.accountNumber).slice(-4)})` : ''}
                   </Badge>
                 )}
               </div>
               <p className="text-2xs text-text-muted">
                 {isEditing
-                  ? 'Update bank account details in place'
+                  ? 'Update details below, or select any other bank from the Configured Bank Accounts grid below'
                   : 'Enter beneficiary bank details for payment processing'}
               </p>
             </div>
@@ -612,10 +772,10 @@ export default function VendorBankDetailsFormPage() {
           {isEditing && (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={handleCancelEdit}
-              className="text-xs self-start sm:self-auto"
+              className="text-xs self-start sm:self-auto shadow-2xs"
             >
               <X size={14} className="mr-1" />
               Cancel Edit
@@ -644,7 +804,7 @@ export default function VendorBankDetailsFormPage() {
                   id="bank-accountHolderName"
                   required
                   maxLength={150}
-                  value={formState.accountHolderName}
+                  value={formState.accountHolderName || ''}
                   onChange={(e) => handleFieldChange('accountHolderName', e.target.value)}
                   placeholder="e.g. Apex Precision Castings Pvt Ltd"
                   error={fieldErrors.accountHolderName}
@@ -658,7 +818,7 @@ export default function VendorBankDetailsFormPage() {
                   id="bank-accountType"
                   required
                   options={ACCOUNT_TYPE_OPTIONS}
-                  value={formState.accountType}
+                  value={formState.accountType || 'Current'}
                   onChange={(e) => handleFieldChange('accountType', e.target.value)}
                   placeholder="Select account type..."
                   searchPlaceholder="Search account types..."
@@ -674,7 +834,7 @@ export default function VendorBankDetailsFormPage() {
                   id="bank-bankName"
                   required
                   maxLength={100}
-                  value={formState.bankName}
+                  value={formState.bankName || ''}
                   onChange={(e) => handleFieldChange('bankName', e.target.value)}
                   placeholder="e.g. HDFC Bank"
                   error={fieldErrors.bankName}
@@ -688,7 +848,7 @@ export default function VendorBankDetailsFormPage() {
                   id="bank-branchName"
                   required
                   maxLength={100}
-                  value={formState.branchName}
+                  value={formState.branchName || ''}
                   onChange={(e) => handleFieldChange('branchName', e.target.value)}
                   placeholder="e.g. GIDC Industrial Estate Branch"
                   error={fieldErrors.branchName}
@@ -702,7 +862,7 @@ export default function VendorBankDetailsFormPage() {
                   id="bank-accountNumber"
                   required
                   maxLength={20}
-                  value={formState.accountNumber}
+                  value={formState.accountNumber || ''}
                   onChange={(e) => {
                     const val = e.target.value.replace(/\D/g, '');
                     handleFieldChange('accountNumber', val);
@@ -720,11 +880,28 @@ export default function VendorBankDetailsFormPage() {
                   id="bank-ifscCode"
                   required={currentVendor?.countryId === 'IN'}
                   maxLength={11}
-                  value={formState.ifscCode}
+                  value={formState.ifscCode || ''}
                   onChange={(e) => handleFieldChange('ifscCode', e.target.value.toUpperCase())}
                   placeholder="e.g. HDFC0001234"
                   className="font-mono tabular-nums uppercase"
                   error={fieldErrors.ifscCode}
+                />
+              </div>
+
+              {/* MICR Code (Optional) */}
+              <div>
+                <Input
+                  label="MICR Code (Optional)"
+                  id="bank-micrCode"
+                  maxLength={9}
+                  value={formState.micrCode || ''}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    handleFieldChange('micrCode', val);
+                  }}
+                  placeholder="9-digit MICR code (e.g. 400240012)"
+                  className="font-mono tabular-nums"
+                  error={fieldErrors.micrCode}
                 />
               </div>
 
@@ -734,7 +911,7 @@ export default function VendorBankDetailsFormPage() {
                   label="SWIFT / BIC Code (Optional)"
                   id="bank-swiftCode"
                   maxLength={11}
-                  value={formState.swiftCode}
+                  value={formState.swiftCode || ''}
                   onChange={(e) => handleFieldChange('swiftCode', e.target.value.toUpperCase())}
                   placeholder="8 or 11 characters (e.g. HDFCINBB)"
                   className="font-mono tabular-nums uppercase"
@@ -742,8 +919,48 @@ export default function VendorBankDetailsFormPage() {
                 />
               </div>
 
+              {/* IBAN (Optional) */}
+              <div>
+                <Input
+                  label="IBAN (Optional / International)"
+                  id="bank-iban"
+                  maxLength={34}
+                  value={formState.iban || ''}
+                  onChange={(e) => handleFieldChange('iban', e.target.value.toUpperCase())}
+                  placeholder="e.g. GB29NWBK60161331926819"
+                  className="font-mono tabular-nums uppercase"
+                  error={fieldErrors.iban}
+                />
+              </div>
+
+              {/* Branch Address */}
+              <div className="lg:col-span-2">
+                <Input
+                  label="Branch Address (Optional)"
+                  id="bank-branchAddress"
+                  maxLength={250}
+                  value={formState.branchAddress || ''}
+                  onChange={(e) => handleFieldChange('branchAddress', e.target.value)}
+                  placeholder="e.g. Floor 2, Commercial Tower, MG Road..."
+                  error={fieldErrors.branchAddress}
+                />
+              </div>
+
+              {/* Remarks */}
+              <div className="lg:col-span-2">
+                <Input
+                  label="Remarks (Optional)"
+                  id="bank-remarks"
+                  maxLength={250}
+                  value={formState.remarks || ''}
+                  onChange={(e) => handleFieldChange('remarks', e.target.value)}
+                  placeholder="e.g. Primary payout account for GST invoices & vendor disbursements"
+                  error={fieldErrors.remarks}
+                />
+              </div>
+
               {/* Account Status Switch */}
-              <div className="flex flex-col gap-1.5 pt-4">
+              <div className="flex flex-col gap-1.5 pt-2">
                 <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider">
                   Account Status
                 </label>
@@ -897,11 +1114,12 @@ export default function VendorBankDetailsFormPage() {
               {isEditing && (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   onClick={handleCancelEdit}
-                  className="text-xs"
+                  className="text-xs shadow-2xs"
                 >
+                  <X size={13} className="mr-1" />
                   Cancel
                 </Button>
               )}
@@ -909,7 +1127,7 @@ export default function VendorBankDetailsFormPage() {
                 type="button"
                 variant="primary"
                 size="sm"
-                onClick={handleAddOrUpdate}
+                onClick={handleFormActionClick}
                 className="text-xs font-semibold shadow-2xs"
               >
                 {isEditing ? (
@@ -940,7 +1158,7 @@ export default function VendorBankDetailsFormPage() {
                 Configured Bank Accounts ({draftRows.length})
               </h3>
               <p className="text-2xs text-text-muted">
-                Active accounts appear first. Saved accounts can be deactivated but cannot be deleted.
+                Active accounts appear first. Any account can be edited or deleted with security credentials authorization.
               </p>
             </div>
           </div>
@@ -996,10 +1214,12 @@ export default function VendorBankDetailsFormPage() {
                     return (
                       <tr
                         key={rowId}
+                        onClick={() => handleSelectAccountForEdit(row)}
                         className={[
-                          'transition-colors hover:bg-surface/50 group',
-                          isCurrentlyEditing ? 'bg-primary/5 ring-1 ring-primary/20' : '',
+                          'transition-colors cursor-pointer group',
+                          isCurrentlyEditing ? 'bg-primary/10 ring-2 ring-primary/40' : 'hover:bg-surface/70',
                         ].join(' ')}
+                        title="Click to load and edit this bank account"
                       >
                         {/* Bank & Branch */}
                         <Td className="py-2.5 px-3">
@@ -1008,13 +1228,18 @@ export default function VendorBankDetailsFormPage() {
                               <span className="font-semibold text-xs text-heading">
                                 {row.bankName}
                               </span>
-                              {isNewInSession && (
+                              {isCurrentlyEditing && (
+                                <Badge variant="pending" size="sm">
+                                  Selected
+                                </Badge>
+                              )}
+                              {isNewInSession && !isCurrentlyEditing && (
                                 <Badge variant="success" size="sm">
                                   New
                                 </Badge>
                               )}
-                              {isEditedInSession && (
-                                <Badge variant="pending" size="sm">
+                              {isEditedInSession && !isCurrentlyEditing && (
+                                <Badge variant="neutral" size="sm">
                                   Edited
                                 </Badge>
                               )}
@@ -1025,7 +1250,10 @@ export default function VendorBankDetailsFormPage() {
                             {hasAtts && (
                               <button
                                 type="button"
-                                onClick={() => setViewingAttachmentsRow(row)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewingAttachmentsRow(row);
+                                }}
                                 className="inline-flex items-center gap-1 text-2xs text-primary font-medium mt-0.5 hover:underline cursor-pointer text-left"
                                 title="Click to view attachments"
                               >
@@ -1052,7 +1280,10 @@ export default function VendorBankDetailsFormPage() {
                             </span>
                             <button
                               type="button"
-                              onClick={() => toggleRevealAccount(rowId)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleRevealAccount(rowId);
+                              }}
                               className="text-text-muted hover:text-heading p-1 rounded hover:bg-surface cursor-pointer transition-colors"
                               title={isRevealed ? 'Mask account number' : 'Reveal account number'}
                               aria-label={isRevealed ? 'Mask account number' : 'Reveal account number'}
@@ -1089,7 +1320,10 @@ export default function VendorBankDetailsFormPage() {
                           {hasAtts ? (
                             <button
                               type="button"
-                              onClick={() => setViewingAttachmentsRow(row)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewingAttachmentsRow(row);
+                              }}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-2xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/25 transition-colors cursor-pointer shadow-2xs"
                               title={`View ${row.attachments.length} attachment(s)`}
                             >
@@ -1099,7 +1333,10 @@ export default function VendorBankDetailsFormPage() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setViewingAttachmentsRow(row)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewingAttachmentsRow(row);
+                              }}
                               className="text-2xs text-text-muted hover:text-heading cursor-pointer inline-flex items-center gap-1"
                               title="No attachments. Click to inspect."
                             >
@@ -1140,7 +1377,10 @@ export default function VendorBankDetailsFormPage() {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => setViewingAttachmentsRow(row)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewingAttachmentsRow(row);
+                              }}
                               title={
                                 hasAtts
                                   ? `View attachments (${row.attachments.length})`
@@ -1156,32 +1396,54 @@ export default function VendorBankDetailsFormPage() {
                               <Paperclip size={13} />
                             </Button>
 
+                            {/* View Bank Details Button */}
+                            {selectedVendorId && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/vendor-bank-details/${selectedVendorId}/view?bank=${rowId}`);
+                                }}
+                                title="View bank details"
+                                className="text-text-muted hover:text-info hover:bg-surface h-7 w-7"
+                                aria-label={`View ${row.bankName}`}
+                              >
+                                <Eye size={13} />
+                              </Button>
+                            )}
+
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant={isCurrentlyEditing ? "primary" : "ghost"}
                               size="icon"
-                              onClick={() => handleStartEdit(row)}
-                              title="Edit account"
-                              className="text-text-muted hover:text-primary hover:bg-surface h-7 w-7"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectAccountForEdit(row);
+                              }}
+                              title={isCurrentlyEditing ? "Currently editing this account" : "Edit account"}
+                              className={isCurrentlyEditing ? "h-7 w-7 shadow-2xs" : "text-text-muted hover:text-primary hover:bg-surface h-7 w-7"}
                               aria-label={`Edit ${row.bankName}`}
                             >
                               <Pencil size={13} />
                             </Button>
 
-                            {/* Remove ONLY for session-added rows */}
-                            {isNewInSession && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRemove(rowId)}
-                                title="Remove unsaved account"
-                                className="text-text-muted hover:text-danger hover:bg-surface h-7 w-7"
-                                aria-label={`Remove unsaved ${row.bankName}`}
-                              >
-                                <Trash2 size={13} />
-                              </Button>
-                            )}
+                            {/* Delete bank account (Requires Auth) */}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePromptDeleteAccount(row);
+                              }}
+                              title="Delete bank account"
+                              className="text-text-muted hover:text-danger hover:bg-danger/10 h-7 w-7"
+                              aria-label={`Delete ${row.bankName}`}
+                            >
+                              <Trash2 size={13} />
+                            </Button>
                           </div>
                         </Td>
                       </tr>
@@ -1195,6 +1457,7 @@ export default function VendorBankDetailsFormPage() {
             <div className="block md:hidden space-y-3">
               {sortedGridRows.map((row) => {
                 const rowId = row.bankDetailId || row.id;
+                const isCurrentlyEditing = editingId === rowId;
                 const isRevealed = revealedIds.has(rowId);
                 const isNewInSession = !savedRowIds.has(rowId);
                 const hasAtts = Array.isArray(row.attachments) && row.attachments.length > 0;
@@ -1202,7 +1465,13 @@ export default function VendorBankDetailsFormPage() {
                 return (
                   <div
                     key={rowId}
-                    className="p-3.5 rounded-xl border border-border bg-surface/40 space-y-2.5 text-xs"
+                    onClick={() => handleSelectAccountForEdit(row)}
+                    className={[
+                      'p-3.5 rounded-xl border transition-all cursor-pointer space-y-2.5 text-xs',
+                      isCurrentlyEditing
+                        ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                        : 'border-border bg-surface/40 hover:bg-surface/80',
+                    ].join(' ')}
                   >
                     <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2">
                       <div>
@@ -1210,7 +1479,12 @@ export default function VendorBankDetailsFormPage() {
                           <span className="font-semibold text-xs text-heading">
                             {row.bankName}
                           </span>
-                          {isNewInSession && (
+                          {isCurrentlyEditing && (
+                            <Badge variant="pending" size="sm">
+                              Selected
+                            </Badge>
+                          )}
+                          {isNewInSession && !isCurrentlyEditing && (
                             <Badge variant="success" size="sm">
                               New
                             </Badge>
@@ -1222,7 +1496,10 @@ export default function VendorBankDetailsFormPage() {
                         {hasAtts && (
                           <button
                             type="button"
-                            onClick={() => setViewingAttachmentsRow(row)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewingAttachmentsRow(row);
+                            }}
                             className="inline-flex items-center gap-1 text-2xs text-primary font-medium mt-0.5 hover:underline cursor-pointer"
                           >
                             <Paperclip size={11} /> {row.attachments.length} attachment(s)
@@ -1234,7 +1511,10 @@ export default function VendorBankDetailsFormPage() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => setViewingAttachmentsRow(row)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingAttachmentsRow(row);
+                          }}
                           className={`h-7 w-7 ${
                             hasAtts ? 'text-primary hover:bg-primary/10' : 'text-text-muted/50'
                           }`}
@@ -1243,28 +1523,49 @@ export default function VendorBankDetailsFormPage() {
                         >
                           <Paperclip size={13} />
                         </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleStartEdit(row)}
-                          className="h-7 w-7 text-text-muted hover:text-primary"
-                          title="Edit account"
-                        >
-                          <Pencil size={13} />
-                        </Button>
-                        {isNewInSession && (
+                        {selectedVendorId && (
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleRemove(rowId)}
-                            className="h-7 w-7 text-text-muted hover:text-danger"
-                            title="Remove account"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/vendor-bank-details/${selectedVendorId}/view?bank=${rowId}`);
+                            }}
+                            className="h-7 w-7 text-text-muted hover:text-info"
+                            title="View bank details"
+                            aria-label={`View ${row.bankName}`}
                           >
-                            <Trash2 size={13} />
+                            <Eye size={13} />
                           </Button>
                         )}
+                        <Button
+                          type="button"
+                          variant={isCurrentlyEditing ? "primary" : "ghost"}
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectAccountForEdit(row);
+                          }}
+                          className={`h-7 w-7 ${isCurrentlyEditing ? '' : 'text-text-muted hover:text-primary'}`}
+                          title="Edit account"
+                        >
+                          <Pencil size={13} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePromptDeleteAccount(row);
+                          }}
+                          className="h-7 w-7 text-text-muted hover:text-danger hover:bg-danger/10"
+                          title="Delete account"
+                          aria-label={`Delete ${row.bankName}`}
+                        >
+                          <Trash2 size={13} />
+                        </Button>
                       </div>
                     </div>
 
@@ -1558,6 +1859,16 @@ export default function VendorBankDetailsFormPage() {
           </div>
         </div>
       </Modal>
+
+      {/* ── Security Auth Verification Modal (for Update & Delete actions) ── */}
+      <AuthVerificationModal
+        isOpen={authModalState.isOpen}
+        onClose={() => setAuthModalState({ isOpen: false, action: 'update', targetData: null })}
+        onSuccess={handleAuthSuccess}
+        action={authModalState.action}
+        bankAccount={authModalState.targetData || formState}
+        vendorName={currentVendor?.vendorName}
+      />
     </div>
   );
 }

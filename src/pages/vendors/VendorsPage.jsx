@@ -19,12 +19,13 @@ import {
   ChevronDown,
   Trash2,
   Pencil,
+  Eye,
   Phone,
   MapPin,
   SearchX,
   RotateCcw,
-  Truck,
 } from 'lucide-react';
+import { IconVendor } from '../../constants/icons';
 
 import {
   Button,
@@ -306,8 +307,8 @@ export default function VendorsPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 110,
-        size: 120,
+        minSize: 130,
+        size: 140,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -315,6 +316,17 @@ export default function VendorsPage() {
 
           return (
             <div className="flex items-center justify-end gap-1">
+              {/* View Ghost Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(`/vendors/${row.id}/effective-dates`, { state: { readOnly: true } })}
+                title="View vendor details"
+                className="text-text-muted hover:text-info hover:bg-surface"
+              >
+                <Eye size={15} aria-hidden="true" />
+              </Button>
+
               {/* Edit Ghost Button */}
               <Button
                 variant="ghost"
@@ -383,7 +395,7 @@ export default function VendorsPage() {
       <PageHeader
         title="Vendor Management"
         subtitle="Directory of approved suppliers, subcontractors, and material vendors."
-        icon={<Truck className="h-6 w-6 text-primary" aria-hidden="true" />}
+        icon={<IconVendor className="h-6 w-6 text-primary" aria-hidden="true" />}
         actions={
           <Button
             variant="primary"
@@ -733,8 +745,20 @@ export default function VendorsPage() {
                     </div>
                   </div>
 
+
+
                   {/* Action buttons footer */}
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`, { state: { readOnly: true } })}
+                      className="flex-1 text-xs"
+                    >
+                      <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                      View
+                    </Button>
+
                     <Button
                       variant="secondary"
                       size="sm"

@@ -17,6 +17,7 @@ import {
   ArrowDown,
   X,
 } from 'lucide-react';
+import { IconUOM } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -321,7 +322,7 @@ export default function UomPage() {
       {/* ── Top Header Bar ── */}
       <PageHeader
         title="Unit of Measurement (UOM)"
-        icon={Scale}
+        icon={IconUOM}
         subtitle="Manage measurement units, descriptions, and active status for procurement and inventory."
         actions={
           <Button

@@ -44,6 +44,7 @@ import {
   ChevronUp,
   ChevronDown,
 } from 'lucide-react';
+import { IconVendor } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -142,7 +143,7 @@ export default function VendorEffectiveDatesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getVendorById, updateVendorVersions, updateVendor } = useVendorsContext();
+  const { getVendorById, updateVendorVersions, updateVendor, toggleStatus } = useVendorsContext();
 
   const backPath = location.state?.from || '/vendors';
   const backLabel = location.state?.backLabel || 'Vendors';
@@ -230,6 +231,80 @@ export default function VendorEffectiveDatesPage() {
       toast.error('Failed to reject vendor. Please try again.');
     } finally {
       setIsSubmittingReject(false);
+    }
+  }
+
+  // Deactivate Modal States
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [deactivateComment, setDeactivateComment] = useState('');
+  const [deactivateError, setDeactivateError] = useState('');
+  const [isSubmittingDeactivate, setIsSubmittingDeactivate] = useState(false);
+
+  function handleOpenDeactivate() {
+    setDeactivateComment('');
+    setDeactivateError('');
+    setIsDeactivateModalOpen(true);
+  }
+
+  function handleCloseDeactivate() {
+    if (isSubmittingDeactivate) return;
+    setIsDeactivateModalOpen(false);
+    setDeactivateComment('');
+    setDeactivateError('');
+  }
+
+  async function handleConfirmDeactivate(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!vendor) return;
+
+    if (!deactivateComment.trim()) {
+      setDeactivateError('Inactive comment is compulsory when deactivating a vendor.');
+      return;
+    }
+
+    try {
+      setIsSubmittingDeactivate(true);
+      const now = formatAuditTimestamp();
+      await updateVendor(vendor.id, {
+        isActive: false,
+        inactiveComment: deactivateComment.trim(),
+        inactiveDate: now,
+      });
+      setIsDeactivateModalOpen(false);
+    } catch {
+      toast.error('Failed to update vendor status.');
+    } finally {
+      setIsSubmittingDeactivate(false);
+    }
+  }
+
+  // Activate Modal States
+  const [isActivateModalOpen, setIsActivateModalOpen] = useState(false);
+  const [isSubmittingActivate, setIsSubmittingActivate] = useState(false);
+
+  function handleOpenActivate() {
+    setIsActivateModalOpen(true);
+  }
+
+  function handleCloseActivate() {
+    if (isSubmittingActivate) return;
+    setIsActivateModalOpen(false);
+  }
+
+  async function handleConfirmActivate() {
+    if (!vendor) return;
+    try {
+      setIsSubmittingActivate(true);
+      await updateVendor(vendor.id, {
+        isActive: true,
+        inactiveComment: '',
+        inactiveDate: null,
+      });
+      setIsActivateModalOpen(false);
+    } catch {
+      toast.error('Failed to activate vendor.');
+    } finally {
+      setIsSubmittingActivate(false);
     }
   }
 
@@ -755,10 +830,13 @@ export default function VendorEffectiveDatesPage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  disabled={!vendor?.isActive}
                   onClick={() => handleStartEdit(row)}
-                  title="Edit this version"
+                  title={!vendor?.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : 'Edit this version'}
                   className={
-                    isSelected && mode === 'EDIT'
+                    !vendor?.isActive
+                      ? 'opacity-40 cursor-not-allowed text-text-muted'
+                      : isSelected && mode === 'EDIT'
                       ? 'bg-primary/15 text-primary'
                       : 'text-text-muted hover:text-primary hover:bg-surface'
                   }
@@ -771,7 +849,7 @@ export default function VendorEffectiveDatesPage() {
         },
       }),
     ],
-    [activeVersion, selectedVersion, mode, isReadOnly]
+    [activeVersion, selectedVersion, mode, isReadOnly, vendor?.isActive]
   );
 
   /* ── React Table Instance with Column Resizing Enabled ── */
@@ -815,6 +893,7 @@ export default function VendorEffectiveDatesPage() {
       <PageHeader
         title={vendor.vendorName}
         subtitle="Effective-dated version history, master details, and supporting documents"
+        icon={<IconVendor className="h-6 w-6 text-primary" aria-hidden="true" />}
         badge={
           <span className="font-mono text-xs font-bold px-2.5 py-0.5 bg-primary/10 text-primary rounded-md border border-primary/20">
             {vendor.vendorCode}
@@ -849,6 +928,49 @@ export default function VendorEffectiveDatesPage() {
               {vendor.approvalStatus || 'Pending'}
             </Badge>
 
+            {!isReadOnly && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => navigate(`/vendors/${vendor.id}/edit`)}
+                disabled={!vendor.isActive}
+                className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit master details.' : `Edit ${vendor.vendorName} Master details`}
+              >
+                <Pencil size={13} aria-hidden="true" />
+                Edit Vendor
+              </Button>
+            )}
+
+            {!isReadOnly && (vendor.approvalStatus || '').toLowerCase() === 'approved' && (
+              vendor.isActive ? (
+                <Button
+                  type="button"
+                  variant="danger-soft"
+                  size="sm"
+                  onClick={handleOpenDeactivate}
+                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title="Mark vendor inactive"
+                >
+                  <X size={13} className="stroke-[2.5]" aria-hidden="true" />
+                  Deactivate
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={handleOpenActivate}
+                  className="text-xs font-semibold transition-all h-8 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer bg-success hover:bg-success/90 text-white border-transparent"
+                  title="Re-activate vendor"
+                >
+                  <Check size={13} className="stroke-[2.5]" aria-hidden="true" />
+                  Activate
+                </Button>
+              )
+            )}
+
             {isFromApproval && (vendor.approvalStatus || '').toLowerCase() === 'pending' && (
               <div className="flex items-center gap-2 pl-2 border-l border-border">
                 <Button
@@ -880,6 +1002,28 @@ export default function VendorEffectiveDatesPage() {
         }
       />
 
+      {/* ── INACTIVE VENDOR NOTICE (SIMPLE & SINGLE) ── */}
+      {!vendor.isActive && (
+        <div className="rounded-xl border border-danger/30 bg-danger/[0.04] p-3.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+            <div className="p-1.5 rounded-lg bg-danger/10 text-danger shrink-0 mt-0.5 sm:mt-0">
+              <AlertCircle size={16} className="stroke-[2.2]" />
+            </div>
+            <div className="text-xs text-heading flex items-center gap-1.5 flex-wrap">
+              <span className="font-bold text-danger">Inactive Reason:</span>
+              <span className="font-medium text-heading">
+                {vendor.inactiveComment || 'No inactive reason specified.'}
+              </span>
+              {vendor.inactiveDate && (
+                <span className="text-2xs font-mono text-text-muted ml-1">
+                  ({vendor.inactiveDate})
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 2. EFFECTIVE DATES GRID / CARDS (CARD WITH RESIZABLE COLUMNS) ── */}
       <Card className="overflow-hidden shadow-xs border-border">
         <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -898,7 +1042,9 @@ export default function VendorEffectiveDatesPage() {
               variant="primary"
               size="sm"
               onClick={handleStartAdd}
+              disabled={!vendor.isActive}
               className="text-xs shrink-0 w-full sm:w-auto justify-center"
+              title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to add new effective dates.' : 'Add new effective date'}
             >
               <Plus size={14} className="mr-1.5" />
               Add New Effective Date
@@ -971,15 +1117,18 @@ export default function VendorEffectiveDatesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          disabled={!vendor?.isActive}
                           onClick={() => handleStartEdit(ver)}
-                          title="Edit this version"
+                          title={!vendor?.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : 'Edit this version'}
                           className={`h-7 w-7 ${
-                            isSelected && mode === 'EDIT'
+                            !vendor?.isActive
+                              ? 'opacity-40 cursor-not-allowed text-text-muted'
+                              : isSelected && mode === 'EDIT'
                               ? 'bg-primary/15 text-primary'
                               : 'text-text-muted hover:text-primary hover:bg-surface'
                           }`}
                         >
-                          <Pencil size={14} />
+                          <Pencil size={13} />
                         </Button>
                       )}
                     </div>
@@ -1176,7 +1325,9 @@ export default function VendorEffectiveDatesPage() {
                 variant="secondary"
                 size="sm"
                 onClick={() => handleStartEdit(selectedVersion)}
+                disabled={!vendor.isActive}
                 className="text-xs w-full sm:w-auto justify-center"
+                title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : 'Edit this version'}
               >
                 <Pencil size={13} className="mr-1.5" />
                 Edit this version
@@ -1186,11 +1337,11 @@ export default function VendorEffectiveDatesPage() {
             {(mode === 'EDIT' || mode === 'ADD') && (
               <>
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   onClick={handleCancel}
                   disabled={isSaving}
-                  className="text-xs"
+                  className="text-xs shadow-2xs"
                 >
                   <X size={13} className="mr-1.5" />
                   Cancel
@@ -1416,7 +1567,12 @@ export default function VendorEffectiveDatesPage() {
                     value={formData.effectiveDate}
                     onChange={handleInputChange}
                     error={formErrors.effectiveDate}
-                    hint={minAllowedEffectiveDate ? `Must be on or after ${formatDateDisplay(minAllowedEffectiveDate)}` : undefined}
+                    disabled={mode === 'EDIT'}
+                    hint={
+                      mode === 'EDIT'
+                        ? 'Effective date cannot be changed for an existing revision.'
+                        : (minAllowedEffectiveDate ? `Must be on or after ${formatDateDisplay(minAllowedEffectiveDate)}` : undefined)
+                    }
                     required
                   />
                 </div>
@@ -1781,10 +1937,13 @@ export default function VendorEffectiveDatesPage() {
             <div className="pt-4 border-t border-border flex items-center justify-end gap-2.5">
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
+                size="sm"
                 onClick={handleCancel}
                 disabled={isSaving}
+                className="shadow-2xs"
               >
+                <X size={14} className="mr-1.5" />
                 Cancel
               </Button>
               <Button
@@ -2093,6 +2252,154 @@ export default function VendorEffectiveDatesPage() {
               </Button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      {/* ── Deactivate Modal (With Compulsory Inactive Comment) ── */}
+      <Modal
+        isOpen={isDeactivateModalOpen}
+        onClose={handleCloseDeactivate}
+        title="Deactivate Vendor Account"
+        maxWidth="max-w-xl"
+      >
+        {vendor && (
+          <form onSubmit={handleConfirmDeactivate} className="space-y-4">
+            <div className="flex items-start gap-3.5 p-4 rounded-xl bg-surface/70 border border-border">
+              <div className="w-11 h-11 rounded-xl bg-danger/10 border border-danger/20 text-danger flex items-center justify-center shrink-0">
+                <Building2 size={20} aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-sm sm:text-base font-bold text-heading truncate">
+                    {vendor.vendorName}
+                  </h3>
+                  <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
+                    {vendor.vendorCode}
+                  </span>
+                </div>
+                <p className="text-xs text-text-muted mt-1">
+                  Deactivating this vendor will block purchase requisition and purchase order creation.
+                </p>
+              </div>
+            </div>
+
+            {/* Inactive Comment Field */}
+            <div className="space-y-1.5">
+              <label
+                htmlFor="page-deactivate-comment"
+                className="text-xs font-semibold text-heading block"
+              >
+                Reason for Inactivating <span className="text-danger">*</span>
+              </label>
+              <textarea
+                id="page-deactivate-comment"
+                rows={3}
+                required
+                value={deactivateComment}
+                onChange={(e) => {
+                  setDeactivateComment(e.target.value);
+                  if (deactivateError) setDeactivateError('');
+                }}
+                placeholder="Enter compulsory reason (e.g. Quality dispute, vendor requested suspension, contract expired)..."
+                className={`w-full rounded-xl border bg-bg text-heading text-xs p-3 placeholder:text-text-muted focus:ring-2 outline-none resize-none leading-relaxed transition-all ${
+                  deactivateError
+                    ? 'border-danger focus:border-danger focus:ring-danger/20'
+                    : 'border-border focus:border-danger focus:ring-danger/20'
+                }`}
+              />
+              {deactivateError && (
+                <span className="text-xs font-medium text-danger block">
+                  {deactivateError}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-danger/5 border border-danger/15 text-xs text-text-muted">
+              <AlertCircle size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
+              <span>
+                An Inactive reason is <strong>compulsory</strong>. It will be recorded and prominently shown on the vendor profile.
+              </span>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleCloseDeactivate}
+                disabled={isSubmittingDeactivate}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="danger"
+                size="md"
+                disabled={!deactivateComment.trim() || isSubmittingDeactivate}
+                loading={isSubmittingDeactivate}
+                className="flex items-center gap-1.5"
+              >
+                <X size={15} strokeWidth={2.5} />
+                Confirm Deactivation
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ── Activate Confirmation Modal ── */}
+      <Modal
+        isOpen={isActivateModalOpen}
+        onClose={handleCloseActivate}
+        title="Activate Vendor Account"
+        maxWidth="max-w-md"
+      >
+        {vendor && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3.5 p-4 rounded-xl bg-surface/70 border border-border">
+              <div className="w-11 h-11 rounded-xl bg-success/10 border border-success/20 text-success flex items-center justify-center shrink-0">
+                <CheckCircle2 size={22} className="stroke-[2.2]" aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-sm sm:text-base font-bold text-heading truncate">
+                    {vendor.vendorName}
+                  </h3>
+                  <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
+                    {vendor.vendorCode}
+                  </span>
+                </div>
+                <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                  Are you sure you want to mark this vendor as <strong>Active</strong>? This will re-enable purchase order creation and new effective date revisions.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleCloseActivate}
+                disabled={isSubmittingActivate}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={handleConfirmActivate}
+                loading={isSubmittingActivate}
+                className="flex items-center gap-1.5 bg-success hover:bg-success/90 text-white border-transparent"
+              >
+                <Check size={15} strokeWidth={2.5} />
+                Confirm Activation
+              </Button>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

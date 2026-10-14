@@ -32,6 +32,7 @@ import {
   Download,
   ExternalLink,
 } from 'lucide-react';
+import { IconVendor } from '../../constants/icons';
 
 import {
   Button,
@@ -114,9 +115,10 @@ const INITIAL_FORM = {
   notes: '',
   attachments: [],
   isActive: true,
+  inactiveComment: '',
 };
 
-function validateField(name, value) {
+function validateField(name, value, currentForm = {}) {
   const str = typeof value === 'string' ? value.trim() : '';
 
   switch (name) {
@@ -174,6 +176,11 @@ function validateField(name, value) {
     case 'address1':
       if (!str) return 'Address Line 1 is required.';
       return '';
+    case 'inactiveComment':
+      if (currentForm.isActive === false && !str) {
+        return 'Inactive comment is compulsory when vendor is marked inactive.';
+      }
+      return '';
     default:
       return '';
   }
@@ -209,8 +216,14 @@ function validateAll(form) {
     if (err) errors.gstNo = err;
   }
   if (form.website) {
-    const err = validateField('website', form.website);
+    const err = validateField('website', form.website, form);
     if (err) errors.website = err;
+  }
+
+  if (!form.isActive) {
+    if (!form.inactiveComment || !form.inactiveComment.trim()) {
+      errors.inactiveComment = 'Inactive comment is compulsory when vendor is marked inactive.';
+    }
   }
 
   return errors;
@@ -271,6 +284,7 @@ export default function VendorFormPage() {
           notes: existingVendor.notes || '',
           attachments: existingVendor.attachments ? [...existingVendor.attachments] : [],
           isActive: existingVendor.isActive !== undefined ? existingVendor.isActive : true,
+          inactiveComment: existingVendor.inactiveComment || '',
         };
         setForm(data);
         setInitialSnapshot(data);
@@ -330,11 +344,11 @@ export default function VendorFormPage() {
     if (name === 'gstNo' && typeof value === 'string') {
       const upper = value.toUpperCase();
       setForm((prev) => ({ ...prev, gstNo: upper }));
-      const err = validateField(name, upper);
+      const err = validateField(name, upper, form);
       if (err) setErrors((prev) => ({ ...prev, [name]: err }));
       return;
     }
-    const err = validateField(name, value);
+    const err = validateField(name, value, form);
     if (err) setErrors((prev) => ({ ...prev, [name]: err }));
   }
 
@@ -502,7 +516,7 @@ export default function VendorFormPage() {
       {/* ── Top Page Header & Navigation ── */}
       <PageHeader
         title={isEdit ? `Edit Vendor: ${existingVendor?.vendorName}` : 'Add New Vendor'}
-        icon={<Building2 className="h-6 w-6 text-primary" aria-hidden="true" />}
+        icon={<IconVendor className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
           <button
             type="button"
@@ -592,7 +606,12 @@ export default function VendorFormPage() {
               onChange={handleChange}
               onBlur={handleBlur}
               error={errors.effectiveDate}
-              hint="Initial effective start date"
+              disabled={isEdit}
+              hint={
+                isEdit
+                  ? 'Effective date cannot be changed for an existing vendor. Use Effective Dates page to add a new version.'
+                  : 'Initial effective start date'
+              }
             />
           </div>
 
@@ -605,7 +624,16 @@ export default function VendorFormPage() {
               <StatusSwitch
                 id="vendor-status-switch"
                 checked={form.isActive}
-                onChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
+                onChange={(checked) => {
+                  setForm((prev) => ({ ...prev, isActive: checked }));
+                  if (checked) {
+                    setErrors((prev) => {
+                      const next = { ...prev };
+                      delete next.inactiveComment;
+                      return next;
+                    });
+                  }
+                }}
               />
               <span className="text-xs text-text-muted">
                 {form.isActive
@@ -613,6 +641,45 @@ export default function VendorFormPage() {
                   : 'Vendor is inactive and temporarily blocked from PO creation.'}
               </span>
             </div>
+
+            {/* Inactive Comment (Compulsory when Inactive) */}
+            {!form.isActive && (
+              <div className="mt-4 p-4 rounded-xl border border-danger/30 bg-danger/[0.04] space-y-2 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-danger font-semibold text-xs uppercase tracking-wider">
+                  <AlertCircle size={15} className="shrink-0" />
+                  <span>Reason for Inactivation (Compulsory)</span>
+                  <span className="text-danger" aria-hidden="true">*</span>
+                </div>
+                <p className="text-2xs text-text-muted">
+                  Please provide a detailed comment or reason why this vendor is being deactivated. This will be visible on the vendor's profile and audit logs.
+                </p>
+                <div className="flex flex-col gap-1 pt-1">
+                  <label htmlFor="inactiveComment" className="text-xs font-semibold text-heading">
+                    Inactive Comment <span className="text-danger">*</span>
+                  </label>
+                  <textarea
+                    id="inactiveComment"
+                    name="inactiveComment"
+                    rows={3}
+                    required
+                    placeholder="e.g. Disqualified due to repeated quality rejections on batch #4810; vendor placed on hold until audit clearance..."
+                    value={form.inactiveComment || ''}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    className={`w-full rounded-lg border bg-bg text-text text-sm p-3 placeholder:text-text-muted transition-colors duration-150 ease-in-out outline-none focus:ring-2 ${
+                      errors.inactiveComment
+                        ? 'border-danger focus:ring-danger/20 focus:border-danger'
+                        : 'border-border focus:ring-primary/20 focus:border-primary hover:border-text-muted'
+                    }`}
+                  />
+                  {errors.inactiveComment && (
+                    <span className="text-xs font-medium text-danger mt-0.5">
+                      {errors.inactiveComment}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </Card>

@@ -5,13 +5,14 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Eye, Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '../../components/ui';
 import {
   getContactTypeBadgeVariant,
   getCountryName,
 } from '../../mocks/clients';
 import { formatDate } from '../../utils/dateUtils';
+import { formatDateDisplay, getEffectiveDateStatus } from '../../utils/effectiveDateUtils';
 
 const columnHelper = createColumnHelper();
 
@@ -25,18 +26,22 @@ export function useClientsTable({ onDeleteClick }) {
       size: 280,
       cell: (info) => {
         const row = info.row.original;
+        const id = row.clientId || row.id;
         return (
-          <div className="flex flex-col py-0.5 max-w-xs">
+          <Link
+            to={`/clients/${id}`}
+            className="flex flex-col py-0.5 max-w-xs group cursor-pointer"
+            title={`View ${row.companyName}`}
+          >
             <span
-              className="font-semibold text-heading text-xs sm:text-sm leading-snug truncate"
-              title={row.companyName}
+              className="font-semibold text-heading text-xs sm:text-sm leading-snug truncate group-hover:text-primary transition-colors"
             >
               {row.companyName}
             </span>
             <span className="text-text-muted text-xs truncate mt-0.5">
               {row.email || row.billingName || '—'}
             </span>
-          </div>
+          </Link>
         );
       },
     }),
@@ -147,12 +152,48 @@ export function useClientsTable({ onDeleteClick }) {
       ),
     }),
 
+    /* 6. EFFECTIVE DATE */
+    columnHelper.accessor(
+      (row) => row.effectiveDate || row.activeVersion?.effectiveDate || (row.createdAt ? row.createdAt.slice(0, 10) : ''),
+      {
+        id: 'effectiveDate',
+        header: 'EFFECTIVE DATE',
+        minSize: 145,
+        size: 165,
+        cell: (info) => {
+          const row = info.row.original;
+          const id = row.clientId || row.id;
+          const effectiveDate =
+            row.effectiveDate ||
+            row.activeVersion?.effectiveDate ||
+            (row.createdAt ? row.createdAt.slice(0, 10) : '');
+          const statusInfo = getEffectiveDateStatus(effectiveDate);
+          return (
+            <Link
+              to={`/clients/${id}/effective-dates`}
+              className="flex flex-col py-0.5 gap-1 group/eff hover:opacity-90 transition-opacity"
+              title="Click to view effective date history"
+            >
+              <span className="font-mono text-xs text-heading font-medium group-hover/eff:text-primary transition-colors">
+                {effectiveDate ? formatDateDisplay(effectiveDate) : '—'}
+              </span>
+              <div>
+                <Badge variant={statusInfo.badgeVariant} className="text-2xs px-1.5 py-0">
+                  {statusInfo.label}
+                </Badge>
+              </div>
+            </Link>
+          );
+        },
+      }
+    ),
+
     /* 7. ACTIONS */
     columnHelper.display({
       id: 'actions',
       header: 'ACTIONS',
-      size: 110,
-      minSize: 100,
+      size: 130,
+      minSize: 120,
       enableSorting: false,
       enableResizing: false,
       cell: (info) => {
@@ -161,14 +202,7 @@ export function useClientsTable({ onDeleteClick }) {
         return (
           <div className="flex items-center justify-end gap-1">
             <Link
-              to={`/clients/${id}`}
-              className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
-              title="View Client Details"
-            >
-              <Eye size={15} />
-            </Link>
-            <Link
-              to={`/clients/${id}/edit`}
+              to={`/clients/${id}/effective-dates`}
               className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
               title="Edit Client"
             >

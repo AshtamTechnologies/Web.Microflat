@@ -21,6 +21,7 @@ import {
   ArrowDown,
   X,
 } from 'lucide-react';
+import { IconRegions } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -535,7 +536,7 @@ export default function RegionsPage() {
       {/* ── Top Header Bar ── */}
       <PageHeader
         title="Regions"
-        icon={MapPin}
+        icon={IconRegions}
         subtitle="Manage hierarchical sales territories, domestic zones, and export distribution regions."
         actions={
           <Button

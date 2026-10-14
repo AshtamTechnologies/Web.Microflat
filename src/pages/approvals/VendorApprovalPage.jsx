@@ -38,6 +38,7 @@ import {
   User,
   Eye,
 } from 'lucide-react';
+import { IconVendorApproval } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -356,6 +357,7 @@ export default function VendorApprovalPage() {
       <PageHeader
         title="Vendor Approval"
         subtitle="Vendors awaiting review. Click the View button to inspect complete vendor documentation before deciding."
+        icon={<IconVendorApproval className="h-6 w-6 text-primary" aria-hidden="true" />}
         badge={
           <Badge variant="pending" size="sm" className="ml-2 gap-1">
             <Clock size={12} className="shrink-0" />

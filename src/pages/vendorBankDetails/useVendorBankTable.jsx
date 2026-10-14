@@ -1,34 +1,56 @@
-/**
- * useVendorBankTable.jsx — Custom hook managing columns, sorting, filtering, and handlers for VendorBankDetailsPage.
- */
-
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Pencil, Paperclip } from 'lucide-react';
+import { Pencil, Paperclip, Trash2, Eye } from 'lucide-react';
 import { Badge, Button } from '../../components/ui';
 import { formatDate } from '../../utils/dateUtils';
 
+export const STATUS_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Statuses' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'INACTIVE', label: 'Inactive' },
+];
+
 const columnHelper = createColumnHelper();
 
-export function useVendorBankTable({ allBanks = [], toggleBankActive, onViewAttachments }) {
+export function useVendorBankTable({
+  allBanks = [],
+  toggleBankActive,
+  onViewAttachments,
+  onDeleteBank,
+}) {
   const navigate = useNavigate();
 
   // Search and Filter states
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
+  const [vendorFilter, setVendorFilter] = useState('ALL'); // 'ALL' | vendorId
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+
+  // Reset all filters and pagination back to page 1
+  const resetFilters = useCallback(() => {
+    setSearch('');
+    setStatusFilter('ALL');
+    setVendorFilter('ALL');
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+  }, []);
 
   // Filtered dataset
   const filteredData = useMemo(() => {
     const q = search.trim().toLowerCase();
 
     return allBanks.filter((bank) => {
+      // Vendor filter
+      if (vendorFilter && vendorFilter !== 'ALL' && String(bank.vendorId).trim() !== String(vendorFilter).trim()) {
+        return false;
+      }
+
       // Status filter
-      if (statusFilter === 'ACTIVE' && !bank.isActive) return false;
-      if (statusFilter === 'INACTIVE' && bank.isActive) return false;
+      const st = (statusFilter || '').toUpperCase();
+      if (st === 'ACTIVE' && !Boolean(bank.isActive)) return false;
+      if (st === 'INACTIVE' && Boolean(bank.isActive)) return false;
 
       // Text search
       if (!q) return true;
@@ -47,7 +69,7 @@ export function useVendorBankTable({ allBanks = [], toggleBankActive, onViewAtta
 
       return matchesSearch;
     });
-  }, [allBanks, search, statusFilter]);
+  }, [allBanks, search, statusFilter, vendorFilter]);
 
   // Mask account number helper: "•••• 4821"
   const maskAccountNumber = (num) => {
@@ -68,17 +90,22 @@ export function useVendorBankTable({ allBanks = [], toggleBankActive, onViewAtta
         size: 220,
         cell: (info) => {
           const row = info.row.original;
+          const bankId = row.bankDetailId || row.id;
           return (
-            <div className="flex flex-col min-w-0 py-0.5">
+            <Link
+              to={`/vendor-bank-details/${row.vendorId}/view?bank=${bankId}`}
+              className="flex flex-col min-w-0 py-0.5 group/vendor"
+              title={`View all bank details for ${row.vendorName}`}
+            >
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-mono tabular-nums font-semibold text-2xs text-heading bg-surface border border-border px-1.5 py-0.5 rounded shadow-2xs shrink-0">
+                <span className="font-mono tabular-nums font-semibold text-2xs text-heading bg-surface group-hover/vendor:border-primary/50 border border-border px-1.5 py-0.5 rounded shadow-2xs shrink-0 transition-colors">
                   {row.vendorCode}
                 </span>
-                <span className="font-semibold text-xs text-heading truncate" title={row.vendorName}>
+                <span className="font-semibold text-xs text-heading group-hover/vendor:text-primary truncate transition-colors">
                   {row.vendorName}
                 </span>
               </div>
-            </div>
+            </Link>
           );
         },
       }),
@@ -265,6 +292,16 @@ export function useVendorBankTable({ allBanks = [], toggleBankActive, onViewAtta
               <Button
                 variant="ghost"
                 size="icon"
+                onClick={() => navigate(`/vendor-bank-details/${row.vendorId}/view?bank=${bankId}`)}
+                title="View bank details"
+                className="text-text-muted hover:text-info hover:bg-surface h-8 w-8 inline-flex items-center justify-center rounded-lg cursor-pointer"
+                aria-label={`View bank details for ${row.vendorName}`}
+              >
+                <Eye size={14} aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => navigate(`/vendor-bank-details/${row.vendorId}/edit?bank=${bankId}`)}
                 title="Edit bank account"
                 className="text-text-muted hover:text-primary hover:bg-surface h-8 w-8 inline-flex items-center justify-center rounded-lg cursor-pointer"
@@ -272,12 +309,24 @@ export function useVendorBankTable({ allBanks = [], toggleBankActive, onViewAtta
               >
                 <Pencil size={14} aria-hidden="true" />
               </Button>
+              {onDeleteBank && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDeleteBank(row)}
+                  title="Delete bank account"
+                  className="text-text-muted hover:text-danger hover:bg-danger/10 h-8 w-8 inline-flex items-center justify-center rounded-lg cursor-pointer"
+                  aria-label={`Delete bank account for ${row.vendorName}`}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                </Button>
+              )}
             </div>
           );
         },
       }),
     ],
-    [navigate, toggleBankActive, onViewAttachments]
+    [navigate, toggleBankActive, onViewAttachments, onDeleteBank]
   );
 
   return {
@@ -287,12 +336,15 @@ export function useVendorBankTable({ allBanks = [], toggleBankActive, onViewAtta
     setSearch,
     statusFilter,
     setStatusFilter,
+    vendorFilter,
+    setVendorFilter,
     sorting,
     setSorting,
     columnSizing,
     setColumnSizing,
     pagination,
     setPagination,
+    resetFilters,
     maskAccountNumber,
   };
 }

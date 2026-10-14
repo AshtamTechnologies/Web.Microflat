@@ -13,6 +13,7 @@ import VendorEffectiveDatesPage from './pages/vendors/VendorEffectiveDatesPage';
 import { VendorsProvider } from './context/VendorsContext';
 import VendorBankDetailsPage from './pages/vendorBankDetails/VendorBankDetailsPage';
 import VendorBankDetailsFormPage from './pages/vendorBankDetails/VendorBankDetailsFormPage';
+import VendorBankDetailsViewPage from './pages/vendorBankDetails/VendorBankDetailsViewPage';
 import { VendorBankDetailsProvider } from './context/VendorBankDetailsContext';
 
 import PurchaseRequisition from './pages/PurchaseRequisition/PurchaseRequisition';
@@ -51,6 +52,7 @@ import { UserSessionsProvider } from './context/UserSessionsContext';
 import ClientsPage from './pages/clients/ClientsPage';
 import ClientFormPage from './pages/clients/ClientFormPage';
 import ClientViewPage from './pages/clients/ClientViewPage';
+import ClientEffectiveDatesPage from './pages/clients/ClientEffectiveDatesPage';
 import { ClientsProvider } from './context/ClientsContext';
 import ScrollToTop from './components/common/ScrollToTop';
 
@@ -112,13 +114,16 @@ export default function App() {
           {/* Vendor Bank Details Routes */}
           <Route path="/vendor-bank-details" element={<VendorBankDetailsPage />} />
           <Route path="/vendor-bank-details/new" element={<VendorBankDetailsFormPage />} />
+          <Route path="/vendor-bank-details/:vendorId" element={<VendorBankDetailsViewPage />} />
+          <Route path="/vendor-bank-details/:vendorId/view" element={<VendorBankDetailsViewPage />} />
           <Route path="/vendor-bank-details/:vendorId/edit" element={<VendorBankDetailsFormPage />} />
 
           {/* Client Routes */}
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/clients/new" element={<ClientFormPage />} />
-          <Route path="/clients/:id" element={<ClientViewPage />} />
-          <Route path="/clients/:id/edit" element={<ClientFormPage />} />
+          <Route path="/clients/:id" element={<ClientEffectiveDatesPage />} />
+          <Route path="/clients/:id/edit" element={<ClientEffectiveDatesPage />} />
+          <Route path="/clients/:id/effective-dates" element={<ClientEffectiveDatesPage />} />
 
           {/* Purchase Requisition Routes */}
           <Route path="/purchase-requisition" element={<PurchaseRequisition />} />

@@ -43,6 +43,7 @@ import {
   MapPin,
   Package,
 } from 'lucide-react';
+import { IconInquiry } from '../../constants/icons';
 
 import {
   Button,
@@ -288,6 +289,7 @@ export default function InquiryViewPage() {
       {/* ── Top Header & Actions ── */}
       <PageHeader
         title={inquiry.InquiryNo}
+        icon={<IconInquiry className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
           <button
             type="button"

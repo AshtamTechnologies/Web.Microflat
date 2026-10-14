@@ -22,6 +22,7 @@ import {
   Layers,
   X,
 } from 'lucide-react';
+import { IconDocumentTypes } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -380,7 +381,7 @@ export default function DocumentTypesPage() {
       {/* ── Top Header Bar ── */}
       <PageHeader
         title="Inquiry Document Types"
-        icon={FileCheck}
+        icon={IconDocumentTypes}
         subtitle="Configure allowed document attachments, allowed file extensions, file size limits & mandatory RFQ rules."
         actions={
           <Button

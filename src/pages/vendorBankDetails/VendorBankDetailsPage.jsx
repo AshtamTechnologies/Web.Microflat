@@ -21,13 +21,16 @@ import {
   SearchX,
   Landmark,
   Pencil,
+  Trash2,
   Paperclip,
   FileText,
   Image as ImageIcon,
   Eye,
   Download,
   X,
+  RotateCcw,
 } from 'lucide-react';
+import { IconBankDetails } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -40,9 +43,12 @@ import {
   Th,
   Td,
   PageHeader,
+  SearchableSelect,
 } from '../../components/ui';
+import { useVendorsContext } from '../../context/VendorsContext';
 import { useVendorBankDetails } from '../../context/VendorBankDetailsContext';
-import { useVendorBankTable } from './useVendorBankTable.jsx';
+import { useVendorBankTable, STATUS_FILTER_OPTIONS } from './useVendorBankTable.jsx';
+import AuthVerificationModal from './components/AuthVerificationModal';
 import { formatDate } from '../../utils/dateUtils';
 
 function getFileIcon(fileName = '', fileType = '') {
@@ -64,12 +70,36 @@ function getFileIcon(fileName = '', fileType = '') {
 
 export default function VendorBankDetailsPage() {
   const navigate = useNavigate();
-  const { getAllBanks, toggleBankActive } = useVendorBankDetails();
+  const { getAllBanks, toggleBankActive, deleteBankDetail } = useVendorBankDetails();
+  const { allVendors = [] } = useVendorsContext();
 
   // Simulated initial loading delay
   const [loading, setLoading] = useState(true);
   const [viewingAttachmentsRow, setViewingAttachmentsRow] = useState(null);
   const [previewingFile, setPreviewingFile] = useState(null);
+
+  // Security Auth Modal State for deletion
+  const [authModalState, setAuthModalState] = useState({
+    isOpen: false,
+    bank: null,
+  });
+
+  const handleDeleteRequest = (bankRow) => {
+    setAuthModalState({
+      isOpen: true,
+      bank: bankRow,
+    });
+  };
+
+  const handleAuthDeleteSuccess = () => {
+    if (!authModalState.bank) return;
+    const bankId = authModalState.bank.bankDetailId || authModalState.bank.id;
+    if (deleteBankDetail) {
+      deleteBankDetail(bankId);
+    }
+    toast.success(`Bank account for ${authModalState.bank.bankName} deleted successfully`);
+    setAuthModalState({ isOpen: false, bank: null });
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 300);
@@ -78,6 +108,36 @@ export default function VendorBankDetailsPage() {
 
   const allBanks = useMemo(() => getAllBanks(), [getAllBanks]);
 
+  // Options for Vendor filter dropdown
+  const vendorOptions = useMemo(() => {
+    const list = [{ value: 'ALL', label: 'All Vendors' }];
+    const seen = new Set();
+
+    if (Array.isArray(allVendors)) {
+      allVendors.forEach((v) => {
+        seen.add(String(v.id));
+        list.push({
+          value: String(v.id),
+          label: `${v.vendorCode} – ${v.vendorName}`,
+        });
+      });
+    }
+
+    if (Array.isArray(allBanks)) {
+      allBanks.forEach((b) => {
+        if (b.vendorId && !seen.has(String(b.vendorId))) {
+          seen.add(String(b.vendorId));
+          list.push({
+            value: String(b.vendorId),
+            label: `${b.vendorCode || b.vendorId} – ${b.vendorName || 'Vendor ' + b.vendorId}`,
+          });
+        }
+      });
+    }
+
+    return list;
+  }, [allVendors, allBanks]);
+
   const {
     columns,
     filteredData,
@@ -85,20 +145,32 @@ export default function VendorBankDetailsPage() {
     setSearch,
     statusFilter,
     setStatusFilter,
+    vendorFilter,
+    setVendorFilter,
     sorting,
     setSorting,
     columnSizing,
     setColumnSizing,
     pagination,
     setPagination,
+    resetFilters,
     maskAccountNumber,
   } = useVendorBankTable({
     allBanks,
     toggleBankActive,
     onViewAttachments: setViewingAttachmentsRow,
+    onDeleteBank: handleDeleteRequest,
   });
 
-  const hasActiveFilters = Boolean(search.trim() || statusFilter !== 'ALL');
+  const hasActiveFilters = Boolean(
+    (search && search.trim() !== '') ||
+    (statusFilter && statusFilter !== 'ALL') ||
+    (vendorFilter && vendorFilter !== 'ALL')
+  );
+
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+  }, [search, statusFilter, vendorFilter, setPagination]);
 
   const table = useReactTable({
     data: filteredData,
@@ -125,17 +197,13 @@ export default function VendorBankDetailsPage() {
   const startRow = totalRows === 0 ? 0 : pageIndex * pageSize + 1;
   const endRow = Math.min((pageIndex + 1) * pageSize, totalRows);
 
-  const resetFilters = () => {
-    setSearch('');
-    setStatusFilter('ALL');
-  };
-
   return (
     <div className="space-y-6 pb-8">
       {/* ── Page Header ── */}
       <PageHeader
         title="Vendor Bank Details"
         subtitle="Overview of bank accounts, IFSC, and payment routing across all registered vendors"
+        icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
         actions={
           <Button
             type="button"
@@ -149,46 +217,65 @@ export default function VendorBankDetailsPage() {
         }
       />
 
-      {/* ── Toolbar: Search & Status Filters ── */}
+      {/* ── Toolbar: Search, Vendor Filter, Status Filter & Reset Filters ── */}
       <Card padding="sm" className="shadow-2xs">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          {/* Search box */}
-          <div className="w-full md:w-96">
-            <Input
-              id="bank-search-input"
-              type="search"
-              placeholder="Search by vendor, bank, account no, IFSC..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              leftIcon={<Search size={16} className="text-text-muted" aria-hidden="true" />}
-              aria-label="Search bank details"
-            />
-          </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center flex-1 gap-3 flex-wrap">
+            {/* Search box */}
+            <div className="w-full sm:w-64 lg:w-72">
+              <Input
+                id="bank-search-input"
+                type="search"
+                placeholder="Search bank, account no, IFSC..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                leftIcon={<Search size={16} className="text-text-muted" aria-hidden="true" />}
+                aria-label="Search bank details"
+              />
+            </div>
 
-          {/* Status filter chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
-            {[
-              { id: 'ALL', label: 'All Accounts' },
-              { id: 'ACTIVE', label: 'Active' },
-              { id: 'INACTIVE', label: 'Inactive' },
-            ].map((chip) => {
-              const isSelected = statusFilter === chip.id;
-              return (
-                <button
-                  key={chip.id}
-                  type="button"
-                  onClick={() => setStatusFilter(chip.id)}
-                  className={[
-                    'px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors select-none cursor-pointer whitespace-nowrap',
-                    isSelected
-                      ? 'bg-primary text-white shadow-2xs'
-                      : 'bg-surface text-text-muted hover:text-heading hover:bg-surface/80 border border-border',
-                  ].join(' ')}
-                >
-                  {chip.label}
-                </button>
-              );
-            })}
+            {/* Vendor Filter using SearchableSelect */}
+            <div className="w-full sm:w-60 lg:w-72">
+              <SearchableSelect
+                id="bank-vendor-filter"
+                value={vendorFilter}
+                onChange={(e) => setVendorFilter(e.target.value)}
+                options={vendorOptions}
+                placeholder="All Vendors"
+                searchPlaceholder="Search vendor code or name..."
+                emptyText="No vendors found"
+                aria-label="Filter bank details by vendor"
+              />
+            </div>
+
+            {/* Status Filter using SearchableSelect */}
+            <div className="w-full sm:w-44">
+              <SearchableSelect
+                id="bank-status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                options={STATUS_FILTER_OPTIONS}
+                placeholder="All Statuses"
+                searchPlaceholder="Search statuses..."
+                emptyText="No matching status"
+                aria-label="Filter bank details by status"
+              />
+            </div>
+
+            {/* Reset Filters button */}
+            {hasActiveFilters && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={resetFilters}
+                className="text-xs text-text-muted hover:text-danger flex items-center gap-1.5 h-10 px-3 cursor-pointer self-start sm:self-auto"
+                title="Reset active filters"
+              >
+                <RotateCcw size={14} className="mr-1" />
+                Reset Filters
+              </Button>
+            )}
           </div>
         </div>
       </Card>
@@ -465,12 +552,32 @@ export default function VendorBankDetailsPage() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      onClick={() => navigate(`/vendor-bank-details/${bank.vendorId}/view?bank=${bankId}`)}
+                      className="h-8 w-8 text-text-muted hover:text-info hover:bg-surface"
+                      title="View bank details"
+                      aria-label={`View ${bank.bankName} account for ${bank.vendorName}`}
+                    >
+                      <Eye size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => navigate(`/vendor-bank-details/${bank.vendorId}/edit?bank=${bankId}`)}
-                      className="h-8 w-8 text-text-muted hover:text-primary"
+                      className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface"
                       title="Edit account"
                       aria-label={`Edit ${bank.bankName} account for ${bank.vendorName}`}
                     >
                       <Pencil size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteRequest(bank)}
+                      className="h-8 w-8 text-text-muted hover:text-danger hover:bg-danger/10"
+                      title="Delete account"
+                      aria-label={`Delete ${bank.bankName} account for ${bank.vendorName}`}
+                    >
+                      <Trash2 size={14} />
                     </Button>
                   </div>
                 </div>
@@ -678,6 +785,16 @@ export default function VendorBankDetailsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* ── Security Auth Verification Modal for Account Deletion ── */}
+      <AuthVerificationModal
+        isOpen={authModalState.isOpen}
+        onClose={() => setAuthModalState({ isOpen: false, bank: null })}
+        onSuccess={handleAuthDeleteSuccess}
+        action="delete"
+        bankAccount={authModalState.bank}
+        vendorName={authModalState.bank?.vendorName}
+      />
     </div>
   );
 }

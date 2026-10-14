@@ -24,6 +24,7 @@ import {
   User,
   Shield,
 } from 'lucide-react';
+import { IconUsers } from '../../constants/icons';
 
 import {
   Card,
@@ -144,6 +145,7 @@ export default function UserViewPage() {
       {/* ── Top Navigation & Actions Bar ── */}
       <PageHeader
         title={`${user.firstName} ${user.lastName}`}
+        icon={<IconUsers className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={{
           onClick: () => navigate('/users'),
           label: 'Back to Users',

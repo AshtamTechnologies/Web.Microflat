@@ -7,6 +7,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { mockClients } from '../../mocks/clients';
+import { getActiveClientVersion } from '../../utils/clientVersions';
 
 let nextClientNumber = mockClients.length + 1;
 
@@ -16,11 +17,45 @@ export function useClients() {
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
   const [contactTypeFilter, setContactTypeFilter] = useState('ALL'); // 'ALL' | 'Customer' | ...
 
+  /* ── Augmented clients list with activeVersion spread ── */
+  const augmentedClients = useMemo(() => {
+    return clients.map((c) => {
+      const activeVersion = getActiveClientVersion(c);
+      const effDate =
+        c.effectiveDate ||
+        activeVersion?.effectiveDate ||
+        (c.createdAt ? c.createdAt.slice(0, 10) : '');
+
+      return {
+        ...c,
+        ...(activeVersion
+          ? {
+              effectiveDate: effDate,
+              companyName: activeVersion.companyName || c.companyName,
+              billingName: activeVersion.billingName || c.billingName,
+              contactTypeId: activeVersion.contactTypeId || c.contactTypeId,
+              email: activeVersion.email || c.email,
+              gstNo: activeVersion.gstNo || c.gstNo,
+              paymentTerms: activeVersion.paymentTerms || c.paymentTerms,
+              deliveryTerms: activeVersion.deliveryTerms || c.deliveryTerms,
+              comments: activeVersion.comments || c.comments,
+            }
+          : {
+              effectiveDate: effDate,
+            }),
+        activeVersion,
+        effectiveDate: effDate,
+        effectiveVersions: c.effectiveVersions || (activeVersion ? [activeVersion] : []),
+        id: c.clientId || c.id,
+      };
+    });
+  }, [clients]);
+
   /* ── Filtered clients list ── */
   const filteredClients = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    return clients.filter((client) => {
+    return augmentedClients.filter((client) => {
       // 1. Text Search across company, billing, email, GST, city, and contacts
       if (q) {
         const matchesCompany = client.companyName?.toLowerCase().includes(q);
@@ -59,7 +94,7 @@ export function useClients() {
 
       return true;
     });
-  }, [clients, search, statusFilter, contactTypeFilter]);
+  }, [augmentedClients, search, statusFilter, contactTypeFilter]);
 
   /* ── Reset filters helper ── */
   const resetFilters = useCallback(() => {
@@ -72,9 +107,9 @@ export function useClients() {
   const getClientById = useCallback(
     (id) => {
       if (!id) return null;
-      return clients.find((c) => c.clientId === id || c.id === id) || null;
+      return augmentedClients.find((c) => c.clientId === id || c.id === id) || null;
     },
-    [clients]
+    [augmentedClients]
   );
 
   /* ── Add new client ── */
@@ -82,11 +117,33 @@ export function useClients() {
     const padded = String(nextClientNumber++).padStart(3, '0');
     const newClientId = `cli-${padded}`;
     const now = new Date().toISOString();
+    const effectiveDate = formData.effectiveDate || now.slice(0, 10);
+
+    const initialVersion = {
+      id: `ver_${newClientId}_1`,
+      effectiveDate,
+      companyName: formData.companyName || '',
+      billingName: formData.billingName || '',
+      contactTypeId: formData.contactTypeId || 'Customer',
+      email: formData.email || '',
+      gstNo: formData.gstNo || '',
+      isActive: formData.isActive !== false,
+      paymentTerms: Array.isArray(formData.paymentTerms) ? formData.paymentTerms : [],
+      deliveryTerms: formData.deliveryTerms || '',
+      comments: formData.comments || '',
+      addresses: Array.isArray(formData.addresses) ? formData.addresses : [],
+      contacts: Array.isArray(formData.contacts) ? formData.contacts : [],
+      createdOn: now,
+    };
 
     const newRecord = {
       ...formData,
       clientId: newClientId,
       id: newClientId,
+      effectiveDate,
+      effectiveVersions: Array.isArray(formData.effectiveVersions) && formData.effectiveVersions.length > 0
+        ? formData.effectiveVersions
+        : [initialVersion],
       createdAt: now,
       updatedAt: null,
       addresses: Array.isArray(formData.addresses) ? formData.addresses : [],
@@ -106,13 +163,66 @@ export function useClients() {
     setClients((prev) =>
       prev.map((c) => {
         if (c.clientId === id || c.id === id) {
+          const effectiveDate = formData.effectiveDate || c.effectiveDate || now.slice(0, 10);
+          const currentVersions = Array.isArray(c.effectiveVersions) && c.effectiveVersions.length > 0
+            ? [...c.effectiveVersions]
+            : [
+                {
+                  id: `ver_${id}_orig`,
+                  effectiveDate: c.effectiveDate || (c.createdAt ? c.createdAt.slice(0, 10) : now.slice(0, 10)),
+                  companyName: c.companyName || '',
+                  billingName: c.billingName || '',
+                  contactTypeId: c.contactTypeId || 'Customer',
+                  email: c.email || '',
+                  gstNo: c.gstNo || '',
+                  isActive: c.isActive !== false,
+                  paymentTerms: c.paymentTerms || [],
+                  deliveryTerms: c.deliveryTerms || '',
+                  comments: c.comments || '',
+                  addresses: c.addresses || [],
+                  contacts: c.contacts || [],
+                  createdOn: c.createdAt || now,
+                },
+              ];
+
+          // Check if version with this effectiveDate already exists
+          const existingIdx = currentVersions.findIndex(
+            (v) => (v.effectiveDate || '').slice(0, 10) === effectiveDate
+          );
+
+          const updatedVersionPayload = {
+            id: existingIdx >= 0 ? currentVersions[existingIdx].id : `ver_${id}_${Date.now()}`,
+            effectiveDate,
+            companyName: formData.companyName !== undefined ? formData.companyName : c.companyName,
+            billingName: formData.billingName !== undefined ? formData.billingName : c.billingName,
+            contactTypeId: formData.contactTypeId !== undefined ? formData.contactTypeId : c.contactTypeId,
+            email: formData.email !== undefined ? formData.email : c.email,
+            gstNo: formData.gstNo !== undefined ? formData.gstNo : c.gstNo,
+            isActive: formData.isActive !== undefined ? formData.isActive : c.isActive,
+            paymentTerms: formData.paymentTerms !== undefined ? formData.paymentTerms : c.paymentTerms,
+            deliveryTerms: formData.deliveryTerms !== undefined ? formData.deliveryTerms : c.deliveryTerms,
+            comments: formData.comments !== undefined ? formData.comments : c.comments,
+            addresses: Array.isArray(formData.addresses) ? formData.addresses : c.addresses || [],
+            contacts: Array.isArray(formData.contacts) ? formData.contacts : c.contacts || [],
+            updatedAt: now,
+          };
+
+          let newVersions;
+          if (existingIdx >= 0) {
+            newVersions = [...currentVersions];
+            newVersions[existingIdx] = { ...currentVersions[existingIdx], ...updatedVersionPayload };
+          } else {
+            newVersions = [updatedVersionPayload, ...currentVersions];
+          }
+
           updatedRecord = {
             ...c,
             ...formData,
             clientId: c.clientId || id,
             id: c.id || id,
+            effectiveDate,
+            effectiveVersions: formData.effectiveVersions || newVersions,
             updatedAt: now,
-            // Replaces nested arrays directly
             addresses: Array.isArray(formData.addresses) ? formData.addresses : c.addresses || [],
             contacts: Array.isArray(formData.contacts) ? formData.contacts : c.contacts || [],
           };
@@ -124,6 +234,22 @@ export function useClients() {
 
     toast.success('Client updated successfully');
     return updatedRecord;
+  }, []);
+
+  /* ── Update Client Versions directly ── */
+  const updateClientVersions = useCallback((clientId, newVersionsArray) => {
+    const now = new Date().toISOString();
+    setClients((prev) =>
+      prev.map((c) => {
+        if (c.clientId !== clientId && c.id !== clientId) return c;
+        return {
+          ...c,
+          effectiveVersions: newVersionsArray,
+          updatedAt: now,
+        };
+      })
+    );
+    toast.success('Revisions updated successfully');
   }, []);
 
   /* ── Delete client ── */
@@ -154,7 +280,7 @@ export function useClients() {
   }, []);
 
   return {
-    clients,
+    clients: augmentedClients,
     filteredClients,
     search,
     setSearch,
@@ -166,6 +292,7 @@ export function useClients() {
     getClientById,
     addClient,
     updateClient,
+    updateClientVersions,
     deleteClient,
     toggleClientActive,
   };

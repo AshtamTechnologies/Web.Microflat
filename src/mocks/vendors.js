@@ -330,6 +330,8 @@ export const mockVendors = [
     vendorCode: 'VEN-0004',
     vendorName: 'Mitutoyo Calibration & Tools India',
     isActive: false,
+    inactiveComment: 'Supplier quality certification expired. Temporarily suspended pending ISO audit renewal.',
+    inactiveDate: '2024-07-01',
     approvalStatus: 'Approved',
     approvedBy: 'Ian Chesnut',
     approvedByComments: 'Standard vendor agreement signed.',
