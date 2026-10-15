@@ -1096,32 +1096,35 @@ export default function InquiryFormPage() {
         <div className="space-y-6">
           {/* ── SECTION 1: INQUIRY DETAILS ── */}
           <Card padding="md" className="bg-bg">
-            <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-base">
-                <FileText size={18} className="text-primary shrink-0" aria-hidden="true" />
-                <span>1. Inquiry Details</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-5 border-b border-border">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-heading">
+                    1. Inquiry Details
+                  </h2>
+                  <p className="text-xs text-text-muted">
+                    Reference code, date, estimate date & priority
+                  </p>
+                </div>
               </div>
-              <span className="text-xs text-text-muted font-normal">
-                Reference code, date, estimate date & priority
-              </span>
+
+              {form.InquiryNo && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="inline-flex items-center font-mono font-bold text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg">
+                    {form.InquiryNo}
+                  </span>
+                  <Badge variant="neutral" size="sm" className="font-medium text-2xs">
+                    System Generated
+                  </Badge>
+                </div>
+              )}
             </div>
 
             <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-                {/* Inquiry No (System Generated & Disabled) */}
-                <Input
-                  id="InquiryNo"
-                  name="InquiryNo"
-                  type="text"
-                  label="Inquiry Number"
-                  placeholder="Auto-generated"
-                  value={form.InquiryNo}
-                  disabled
-                  readOnly
-                  hint="System auto-generated"
-                  className="font-mono text-sm uppercase bg-surface/70 text-text-muted cursor-not-allowed opacity-90 select-none"
-                />
-
                 {/* Inquiry Date */}
                 <DatePicker
                   id="InquiryDate"

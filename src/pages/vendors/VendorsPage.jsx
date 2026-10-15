@@ -303,10 +303,8 @@ export default function VendorsPage() {
             <TableActions
               onView={() => navigate(`/vendors/${row.id}/effective-dates`, { state: { readOnly: true } })}
               onEdit={() => navigate(`/vendors/${row.id}/effective-dates`)}
-              onDelete={() => setVendorToDelete(row)}
               viewTitle="View vendor details"
               editTitle="Edit vendor"
-              deleteTitle="Delete vendor"
             />
           );
         },
@@ -496,16 +494,6 @@ export default function VendorsPage() {
                 >
                   <Pencil size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
-                </Button>
-
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setVendorToDelete(vendor)}
-                  className="flex-1 text-xs"
-                >
-                  <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
-                  Delete
                 </Button>
               </div>
             </div>

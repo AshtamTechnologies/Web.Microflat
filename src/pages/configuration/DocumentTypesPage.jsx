@@ -12,7 +12,6 @@ import {
   Plus,
   Search,
   Pencil,
-  Trash2,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -21,6 +20,8 @@ import {
   Tag,
   Layers,
   X,
+  Save,
+  Eye,
 } from 'lucide-react';
 import { IconDocumentTypes } from '../../constants/icons';
 import toast from 'react-hot-toast';
@@ -40,6 +41,7 @@ import {
   StatusSwitch,
   PageHeader,
   FilterBar,
+  TableActions,
 } from '../../components/ui';
 import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useInquiryDocumentsContext } from '../../context/InquiryDocumentsContext';
@@ -79,6 +81,7 @@ export default function DocumentTypesPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null); // null = Add, object = Edit
+  const [viewingItem, setViewingItem] = useState(null); // View modal state
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -322,31 +325,17 @@ export default function DocumentTypesPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        size: 110,
-        minSize: 100,
+        size: 100,
+        minSize: 90,
         enableSorting: false,
         enableResizing: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1.5 justify-end">
-            <button
-              type="button"
-              onClick={() => handleOpenEdit(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer shadow-2xs"
-              title="Edit document type"
-              aria-label="Edit document type"
-            >
-              <Pencil size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDeleteClick(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer shadow-2xs"
-              title="Delete document type"
-              aria-label="Delete document type"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
+          <TableActions
+            onView={() => setViewingItem(row.original)}
+            onEdit={() => handleOpenEdit(row.original)}
+            viewTitle="View document type"
+            editTitle="Edit document type"
+          />
         ),
       }),
     ],
@@ -619,22 +608,26 @@ export default function DocumentTypesPage() {
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setViewingItem(dt)}
+                    className="text-xs"
+                  >
+                    <Eye size={13} className="mr-1.5" />
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => handleOpenEdit(dt)}
-                    className="flex-1 py-1.5 px-3 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    className="text-xs"
                   >
-                    <Pencil size={13} />
+                    <Pencil size={13} className="mr-1.5" />
                     Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteClick(dt)}
-                    className="flex-1 py-1.5 px-3 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <Trash2 size={13} />
-                    Delete
-                  </button>
+                  </Button>
                 </div>
               </div>
             );
@@ -757,14 +750,16 @@ export default function DocumentTypesPage() {
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
             <Button
               type="button"
               variant="secondary"
               size="md"
               onClick={handleCloseModal}
               disabled={isSubmitting}
+              className="justify-center"
             >
+              <X size={15} className="mr-1.5" aria-hidden="true" />
               Cancel
             </Button>
             <Button
@@ -773,32 +768,139 @@ export default function DocumentTypesPage() {
               size="md"
               loading={isSubmitting}
               disabled={isSubmitting}
+              className="justify-center font-semibold shadow-2xs"
             >
+              <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
               {editingItem ? 'Save Changes' : 'Create Document Type'}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* ── Delete Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={Boolean(itemToDelete)}
-        onClose={() => setItemToDelete(null)}
-        onConfirm={handleConfirmDelete}
-        title="Delete Document Type?"
-        message={
-          <>
-            Are you sure you want to delete{' '}
-            <strong className="text-heading font-semibold">
-              {itemToDelete?.typeName}
-            </strong>
-            ? This configuration will be permanently removed.
-          </>
-        }
-        confirmText="Delete Document Type"
-        cancelText="Cancel"
-        variant="danger"
-      />
+      {/* ── View Document Type Modal ── */}
+      <Modal
+        isOpen={Boolean(viewingItem)}
+        onClose={() => setViewingItem(null)}
+        title="Document Type Details"
+        maxWidth="max-w-lg"
+      >
+        {viewingItem && (
+          <div className="space-y-4">
+            {/* Header banner */}
+            <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                  <FileCheck size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-heading break-words leading-snug">
+                    {viewingItem.typeName}
+                  </h3>
+                  <p className="text-xs text-text-muted mt-1">Document Type Configuration</p>
+                </div>
+              </div>
+              <span
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none shrink-0 mt-0.5',
+                  viewingItem.isActive !== false
+                    ? 'bg-success/10 text-success border border-success/20'
+                    : 'bg-danger/10 text-danger border border-danger/20',
+                ].join(' ')}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    viewingItem.isActive !== false ? 'bg-success' : 'bg-danger'
+                  }`}
+                  aria-hidden="true"
+                />
+                {viewingItem.isActive !== false ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Mandatory for RFQ
+                </span>
+                <div>
+                  {viewingItem.isMandatory ? (
+                    <Badge variant="warning" className="text-2xs px-2 py-0.5">
+                      Required
+                    </Badge>
+                  ) : (
+                    <Badge variant="neutral" className="text-2xs px-2 py-0.5">
+                      Optional
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Max File Size Limit
+                </span>
+                <span className="font-mono text-sm font-semibold text-heading">
+                  {viewingItem.maxSizeMB} MB
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Allowed Extensions
+                </span>
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {(Array.isArray(viewingItem.allowedExtensions) ? viewingItem.allowedExtensions : []).map((ext) => (
+                    <span
+                      key={ext}
+                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-surface border border-border text-heading shadow-2xs"
+                    >
+                      {ext}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Usage in Inquiries
+                </span>
+                <span className="text-xs text-text">
+                  {documents.filter(d => d.documentTypeId === (viewingItem.documentTypeId || viewingItem.id)).length} document(s) currently linked to this type.
+                </span>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => setViewingItem(null)}
+                className="justify-center"
+              >
+                <X size={15} className="mr-1.5" aria-hidden="true" />
+                Close
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  const item = viewingItem;
+                  setViewingItem(null);
+                  handleOpenEdit(item);
+                }}
+                className="justify-center font-semibold shadow-2xs"
+              >
+                <Pencil size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                Edit
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

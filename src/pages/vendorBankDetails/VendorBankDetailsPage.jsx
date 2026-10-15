@@ -289,7 +289,6 @@ export default function VendorBankDetailsPage() {
           const bankId = bank.bankDetailId || bank.id;
           const dateVal = bank.updatedAt || bank.createdAt;
           const userVal = bank.updatedBy || bank.createdBy || 'Ian Chesnut';
-          const atts = Array.isArray(bank.attachments) ? bank.attachments : [];
 
           return (
             <Card
@@ -299,14 +298,9 @@ export default function VendorBankDetailsPage() {
             >
               <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-mono tabular-nums font-semibold text-2xs text-heading bg-surface border border-border px-1.5 py-0.5 rounded shadow-2xs">
-                      {bank.vendorCode}
-                    </span>
-                    <span className="font-semibold text-xs text-heading truncate">
-                      {bank.vendorName}
-                    </span>
-                  </div>
+                  <span className="font-semibold text-xs text-heading truncate block">
+                    {bank.vendorName}
+                  </span>
                   <p className="text-2xs text-text-muted truncate mt-0.5">
                     {bank.bankName} • {bank.branchName || 'Main Branch'}
                   </p>
@@ -332,21 +326,6 @@ export default function VendorBankDetailsPage() {
                     </span>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 text-2xs">
-                <span className="text-text-muted">Attachments:</span>
-                {atts.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setViewingAttachmentsRow(bank)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-2xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/25 transition-colors cursor-pointer shadow-2xs"
-                  >
-                    <Paperclip size={11} /> {atts.length} File{atts.length > 1 ? 's' : ''}
-                  </button>
-                ) : (
-                  <span className="text-2xs text-text-muted font-mono">—</span>
-                )}
               </div>
 
               {/* Action buttons footer */}

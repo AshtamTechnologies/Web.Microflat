@@ -353,6 +353,7 @@ export default function ClientFormPage() {
           disabled={isSubmitting}
           className="flex-1 sm:flex-none justify-center"
         >
+          <X size={14} className="mr-1.5" aria-hidden="true" />
           Cancel
         </Button>
         <Button
@@ -362,7 +363,7 @@ export default function ClientFormPage() {
           disabled={isSubmitting}
           className="flex-1 sm:flex-none justify-center font-semibold shadow-2xs"
         >
-          <Save size={14} className="mr-1.5" />
+          <Save size={14} className="mr-1.5 shrink-0" aria-hidden="true" />
           {isSubmitting ? 'Saving Client...' : isEdit ? 'Save Changes' : 'Save Client'}
         </Button>
       </div>
@@ -394,24 +395,26 @@ export default function ClientFormPage() {
           </button>
         }
         actions={
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
             <Button
               type="button"
               variant="secondary"
-              size="sm"
+              size="md"
               onClick={handleCancel}
               disabled={isSubmitting}
+              className="flex-1 sm:flex-initial"
             >
+              <X size={16} className="mr-1.5" aria-hidden="true" />
               Cancel
             </Button>
             <Button
               type="submit"
               variant="primary"
-              size="sm"
+              size="md"
               disabled={isSubmitting}
-              className="font-semibold shadow-2xs"
+              className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
             >
-              <Save size={14} className="mr-1.5" />
+              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
               {isSubmitting ? 'Saving Client...' : isEdit ? 'Save Changes' : 'Save Client'}
             </Button>
           </div>
@@ -485,7 +488,7 @@ export default function ClientFormPage() {
         tabs={[
           {
             id: 'company_terms',
-            label: 'Company Details & Terms',
+            label: 'Client Details & Terms',
             icon: Building2,
             hasError: hasCompanyTermsErrors,
           },
@@ -738,7 +741,7 @@ export default function ClientFormPage() {
           </Card>
 
           {/* Save Button for Tab 1 */}
-          {renderTabSaveBar('Company Details & Terms')}
+          {renderTabSaveBar('Client Details & Terms')}
         </div>
       )}
 

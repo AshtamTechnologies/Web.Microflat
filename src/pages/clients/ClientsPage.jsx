@@ -16,49 +16,31 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getPaginationRowModel,
-  flexRender,
 } from '@tanstack/react-table';
 import {
-  Search,
   Plus,
-  ChevronUp,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  SearchX,
-  RotateCcw,
-  X,
   Pencil,
-  Trash2,
-  Calendar,
-  MapPin,
-  Phone,
-  User,
   Eye,
 } from 'lucide-react';
 import { IconClient } from '../../constants/icons';
 import {
   Button,
-  Input,
-  Select,
   Card,
   Badge,
-  ConfirmModal,
   PageHeader,
   DataTable,
   TableToolbar,
   StatusBadge,
+  SearchableSelect,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useClientsTable } from './useClientsTable.jsx';
 import {
   CONTACT_TYPE_OPTIONS,
   getContactTypeBadgeVariant,
-  getCountryName,
 } from '../../mocks/clients';
-import { formatDateDisplay, getEffectiveDateStatus } from '../../utils/effectiveDateUtils';
 
-const STATUS_CHIPS = [
+const STATUS_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
   { value: 'ACTIVE', label: 'Active' },
   { value: 'INACTIVE', label: 'Inactive' },
@@ -81,8 +63,6 @@ export default function ClientsPage() {
     contactTypeFilter,
     setContactTypeFilter,
     resetFilters,
-    deleteClient,
-    toggleClientActive,
   } = useClientsContext();
 
   const [sorting, setSorting] = useState([]);
@@ -91,7 +71,6 @@ export default function ClientsPage() {
     pageIndex: 0,
     pageSize: 10,
   });
-  const [clientToDelete, setClientToDelete] = useState(null);
 
   const hasActiveFilters = Boolean(
     search.trim() || statusFilter !== 'ALL' || contactTypeFilter !== 'ALL'
@@ -106,7 +85,6 @@ export default function ClientsPage() {
       const id = client.clientId || client.id;
       navigate(`/clients/${id}/effective-dates`);
     },
-    onDeleteClick: (client) => setClientToDelete(client),
   });
 
   const table = useReactTable({
@@ -126,15 +104,6 @@ export default function ClientsPage() {
     columnResizeMode: 'onChange',
     enableColumnResizing: true,
   });
-
-  const handleDeleteConfirm = () => {
-    if (!clientToDelete) return;
-    const id = clientToDelete.clientId || clientToDelete.id;
-    // NOTE: Before production API integration, verify no active Inquiries, Quotations,
-    // or Sales Orders link to this clientId before allowing hard delete.
-    deleteClient(id);
-    setClientToDelete(null);
-  };
 
   return (
     <div className="space-y-5 pb-16">
@@ -165,34 +134,27 @@ export default function ClientsPage() {
         onReset={resetFilters}
         resetLabel="Reset"
       >
-        {/* Status Chips */}
-        <div className="inline-flex rounded-lg border border-border p-0.5 bg-surface/50">
-          {STATUS_CHIPS.map((chip) => {
-            const isSelected = statusFilter === chip.value;
-            return (
-              <button
-                key={chip.value}
-                type="button"
-                onClick={() => setStatusFilter(chip.value)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-bg text-heading font-semibold shadow-2xs border border-border/80'
-                    : 'text-text-muted hover:text-text'
-                }`}
-              >
-                {chip.label}
-              </button>
-            );
-          })}
+        {/* Status SearchableSelect */}
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            options={STATUS_FILTER_OPTIONS}
+            placeholder="All Statuses"
+            searchPlaceholder="Search statuses..."
+          />
         </div>
 
-        {/* Contact Type Select */}
-        <div className="w-44">
-          <Select
+        {/* Contact Type SearchableSelect */}
+        <div className="w-full sm:w-48">
+          <SearchableSelect
             id="contact-type-filter"
             value={contactTypeFilter}
             onChange={(e) => setContactTypeFilter(e.target.value)}
             options={CONTACT_TYPE_FILTER_OPTIONS}
+            placeholder="All Contact Types"
+            searchPlaceholder="Search contact types..."
           />
         </div>
       </TableToolbar>
@@ -226,24 +188,10 @@ export default function ClientsPage() {
           const client = row.original;
           const id = client.clientId || client.id;
           const contactType = client.contactTypeId || 'Customer';
-          const countryVal = client.countryId;
-          const countryCode = typeof countryVal === 'object' && countryVal !== null ? countryVal.value || '' : countryVal;
-          const countryName = getCountryName(countryCode);
-
-          const contacts = client.contacts || [];
-          const primary = contacts.find((c) => c.isActive !== false) || contacts[0];
-          const primaryName = primary ? `${primary.firstName || ''} ${primary.lastName || ''}`.trim() : null;
-          const primaryPhone = primary?.mobile1 || primary?.phone;
 
           const addresses = client.addresses || [];
           const primaryAddr = addresses.find((a) => a.isDefault || a.isActive !== false) || addresses[0];
           const city = primaryAddr?.city || client.city;
-
-          const effectiveDate =
-            client.effectiveDate ||
-            client.activeVersion?.effectiveDate ||
-            (client.createdAt ? client.createdAt.slice(0, 10) : '');
-          const statusInfo = getEffectiveDateStatus(effectiveDate);
 
           return (
             <div
@@ -278,47 +226,12 @@ export default function ClientsPage() {
                 <StatusBadge status={client.isActive} size="sm" />
               </div>
 
-              {/* Details: Effective Date, Primary Contact, Location */}
-              <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <Calendar size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                    <span>Eff:</span>
-                    <span className="font-mono text-2xs font-medium text-heading">
-                      {effectiveDate ? formatDateDisplay(effectiveDate) : '—'}
-                    </span>
-                  </div>
-                  {effectiveDate && (
-                    <Badge variant={statusInfo.badgeVariant} className="text-2xs px-1.5 py-0">
-                      {statusInfo.label}
-                    </Badge>
-                  )}
+              {/* Location if present */}
+              {city && (
+                <div className="text-xs text-text-muted pt-2 border-t border-border/50">
+                  <span className="truncate">{city}</span>
                 </div>
-
-                {(primaryName || primaryPhone) && (
-                  <div className="flex items-center gap-2">
-                    {primaryPhone ? (
-                      <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                    ) : (
-                      <User size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                    )}
-                    <span className="truncate">
-                      {primaryName && <span className="text-heading font-medium">{primaryName}</span>}
-                      {primaryName && primaryPhone && <span className="mx-1">•</span>}
-                      {primaryPhone && <span className="font-mono tabular-nums">{primaryPhone}</span>}
-                    </span>
-                  </div>
-                )}
-
-                {(city || countryName) && (
-                  <div className="flex items-center gap-2">
-                    <MapPin size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                    <span className="truncate">
-                      {[city, countryName].filter(Boolean).join(', ')}
-                    </span>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Action buttons footer */}
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
@@ -341,35 +254,10 @@ export default function ClientsPage() {
                   <Pencil size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
                 </Button>
-
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setClientToDelete(client)}
-                  className="flex-1 text-xs"
-                >
-                  <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
-                  Delete
-                </Button>
               </div>
             </div>
           );
         }}
-      />
-
-      {/* ── Delete Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={Boolean(clientToDelete)}
-        onClose={() => setClientToDelete(null)}
-        onConfirm={handleDeleteConfirm}
-        title="Delete Client"
-        message={
-          clientToDelete
-            ? `Are you sure you want to delete ${clientToDelete.companyName}? This action will permanently remove the client and all associated address and contact records.`
-            : ''
-        }
-        confirmText="Delete Client"
-        confirmVariant="danger"
       />
     </div>
   );

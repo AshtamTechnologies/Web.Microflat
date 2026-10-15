@@ -19,7 +19,7 @@ import {
   getPaginationRowModel,
   createColumnHelper,
 } from '@tanstack/react-table';
-import { Plus, FileText, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Eye, Pencil } from 'lucide-react';
 import { IconPR } from '../../constants/icons';
 
 import {
@@ -27,7 +27,6 @@ import {
   DatePicker,
   SearchableSelect,
   Badge,
-  ConfirmModal,
   PageHeader,
   DataTable,
   TableToolbar,
@@ -82,7 +81,6 @@ export default function PurchaseRequisition() {
     pageIndex: 0,
     pageSize: 10,
   });
-  const [prToDelete, setPrToDelete] = useState(null);
 
   // Sync URL search parameters on mount / route changes (e.g. from Dashboard)
   useEffect(() => {
@@ -151,10 +149,9 @@ export default function PurchaseRequisition() {
               onClick={() =>
                 navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)
               }
-              className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1.5 cursor-pointer text-left whitespace-nowrap"
+              className="font-mono text-xs font-semibold text-primary hover:underline cursor-pointer text-left whitespace-nowrap"
             >
-              <FileText size={14} className="text-primary/70 shrink-0" />
-              <span>{pr.prNumber}</span>
+              {pr.prNumber}
             </button>
           );
         },
@@ -199,31 +196,28 @@ export default function PurchaseRequisition() {
         },
       }),
 
-      /* 4. REQUESTED BY */
+      /* 4. REQUESTED BY & DEPARTMENT */
       columnHelper.accessor('requestedBy', {
-        header: 'REQUESTED BY',
-        minSize: 130,
-        size: 150,
-        cell: (info) => (
-          <span className="font-medium text-text text-xs whitespace-nowrap">
-            {info.getValue() || '—'}
-          </span>
-        ),
+        id: 'requestedBy',
+        header: 'REQUESTED BY & DEPT',
+        minSize: 160,
+        size: 180,
+        cell: (info) => {
+          const pr = info.row.original;
+          return (
+            <div className="flex flex-col min-w-0">
+              <span className="font-medium text-heading text-xs truncate" title={pr.requestedBy}>
+                {pr.requestedBy || '—'}
+              </span>
+              <span className="text-2xs text-text-muted truncate mt-0.5" title={pr.department}>
+                {pr.department || '—'}
+              </span>
+            </div>
+          );
+        },
       }),
 
-      /* 5. DEPARTMENT */
-      columnHelper.accessor('department', {
-        header: 'DEPARTMENT',
-        minSize: 120,
-        size: 140,
-        cell: (info) => (
-          <span className="text-text-muted text-xs whitespace-nowrap">
-            {info.getValue() || '—'}
-          </span>
-        ),
-      }),
-
-      /* 6. REQUIRED DATE */
+      /* 5. REQUIRED DATE */
       columnHelper.accessor('requiredDate', {
         header: 'REQUIRED DATE',
         minSize: 110,
@@ -235,7 +229,7 @@ export default function PurchaseRequisition() {
         ),
       }),
 
-      /* 7. STATUS */
+      /* 6. STATUS */
       columnHelper.accessor('status', {
         header: 'STATUS',
         minSize: 130,
@@ -251,12 +245,12 @@ export default function PurchaseRequisition() {
         },
       }),
 
-      /* 8. ACTIONS */
+      /* 7. ACTIONS */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 110,
-        size: 120,
+        minSize: 90,
+        size: 100,
         enableResizing: false,
         enableSorting: false,
         cell: (info) => {
@@ -266,10 +260,8 @@ export default function PurchaseRequisition() {
             <TableActions
               onView={() => navigate(`/purchase-requisition/${prKey}`)}
               onEdit={() => navigate(`/purchase-requisition/${prKey}/edit`)}
-              onDelete={() => setPrToDelete(pr)}
               viewTitle="View Requisition"
               editTitle="Edit Requisition"
-              deleteTitle="Delete Requisition"
             />
           );
         },
@@ -357,7 +349,7 @@ export default function PurchaseRequisition() {
         </div>
 
         {/* Date Filter */}
-        <div className="w-full sm:w-36">
+        <div className="w-full sm:w-48 min-w-[185px]">
           <DatePicker
             id="filter-pr-date"
             name="dateFilter"
@@ -485,33 +477,11 @@ export default function PurchaseRequisition() {
                   <Pencil size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
                 </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setPrToDelete(pr)}
-                  className="flex-1 text-xs"
-                >
-                  <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
-                  Delete
-                </Button>
               </div>
             </div>
           );
         }}
       />
-
-{/* Delete Confirmation Modal */}
-      {prToDelete && (
-        <ConfirmModal
-          isOpen={Boolean(prToDelete)}
-          title="Delete Purchase Requisition"
-          message={`Are you sure you want to delete purchase requisition ${prToDelete.prNumber}? This action cannot be undone.`}
-          confirmLabel="Delete Requisition"
-          confirmVariant="danger"
-          onConfirm={handleDeleteConfirm}
-          onClose={() => setPrToDelete(null)}
-        />
-      )}
     </div>
   );
 }

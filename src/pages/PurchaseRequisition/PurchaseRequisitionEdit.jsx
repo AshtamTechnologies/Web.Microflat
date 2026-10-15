@@ -236,14 +236,9 @@ export default function PurchaseRequisitionEdit() {
           </button>
         }
         badge={
-          <div className="flex items-center gap-2">
-            <Badge variant={currentStatusVariant} className="px-3 py-1 text-xs">
-              {formData.status}
-            </Badge>
-            <Badge variant="role" className="px-3 py-1 text-xs font-mono">
-              {formData.prNumber}
-            </Badge>
-          </div>
+          <Badge variant={currentStatusVariant} className="px-3 py-1 text-xs">
+            {formData.status}
+          </Badge>
         }
         actions={
           <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
@@ -286,33 +281,33 @@ export default function PurchaseRequisitionEdit() {
 
       {/* ── Section 1: Purchase Requisition Information ── */}
       <Card padding="md" className="space-y-5 shadow-xs border-border">
-        <div className="flex items-center gap-2.5 pb-3 border-b border-border">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <FileSpreadsheet size={18} />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <FileSpreadsheet size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-heading">
+                Purchase Requisition Information
+              </h2>
+              <p className="text-xs text-text-muted">
+                General details, department, and timeline.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-base font-bold text-heading">
-              Purchase Requisition Information
-            </h2>
-            <p className="text-xs text-text-muted">
-              General details, department, and timeline.
-            </p>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="inline-flex items-center font-mono font-bold text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg">
+              {formData.prNumber}
+            </span>
+            <Badge variant="neutral" size="sm" className="font-medium text-2xs">
+              System Generated
+            </Badge>
           </div>
         </div>
 
         {/* Form Fields Grid: 3 columns per row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Row 1, Col 1: PR Number (Read Only) */}
-          <div>
-            <Input
-              id="edit-pr-number"
-              label="PR Number"
-              value={formData.prNumber}
-              disabled
-              hint="PR number cannot be changed"
-              className="bg-border/30 font-semibold text-text cursor-not-allowed"
-            />
-          </div>
 
           {/* Row 1, Col 2: PR Date */}
           <div>

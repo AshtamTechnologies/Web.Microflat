@@ -15,6 +15,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { X, Save } from 'lucide-react';
 import { Modal, Input, Textarea, SearchableMultiSelect, Button, StatusSwitch } from '../../components/ui';
 import { ROLE_OPTIONS } from '../../mocks/users';
 
@@ -294,7 +295,9 @@ export default function UserFormModal({
             size="md"
             onClick={onClose}
             disabled={loading}
+            className="flex-1 sm:flex-none justify-center"
           >
+            <X size={15} className="mr-1.5" aria-hidden="true" />
             Cancel
           </Button>
           <Button
@@ -303,7 +306,9 @@ export default function UserFormModal({
             size="md"
             loading={loading}
             disabled={loading}
+            className="flex-1 sm:flex-none justify-center font-semibold shadow-2xs"
           >
+            <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
             {isEdit ? 'Save Changes' : 'Create User'}
           </Button>
         </div>

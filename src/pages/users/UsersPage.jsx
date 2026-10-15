@@ -289,10 +289,8 @@ export default function UsersPage() {
             <TableActions
               onView={() => navigate(`/users/${row.id}`)}
               onEdit={() => handleOpenEdit(row)}
-              onDelete={() => setUserToDelete(row)}
               viewTitle="View user details & login sessions"
               editTitle="Edit user"
-              deleteTitle="Delete user"
             />
           );
         },
@@ -512,15 +510,6 @@ export default function UsersPage() {
                 >
                   <Pencil size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setUserToDelete(user)}
-                  className="flex-1 text-xs"
-                >
-                  <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
-                  Delete
                 </Button>
               </div>
             </div>

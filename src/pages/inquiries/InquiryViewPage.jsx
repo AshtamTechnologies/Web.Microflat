@@ -380,9 +380,16 @@ export default function InquiryViewPage() {
               <FileText size={17} className="text-primary shrink-0" />
               <span>1. Inquiry Master Details</span>
             </div>
-            <span className="font-mono text-xs text-text-muted">
-              {inquiry.InquiryNo}
-            </span>
+            {inquiry.InquiryNo && (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="inline-flex items-center font-mono font-bold text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg">
+                  {inquiry.InquiryNo}
+                </span>
+                <Badge variant="neutral" size="sm" className="font-medium text-2xs">
+                  System Generated
+                </Badge>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -31,6 +31,7 @@ import {
   FileText,
   User,
   Package,
+  Eye,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -507,7 +508,7 @@ export default function PurchaseRequisitionDashboardPage() {
                       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
                         <Link
                           to={`/purchase-requisition/${pr.prNumber || pr.prId}`}
-                          state={{ from: '/purchase-requisition/dashboard', backLabel: 'PR Dashboard' }}
+                          state={{ from: '/purchase-requisition/dashboard', backLabel: 'PR Dashboard', isApprovalView: true, readOnly: true }}
                           className="text-xs sm:text-sm font-semibold text-heading hover:text-primary transition-colors truncate font-mono"
                           title={pr.prNumber}
                         >
@@ -541,26 +542,20 @@ export default function PurchaseRequisitionDashboardPage() {
                       </p>
                     </div>
 
-                    {/* Action buttons (Approve / Reject) */}
+                    {/* Action button (View requisition approval) */}
                     <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                       <button
                         type="button"
-                        onClick={() => handleApprove(pr)}
-                        title="Approve Requisition"
-                        className="p-1.5 sm:p-2 rounded-lg text-success hover:bg-success/10 border border-success/30 transition-colors cursor-pointer active:scale-95"
-                        aria-label={`Approve ${pr.prNumber}`}
+                        onClick={() =>
+                          navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`, {
+                            state: { from: '/purchase-requisition/dashboard', backLabel: 'PR Dashboard', isApprovalView: true, readOnly: true },
+                          })
+                        }
+                        title="View Requisition Approval"
+                        className="p-1.5 sm:p-2 rounded-lg text-text-muted hover:text-primary hover:bg-surface border border-border transition-colors cursor-pointer active:scale-95"
+                        aria-label={`View ${pr.prNumber}`}
                       >
-                        <Check size={14} strokeWidth={2.5} />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleOpenRejectModal(pr)}
-                        title="Reject Requisition"
-                        className="p-1.5 sm:p-2 rounded-lg text-danger hover:bg-danger/10 border border-danger/30 transition-colors cursor-pointer active:scale-95"
-                        aria-label={`Reject ${pr.prNumber}`}
-                      >
-                        <X size={14} strokeWidth={2.5} />
+                        <Eye size={14} />
                       </button>
                     </div>
                   </div>

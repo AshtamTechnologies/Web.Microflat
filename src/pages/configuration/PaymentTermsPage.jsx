@@ -11,13 +11,14 @@ import {
   Plus,
   Search,
   Pencil,
-  Trash2,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   FileText,
   AlertCircle,
   X,
+  Save,
+  Eye,
 } from 'lucide-react';
 import { IconPaymentTerms } from '../../constants/icons';
 import toast from 'react-hot-toast';
@@ -37,6 +38,7 @@ import {
   PageHeader,
   FilterBar,
   IconButton,
+  TableActions,
 } from '../../components/ui';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
 import { formatDate } from '../../utils/dateUtils';
@@ -77,6 +79,7 @@ export default function PaymentTermsPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTerm, setEditingTerm] = useState(null);
+  const [viewingTerm, setViewingTerm] = useState(null); // View modal state
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -251,28 +254,33 @@ export default function PaymentTermsPage() {
   }, [paymentTerms, searchQuery, statusFilter]);
 
   /* ── TanStack Columns with Resizing and Sorting ── */
-  /* ── TanStack Columns with Resizing and Sorting ── */
   const columns = useMemo(
     () => [
+      /* 1. TERM CODE */
+      columnHelper.accessor('termCode', {
+        id: 'termCode',
+        header: 'TERM CODE',
+        size: 140,
+        minSize: 120,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={() => setViewingTerm(row.original)}
+            className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
+          >
+            {row.original.termCode}
+          </button>
+        ),
+      }),
+      /* 2. DISPLAY ORDER */
       columnHelper.accessor('displayOrder', {
         id: 'displayOrder',
-        header: 'Order',
+        header: 'ORDER',
         size: 90,
         minSize: 75,
         cell: ({ row }) => (
-          <span className="font-mono tabular-nums text-xs font-semibold text-text-muted bg-surface/80 border border-border px-2 py-0.5 rounded shadow-2xs">
-            #{row.original.displayOrder ?? '—'}
-          </span>
-        ),
-      }),
-      columnHelper.accessor('termCode', {
-        id: 'termCode',
-        header: 'Code',
-        size: 130,
-        minSize: 110,
-        cell: ({ row }) => (
-          <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md shadow-2xs">
-            {row.original.termCode}
+          <span className="font-mono tabular-nums text-xs text-text">
+            {row.original.displayOrder ?? '—'}
           </span>
         ),
       }),
@@ -341,32 +349,18 @@ export default function PaymentTermsPage() {
       }),
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
-        size: 110,
-        minSize: 100,
+        header: 'ACTIONS',
+        size: 100,
+        minSize: 90,
         enableSorting: false,
         enableResizing: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1.5 justify-end">
-            <button
-              type="button"
-              onClick={() => handleOpenEdit(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer shadow-2xs"
-              title="Edit payment term"
-              aria-label="Edit payment term"
-            >
-              <Pencil size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDeleteClick(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer shadow-2xs"
-              title="Delete payment term"
-              aria-label="Delete payment term"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
+          <TableActions
+            onView={() => setViewingTerm(row.original)}
+            onEdit={() => handleOpenEdit(row.original)}
+            viewTitle="View payment term"
+            editTitle="Edit payment term"
+          />
         ),
       }),
     ],
@@ -593,12 +587,16 @@ export default function PaymentTermsPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setViewingTerm(term)}
+                      className="font-mono text-xs font-bold text-primary hover:underline text-left cursor-pointer"
+                    >
                       {term.termCode}
-                    </span>
+                    </button>
                     {term.displayOrder !== undefined && (
                       <span className="text-2xs font-mono text-text-muted bg-surface px-1.5 py-0.5 rounded border border-border">
-                        #{term.displayOrder}
+                        {term.displayOrder}
                       </span>
                     )}
                   </div>
@@ -637,23 +635,27 @@ export default function PaymentTermsPage() {
                 <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-text-muted">
                   <span className="font-mono tabular-nums">{formatDate(term.createdOn)}</span>
 
-                  <div className="flex items-center gap-1.5">
-                    <button
+                  <div className="flex items-center gap-2">
+                    <Button
                       type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setViewingTerm(term)}
+                      className="text-xs"
+                    >
+                      <Eye size={13} className="mr-1.5" />
+                      View
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => handleOpenEdit(term)}
-                      className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer"
-                      title="Edit payment term"
+                      className="text-xs"
                     >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteClick(term)}
-                      className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer"
-                      title="Delete payment term"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                      <Pencil size={13} className="mr-1.5" />
+                      Edit
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -803,52 +805,136 @@ export default function PaymentTermsPage() {
             <Button
               type="button"
               variant="secondary"
+              size="md"
               onClick={handleCloseModal}
               disabled={isSubmitting}
+              className="justify-center"
             >
+              <X size={15} className="mr-1.5" aria-hidden="true" />
               Cancel
             </Button>
             <Button
               type="submit"
               variant="primary"
+              size="md"
+              loading={isSubmitting}
               disabled={isSubmitting}
-              className="min-w-[120px] flex items-center justify-center gap-2"
+              className="justify-center font-semibold shadow-2xs"
             >
-              {isSubmitting ? (
-                <>
-                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <span>{editingTerm ? 'Save Changes' : 'Add Term'}</span>
-              )}
+              <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+              {editingTerm ? 'Save Changes' : 'Create Payment Term'}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* ── Confirm Delete Modal ── */}
-      <ConfirmModal
-        isOpen={Boolean(termToDelete)}
-        onClose={() => setTermToDelete(null)}
-        onConfirm={handleConfirmDelete}
-        title="Delete Payment Term"
-        message={
-          termToDelete ? (
-            <span>
-              Are you sure you want to delete payment term{' '}
-              <strong className="text-heading font-semibold">
-                {termToDelete.termCode}
-              </strong>
-              ? This action cannot be undone.
-            </span>
-          ) : (
-            'Are you sure you want to delete this payment term?'
-          )
-        }
-        confirmText="Delete Payment Term"
-        confirmVariant="danger"
-      />
+      {/* ── View Payment Term Modal ── */}
+      <Modal
+        isOpen={Boolean(viewingTerm)}
+        onClose={() => setViewingTerm(null)}
+        title="Payment Term Details"
+        maxWidth="max-w-lg"
+      >
+        {viewingTerm && (
+          <div className="space-y-4">
+            {/* Header banner */}
+            <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                  <HandCoins size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-heading break-words leading-snug">
+                    {viewingTerm.termCode}
+                  </h3>
+                  <p className="text-xs text-text-muted mt-1">Payment Term Configuration</p>
+                </div>
+              </div>
+              <span
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none shrink-0 mt-0.5',
+                  viewingTerm.isActive
+                    ? 'bg-success/10 text-success border border-success/20'
+                    : 'bg-danger/10 text-danger border border-danger/20',
+                ].join(' ')}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    viewingTerm.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
+                  aria-hidden="true"
+                />
+                {viewingTerm.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Display Order
+                </span>
+                <span className="font-mono text-sm font-semibold text-heading tabular-nums">
+                  {viewingTerm.displayOrder ?? '—'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Created Date
+                </span>
+                <span className="font-mono text-xs text-text-muted">
+                  {formatDate(viewingTerm.createdOn)}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-2 sm:col-span-2">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Payment Terms / Description
+                </span>
+                {/<[a-z][\s\S]*>/i.test(viewingTerm.description || '') ? (
+                  <div
+                    className="text-xs text-heading max-h-48 overflow-y-auto prose prose-xs max-w-none leading-relaxed [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
+                    dangerouslySetInnerHTML={{ __html: viewingTerm.description }}
+                  />
+                ) : (
+                  <p className="text-xs text-heading whitespace-pre-line leading-relaxed max-h-48 overflow-y-auto">
+                    {viewingTerm.description || 'No description specified'}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => setViewingTerm(null)}
+                className="justify-center"
+              >
+                <X size={15} className="mr-1.5" aria-hidden="true" />
+                Close
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  const term = viewingTerm;
+                  setViewingTerm(null);
+                  handleOpenEdit(term);
+                }}
+                className="justify-center font-semibold shadow-2xs"
+              >
+                <Pencil size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                Edit
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

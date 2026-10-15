@@ -125,6 +125,8 @@ export default function VendorBankDetailsFormPage() {
   const { vendorId: routeVendorId } = useParams();
   const [searchParams] = useSearchParams();
   const bankParamId = searchParams.get('bank');
+  const actionParam = searchParams.get('action') || searchParams.get('mode');
+  const isAddAction = actionParam === 'add';
 
   const { allVendors = [], getVendorById } = useVendorsContext();
   const { getBanksForVendor, saveVendorBanks, deleteBankDetail } = useVendorBankDetails();
@@ -526,6 +528,11 @@ export default function VendorBankDetailsFormPage() {
   useEffect(() => {
     if (!preloadedBankRef.current && draftRows.length > 0) {
       preloadedBankRef.current = true;
+      if (isAddAction) {
+        // Explicitly adding a new account — leave form empty for new entry
+        handleCancelEdit();
+        return;
+      }
       if (bankParamId) {
         const match = draftRows.find(
           (r) => r.bankDetailId === bankParamId || r.id === bankParamId
@@ -545,7 +552,7 @@ export default function VendorBankDetailsFormPage() {
         });
       }
     }
-  }, [bankParamId, draftRows, isEditMode, handleStartEdit]);
+  }, [bankParamId, isAddAction, draftRows, isEditMode, handleStartEdit, handleCancelEdit]);
 
   // Handle vendor dropdown change in Add mode
   const handleVendorSelect = (newVendorId) => {
@@ -697,20 +704,6 @@ export default function VendorBankDetailsFormPage() {
         }
         actions={
           <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
-            {selectedVendorId && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() => navigate(`/vendor-bank-details/${selectedVendorId}/view`)}
-                className="hidden sm:inline-flex text-xs"
-                title="View Bank Details"
-              >
-                <Eye size={15} className="mr-1.5" />
-                View Details
-              </Button>
-            )}
-
             <Button
               type="button"
               variant="secondary"
@@ -729,6 +722,7 @@ export default function VendorBankDetailsFormPage() {
               size="md"
               onClick={handleFormActionClick}
               disabled={isSubmitting || !selectedVendorId}
+              title={!selectedVendorId ? 'Please select a vendor first' : undefined}
               className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
             >
               <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
@@ -1242,19 +1236,12 @@ export default function VendorBankDetailsFormPage() {
                 variant="primary"
                 size="sm"
                 onClick={handleFormActionClick}
+                disabled={isSubmitting || !selectedVendorId}
+                title={!selectedVendorId ? 'Please select a vendor first' : undefined}
                 className="text-xs font-semibold shadow-2xs"
               >
-                {isEditing ? (
-                  <>
-                    <Save size={14} className="mr-1.5" />
-                    Save Changes
-                  </>
-                ) : (
-                  <>
-                    <Plus size={14} className="mr-1.5" />
-                    Save Bank Account
-                  </>
-                )}
+                <Save size={14} className="mr-1.5" />
+                {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Bank Account'}
               </Button>
             </div>
           </div>

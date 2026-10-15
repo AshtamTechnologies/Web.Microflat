@@ -62,6 +62,7 @@ import toast from 'react-hot-toast';
 import {
   Button,
   Input,
+  Checkbox,
   DatePicker,
   Badge,
   Card,
@@ -160,6 +161,7 @@ export default function ClientEffectiveDatesPage() {
 
   const [formErrors, setFormErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const [sameAsCompany, setSameAsCompany] = useState(false);
 
   // Default selection on mount: select active version or first version
   useEffect(() => {
@@ -270,10 +272,14 @@ export default function ClientEffectiveDatesPage() {
       ? ver.contacts
       : (Array.isArray(client?.contacts) ? client.contacts : []);
 
+    const cName = ver.companyName || client?.companyName || '';
+    const bName = ver.billingName || client?.billingName || '';
+    setSameAsCompany(Boolean(cName && cName === bName));
+
     setFormData({
       effectiveDate: ver.effectiveDate || '',
-      companyName: ver.companyName || client?.companyName || '',
-      billingName: ver.billingName || client?.billingName || '',
+      companyName: cName,
+      billingName: bName,
       contactTypeId: ver.contactTypeId || client?.contactTypeId || 'Customer',
       email: ver.email || client?.email || '',
       gstNo: ver.gstNo || client?.gstNo || '',
@@ -304,10 +310,14 @@ export default function ClientEffectiveDatesPage() {
       ? base.contacts
       : (Array.isArray(client?.contacts) ? client.contacts : []);
 
+    const cName = base.companyName || client?.companyName || '';
+    const bName = base.billingName || client?.billingName || '';
+    setSameAsCompany(Boolean(cName && cName === bName));
+
     setFormData({
       effectiveDate: initialDate,
-      companyName: base.companyName || client?.companyName || '',
-      billingName: base.billingName || client?.billingName || '',
+      companyName: cName,
+      billingName: bName,
       contactTypeId: base.contactTypeId || client?.contactTypeId || 'Customer',
       email: base.email || client?.email || '',
       gstNo: base.gstNo || client?.gstNo || '',
@@ -334,6 +344,28 @@ export default function ClientEffectiveDatesPage() {
     setMode('VIEW');
     setFormErrors({});
   }
+
+  const handleCompanyNameChange = (e) => {
+    const val = e.target.value;
+    setFormData((prev) => {
+      const next = { ...prev, companyName: val };
+      if (sameAsCompany) {
+        next.billingName = val;
+      }
+      return next;
+    });
+    if (formErrors.companyName) {
+      setFormErrors((prev) => ({ ...prev, companyName: '' }));
+    }
+  };
+
+  const handleSameAsCompanyToggle = (e) => {
+    const checked = typeof e === 'boolean' ? e : Boolean(e?.target?.checked);
+    setSameAsCompany(checked);
+    if (checked) {
+      setFormData((prev) => ({ ...prev, billingName: prev.companyName }));
+    }
+  };
 
   function handleFieldChange(name, value) {
     const rawValue =
@@ -1422,7 +1454,7 @@ export default function ClientEffectiveDatesPage() {
               tabs={[
                 {
                   id: 'company_terms',
-                  label: 'Company Details & Terms',
+                  label: 'Client Details & Terms',
                   icon: Building2,
                 },
                 {
@@ -1440,7 +1472,7 @@ export default function ClientEffectiveDatesPage() {
               ]}
             />
 
-            {/* ── Form Tab 1: Company Details & Terms ── */}
+            {/* ── Form Tab 1: Client Details & Terms ── */}
             {activeFormTab === 'company_terms' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1451,21 +1483,35 @@ export default function ClientEffectiveDatesPage() {
                     label="Company Name"
                     required
                     value={formData.companyName}
-                    onChange={(e) => handleFieldChange('companyName', e.target.value)}
+                    onChange={handleCompanyNameChange}
                     error={formErrors.companyName}
                     placeholder="e.g. Acme Industrial Solutions"
                   />
 
-                  {/* Billing Name */}
-                  <Input
-                    id="billingName"
-                    name="billingName"
-                    label="Billing Name"
-                    value={formData.billingName}
-                    onChange={(e) => handleFieldChange('billingName', e.target.value)}
-                    placeholder="e.g. Acme Solutions Pvt Ltd"
-                    hint="Official registered name for invoices"
-                  />
+                  {/* Billing Name with Same as company name toggle */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="billingName" className="text-xs font-semibold text-heading cursor-pointer">
+                        Billing Name
+                      </label>
+                      <Checkbox
+                        id="same-as-company"
+                        checked={sameAsCompany}
+                        onChange={handleSameAsCompanyToggle}
+                        label="Same as company name"
+                      />
+                    </div>
+                    <Input
+                      id="billingName"
+                      name="billingName"
+                      value={formData.billingName}
+                      disabled={sameAsCompany}
+                      onChange={(e) => handleFieldChange('billingName', e.target.value)}
+                      placeholder="e.g. Acme Solutions Pvt Ltd"
+                      hint="Official registered name for invoices"
+                      error={formErrors.billingName}
+                    />
+                  </div>
 
                   {/* Contact Type */}
                   <SearchableSelect

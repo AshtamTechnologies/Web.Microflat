@@ -11,7 +11,6 @@ import {
   Plus,
   Search,
   Pencil,
-  Trash2,
   ChevronRight,
   ChevronDown,
   Folder,
@@ -21,6 +20,8 @@ import {
   ArrowDown,
   X,
   AlertTriangle,
+  Save,
+  Eye,
 } from 'lucide-react';
 import { IconProductCategories } from '../../constants/icons';
 import toast from 'react-hot-toast';
@@ -40,6 +41,7 @@ import {
   StatusSwitch,
   PageHeader,
   FilterBar,
+  TableActions,
 } from '../../components/ui';
 import { formatDate } from '../../utils/dateUtils';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
@@ -104,6 +106,7 @@ export default function ProductCategoriesPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [viewingCategory, setViewingCategory] = useState(null); // View modal state
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -356,15 +359,20 @@ export default function ProductCategoriesPage() {
   /* ── TanStack Columns with Resizing Support ── */
   const columns = useMemo(
     () => [
+      /* 1. CATEGORY CODE */
       columnHelper.accessor('categoryCode', {
         id: 'categoryCode',
-        header: 'CODE',
+        header: 'CATEGORY CODE',
         size: 140,
         minSize: 110,
         cell: ({ row }) => (
-          <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setViewingCategory(row.original)}
+            className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
+          >
             {row.original.categoryCode}
-          </span>
+          </button>
         ),
       }),
       columnHelper.accessor('categoryName', {
@@ -478,41 +486,30 @@ export default function ProductCategoriesPage() {
         id: 'actions',
         header: 'ACTIONS',
         size: 130,
-        minSize: 120,
+        minSize: 110,
         enableSorting: false,
         enableResizing: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1.5 justify-end">
-            {!row.original.parentCategoryId && (
-              <button
-                type="button"
-                onClick={() => handleOpenAdd(row.original.categoryId)}
-                className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer shadow-2xs"
-                title="Add sub-category"
-                aria-label="Add sub-category"
-              >
-                <Plus size={15} />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => handleOpenEdit(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer shadow-2xs"
-              title="Edit category"
-              aria-label="Edit category"
-            >
-              <Pencil size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDeleteClick(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer shadow-2xs"
-              title="Delete category"
-              aria-label="Delete category"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
+          <TableActions
+            extraActions={
+              !row.original.parentCategoryId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleOpenAdd(row.original.categoryId)}
+                  title="Add sub-category"
+                  className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface transition-colors"
+                >
+                  <Plus size={15} aria-hidden="true" />
+                </Button>
+              )
+            }
+            onView={() => setViewingCategory(row.original)}
+            onEdit={() => handleOpenEdit(row.original)}
+            viewTitle="View category"
+            editTitle="Edit category"
+          />
         ),
       }),
     ],
@@ -754,9 +751,13 @@ export default function ProductCategoriesPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
+                    <button
+                      type="button"
+                      onClick={() => setViewingCategory(cat)}
+                      className="font-mono text-xs font-bold text-primary hover:underline text-left cursor-pointer"
+                    >
                       {cat.categoryCode}
-                    </span>
+                    </button>
                     {cat.depth > 0 && (
                       <span className="text-2xs text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">
                         Level {cat.depth + 1}
@@ -795,31 +796,38 @@ export default function ProductCategoriesPage() {
                 <span className="font-mono">Created: {formatDate(cat.createdOn)}</span>
                 <div className="flex items-center gap-1.5">
                   {!cat.parentCategoryId && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleOpenAdd(cat.categoryId)}
-                      className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer"
                       title="Add sub-category"
+                      className="text-xs"
                     >
-                      <Plus size={14} />
-                    </button>
+                      <Plus size={13} className="mr-1" />
+                      Add Sub
+                    </Button>
                   )}
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setViewingCategory(cat)}
+                    className="text-xs"
+                  >
+                    <Eye size={13} className="mr-1.5" />
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => handleOpenEdit(cat)}
-                    className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer"
-                    title="Edit category"
+                    className="text-xs"
                   >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteClick(cat)}
-                    className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer"
-                    title="Delete category"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                    <Pencil size={13} className="mr-1.5" />
+                    Edit
+                  </Button>
                 </div>
               </div>
             </div>
@@ -936,14 +944,16 @@ export default function ProductCategoriesPage() {
           </div>
 
           {/* Modal Footer Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
             <Button
               type="button"
               variant="secondary"
               size="md"
               onClick={handleCloseModal}
               disabled={isSubmitting}
+              className="justify-center"
             >
+              <X size={15} className="mr-1.5" aria-hidden="true" />
               Cancel
             </Button>
             <Button
@@ -952,32 +962,142 @@ export default function ProductCategoriesPage() {
               size="md"
               loading={isSubmitting}
               disabled={isSubmitting}
+              className="justify-center font-semibold shadow-2xs"
             >
+              <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
               {editingCategory ? 'Save Changes' : 'Create Category'}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* ── Delete Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={Boolean(categoryToDelete)}
-        onClose={() => setCategoryToDelete(null)}
-        onConfirm={handleConfirmDelete}
-        title="Delete Product Category?"
-        message={
-          <>
-            Are you sure you want to permanently delete{' '}
-            <strong className="text-heading font-semibold">
-              {categoryToDelete?.categoryName} ({categoryToDelete?.categoryCode})
-            </strong>
-            ? This action cannot be undone.
-          </>
-        }
-        confirmText="Delete Category"
-        cancelText="Cancel"
-        variant="danger"
-      />
+      {/* ── View Product Category Modal ── */}
+      <Modal
+        isOpen={Boolean(viewingCategory)}
+        onClose={() => setViewingCategory(null)}
+        title="Product Category Details"
+        maxWidth="max-w-lg"
+      >
+        {viewingCategory && (
+          <div className="space-y-4">
+            {/* Header banner */}
+            <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                  <FolderTree size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-heading break-words leading-snug">
+                    {viewingCategory.categoryName}
+                  </h3>
+                  <p className="text-xs text-text-muted font-mono mt-1">{viewingCategory.categoryCode}</p>
+                </div>
+              </div>
+              <span
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none shrink-0 mt-0.5',
+                  viewingCategory.isActive
+                    ? 'bg-success/10 text-success border border-success/20'
+                    : 'bg-danger/10 text-danger border border-danger/20',
+                ].join(' ')}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    viewingCategory.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
+                  aria-hidden="true"
+                />
+                {viewingCategory.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Category Code
+                </span>
+                <span className="font-mono text-sm font-semibold text-heading break-words">
+                  {viewingCategory.categoryCode}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Category Type
+                </span>
+                <span className="text-xs font-medium text-heading">
+                  {!viewingCategory.parentCategoryId ? 'Top-Level Category' : 'Sub-Category'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Parent Category
+                </span>
+                <span className="text-xs text-text break-words block leading-relaxed">
+                  {viewingCategory.parentName || '— (None / Top-Level)'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Sub-Categories
+                </span>
+                <span className="text-xs font-medium text-heading">
+                  {categories.filter(c => c.parentCategoryId === viewingCategory.categoryId).length} sub-categories
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Created On
+                </span>
+                <span className="font-mono text-xs text-text-muted">
+                  {formatDate(viewingCategory.createdOn)}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Linked Inquiries
+                </span>
+                <span className="text-xs text-text">
+                  {inquiries.filter(inq => inq.CategoryId === viewingCategory.categoryId || inq.categoryId === viewingCategory.categoryId).length} inquiries
+                </span>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => setViewingCategory(null)}
+                className="justify-center"
+              >
+                <X size={15} className="mr-1.5" aria-hidden="true" />
+                Close
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  const cat = viewingCategory;
+                  setViewingCategory(null);
+                  handleOpenEdit(cat);
+                }}
+                className="justify-center font-semibold shadow-2xs"
+              >
+                <Pencil size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                Edit
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

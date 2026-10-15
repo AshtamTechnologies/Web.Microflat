@@ -11,11 +11,12 @@ import {
   Plus,
   Search,
   Pencil,
-  Trash2,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   X,
+  Save,
+  Eye,
 } from 'lucide-react';
 import { IconUOM } from '../../constants/icons';
 import toast from 'react-hot-toast';
@@ -32,6 +33,7 @@ import {
   StatusSwitch,
   PageHeader,
   FilterBar,
+  TableActions,
 } from '../../components/ui';
 import { useUomContext } from '../../context/UomContext';
 import { formatDate } from '../../utils/dateUtils';
@@ -70,6 +72,7 @@ export default function UomPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUom, setEditingUom] = useState(null);
+  const [viewingUom, setViewingUom] = useState(null); // View modal state
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -271,31 +274,17 @@ export default function UomPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        size: 110,
-        minSize: 100,
+        size: 100,
+        minSize: 90,
         enableSorting: false,
         enableResizing: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1.5 justify-end">
-            <button
-              type="button"
-              onClick={() => handleOpenEdit(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer shadow-2xs"
-              title="Edit UOM"
-              aria-label="Edit UOM"
-            >
-              <Pencil size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDeleteClick(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer shadow-2xs"
-              title="Delete UOM"
-              aria-label="Delete UOM"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
+          <TableActions
+            onView={() => setViewingUom(row.original)}
+            onEdit={() => handleOpenEdit(row.original)}
+            viewTitle="View UOM"
+            editTitle="Edit UOM"
+          />
         ),
       }),
     ],
@@ -545,23 +534,27 @@ export default function UomPage() {
 
                 <div className="flex items-center justify-between text-2xs text-text-muted pt-2 border-t border-border">
                   <span className="font-mono">Created: {formatDate(uom.createdOn)}</span>
-                  <div className="flex items-center gap-1.5">
-                    <button
+                  <div className="flex items-center gap-2">
+                    <Button
                       type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setViewingUom(uom)}
+                      className="text-xs"
+                    >
+                      <Eye size={13} className="mr-1.5" />
+                      View
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => handleOpenEdit(uom)}
-                      className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer"
-                      title="Edit UOM"
+                      className="text-xs"
                     >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteClick(uom)}
-                      className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer"
-                      title="Delete UOM"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                      <Pencil size={13} className="mr-1.5" />
+                      Edit
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -642,14 +635,16 @@ export default function UomPage() {
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
             <Button
               type="button"
               variant="secondary"
               size="md"
               onClick={handleCloseModal}
               disabled={isSubmitting}
+              className="justify-center"
             >
+              <X size={15} className="mr-1.5" aria-hidden="true" />
               Cancel
             </Button>
             <Button
@@ -658,32 +653,115 @@ export default function UomPage() {
               size="md"
               loading={isSubmitting}
               disabled={isSubmitting}
+              className="justify-center font-semibold shadow-2xs"
             >
+              <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
               {editingUom ? 'Save Changes' : 'Create UOM'}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* ── Delete Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={Boolean(uomToDelete)}
-        onClose={() => setUomToDelete(null)}
-        onConfirm={handleConfirmDelete}
-        title="Delete Unit of Measurement?"
-        message={
-          <>
-            Are you sure you want to delete{' '}
-            <strong className="text-heading font-semibold">
-              {uomToDelete?.uomName}
-            </strong>
-            ? This unit will be removed.
-          </>
-        }
-        confirmText="Delete UOM"
-        cancelText="Cancel"
-        variant="danger"
-      />
+      {/* ── View UOM Modal ── */}
+      <Modal
+        isOpen={Boolean(viewingUom)}
+        onClose={() => setViewingUom(null)}
+        title="Unit of Measurement Details"
+        maxWidth="max-w-lg"
+      >
+        {viewingUom && (
+          <div className="space-y-4">
+            {/* Header banner */}
+            <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                  <Scale size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-heading break-words leading-snug">
+                    {viewingUom.uomName}
+                  </h3>
+                  <p className="text-xs text-text-muted mt-1">Unit Configuration</p>
+                </div>
+              </div>
+              <span
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none shrink-0 mt-0.5',
+                  viewingUom.isActive
+                    ? 'bg-success/10 text-success border border-success/20'
+                    : 'bg-danger/10 text-danger border border-danger/20',
+                ].join(' ')}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    viewingUom.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
+                  aria-hidden="true"
+                />
+                {viewingUom.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  UOM Name
+                </span>
+                <span className="font-semibold text-sm text-heading">
+                  {viewingUom.uomName}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Created Date
+                </span>
+                <span className="font-mono text-xs text-text-muted">
+                  {formatDate(viewingUom.createdOn)}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Description
+                </span>
+                <p className="text-xs text-heading leading-relaxed">
+                  {viewingUom.description || 'No description provided.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => setViewingUom(null)}
+                className="justify-center"
+              >
+                <X size={15} className="mr-1.5" aria-hidden="true" />
+                Close
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  const uom = viewingUom;
+                  setViewingUom(null);
+                  handleOpenEdit(uom);
+                }}
+                className="justify-center font-semibold shadow-2xs"
+              >
+                <Pencil size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                Edit
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

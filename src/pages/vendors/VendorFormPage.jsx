@@ -555,32 +555,35 @@ export default function VendorFormPage() {
 
       {/* ── SECTION 1: VENDOR MASTER DETAILS ── */}
       <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <Truck size={18} className="text-primary" aria-hidden="true" />
-            <span>1. Vendor Master Details</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-5 border-b border-border">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Truck size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-heading">
+                1. Vendor Master Details
+              </h2>
+              <p className="text-xs text-text-muted">
+                Basic classification, effective date & active account status
+              </p>
+            </div>
           </div>
-          <span className="text-xs text-text-muted font-normal">
-            Basic classification, effective date & active account status
-          </span>
+
+          {form.vendorCode && (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="inline-flex items-center font-mono font-bold text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg">
+                {form.vendorCode}
+              </span>
+              <Badge variant="neutral" size="sm" className="font-medium text-2xs">
+                System Generated
+              </Badge>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-            {/* Vendor Code (System Generated & Disabled) */}
-            <Input
-              id="vendorCode"
-              name="vendorCode"
-              type="text"
-              label="Vendor Code"
-              placeholder="Auto-generated"
-              value={form.vendorCode}
-              disabled
-              readOnly
-              hint="System auto-generated"
-              className="font-mono text-sm uppercase bg-surface/70 text-text-muted cursor-not-allowed opacity-90 select-none"
-            />
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Vendor Name */}
             <Input
               id="vendorName"

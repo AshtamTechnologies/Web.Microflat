@@ -182,10 +182,26 @@ function NavItem({ item, collapsed, onClick }) {
   );
 }
 
+/* ── Submenu Item Active Resolver ────────────────────────────── */
+function isSubNavActive(itemPath, currentPath) {
+  if (!itemPath || !currentPath) return false;
+  // Dashboard routes require exact match
+  if (itemPath.endsWith('/dashboard')) {
+    return currentPath === itemPath;
+  }
+  // Exact match
+  if (currentPath === itemPath) return true;
+  // Sub-routes under this section (e.g. /purchase-requisition/create, /purchase-requisition/PR-123)
+  // should activate the main list link, but NOT if navigating to the dashboard sibling
+  return currentPath.startsWith(itemPath + '/') && !currentPath.startsWith(itemPath + '/dashboard');
+}
+
 /* ── Submenu Item (Tree-branch hierarchy) ──────────────────────── */
 function SubNavItem({ item, onClick }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const Icon = item.icon;
+  const isActive = isSubNavActive(item.path, location.pathname);
 
   return (
     <div className="relative group/subnav-item flex items-center">
@@ -195,21 +211,15 @@ function SubNavItem({ item, onClick }) {
         aria-hidden="true"
       />
 
-      <NavLink
+      <Link
         to={item.path}
-        end={
-          item.path === '/vendors' ||
-          item.path === '/vendors/dashboard' ||
-          item.path === '/vendor-bank-details'
-        }
         onClick={onClick}
-        className={({ isActive }) =>
-          [
-            'w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors select-none',
-            isActive
-              ? 'bg-primary/10 text-primary font-semibold'
-              : 'text-text-muted hover:bg-surface hover:text-heading',
-          ].join(' ')}
+        className={[
+          'w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors select-none',
+          isActive
+            ? 'bg-primary/10 text-primary font-semibold'
+            : 'text-text-muted hover:bg-surface hover:text-heading',
+        ].join(' ')}
       >
         <span className="flex items-center gap-2 min-w-0 truncate">
           {Icon && <Icon size={14} className="shrink-0 opacity-80" aria-hidden="true" />}
@@ -233,7 +243,7 @@ function SubNavItem({ item, onClick }) {
             </button>
           </div>
         )}
-      </NavLink>
+      </Link>
     </div>
   );
 }
@@ -243,7 +253,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
   const location = useLocation();
   const Icon = item.icon;
 
-  const isChildActive = item.children?.some((c) => location.pathname.startsWith(c.path));
+  const isChildActive = item.children?.some((c) => isSubNavActive(c.path, location.pathname));
   const [open, setOpen] = useState(isChildActive);
   const [isFlyoutOpen, setIsFlyoutOpen] = useState(false);
   const [flyoutCoords, setFlyoutCoords] = useState(null);
@@ -362,10 +372,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
               <div className="p-1.5 space-y-0.5">
                 {item.children?.map((child) => {
                   const ChildIcon = child.icon;
-                  const isLinkActive =
-                    child.path === '/vendors'
-                      ? location.pathname === '/vendors'
-                      : location.pathname.startsWith(child.path);
+                  const isLinkActive = isSubNavActive(child.path, location.pathname);
 
                   return (
                     <NavLink

@@ -28,6 +28,7 @@ import {
   Calendar,
   AlertCircle,
   Sparkles,
+  Eye,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -503,7 +504,7 @@ export default function VendorDashboardPage() {
                       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
                         <Link
                           to={`/vendors/${vendor.id}/effective-dates`}
-                          state={{ from: '/vendors/dashboard', backLabel: 'Vendor Dashboard', readOnly: true }}
+                          state={{ from: '/vendors/dashboard', backLabel: 'Vendor Dashboard', readOnly: true, isApprovalView: true }}
                           className="text-xs sm:text-sm font-semibold text-heading hover:text-primary transition-colors truncate"
                           title={vendor.vendorName}
                         >
@@ -525,26 +526,20 @@ export default function VendorDashboardPage() {
                       </p>
                     </div>
 
-                    {/* Action buttons (Approve / Reject) */}
+                    {/* Action button (View vendor approval) */}
                     <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                       <button
                         type="button"
-                        onClick={() => handleApprove(vendor)}
-                        title="Approve Vendor"
-                        className="p-1.5 sm:p-2 rounded-lg text-success hover:bg-success/10 border border-success/30 transition-colors cursor-pointer active:scale-95"
-                        aria-label={`Approve ${vendor.vendorName}`}
+                        onClick={() =>
+                          navigate(`/vendors/${vendor.id}/effective-dates`, {
+                            state: { from: '/vendors/dashboard', backLabel: 'Vendor Dashboard', readOnly: true, isApprovalView: true },
+                          })
+                        }
+                        title="View Vendor Approval"
+                        className="p-1.5 sm:p-2 rounded-lg text-text-muted hover:text-primary hover:bg-surface border border-border transition-colors cursor-pointer active:scale-95"
+                        aria-label={`View ${vendor.vendorName}`}
                       >
-                        <Check size={14} strokeWidth={2.5} />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleOpenRejectModal(vendor)}
-                        title="Reject Vendor"
-                        className="p-1.5 sm:p-2 rounded-lg text-danger hover:bg-danger/10 border border-danger/30 transition-colors cursor-pointer active:scale-95"
-                        aria-label={`Reject ${vendor.vendorName}`}
-                      >
-                        <X size={14} strokeWidth={2.5} />
+                        <Eye size={14} />
                       </button>
                     </div>
                   </div>

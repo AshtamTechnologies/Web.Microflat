@@ -14,6 +14,9 @@ import {
   Save,
   CheckCircle2,
   XCircle,
+  Pencil,
+  X,
+  Eye,
 } from 'lucide-react';
 
 import {
@@ -27,6 +30,7 @@ import {
   TableContainer,
   Th,
   Td,
+  TableActions,
 } from '../../components/ui';
 import SubSidebar from '../../components/layout/SubSidebar';
 import { SERIES_TYPES, getSeriesTypeByKey } from '../../config/seriesTypes';
@@ -91,8 +95,9 @@ export default function SeriesSetupPage() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Edit Modal State
+  // Edit & View Modal State
   const [editingVersion, setEditingVersion] = useState(null);
+  const [viewingVersion, setViewingVersion] = useState(null);
   const [editForm, setEditForm] = useState({
     prefix: '',
     separator: '-',
@@ -594,13 +599,13 @@ export default function SeriesSetupPage() {
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 pt-2 border-t border-border">
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="secondary"
                   size="md"
                   onClick={handleReset}
                   disabled={isSubmitting}
-                  className="text-xs justify-center"
+                  className="justify-center"
                 >
-                  <RotateCcw size={14} className="mr-1.5" />
+                  <RotateCcw size={15} className="mr-1.5" />
                   Reset
                 </Button>
 
@@ -608,10 +613,11 @@ export default function SeriesSetupPage() {
                   type="submit"
                   variant="primary"
                   size="md"
+                  loading={isSubmitting}
                   disabled={isSubmitting}
-                  className="text-xs font-semibold shadow-2xs justify-center"
+                  className="font-semibold shadow-2xs justify-center"
                 >
-                  <Plus size={15} className="mr-1.5" />
+                  <Plus size={15} className="mr-1.5 shrink-0" />
                   {isSubmitting ? 'Adding Series Version...' : 'Add Series Version'}
                 </Button>
               </div>
@@ -726,16 +732,28 @@ export default function SeriesSetupPage() {
                             By <span className="font-medium text-text">{ver.createdBy || 'Ian Chesnut'}</span> • {formatDate(ver.createdOn)}
                           </div>
 
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() => handleOpenEditModal(ver)}
-                            className="text-xs px-2.5 py-1 text-text hover:text-primary border border-border shrink-0"
-                          >
-                            <Edit3 size={12} className="mr-1 text-primary" />
-                            Edit
-                          </Button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setViewingVersion(ver)}
+                              className="text-xs"
+                            >
+                              <Eye size={13} className="mr-1.5" />
+                              View
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleOpenEditModal(ver)}
+                              className="text-xs"
+                            >
+                              <Pencil size={13} className="mr-1.5" />
+                              Edit
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -845,14 +863,12 @@ export default function SeriesSetupPage() {
 
                             {/* Actions Column */}
                             <Td className="py-3.5 px-4 text-center whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditModal(ver)}
-                                title="Edit Version"
-                                className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface border border-transparent hover:border-border transition-colors cursor-pointer inline-flex items-center gap-1 text-xs font-medium"
-                              >
-                                <Edit3 size={14} />
-                              </button>
+                              <TableActions
+                                onView={() => setViewingVersion(ver)}
+                                onEdit={() => handleOpenEditModal(ver)}
+                                viewTitle="View series version"
+                                editTitle="Edit series version"
+                              />
                             </Td>
                           </tr>
                         );
@@ -1009,14 +1025,16 @@ export default function SeriesSetupPage() {
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
               <Button
                 type="button"
                 variant="secondary"
                 size="md"
                 onClick={handleCloseEditModal}
                 disabled={isUpdating}
+                className="justify-center"
               >
+                <X size={15} className="mr-1.5" aria-hidden="true" />
                 Cancel
               </Button>
 
@@ -1024,15 +1042,140 @@ export default function SeriesSetupPage() {
                 type="submit"
                 variant="primary"
                 size="md"
+                loading={isUpdating}
                 disabled={isUpdating}
-                className="text-xs font-semibold shadow-2xs"
+                className="justify-center font-semibold shadow-2xs"
               >
-                <Save size={14} className="mr-1.5" />
-                {isUpdating ? 'Saving Changes...' : 'Save Changes'}
+                <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                Save Changes
               </Button>
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* ── VIEW SERIES VERSION MODAL ── */}
+      <Modal
+        isOpen={Boolean(viewingVersion)}
+        onClose={() => setViewingVersion(null)}
+        title={`${currentType.label} Series Details`}
+        maxWidth="max-w-lg"
+      >
+        {viewingVersion && (() => {
+          const statusInfo = getStatusInfo(viewingVersion);
+          const sampleNum = formatSeriesNumber(
+            viewingVersion,
+            viewingVersion.startingNumber,
+            viewingVersion.effectiveDate ? new Date(viewingVersion.effectiveDate) : new Date()
+          );
+          const pattern = formatSeriesPattern(viewingVersion);
+
+          return (
+            <div className="space-y-4">
+              {/* Header banner */}
+              <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                    <Hash size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base font-bold text-heading break-words leading-snug">
+                      {currentType.label} Series
+                    </h3>
+                    <p className="text-xs text-text-muted mt-1">Effective {formatDate(viewingVersion.effectiveDate)}</p>
+                  </div>
+                </div>
+                <Badge variant={statusInfo.variant} className="text-xs px-2.5 py-0.5 font-medium shrink-0 mt-0.5">
+                  {statusInfo.label}
+                </Badge>
+              </div>
+
+              {/* Sample Number Highlight */}
+              <div className="bg-bg p-3.5 rounded-xl border border-border flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-2xs text-text-muted font-bold uppercase tracking-wider">
+                    Generated Sample Number
+                  </span>
+                  <span className="text-2xs font-mono text-text-muted">
+                    Pattern: {pattern}
+                  </span>
+                </div>
+                <span className="font-mono font-bold text-base text-primary bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20 tracking-wider">
+                  {sampleNum}
+                </span>
+              </div>
+
+              {/* Specs Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Prefix</span>
+                  <span className="font-mono font-bold text-heading">{viewingVersion.prefix}</span>
+                </div>
+
+                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Separator</span>
+                  <span className="font-mono text-heading">
+                    {viewingVersion.separator === '' || viewingVersion.separator === 'None' ? 'None' : viewingVersion.separator}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Year Format</span>
+                  <span className="font-mono text-heading">{viewingVersion.yearFormat || 'None'}</span>
+                </div>
+
+                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Number Length</span>
+                  <span className="font-mono text-heading tabular-nums">{viewingVersion.numberLength} digits</span>
+                </div>
+
+                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Start Number</span>
+                  <span className="font-mono text-heading tabular-nums">{viewingVersion.startingNumber}</span>
+                </div>
+
+                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Reset Frequency</span>
+                  <span className="text-heading truncate block font-medium">{viewingVersion.resetCounter || 'Yearly'}</span>
+                </div>
+              </div>
+
+              {/* Audit Details */}
+              <div className="p-3 bg-surface/40 border border-border rounded-lg flex items-center justify-between text-2xs text-text-muted">
+                <span>Created by <strong className="text-text font-medium">{viewingVersion.createdBy || 'Ian Chesnut'}</strong></span>
+                <span>{formatDate(viewingVersion.createdOn)}</span>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  onClick={() => setViewingVersion(null)}
+                  className="justify-center"
+                >
+                  <X size={15} className="mr-1.5" aria-hidden="true" />
+                  Close
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  onClick={() => {
+                    const ver = viewingVersion;
+                    setViewingVersion(null);
+                    handleOpenEditModal(ver);
+                  }}
+                  className="justify-center font-semibold shadow-2xs"
+                >
+                  <Pencil size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                  Edit
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

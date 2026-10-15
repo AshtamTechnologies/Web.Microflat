@@ -1,7 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Paperclip } from 'lucide-react';
 import { Badge, TableActions } from '../../components/ui';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -82,7 +81,7 @@ export function useVendorBankTable({
   // Columns definition
   const columns = useMemo(
     () => [
-      /* 1. Vendor (code in mono + name) */
+      /* 1. Vendor (name only) */
       columnHelper.accessor('vendorName', {
         id: 'vendor',
         header: 'VENDOR',
@@ -94,17 +93,12 @@ export function useVendorBankTable({
           return (
             <Link
               to={`/vendor-bank-details/${row.vendorId}/view?bank=${bankId}`}
-              className="flex flex-col min-w-0 py-0.5 group/vendor"
+              className="flex items-center min-w-0 py-0.5 group/vendor"
               title={`View all bank details for ${row.vendorName}`}
             >
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-mono tabular-nums font-semibold text-2xs text-heading bg-surface group-hover/vendor:border-primary/50 border border-border px-1.5 py-0.5 rounded shadow-2xs shrink-0 transition-colors">
-                  {row.vendorCode}
-                </span>
-                <span className="font-semibold text-xs text-heading group-hover/vendor:text-primary truncate transition-colors">
-                  {row.vendorName}
-                </span>
-              </div>
+              <span className="font-semibold text-xs text-heading group-hover/vendor:text-primary truncate transition-colors">
+                {row.vendorName}
+              </span>
             </Link>
           );
         },
@@ -144,32 +138,6 @@ export function useVendorBankTable({
             {info.getValue() || 'Current'}
           </Badge>
         ),
-      }),
-
-      /* 7. Attachments */
-      columnHelper.accessor('attachments', {
-        id: 'attachments',
-        header: 'ATTACHMENTS',
-        minSize: 110,
-        size: 130,
-        cell: (info) => {
-          const row = info.row.original;
-          const atts = Array.isArray(row.attachments) ? row.attachments : [];
-          if (atts.length === 0) {
-            return <span className="text-2xs text-text-muted">—</span>;
-          }
-          return (
-            <button
-              type="button"
-              onClick={() => onViewAttachments && onViewAttachments(row)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-2xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/25 transition-colors cursor-pointer shadow-2xs"
-              title={`View ${atts.length} attachment(s)`}
-            >
-              <Paperclip size={11} />
-              <span>{atts.length} File{atts.length > 1 ? 's' : ''}</span>
-            </button>
-          );
-        },
       }),
 
       /* 8. Status Badge */

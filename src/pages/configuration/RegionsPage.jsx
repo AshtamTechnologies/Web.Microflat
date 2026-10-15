@@ -11,7 +11,6 @@ import {
   Plus,
   Search,
   Pencil,
-  Trash2,
   ChevronRight,
   ChevronDown,
   Globe,
@@ -20,6 +19,8 @@ import {
   ArrowUp,
   ArrowDown,
   X,
+  Save,
+  Eye,
 } from 'lucide-react';
 import { IconRegions } from '../../constants/icons';
 import toast from 'react-hot-toast';
@@ -38,6 +39,7 @@ import {
   StatusSwitch,
   PageHeader,
   FilterBar,
+  TableActions,
 } from '../../components/ui';
 import { useRegionsContext } from '../../context/RegionsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
@@ -101,6 +103,7 @@ export default function RegionsPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRegion, setEditingRegion] = useState(null);
+  const [viewingRegion, setViewingRegion] = useState(null); // View modal state
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -353,15 +356,20 @@ export default function RegionsPage() {
   /* ── TanStack Columns with Resizing Support ── */
   const columns = useMemo(
     () => [
+      /* 1. REGION CODE */
       columnHelper.accessor('regionCode', {
         id: 'regionCode',
-        header: 'Code',
+        header: 'REGION CODE',
         size: 140,
         minSize: 110,
         cell: ({ row }) => (
-          <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setViewingRegion(row.original)}
+            className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
+          >
             {row.original.regionCode}
-          </span>
+          </button>
         ),
       }),
       columnHelper.accessor('regionName', {
@@ -473,43 +481,32 @@ export default function RegionsPage() {
       }),
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: 'ACTIONS',
         size: 130,
-        minSize: 120,
+        minSize: 110,
         enableSorting: false,
         enableResizing: false,
         cell: ({ row }) => (
-          <div className="flex items-center gap-1.5 justify-end">
-            {!row.original.parentRegionId && (
-              <button
-                type="button"
-                onClick={() => handleOpenAdd(row.original.regionId)}
-                className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer shadow-2xs"
-                title="Add sub-region"
-                aria-label="Add sub-region"
-              >
-                <Plus size={15} />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => handleOpenEdit(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer shadow-2xs"
-              title="Edit region"
-              aria-label="Edit region"
-            >
-              <Pencil size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDeleteClick(row.original)}
-              className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer shadow-2xs"
-              title="Delete region"
-              aria-label="Delete region"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
+          <TableActions
+            extraActions={
+              !row.original.parentRegionId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleOpenAdd(row.original.regionId)}
+                  title="Add sub-region"
+                  className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface transition-colors"
+                >
+                  <Plus size={15} aria-hidden="true" />
+                </Button>
+              )
+            }
+            onView={() => setViewingRegion(row.original)}
+            onEdit={() => handleOpenEdit(row.original)}
+            viewTitle="View region"
+            editTitle="Edit region"
+          />
         ),
       }),
     ],
@@ -751,9 +748,13 @@ export default function RegionsPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono tabular-nums font-semibold text-xs text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
+                    <button
+                      type="button"
+                      onClick={() => setViewingRegion(reg)}
+                      className="font-mono text-xs font-bold text-primary hover:underline text-left cursor-pointer"
+                    >
                       {reg.regionCode}
-                    </span>
+                    </button>
                     {reg.depth > 0 && (
                       <span className="text-2xs text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">
                         Level {reg.depth + 1}
@@ -793,31 +794,38 @@ export default function RegionsPage() {
 
                 <div className="flex items-center gap-1.5">
                   {!reg.parentRegionId && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleOpenAdd(reg.regionId)}
-                      className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer"
                       title="Add sub-region"
+                      className="text-xs"
                     >
-                      <Plus size={14} />
-                    </button>
+                      <Plus size={13} className="mr-1" />
+                      Add Sub
+                    </Button>
                   )}
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setViewingRegion(reg)}
+                    className="text-xs"
+                  >
+                    <Eye size={13} className="mr-1.5" />
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => handleOpenEdit(reg)}
-                    className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer"
-                    title="Edit region"
+                    className="text-xs"
                   >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteClick(reg)}
-                    className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 hover:bg-danger/5 transition-all cursor-pointer"
-                    title="Delete region"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                    <Pencil size={13} className="mr-1.5" />
+                    Edit
+                  </Button>
                 </div>
               </div>
             </div>
@@ -938,52 +946,147 @@ export default function RegionsPage() {
             <Button
               type="button"
               variant="secondary"
+              size="md"
               onClick={handleCloseModal}
               disabled={isSubmitting}
+              className="justify-center"
             >
+              <X size={15} className="mr-1.5" aria-hidden="true" />
               Cancel
             </Button>
             <Button
               type="submit"
               variant="primary"
+              size="md"
+              loading={isSubmitting}
               disabled={isSubmitting}
-              className="min-w-[100px] flex items-center justify-center gap-2"
+              className="justify-center font-semibold shadow-2xs"
             >
-              {isSubmitting ? (
-                <>
-                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <span>{editingRegion ? 'Save Changes' : 'Add Region'}</span>
-              )}
+              <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+              {editingRegion ? 'Save Changes' : 'Create Region'}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* ── Confirm Delete Modal ── */}
-      <ConfirmModal
-        isOpen={Boolean(regionToDelete)}
-        onClose={() => setRegionToDelete(null)}
-        onConfirm={handleConfirmDelete}
-        title="Delete Region"
-        message={
-          regionToDelete ? (
-            <span>
-              Are you sure you want to delete{' '}
-              <strong className="text-heading font-semibold">
-                {regionToDelete.regionName}
-              </strong>{' '}
-              ({regionToDelete.regionCode})? This action cannot be undone.
-            </span>
-          ) : (
-            'Are you sure you want to delete this region?'
-          )
-        }
-        confirmText="Delete Region"
-        confirmVariant="danger"
-      />
+      {/* ── View Region Modal ── */}
+      <Modal
+        isOpen={Boolean(viewingRegion)}
+        onClose={() => setViewingRegion(null)}
+        title="Region Details"
+        maxWidth="max-w-lg"
+      >
+        {viewingRegion && (
+          <div className="space-y-4">
+            {/* Header banner */}
+            <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                  {viewingRegion.depth === 0 ? <Globe size={20} /> : <MapPin size={20} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold text-heading break-words leading-snug">
+                    {viewingRegion.regionName}
+                  </h3>
+                  <p className="text-xs text-text-muted font-mono mt-1">{viewingRegion.regionCode}</p>
+                </div>
+              </div>
+              <span
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none shrink-0 mt-0.5',
+                  viewingRegion.isActive
+                    ? 'bg-success/10 text-success border border-success/20'
+                    : 'bg-danger/10 text-danger border border-danger/20',
+                ].join(' ')}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    viewingRegion.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
+                  aria-hidden="true"
+                />
+                {viewingRegion.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Region Code
+                </span>
+                <span className="font-mono text-sm font-semibold text-heading break-words">
+                  {viewingRegion.regionCode}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Hierarchy Level
+                </span>
+                <span className="text-xs font-medium text-heading">
+                  {viewingRegion.depth === 0 || !viewingRegion.parentRegionId ? 'Top-Level Region' : 'Sub-Region'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Parent Region
+                </span>
+                <span className="text-xs text-text break-words block leading-relaxed">
+                  {viewingRegion.parentName || '— (None / Top-Level)'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Sub-Regions
+                </span>
+                <span className="text-xs font-medium text-heading">
+                  {regions.filter(r => r.parentRegionId === viewingRegion.regionId).length} sub-regions
+                </span>
+              </div>
+
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                  Created On
+                </span>
+                <span className="font-mono text-xs text-text-muted">
+                  {formatDate(viewingRegion.createdOn)}
+                </span>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => setViewingRegion(null)}
+                className="justify-center"
+              >
+                <X size={15} className="mr-1.5" aria-hidden="true" />
+                Close
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  const reg = viewingRegion;
+                  setViewingRegion(null);
+                  handleOpenEdit(reg);
+                }}
+                className="justify-center font-semibold shadow-2xs"
+              >
+                <Pencil size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                Edit
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
