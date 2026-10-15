@@ -1,8 +1,8 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Pencil, Paperclip, Trash2, Eye } from 'lucide-react';
-import { Badge, Button } from '../../components/ui';
+import { Paperclip } from 'lucide-react';
+import { Badge, TableActions } from '../../components/ui';
 import { formatDate } from '../../utils/dateUtils';
 
 export const STATUS_FILTER_OPTIONS = [
@@ -131,55 +131,7 @@ export function useVendorBankTable({
         },
       }),
 
-      /* 3. Account Holder */
-      columnHelper.accessor('accountHolderName', {
-        id: 'accountHolder',
-        header: 'ACCOUNT HOLDER',
-        minSize: 150,
-        size: 190,
-        cell: (info) => (
-          <span className="text-xs text-text truncate block" title={info.getValue()}>
-            {info.getValue() || '—'}
-          </span>
-        ),
-      }),
 
-      /* 4. Account No (masked "•••• 4821", mono) */
-      columnHelper.accessor('accountNumber', {
-        id: 'accountNumber',
-        header: 'ACCOUNT NO',
-        minSize: 130,
-        size: 150,
-        cell: (info) => (
-          <span className="font-mono tabular-nums text-xs font-medium text-heading">
-            {maskAccountNumber(info.getValue())}
-          </span>
-        ),
-      }),
-
-      /* 5. IFSC / SWIFT (mono) */
-      columnHelper.accessor('ifscCode', {
-        id: 'ifscOrSwift',
-        header: 'IFSC / SWIFT',
-        minSize: 130,
-        size: 150,
-        cell: (info) => {
-          const row = info.row.original;
-          return (
-            <div className="flex flex-col font-mono tabular-nums text-xs">
-              {row.ifscCode ? (
-                <span className="font-medium text-heading">{row.ifscCode}</span>
-              ) : null}
-              {row.swiftCode ? (
-                <span className="text-2xs text-text-muted">{row.swiftCode}</span>
-              ) : null}
-              {!row.ifscCode && !row.swiftCode ? (
-                <span className="text-text-muted text-xs">—</span>
-              ) : null}
-            </div>
-          );
-        },
-      }),
 
       /* 6. Type (neutral Badge) */
       columnHelper.accessor('accountType', {
@@ -259,69 +211,26 @@ export function useVendorBankTable({
         },
       }),
 
-      /* 10. Actions (Attachment view & Edit) */
+      /* Actions (View, Edit, Delete) */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 90,
+        minSize: 100,
         size: 110,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
           const row = info.row.original;
           const bankId = row.bankDetailId || row.id;
-          const hasAtts = Array.isArray(row.attachments) && row.attachments.length > 0;
           return (
-            <div className="flex items-center justify-end gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onViewAttachments && onViewAttachments(row)}
-                title={
-                  hasAtts
-                    ? `View ${row.attachments.length} attachment(s)`
-                    : 'View attachments (none)'
-                }
-                className={`h-8 w-8 inline-flex items-center justify-center rounded-lg cursor-pointer ${
-                  hasAtts ? 'text-primary hover:bg-primary/10' : 'text-text-muted/40 hover:bg-surface'
-                }`}
-                aria-label="View attachments"
-              >
-                <Paperclip size={14} aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate(`/vendor-bank-details/${row.vendorId}/view?bank=${bankId}`)}
-                title="View bank details"
-                className="text-text-muted hover:text-info hover:bg-surface h-8 w-8 inline-flex items-center justify-center rounded-lg cursor-pointer"
-                aria-label={`View bank details for ${row.vendorName}`}
-              >
-                <Eye size={14} aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate(`/vendor-bank-details/${row.vendorId}/edit?bank=${bankId}`)}
-                title="Edit bank account"
-                className="text-text-muted hover:text-primary hover:bg-surface h-8 w-8 inline-flex items-center justify-center rounded-lg cursor-pointer"
-                aria-label={`Edit bank account for ${row.vendorName}`}
-              >
-                <Pencil size={14} aria-hidden="true" />
-              </Button>
-              {onDeleteBank && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onDeleteBank(row)}
-                  title="Delete bank account"
-                  className="text-text-muted hover:text-danger hover:bg-danger/10 h-8 w-8 inline-flex items-center justify-center rounded-lg cursor-pointer"
-                  aria-label={`Delete bank account for ${row.vendorName}`}
-                >
-                  <Trash2 size={14} aria-hidden="true" />
-                </Button>
-              )}
-            </div>
+            <TableActions
+              onView={() => navigate(`/vendor-bank-details/${row.vendorId}/view?bank=${bankId}`)}
+              onEdit={() => navigate(`/vendor-bank-details/${row.vendorId}/edit?bank=${bankId}`)}
+              onDelete={onDeleteBank ? () => onDeleteBank(row) : undefined}
+              viewTitle={`View bank details for ${row.vendorName}`}
+              editTitle={`Edit bank account for ${row.vendorName}`}
+              deleteTitle={`Delete bank account for ${row.vendorName}`}
+            />
           );
         },
       }),

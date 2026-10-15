@@ -19,21 +19,15 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getPaginationRowModel,
-  flexRender,
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  Search,
   Check,
   X,
-  ChevronUp,
-  ChevronDown,
   FileSpreadsheet,
   CheckCircle2,
   Clock,
   Building2,
-  SearchX,
-  RotateCcw,
   AlertCircle,
   FileText,
   User,
@@ -52,12 +46,10 @@ import {
   Button,
   Input,
   Modal,
-  ConfirmModal,
-  TableContainer,
-  Th,
-  Td,
   Badge,
   PageHeader,
+  DataTable,
+  TableToolbar,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -486,16 +478,7 @@ export default function PurchaseRequisitionApprovalPage() {
     enableColumnResizing: true,
   });
 
-  const pageCount = table.getPageCount();
-  const currentPage = table.getState().pagination.pageIndex;
-  const totalRows = filteredPendingPRs.length;
-  const startRow = totalRows === 0 ? 0 : currentPage * pagination.pageSize + 1;
-  const endRow = Math.min((currentPage + 1) * pagination.pageSize, totalRows);
 
-  const paginatedMobilePRs = useMemo(() => {
-    const start = currentPage * pagination.pageSize;
-    return filteredPendingPRs.slice(start, start + pagination.pageSize);
-  }, [filteredPendingPRs, currentPage, pagination.pageSize]);
 
   return (
     <div className="space-y-6">
@@ -567,396 +550,176 @@ export default function PurchaseRequisitionApprovalPage() {
         </div>
       </div>
 
-      {/* ── Unified Card Container ── */}
-      <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-        {/* ── Toolbar: Search & Priority Filter ── */}
-        <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center flex-1 gap-3 flex-wrap">
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-0 sm:min-w-56 max-w-md">
-              <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-                aria-hidden="true"
-              />
-              <input
-                type="text"
-                placeholder="Search PR number, requester, department, item..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPagination((p) => ({ ...p, pageIndex: 0 }));
-                }}
-                className="w-full pl-9 pr-8 py-2 bg-surface text-text placeholder:text-text-muted border border-border rounded-lg text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors duration-150"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-heading cursor-pointer p-0.5"
-                  aria-label="Clear search"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            {/* Priority Quick Filter */}
-            <div className="flex items-center gap-1.5 bg-surface p-1 rounded-lg border border-border text-xs">
-              {['ALL', 'Normal', 'Urgent'].map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => {
-                    setPriorityFilter(p);
-                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-                  }}
-                  className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                    priorityFilter === p
-                      ? 'bg-primary text-white shadow-2xs font-semibold'
-                      : 'text-text-muted hover:text-heading hover:bg-bg'
-                  }`}
-                >
-                  {p === 'ALL' ? 'All Priority' : p}
-                </button>
-              ))}
-            </div>
-
-            {hasSearchFilter && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearch('');
-                  setPriorityFilter('ALL');
-                }}
-                className="text-xs text-text-muted hover:text-danger h-8 px-2"
-                title="Reset filters"
-              >
-                <RotateCcw size={12} className="mr-1" />
-                Reset
-              </Button>
-            )}
-          </div>
-
-          <span className="text-xs font-mono text-text-muted shrink-0 self-end sm:self-center">
-            Showing <strong className="text-heading font-semibold">{filteredPendingPRs.length}</strong> of {totalPendingCount} pending
-          </span>
+      {/* ── Filter Toolbar ── */}
+      <TableToolbar
+        searchValue={search}
+        onSearchChange={(val) => {
+          setSearch(val);
+          setPagination((p) => ({ ...p, pageIndex: 0 }));
+        }}
+        searchPlaceholder="Search PR number, requester, department, item..."
+        hasActiveFilters={hasSearchFilter}
+        onReset={() => {
+          setSearch('');
+          setPriorityFilter('ALL');
+        }}
+      >
+        {/* Priority Quick Filter */}
+        <div className="flex items-center gap-1.5 bg-surface p-1 rounded-lg border border-border text-xs">
+          {['ALL', 'Normal', 'Urgent'].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => {
+                setPriorityFilter(p);
+                setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+              }}
+              className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                priorityFilter === p
+                  ? 'bg-primary text-white shadow-2xs font-semibold'
+                  : 'text-text-muted hover:text-heading hover:bg-bg'
+              }`}
+            >
+              {p === 'ALL' ? 'All Priority' : p}
+            </button>
+          ))}
         </div>
+      </TableToolbar>
 
-        {/* ── DESKTOP TABLE VIEW (md+) ── */}
-        <div className="hidden md:block">
-          <TableContainer>
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => {
-                    const canSort = header.column.getCanSort();
-                    const sorted = header.column.getIsSorted();
+      {/* ── Standard TanStack DataTable & Mobile Responsive Cards ── */}
+      <DataTable
+        table={table}
+        columns={columns}
+        totalCount={filteredPendingPRs.length}
+        entityName="pending requisitions"
+        emptyTitle={
+          hasSearchFilter
+            ? 'No matching pending requisitions'
+            : 'All purchase requisitions reviewed'
+        }
+        emptyDescription={
+          hasSearchFilter
+            ? `No pending requisitions match your query. Try resetting filters.`
+            : 'There are currently no purchase requisitions awaiting approval in the queue.'
+        }
+        emptyAction={
+          hasSearchFilter ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearch('');
+                setPriorityFilter('ALL');
+              }}
+              className="text-xs text-primary"
+            >
+              Clear filters
+            </Button>
+          ) : null
+        }
+        renderMobileCard={(row) => {
+          const pr = row.original;
+          const isUrgent = (pr.priority || '').toLowerCase() === 'urgent';
+          const itemsCount = pr.items?.length || 0;
 
-                    return (
-                      <Th
-                        key={header.id}
-                        style={{ width: header.getSize() }}
-                        isResizing={header.column.getIsResizing()}
-                        resizeHandler={
-                          header.column.getCanResize()
-                            ? header.getResizeHandler()
-                            : undefined
-                        }
-                        className={canSort ? 'cursor-pointer select-none' : 'select-none'}
-                      >
-                        {header.isPlaceholder ? null : canSort ? (
-                          <button
-                            type="button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            className="group/th-btn flex items-center gap-1.5 w-full text-left select-none cursor-pointer hover:text-heading transition-colors"
-                          >
-                            <span className="truncate">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                            </span>
-
-                            <span className="shrink-0 ml-1 inline-flex items-center">
-                              {sorted === 'asc' ? (
-                                <ChevronUp
-                                  size={14}
-                                  className="text-primary stroke-[2.5]"
-                                  aria-hidden="true"
-                                />
-                              ) : sorted === 'desc' ? (
-                                <ChevronDown
-                                  size={14}
-                                  className="text-primary stroke-[2.5]"
-                                  aria-hidden="true"
-                                />
-                              ) : (
-                                <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <ChevronUp size={11} strokeWidth={2.5} />
-                                  <ChevronDown size={11} strokeWidth={2.5} />
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        ) : (
-                          <div
-                            className={`select-none ${
-                              header.id === 'actions' ? 'text-right w-full pr-1' : ''
-                            }`}
-                          >
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                          </div>
-                        )}
-                      </Th>
-                    );
-                  })}
-                </tr>
-              ))}
-            </thead>
-            <tbody className="divide-y divide-border">
-              {table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="py-16 text-center text-text-muted bg-bg"
-                  >
-                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-                      {hasSearchFilter ? (
-                        <>
-                          <div className="w-12 h-12 rounded-full bg-surface border border-border flex items-center justify-center text-text-muted mb-3">
-                            <SearchX size={22} className="stroke-[1.75]" aria-hidden="true" />
-                          </div>
-                          <h4 className="text-sm font-semibold text-heading">
-                            No matching requisitions found
-                          </h4>
-                          <p className="text-xs text-text-muted mt-1">
-                            Try adjusting or clearing your search term.
-                          </p>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              setSearch('');
-                              setPriorityFilter('ALL');
-                            }}
-                            className="mt-4 text-xs"
-                          >
-                            <RotateCcw size={13} className="mr-1.5" />
-                            Clear search
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <div className="w-12 h-12 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-success mb-3 shadow-xs">
-                            <CheckCircle2 size={24} className="stroke-[2.2]" aria-hidden="true" />
-                          </div>
-                          <h4 className="text-sm font-semibold text-heading">
-                            No purchase requisitions pending approval
-                          </h4>
-                          <p className="text-xs text-text-muted mt-1">
-                            All caught up! There are currently no purchase requisitions awaiting review.
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                /* ── Data Rows ── */
-                table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-surface/80 transition-colors duration-120 bg-bg group/row"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <Td
-                        key={cell.id}
-                        style={{ width: cell.column.getSize() }}
-                        className={cell.column.id === 'actions' ? 'overflow-visible pr-3 sm:pr-4' : ''}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </Td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </TableContainer>
-        </div>
-
-        {/* ── MOBILE CARD VIEW (< md) ── */}
-        <div className="block md:hidden p-4 space-y-3 bg-bg">
-          {paginatedMobilePRs.length === 0 ? (
-            <div className="py-12 px-4 text-center">
-              <div className="w-12 h-12 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-success mx-auto mb-3">
-                <CheckCircle2 size={22} className="stroke-[2.2]" aria-hidden="true" />
-              </div>
-              <h4 className="text-sm font-semibold text-heading">
-                No requisitions pending approval
-              </h4>
-              <p className="text-xs text-text-muted mt-1">
-                All caught up! There are currently no purchase requisitions awaiting review.
-              </p>
-            </div>
-          ) : (
-            paginatedMobilePRs.map((pr) => {
-              const isUrgent = pr.priority === 'Urgent';
-              const items = pr.items || [];
-
-              return (
-                <div
-                  key={pr.prId || pr.prNumber}
-                  className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono text-xs font-bold text-primary">
-                          {pr.prNumber}
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-bold border ${
-                            isUrgent
-                              ? 'bg-danger/10 text-danger border-danger/25'
-                              : 'bg-primary/10 text-primary border-primary/20'
-                          }`}
-                        >
-                          {isUrgent && <Flame size={10} className="stroke-[2.5]" />}
-                          {pr.priority || 'Normal'}
-                        </span>
-                      </div>
-                      <h3 className="text-sm font-semibold text-heading leading-tight mt-1">
-                        {pr.requestedBy}
-                      </h3>
-                      <p className="text-xs text-text-muted flex items-center gap-1 mt-0.5">
-                        <Building2 size={12} />
-                        <span>{pr.department}</span>
-                      </p>
-                    </div>
-
-                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-warning/15 text-warning border border-warning/30 shrink-0">
-                      <Clock size={11} className="shrink-0" />
-                      Pending
+          return (
+            <div
+              key={pr.prNumber}
+              className="bg-surface border border-border rounded-xl p-4 shadow-2xs space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-primary">
+                      {pr.prNumber}
                     </span>
-                  </div>
-
-                  {/* Materials brief */}
-                  <div className="pt-2 border-t border-border text-xs text-text-muted space-y-1">
-                    <div className="flex items-center justify-between font-mono text-2xs">
-                      <span>Items: <strong>{items.length} {items.length === 1 ? 'item' : 'items'}</strong></span>
-                      <span>Date: {formatPRDate(pr.prDate)}</span>
-                    </div>
-                    {pr.attachments?.length > 0 && (
-                      <div className="flex items-center justify-between text-2xs pt-1">
-                        <span className="text-text-muted">Attachments:</span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPrToViewAttachments(pr);
-                          }}
-                          className="text-primary font-medium hover:underline inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <Paperclip size={11} />
-                          {pr.attachments.length} {pr.attachments.length === 1 ? 'file' : 'files'}
-                        </button>
-                      </div>
+                    {isUrgent && (
+                      <Badge variant="danger" size="sm" className="gap-1 font-semibold">
+                        <Flame size={11} className="shrink-0" />
+                        Urgent
+                      </Badge>
                     )}
                   </div>
-
-                  {/* Actions */}
-                  <div
-                    className="flex items-center gap-2 pt-2 border-t border-border"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Button
-                      type="button"
-                      variant="primary-soft"
-                      size="sm"
-                      onClick={() =>
-                        navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`, {
-                          state: { from: '/approvals/purchase-requisitions', backLabel: 'PR Approval', readOnly: true },
-                        })
-                      }
-                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
-                    >
-                      <Eye size={13} />
-                      View
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="success"
-                      size="sm"
-                      onClick={() => handleOpenApprove(pr)}
-                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
-                    >
-                      <Check size={14} className="stroke-[2.5]" />
-                      Approve
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="danger-soft"
-                      size="sm"
-                      onClick={() => handleOpenReject(pr)}
-                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
-                    >
-                      <X size={14} className="stroke-[2.5]" />
-                      Reject
-                    </Button>
-                  </div>
+                  <h3 className="text-sm font-semibold text-heading leading-tight mt-0.5 truncate">
+                    {pr.requestedBy}
+                  </h3>
+                  <span className="text-xs text-text-muted block mt-0.5">
+                    {pr.department}
+                  </span>
                 </div>
-              );
-            })
-          )}
-        </div>
+                <Badge variant="warning" size="sm">
+                  Pending Review
+                </Badge>
+              </div>
 
-        {/* ── Table Pagination Footer ── */}
-        {totalRows > 0 && (
-          <div className="p-4 sm:px-6 bg-surface/50 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <span className="text-text-muted">
-              Showing <strong className="text-heading font-medium">{startRow}</strong> to{' '}
-              <strong className="text-heading font-medium">{endRow}</strong> of{' '}
-              <strong className="text-heading font-medium">{totalRows}</strong> results
-            </span>
+              {/* Meta details */}
+              <div className="grid grid-cols-2 gap-2 text-xs text-text-muted pt-2 border-t border-border/50">
+                <div>
+                  <span className="text-2xs text-text-muted block">Project</span>
+                  <span className="font-medium text-heading truncate block">
+                    {pr.projectId || 'General Inventory'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-2xs text-text-muted block">Line Items</span>
+                  <span className="font-medium text-heading block">
+                    {itemsCount} {itemsCount === 1 ? 'item' : 'items'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-2xs text-text-muted block">Required By</span>
+                  <span className="font-mono text-2xs text-heading">
+                    {formatPRDate(pr.requiredDate)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-2xs text-text-muted block">Created Date</span>
+                  <span className="font-mono text-2xs text-text-muted">
+                    {formatPRDate(pr.prDate)}
+                  </span>
+                </div>
+              </div>
 
-            <div className="flex items-center gap-2 self-center sm:self-auto">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="text-xs h-8 px-3"
-              >
-                Previous
-              </Button>
+              {/* Actions footer */}
+              <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)}
+                  className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
+                >
+                  <Eye size={13} />
+                  View
+                </Button>
 
-              <span className="font-mono text-xs px-2 text-text-muted">
-                Page <strong className="text-heading">{currentPage + 1}</strong> of{' '}
-                <strong className="text-heading">{Math.max(1, pageCount)}</strong>
-              </span>
+                <Button
+                  type="button"
+                  variant="success"
+                  size="sm"
+                  onClick={() => handleOpenApprove(pr)}
+                  className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
+                >
+                  <Check size={13} className="stroke-[2.5]" />
+                  Approve
+                </Button>
 
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="text-xs h-8 px-3"
-              >
-                Next
-              </Button>
+                <Button
+                  type="button"
+                  variant="danger-soft"
+                  size="sm"
+                  onClick={() => handleOpenReject(pr)}
+                  className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
+                >
+                  <X size={13} className="stroke-[2.5]" />
+                  Reject
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          );
+        }}
+      />
 
       {/* ── 1. APPROVE CONFIRMATION MODAL WITH REMARKS ── */}
       {prToApprove && (

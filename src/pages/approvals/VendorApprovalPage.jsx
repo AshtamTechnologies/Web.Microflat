@@ -18,22 +18,14 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getPaginationRowModel,
-  flexRender,
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  Search,
   Check,
   X,
-  ChevronUp,
-  ChevronDown,
-  Building2,
   CheckCircle2,
   Clock,
   MapPin,
-  SearchX,
-  RotateCcw,
-  AlertCircle,
   FileText,
   User,
   Eye,
@@ -43,15 +35,12 @@ import toast from 'react-hot-toast';
 
 import {
   Button,
-  Input,
   Modal,
-  ConfirmModal,
-  TableContainer,
-  Th,
-  Td,
   Badge,
   PageHeader,
   Textarea,
+  DataTable,
+  TableToolbar,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { getStateName } from '../../mocks/vendors';
@@ -340,16 +329,7 @@ export default function VendorApprovalPage() {
     enableColumnResizing: true,
   });
 
-  const pageCount = table.getPageCount();
-  const currentPage = table.getState().pagination.pageIndex;
-  const totalRows = filteredPendingVendors.length;
-  const startRow = totalRows === 0 ? 0 : currentPage * pagination.pageSize + 1;
-  const endRow = Math.min((currentPage + 1) * pagination.pageSize, totalRows);
 
-  const paginatedMobileVendors = useMemo(() => {
-    const start = currentPage * pagination.pageSize;
-    return filteredPendingVendors.slice(start, start + pagination.pageSize);
-  }, [filteredPendingVendors, currentPage, pagination.pageSize]);
 
   return (
     <div className="space-y-6">
@@ -366,323 +346,131 @@ export default function VendorApprovalPage() {
         }
       />
 
-      {/* ── Unified Card Container ── */}
-      <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-        {/* ── Toolbar: Search Filter ── */}
-        <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center flex-1 gap-3 flex-wrap">
-            <div className="w-full sm:w-80">
-              <Input
-                id="vendor-approval-search"
-                type="search"
-                placeholder="Search by vendor name, code, contact..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                leftIcon={<Search size={16} aria-hidden="true" />}
-              />
-            </div>
-
-            {hasSearchFilter && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSearch('')}
-                className="text-xs text-text-muted hover:text-danger flex items-center gap-1.5 h-10 px-3"
-                title="Clear search"
-              >
-                <RotateCcw size={13} aria-hidden="true" />
-                Reset
-              </Button>
-            )}
-          </div>
-
-          <div className="text-xs text-text-muted flex items-center gap-1.5 self-end sm:self-center">
-            <FileText size={13} className="text-primary" />
-            <span>Showing queue of pending submissions</span>
-          </div>
+      {/* ── Filter Toolbar ── */}
+      <TableToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by vendor name, code, contact person, or city..."
+        hasActiveFilters={hasSearchFilter}
+        onReset={() => setSearch('')}
+      >
+        <div className="text-xs text-text-muted flex items-center gap-1.5 self-end sm:self-center">
+          <FileText size={13} className="text-primary" />
+          <span>Showing queue of pending submissions</span>
         </div>
+      </TableToolbar>
 
-        {/* ── DESKTOP TABLE VIEW (md+) ── */}
-        <div className="hidden md:block">
-          <TableContainer
-            tableStyle={{ width: table.getTotalSize(), minWidth: '100%' }}
-            tableClassName="table-fixed"
-          >
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} className="bg-surface">
-                  {headerGroup.headers.map((header) => {
-                    const sorted = header.column.getIsSorted();
-                    const canSort = header.column.getCanSort();
-                    const canResize = header.column.getCanResize();
-
-                    return (
-                      <Th
-                        key={header.id}
-                        style={{ width: header.getSize() }}
-                        isResizing={header.column.getIsResizing()}
-                        resizeHandler={canResize ? header.getResizeHandler() : undefined}
-                      >
-                        {header.isPlaceholder ? null : canSort ? (
-                          <button
-                            type="button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            className="group/th-btn flex items-center gap-1.5 w-full text-left select-none cursor-pointer hover:text-heading transition-colors"
-                          >
-                            <span className="truncate">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                            </span>
-
-                            {/* Sort indicator */}
-                            <span className="shrink-0 ml-1 inline-flex items-center">
-                              {sorted === 'asc' ? (
-                                <ChevronUp size={14} className="text-primary stroke-[2.5]" aria-hidden="true" />
-                              ) : sorted === 'desc' ? (
-                                <ChevronDown size={14} className="text-primary stroke-[2.5]" aria-hidden="true" />
-                              ) : (
-                                <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <ChevronUp size={11} strokeWidth={2.5} />
-                                  <ChevronDown size={11} strokeWidth={2.5} />
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        ) : (
-                          <div className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''}`}>
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                          </div>
-                        )}
-                      </Th>
-                    );
-                  })}
-                </tr>
-              ))}
-            </thead>
-
-            <tbody className="divide-y divide-border bg-bg">
-              {table.getRowModel().rows.length === 0 ? (
-                /* ── Empty State ── */
-                <tr>
-                  <td colSpan={columns.length} className="text-center py-16 px-6">
-                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto text-center">
-                      {hasSearchFilter ? (
-                        <>
-                          <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center text-text-muted mb-3">
-                            <SearchX size={22} className="opacity-60" aria-hidden="true" />
-                          </div>
-                          <h4 className="text-sm font-semibold text-heading">
-                            No matching pending vendors
-                          </h4>
-                          <p className="text-xs text-text-muted mt-1 mb-4">
-                            No pending vendor records match your search criteria.
-                          </p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSearch('')}
-                            className="text-primary hover:text-primary hover:bg-primary/10"
-                          >
-                            Clear search
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <div className="w-14 h-14 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-success mb-3 shadow-sm">
-                            <CheckCircle2 size={26} className="stroke-[2.2]" aria-hidden="true" />
-                          </div>
-                          <h4 className="text-base font-semibold text-heading">
-                            No vendors pending approval
-                          </h4>
-                          <p className="text-xs text-text-muted mt-1">
-                            All caught up! There are currently no vendor records awaiting review.
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                /* ── Data Rows ── */
-                table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-surface/80 transition-colors duration-120 bg-bg group/row"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <Td
-                        key={cell.id}
-                        style={{ width: cell.column.getSize() }}
-                        className={cell.column.id === 'actions' ? 'overflow-visible pr-3 sm:pr-4' : ''}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </Td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </TableContainer>
-        </div>
-
-        {/* ── MOBILE CARD VIEW (< md) ── */}
-        <div className="block md:hidden p-4 space-y-3 bg-bg">
-          {paginatedMobileVendors.length === 0 ? (
-            <div className="py-12 px-4 text-center">
-              <div className="w-12 h-12 rounded-full bg-success/15 border border-success/30 flex items-center justify-center text-success mx-auto mb-3">
-                <CheckCircle2 size={22} className="stroke-[2.2]" aria-hidden="true" />
-              </div>
-              <h4 className="text-sm font-semibold text-heading">
-                No vendors pending approval
-              </h4>
-              <p className="text-xs text-text-muted mt-1">
-                All caught up! There are currently no vendor records awaiting review.
-              </p>
-            </div>
-          ) : (
-            paginatedMobileVendors.map((vendor) => {
-              const state = getStateName(vendor.countryId, vendor.stateId);
-
-              return (
-                <div
-                  key={vendor.id}
-                  className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="font-mono text-xs font-bold text-primary block">
-                        {vendor.vendorCode}
-                      </span>
-                      <h3 className="text-sm font-semibold text-heading leading-tight mt-0.5">
-                        {vendor.vendorName}
-                      </h3>
-                      {vendor.contactPersonName && (
-                        <p className="text-xs text-text-muted mt-0.5">
-                          Contact: {vendor.contactPersonName}
-                        </p>
-                      )}
-                    </div>
-
-                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-warning/15 text-warning border border-warning/30 shrink-0">
-                      <Clock size={11} />
-                      Pending
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-text-muted pt-2 border-t border-border/50">
-                    <div className="flex items-center gap-1">
-                      <MapPin size={12} className="shrink-0 text-text-muted/70" />
-                      <span>{vendor.city ? `${vendor.city}, ${state}` : state || '—'}</span>
-                    </div>
-                    <span className="font-mono">{formatDate(vendor.effectiveDate || vendor.createdOn)}</span>
-                  </div>
-
-                  {/* Actions Footer */}
-                  <div
-                    className="flex items-center justify-end gap-2 pt-2 border-t border-border/50"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Button
-                      type="button"
-                      variant="primary-soft"
-                      size="sm"
-                      onClick={() =>
-                        navigate(`/vendors/${vendor.id}/effective-dates`, {
-                          state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
-                        })
-                      }
-                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
-                    >
-                      <Eye size={13} />
-                      View
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="success"
-                      size="sm"
-                      onClick={() => handleOpenApprove(vendor)}
-                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
-                    >
-                      <Check size={13} className="stroke-[2.5]" />
-                      Approve
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="danger-soft"
-                      size="sm"
-                      onClick={() => handleOpenReject(vendor)}
-                      className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
-                    >
-                      <X size={13} className="stroke-[2.5]" />
-                      Reject
-                    </Button>
-                  </div>
+      {/* ── Standard TanStack DataTable & Mobile Responsive Cards ── */}
+      <DataTable
+        table={table}
+        columns={columns}
+        totalCount={filteredPendingVendors.length}
+        entityName="pending vendors"
+        emptyTitle={
+          hasSearchFilter
+            ? 'No matching pending vendors'
+            : 'All vendor submissions reviewed'
+        }
+        emptyDescription={
+          hasSearchFilter
+            ? `No pending vendors match "${search}". Try adjusting your query.`
+            : 'There are currently no vendors awaiting approval in the queue.'
+        }
+        emptyAction={
+          hasSearchFilter ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSearch('')}
+              className="text-xs text-primary"
+            >
+              Clear search
+            </Button>
+          ) : null
+        }
+        renderMobileCard={(row) => {
+          const vendor = row.original;
+          return (
+            <div
+              key={vendor.id}
+              className="bg-surface border border-border rounded-xl p-4 shadow-2xs space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="font-mono text-xs font-bold text-primary">
+                    {vendor.vendorCode}
+                  </span>
+                  <h3 className="text-sm font-semibold text-heading leading-tight mt-0.5">
+                    {vendor.vendorName}
+                  </h3>
                 </div>
-              );
-            })
-          )}
-        </div>
+                <Badge variant="pending" size="sm">
+                  Pending Review
+                </Badge>
+              </div>
 
-        {/* ── PAGINATION FOOTER ── */}
-        <div className="px-6 py-4 bg-bg border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-text-muted">
-            Showing <span className="font-medium text-heading">{startRow}-{endRow}</span> of{' '}
-            <span className="font-medium text-heading">{totalRows}</span> pending vendors
-          </p>
+              {/* Meta details */}
+              <div className="grid grid-cols-2 gap-2 text-xs text-text-muted pt-2 border-t border-border/50">
+                <div>
+                  <span className="text-2xs text-text-muted block">Contact</span>
+                  <span className="font-medium text-heading truncate block">
+                    {vendor.contactPersonName || '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-2xs text-text-muted block">Location</span>
+                  <span className="font-medium text-heading truncate block">
+                    {vendor.city ? `${vendor.city}, ${getStateName(vendor.countryId, vendor.stateId)}` : '—'}
+                  </span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-2xs text-text-muted block">Submitted On</span>
+                  <span className="font-mono text-2xs text-heading">
+                    {formatDate(vendor.effectiveDate)}
+                  </span>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-              className="text-xs h-8 px-3"
-            >
-              Previous
-            </Button>
-
-            {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
-              const isActive = i === currentPage;
-              return isActive ? (
-                <button
-                  key={i}
-                  type="button"
-                  className="min-w-[32px] h-8 px-2 text-xs font-semibold rounded-md bg-primary text-white shadow-xs select-none cursor-default"
-                >
-                  {i + 1}
-                </button>
-              ) : (
+              {/* Actions footer */}
+              <div className="flex items-center gap-2 pt-2 border-t border-border/50">
                 <Button
-                  key={i}
-                  variant="ghost"
+                  type="button"
+                  variant="secondary"
                   size="sm"
-                  onClick={() => table.setPageIndex(i)}
-                  className="min-w-[32px] h-8 px-2 text-xs text-text-muted hover:text-heading hover:bg-surface"
+                  onClick={() => navigate(`/vendors/${vendor.id}`)}
+                  className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                 >
-                  {i + 1}
+                  <Eye size={13} />
+                  View
                 </Button>
-              );
-            })}
 
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-              className="text-xs h-8 px-3"
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      </div>
+                <Button
+                  type="button"
+                  variant="success"
+                  size="sm"
+                  onClick={() => handleOpenApprove(vendor)}
+                  className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
+                >
+                  <Check size={13} className="stroke-[2.5]" />
+                  Approve
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="danger-soft"
+                  size="sm"
+                  onClick={() => handleOpenReject(vendor)}
+                  className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
+                >
+                  <X size={13} className="stroke-[2.5]" />
+                  Reject
+                </Button>
+              </div>
+            </div>
+          );
+        }}
+      />
 
       {/* ── 1. APPROVE CONFIRMATION MODAL WITH APPROVAL COMMENT ── */}
       <Modal

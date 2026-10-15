@@ -17,6 +17,7 @@ import {
   Upload,
   Trash2,
   FileText,
+  Save,
 } from 'lucide-react';
 import { IconPR } from '../../constants/icons';
 import toast from 'react-hot-toast';
@@ -37,6 +38,7 @@ import {
   DEPARTMENT_OPTIONS,
   PRIORITY_OPTIONS,
   REQUESTED_BY_OPTIONS,
+  PROJECT_OPTIONS,
   getPRStatusBadgeVariant,
 } from '../../mocks/purchaseRequisitions';
 import ItemsEditor from './components/ItemsEditor';
@@ -53,6 +55,7 @@ export default function PurchaseRequisitionEdit() {
   // Form State
   const [formData, setFormData] = useState({
     prNumber: '',
+    projectId: '',
     prDate: '',
     requestedBy: '',
     department: '',
@@ -72,6 +75,7 @@ export default function PurchaseRequisitionEdit() {
     if (originalPR) {
       setFormData({
         prNumber: originalPR.prNumber || '',
+        projectId: originalPR.projectId || '',
         prDate: originalPR.prDate ? originalPR.prDate.split('T')[0] : '',
         requestedBy: originalPR.requestedBy || 'Ian Chesnut',
         department: originalPR.department || '',
@@ -128,6 +132,9 @@ export default function PurchaseRequisitionEdit() {
 
   const validateForm = () => {
     const newErrors = {};
+    if (!formData.projectId) {
+      newErrors.projectId = 'Please select a project';
+    }
     if (!formData.requestedBy) {
       newErrors.requestedBy = 'Please select who requested this requisition';
     }
@@ -142,6 +149,9 @@ export default function PurchaseRequisitionEdit() {
       newErrors.items = 'At least one item is required in the requisition';
     } else {
       items.forEach((it, idx) => {
+        if (!it.itemId) {
+          newErrors.items = `Item #${idx + 1} must have a selected Material Catalog Preset`;
+        }
         if (!it.itemCode?.trim() || !it.itemName?.trim()) {
           newErrors.items = `Item #${idx + 1} is missing item code or name`;
         }
@@ -235,6 +245,35 @@ export default function PurchaseRequisitionEdit() {
             </Badge>
           </div>
         }
+        actions={
+          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() =>
+                navigate(
+                  `/purchase-requisition/${originalPR.prNumber || originalPR.prId}`
+                )
+              }
+              className="flex-1 sm:flex-initial"
+            >
+              <X size={16} className="mr-1.5" aria-hidden="true" />
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={handleSubmitForApproval}
+              className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
+            >
+              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
+              Save Changes
+            </Button>
+          </div>
+        }
       />
 
       {/* Error Summary Banner */}
@@ -300,7 +339,21 @@ export default function PurchaseRequisitionEdit() {
             />
           </div>
 
-          {/* Row 2, Col 1: Department */}
+          {/* Row 2, Col 1: Project ID */}
+          <div>
+            <SearchableSelect
+              id="edit-pr-project-id"
+              label="Project ID"
+              required
+              options={PROJECT_OPTIONS}
+              value={formData.projectId}
+              error={errors.projectId}
+              placeholder="Select project..."
+              onChange={(e) => handleFieldChange('projectId', e.target.value)}
+            />
+          </div>
+
+          {/* Row 2, Col 2: Department */}
           <div>
             <SearchableSelect
               id="edit-pr-department"
@@ -314,7 +367,7 @@ export default function PurchaseRequisitionEdit() {
             />
           </div>
 
-          {/* Row 2, Col 2: Required Date */}
+          {/* Row 2, Col 3: Required Date */}
           <div>
             <DatePicker
               id="edit-pr-required-date"
@@ -327,7 +380,7 @@ export default function PurchaseRequisitionEdit() {
             />
           </div>
 
-          {/* Row 2, Col 3: Priority */}
+          {/* Row 3, Col 1: Priority */}
           <div>
             <SearchableSelect
               id="edit-pr-priority"
@@ -463,8 +516,8 @@ export default function PurchaseRequisitionEdit() {
           onClick={handleSubmitForApproval}
           className="w-full sm:w-auto font-semibold shadow-sm"
         >
-          <Send size={16} className="mr-1.5" />
-          Submit for Approval
+          <Save size={16} className="mr-1.5" />
+          Save Changes
         </Button>
       </div>
     </div>

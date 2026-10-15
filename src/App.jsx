@@ -17,6 +17,7 @@ import VendorBankDetailsViewPage from './pages/vendorBankDetails/VendorBankDetai
 import { VendorBankDetailsProvider } from './context/VendorBankDetailsContext';
 
 import PurchaseRequisition from './pages/PurchaseRequisition/PurchaseRequisition';
+import PurchaseRequisitionDashboardPage from './pages/PurchaseRequisition/PurchaseRequisitionDashboardPage';
 import PurchaseRequisitionCreate from './pages/PurchaseRequisition/PurchaseRequisitionCreate';
 import PurchaseRequisitionView from './pages/PurchaseRequisition/PurchaseRequisitionView';
 import PurchaseRequisitionEdit from './pages/PurchaseRequisition/PurchaseRequisitionEdit';
@@ -127,6 +128,7 @@ export default function App() {
 
           {/* Purchase Requisition Routes */}
           <Route path="/purchase-requisition" element={<PurchaseRequisition />} />
+          <Route path="/purchase-requisition/dashboard" element={<PurchaseRequisitionDashboardPage />} />
           <Route path="/purchase-requisition/create" element={<PurchaseRequisitionCreate />} />
           <Route path="/purchase-requisition/:id" element={<PurchaseRequisitionView />} />
           <Route path="/purchase-requisition/:id/edit" element={<PurchaseRequisitionEdit />} />

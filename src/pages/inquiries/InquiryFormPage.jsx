@@ -60,6 +60,7 @@ import {
   Th,
   Td,
   PageHeader,
+  ScrollableTabs,
 } from '../../components/ui';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useUsersContext } from '../../context/UsersContext';
@@ -263,11 +264,25 @@ export default function InquiryFormPage() {
     return isEdit ? getInquiryById(id) : null;
   }, [isEdit, id, getInquiryById]);
 
-  const [currentStep, setCurrentStep] = useState(1);
+  const [activeTab, setActiveTab] = useState('inquiry_customer');
   const [form, setForm] = useState(INITIAL_FORM);
   const [initialSnapshot, setInitialSnapshot] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  const step1Fields = useMemo(() => [
+    'InquiryNo',
+    'InquiryDate',
+    'CustomerName',
+    'Email',
+    'Phone',
+    'AlternativePhone',
+    'RegionId',
+    'CategoryId',
+    'DistributorName',
+  ], []);
+  const hasTab1Errors = useMemo(() => Object.keys(errors).some((k) => step1Fields.includes(k)), [errors, step1Fields]);
+  const hasTab2Errors = useMemo(() => Object.keys(errors).some((k) => k === 'AssignedTo'), [errors]);
 
   // 2-Level Parent and Sub-Region options
   const parentRegionOptions = useMemo(() => {
@@ -787,19 +802,7 @@ export default function InquiryFormPage() {
     navigate(isEdit && existingInquiry ? `/inquiries/${existingInquiry.id || existingInquiry.InquiryId}` : '/inquiries');
   }
 
-  function handleNextStep() {
-    const step1Errors = validateStep1(form);
-    if (Object.keys(step1Errors).length > 0) {
-      setErrors(step1Errors);
-      const firstErrorField = Object.keys(step1Errors)[0];
-      const el = document.getElementById(firstErrorField);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.focus?.();
-      }
-      return;
-    }
-
+  function handleNextTab() {
     if (itemFormState.itemId || itemFormState.itemCode?.trim()) {
       toast.error('You have an unadded product item in progress. Please click "+ Add Item" or Cancel before continuing.');
       const el = document.getElementById('item-catalog-preset');
@@ -810,13 +813,12 @@ export default function InquiryFormPage() {
       return;
     }
 
-    setErrors({});
-    setCurrentStep(2);
+    setActiveTab('assignment_documents');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function handlePrevStep() {
-    setCurrentStep(1);
+  function handlePrevTab() {
+    setActiveTab('inquiry_customer');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -913,19 +915,15 @@ export default function InquiryFormPage() {
     const fieldErrors = validateAll(form);
     if (Object.keys(fieldErrors).length > 0) {
       setErrors(fieldErrors);
-      const step1Fields = [
-        'InquiryNo',
-        'InquiryDate',
-        'CustomerName',
-        'Email',
-        'Phone',
-        'AlternativePhone',
-        'RegionId',
-        'CategoryId',
-      ];
-      const hasStep1Error = Object.keys(fieldErrors).some((k) => step1Fields.includes(k));
-      if (hasStep1Error && currentStep !== 1) {
-        setCurrentStep(1);
+      const hasStep1Err = Object.keys(fieldErrors).some((k) => step1Fields.includes(k));
+      if (hasStep1Err) {
+        setActiveTab('inquiry_customer');
+        toast.error('Please complete all required fields in Inquiry & Customer Details.');
+      } else if (fieldErrors.AssignedTo) {
+        setActiveTab('assignment_documents');
+        toast.error('Please select an assignee in Assignment & Documents.');
+      } else {
+        toast.error('Please complete all required fields before saving.');
       }
       setTimeout(() => {
         const firstErrorField = Object.keys(fieldErrors)[0];
@@ -940,7 +938,7 @@ export default function InquiryFormPage() {
 
     if (itemFormState.itemId || itemFormState.itemCode?.trim()) {
       toast.error('You have an unadded product item in progress. Please click "+ Add Item" or Cancel before submitting.');
-      if (currentStep !== 1) setCurrentStep(1);
+      setActiveTab('inquiry_customer');
       const el = document.getElementById('item-catalog-preset');
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1053,123 +1051,48 @@ export default function InquiryFormPage() {
               Cancel
             </Button>
 
-            {currentStep === 1 ? (
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={handleNextStep}
-                className="flex-1 sm:flex-initial justify-center"
-              >
-                <span>Next</span>
-                <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                loading={loading}
-                disabled={loading}
-                className="flex-1 sm:flex-initial justify-center"
-              >
-                <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
-                {isEdit ? 'Save Changes' : 'Create Inquiry'}
-              </Button>
-            )}
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              loading={loading}
+              disabled={loading}
+              className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
+            >
+              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
+              {isEdit ? 'Save Changes' : 'Save Inquiry'}
+            </Button>
           </div>
         }
       />
 
-      {/* ── 2-STEP PROGRESS STEPPER ── */}
-      <div className="bg-surface/60 border border-border rounded-xl p-2.5 sm:p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
-          {/* Step 1 Button/Tab */}
-          <button
-            type="button"
-            onClick={() => handlePrevStep()}
-            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer ${currentStep === 1
-                ? 'bg-primary/10 border-primary/50 ring-1 ring-primary/20 shadow-2xs'
-                : 'bg-surface border-border hover:bg-surface/80'
-              }`}
-          >
-            <div
-              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-colors ${currentStep === 1
-                  ? 'bg-primary text-white shadow-xs'
-                  : currentStep > 1
-                    ? 'bg-success/15 text-success border border-success/30'
-                    : 'bg-surface text-text-muted border border-border'
-                }`}
-            >
-              {currentStep > 1 ? <CheckCircle2 size={16} /> : '1'}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-2xs sm:text-xs uppercase font-bold tracking-wider text-text-muted">
-                  Step 1
-                </span>
-                {currentStep > 1 && (
-                  <Badge variant="success" className="text-2xs py-0 px-1.5 font-semibold">
-                    Completed
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs sm:text-sm font-semibold text-heading truncate">
-                Inquiry & Customer Details
-              </p>
-              <p className="text-2xs text-text-muted truncate">
-                Inquiry info, Customer profile & Requirements
-              </p>
-            </div>
-          </button>
-
-          {/* Step 2 Button/Tab */}
-          <button
-            type="button"
-            onClick={() => {
-              if (currentStep === 1) {
-                handleNextStep();
-              }
-            }}
-            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer ${currentStep === 2
-                ? 'bg-primary/10 border-primary/50 ring-1 ring-primary/20 shadow-2xs'
-                : 'bg-surface border-border hover:bg-surface/80'
-              }`}
-          >
-            <div
-              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 transition-colors ${currentStep === 2
-                  ? 'bg-primary text-white shadow-xs'
-                  : 'bg-surface text-text-muted border border-border'
-                }`}
-            >
-              2
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-2xs sm:text-xs uppercase font-bold tracking-wider text-text-muted">
-                  Step 2
-                </span>
-                {currentStep === 2 && (
-                  <Badge variant="primary" className="text-2xs py-0 px-1.5 font-semibold">
-                    Active Step
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs sm:text-sm font-semibold text-heading truncate">
-                Assignment, Notes & Documents
-              </p>
-              <p className="text-2xs text-text-muted truncate">
-                Team assignment, Initial comments & Attachments
-              </p>
-            </div>
-          </button>
-        </div>
-      </div>
+      {/* ── TABS NAVIGATION BAR (Scrollable and consistent with ClientFormPage) ── */}
+      <ScrollableTabs
+        variant="pills"
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        tabs={[
+          {
+            id: 'inquiry_customer',
+            label: 'Inquiry & Customer Details',
+            icon: Inbox,
+            badge: form.items?.length > 0 ? form.items.length : undefined,
+            hasError: hasTab1Errors,
+          },
+          {
+            id: 'assignment_documents',
+            label: 'Assignment & Documents',
+            icon: UserCheck,
+            badge: (form.attachments?.length || 0) > 0 ? form.attachments.length : undefined,
+            hasError: hasTab2Errors,
+          },
+        ]}
+      />
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
-      {/* ── STEP 1 CONTENT: INQUIRY & CUSTOMER DETAILS ── */}
+      {/* ── TAB 1 CONTENT: INQUIRY & CUSTOMER DETAILS ── */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
-      {currentStep === 1 && (
+      {activeTab === 'inquiry_customer' && (
         <div className="space-y-6">
           {/* ── SECTION 1: INQUIRY DETAILS ── */}
           <Card padding="md" className="bg-bg">
@@ -1869,38 +1792,52 @@ export default function InquiryFormPage() {
             </div>
           </Card>
 
-          {/* ── Step 1 Bottom Action Controls ── */}
-          <div className="flex items-center justify-end gap-2.5 sm:gap-3 pt-3 border-t border-border">
+          {/* ── Tab 1 Bottom Action Controls ── */}
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-3 border-t border-border">
             <Button
               type="button"
               variant="secondary"
               size="md"
               onClick={handleCancel}
               disabled={loading}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto justify-center"
             >
               <X size={16} className="mr-1.5" aria-hidden="true" />
               Cancel
             </Button>
 
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={handleNextStep}
-              className="w-full sm:w-auto justify-center"
-            >
-              <span>Next</span>
-              <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
-            </Button>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handleNextTab}
+                className="w-full sm:w-auto justify-center"
+              >
+                <span>Next: Assignment & Documents</span>
+                <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
+              </Button>
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                loading={loading}
+                disabled={loading}
+                className="w-full sm:w-auto justify-center font-semibold shadow-xs"
+              >
+                <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
+                {isEdit ? 'Save Changes' : 'Save Inquiry'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
-      {/* ── STEP 2 CONTENT: ASSIGNMENT, NOTES & DOCUMENTS ── */}
+      {/* ── TAB 2 CONTENT: ASSIGNMENT, NOTES & DOCUMENTS ── */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
-      {currentStep === 2 && (
+      {activeTab === 'assignment_documents' && (
         <div className="space-y-6">
           {/* ── SECTION 4: ASSIGNMENT & INITIAL STATUS ── */}
           <Card padding="md" className="bg-bg">
@@ -2261,45 +2198,45 @@ export default function InquiryFormPage() {
             </div>
           </Card>
 
-          {/* ── Step 2 Bottom Action Controls ── */}
+          {/* ── Tab 2 Bottom Action Controls ── */}
           <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-3 border-t border-border">
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={handlePrevStep}
-              disabled={loading}
-              className="w-full sm:w-auto"
-            >
-              <ArrowLeft size={16} className="mr-1.5 shrink-0" />
-              <span>Back to Inquiry Details</span>
-            </Button>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={handlePrevTab}
+                disabled={loading}
+                className="w-full sm:w-auto justify-center"
+              >
+                <ArrowLeft size={16} className="mr-1.5 shrink-0" />
+                <span>Back to Inquiry Details</span>
+              </Button>
 
-            <div className="flex items-center gap-2.5 w-full sm:w-auto">
               <Button
                 type="button"
                 variant="secondary"
                 size="md"
                 onClick={handleCancel}
                 disabled={loading}
-                className="flex-1 sm:flex-initial"
+                className="w-full sm:w-auto justify-center"
               >
                 <X size={16} className="mr-1.5" aria-hidden="true" />
                 Cancel
               </Button>
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                loading={loading}
-                disabled={loading}
-                className="flex-1 sm:flex-initial justify-center"
-              >
-                <Save size={16} className="mr-1.5 shrink-0" />
-                {isEdit ? 'Save Changes' : 'Create Inquiry'}
-              </Button>
             </div>
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              loading={loading}
+              disabled={loading}
+              className="w-full sm:w-auto justify-center font-semibold shadow-xs"
+            >
+              <Save size={16} className="mr-1.5 shrink-0" />
+              {isEdit ? 'Save Changes' : 'Save Inquiry'}
+            </Button>
           </div>
         </div>
       )}

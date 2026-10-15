@@ -62,6 +62,12 @@ export const navigation = [
         roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
         children: [
           {
+            label: 'Dashboard',
+            icon: IconDashboard,
+            path: '/purchase-requisition/dashboard',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          },
+          {
             label: 'All Requisitions',
             icon: IconList,
             path: '/purchase-requisition',

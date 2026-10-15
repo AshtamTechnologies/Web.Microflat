@@ -19,30 +19,34 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getPaginationRowModel,
-  flexRender,
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  Search,
   UserPlus,
-  ChevronUp,
-  ChevronDown,
-  Trash2,
-  Pencil,
-  Eye,
   Mail,
   Phone,
   Smartphone,
   MapPin,
   ShieldCheck,
   Hash,
-  SearchX,
-  RotateCcw,
   Clock,
+  Eye,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { IconUsers } from '../../constants/icons';
 
-import { Button, Input, Modal, SearchableSelect, ConfirmModal, TableContainer, Th, Td, PageHeader } from '../../components/ui';
+import {
+  Button,
+  Modal,
+  SearchableSelect,
+  ConfirmModal,
+  PageHeader,
+  DataTable,
+  TableToolbar,
+  TableActions,
+  StatusBadge,
+} from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
 import { useUserSessions } from '../../context/UserSessionsContext';
 import { formatDateTime, formatRelative } from '../../utils/dateTime';
@@ -268,27 +272,7 @@ export default function UsersPage() {
         header: 'STATUS',
         minSize: 110,
         size: 130,
-        cell: (info) => {
-          const row = info.row.original;
-          const isActive = row.isActive;
-          return (
-            <span
-              className={[
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none',
-                isActive
-                  ? 'bg-success/10 text-success border border-success/20'
-                  : 'bg-danger/10 text-danger border border-danger/20',
-              ].join(' ')}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-success' : 'bg-danger'
-                  }`}
-                aria-hidden="true"
-              />
-              {isActive ? 'Active' : 'Inactive'}
-            </span>
-          );
-        },
+        cell: (info) => <StatusBadge status={info.getValue()} size="sm" />,
       }),
 
       /* 6. ACTIONS — View, Edit & Delete Ghost buttons */
@@ -302,40 +286,14 @@ export default function UsersPage() {
         cell: (info) => {
           const row = info.row.original;
           return (
-            <div className="flex items-center justify-end gap-1">
-              {/* View Ghost Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate(`/users/${row.id}`)}
-                title="View user details & login sessions"
-                className="text-text-muted hover:text-primary hover:bg-surface"
-              >
-                <Eye size={15} aria-hidden="true" />
-              </Button>
-
-              {/* Edit Ghost Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleOpenEdit(row)}
-                title="Edit user"
-                className="text-text-muted hover:text-primary hover:bg-surface"
-              >
-                <Pencil size={15} aria-hidden="true" />
-              </Button>
-
-              {/* Delete Ghost Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setUserToDelete(row)}
-                title="Delete user"
-                className="text-text-muted hover:text-danger hover:bg-surface"
-              >
-                <Trash2 size={15} aria-hidden="true" />
-              </Button>
-            </div>
+            <TableActions
+              onView={() => navigate(`/users/${row.id}`)}
+              onEdit={() => handleOpenEdit(row)}
+              onDelete={() => setUserToDelete(row)}
+              viewTitle="View user details & login sessions"
+              editTitle="Edit user"
+              deleteTitle="Delete user"
+            />
           );
         },
       }),
@@ -357,17 +315,7 @@ export default function UsersPage() {
     enableColumnResizing: true,
   });
 
-  const pageCount = table.getPageCount();
-  const currentPage = table.getState().pagination.pageIndex;
-  const totalRows = users.length;
-  const startRow = totalRows === 0 ? 0 : currentPage * pagination.pageSize + 1;
-  const endRow = Math.min((currentPage + 1) * pagination.pageSize, totalRows);
 
-  // Paginated data slice for Mobile Card View
-  const paginatedMobileUsers = useMemo(() => {
-    const start = currentPage * pagination.pageSize;
-    return users.slice(start, start + pagination.pageSize);
-  }, [users, currentPage, pagination.pageSize]);
 
   // Roles array for user currently viewed
   const viewUserRoles = useMemo(() => {
@@ -403,414 +351,182 @@ export default function UsersPage() {
         }
       />
 
-      {/* ── UNIFIED CARD CONTAINER: Toolbar + Table/Cards + Pagination ── */}
-      <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-        {/* ── Toolbar: Search + Role Searchable Filter + Status Searchable Filter ── */}
-        <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3 flex-wrap">
-            {/* Search Input */}
-            <div className="w-full sm:w-72">
-              <Input
-                id="users-search"
-                type="search"
-                placeholder="Search by name, email, phone, address..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                leftIcon={<Search size={16} aria-hidden="true" />}
-              />
-            </div>
-
-            {/* Role Filter Dropdown using SearchableSelect */}
-            <div className="w-full sm:w-52">
-              <SearchableSelect
-                id="filter-role"
-                placeholder="All Roles"
-                searchPlaceholder="Search roles..."
-                options={ROLE_FILTER_OPTIONS}
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-              />
-            </div>
-
-            {/* Status Filter Dropdown using SearchableSelect */}
-            <div className="w-full sm:w-44">
-              <SearchableSelect
-                id="filter-status"
-                placeholder="All Statuses"
-                searchPlaceholder="Search statuses..."
-                options={STATUS_FILTER_OPTIONS}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              />
-            </div>
-
-            {/* Clear Filters Button */}
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetFilters}
-                className="text-xs text-text-muted hover:text-danger flex items-center gap-1.5 h-10 px-3"
-                title="Reset all search & filters"
-              >
-                <RotateCcw size={13} aria-hidden="true" />
-                Reset
-              </Button>
-            )}
-          </div>
+      {/* ── Table Toolbar: Search + Role Filter + Status Filter ── */}
+      <TableToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name, email, phone, address..."
+        hasActiveFilters={hasActiveFilters}
+        onReset={resetFilters}
+      >
+        {/* Role Filter Dropdown */}
+        <div className="w-full sm:w-52">
+          <SearchableSelect
+            id="filter-role"
+            placeholder="All Roles"
+            searchPlaceholder="Search roles..."
+            options={ROLE_FILTER_OPTIONS}
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          />
         </div>
 
-        {/* ── DESKTOP TABLE VIEW (md+) ── */}
-        <div className="hidden md:block">
-          <TableContainer
-            tableStyle={{ width: table.getTotalSize(), minWidth: '100%' }}
-            tableClassName="table-fixed"
-          >
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} className="bg-surface">
-                  {headerGroup.headers.map((header) => {
-                    const sorted = header.column.getIsSorted();
-                    const canSort = header.column.getCanSort();
-                    const canResize = header.column.getCanResize();
-
-                    return (
-                      <Th
-                        key={header.id}
-                        style={{ width: header.getSize() }}
-                        isResizing={header.column.getIsResizing()}
-                        resizeHandler={canResize ? header.getResizeHandler() : undefined}
-                      >
-                        {header.isPlaceholder ? null : canSort ? (
-                          <button
-                            type="button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            className="group/th-btn flex items-center gap-1.5 w-full text-left select-none cursor-pointer hover:text-heading transition-colors"
-                          >
-                            <span className="truncate">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                            </span>
-
-                            {/* Sort indicator */}
-                            <span className="shrink-0 ml-1 inline-flex items-center">
-                              {sorted === 'asc' ? (
-                                <ChevronUp size={14} className="text-primary stroke-[2.5]" aria-hidden="true" />
-                              ) : sorted === 'desc' ? (
-                                <ChevronDown size={14} className="text-primary stroke-[2.5]" aria-hidden="true" />
-                              ) : (
-                                <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <ChevronUp size={11} strokeWidth={2.5} />
-                                  <ChevronDown size={11} strokeWidth={2.5} />
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        ) : (
-                          <div className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''}`}>
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                          </div>
-                        )}
-                      </Th>
-                    );
-                  })}
-                </tr>
-              ))}
-            </thead>
-
-            <tbody className="divide-y divide-border bg-bg">
-              {loading ? (
-                /* Skeleton Loading Rows */
-                Array.from({ length: 5 }).map((_, idx) => (
-                  <tr key={`skeleton-${idx}`} className="bg-bg">
-                    <Td>
-                      <div className="space-y-1.5 flex-1 py-0.5">
-                        <div className="h-3.5 w-28 bg-surface rounded-md animate-pulse" />
-                        <div className="h-2.5 w-40 bg-surface rounded-md animate-pulse" />
-                      </div>
-                    </Td>
-                    <Td>
-                      <div className="h-3 w-24 bg-surface rounded-md animate-pulse" />
-                    </Td>
-                    <Td>
-                      <div className="h-5 w-20 bg-surface rounded-full animate-pulse" />
-                    </Td>
-                    <Td>
-                      <div className="h-5 w-16 bg-surface rounded-full animate-pulse" />
-                    </Td>
-                    <Td>
-                      <div className="flex items-center justify-end gap-1">
-                        <div className="w-8 h-8 rounded-md bg-surface animate-pulse" />
-                        <div className="w-8 h-8 rounded-md bg-surface animate-pulse" />
-                        <div className="w-8 h-8 rounded-md bg-surface animate-pulse" />
-                      </div>
-                    </Td>
-                  </tr>
-                ))
-              ) : table.getRowModel().rows.length === 0 ? (
-                /* Centered Empty State */
-                <tr>
-                  <td colSpan={columns.length} className="text-center py-16 px-6">
-                    <div className="flex flex-col items-center justify-center max-w-xs mx-auto text-center">
-                      <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center text-text-muted mb-3">
-                        <SearchX size={22} className="opacity-60" aria-hidden="true" />
-                      </div>
-                      <h4 className="text-sm font-semibold text-heading">No users found</h4>
-                      <p className="text-xs text-text-muted mt-1 mb-4">
-                        {hasActiveFilters
-                          ? 'No user records match the selected search or filter criteria.'
-                          : 'Get started by creating your first user.'}
-                      </p>
-                      {hasActiveFilters && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={resetFilters}
-                          className="text-primary hover:text-primary hover:bg-primary/10"
-                        >
-                          Clear filters
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                /* Data Rows */
-                table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-surface/80 transition-colors duration-120 bg-bg"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <Td
-                        key={cell.id}
-                        style={{ width: cell.column.getSize() }}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </Td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </TableContainer>
+        {/* Status Filter Dropdown */}
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="filter-status"
+            placeholder="All Statuses"
+            searchPlaceholder="Search statuses..."
+            options={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          />
         </div>
+      </TableToolbar>
 
-        {/* ── MOBILE CARD VIEW (< md) ── */}
-        <div className="block md:hidden p-4 space-y-3 bg-bg">
-          {loading ? (
-            Array.from({ length: 3 }).map((_, idx) => (
-              <div key={`mobile-skeleton-${idx}`} className="bg-surface/40 rounded-xl border border-border p-4 space-y-3 animate-pulse">
-                <div className="space-y-1.5 flex-1">
-                  <div className="h-3.5 w-24 bg-surface rounded" />
-                  <div className="h-2.5 w-32 bg-surface rounded" />
-                </div>
-              </div>
-            ))
-          ) : paginatedMobileUsers.length === 0 ? (
-            <div className="py-12 px-4 text-center">
-              <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center text-text-muted mx-auto mb-3">
-                <SearchX size={22} className="opacity-60" aria-hidden="true" />
-              </div>
-              <h4 className="text-sm font-semibold text-heading">No users found</h4>
-              <p className="text-xs text-text-muted mt-1 mb-4">
-                {hasActiveFilters
-                  ? 'No user records match the selected search or filter criteria.'
-                  : 'Get started by creating your first user.'}
-              </p>
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetFilters}
-                  className="text-primary hover:text-primary hover:bg-primary/10"
-                >
-                  Clear filters
-                </Button>
-              )}
-            </div>
+      {/* ── Standard TanStack DataTable & Mobile Responsive Cards ── */}
+      <DataTable
+        table={table}
+        columns={columns}
+        isLoading={loading}
+        totalCount={users.length}
+        entityName="users"
+        emptyTitle="No users found"
+        emptyDescription={
+          hasActiveFilters
+            ? 'No users match your current filter criteria.'
+            : 'No users have been added to the system yet.'
+        }
+        emptyAction={
+          hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+              className="text-xs text-primary"
+            >
+              Clear filters
+            </Button>
           ) : (
-            paginatedMobileUsers.map((user) => {
-              const roles = Array.isArray(user.roles) && user.roles.length > 0
-                ? user.roles
-                : user.role
-                  ? [user.role]
-                  : ['Viewer'];
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleOpenAdd}
+              className="text-xs"
+            >
+              <UserPlus size={14} className="mr-1.5" />
+              Add User
+            </Button>
+          )
+        }
+        renderMobileCard={(row) => {
+          const user = row.original;
+          const roles = Array.isArray(user.roles) && user.roles.length > 0
+            ? user.roles
+            : user.role
+              ? [user.role]
+              : ['Viewer'];
 
-              return (
-                <div
-                  key={user.id}
-                  className="bg-bg rounded-xl border border-border p-4 shadow-2xs space-y-3"
-                >
-                  {/* Header: Name, Roles, Status */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-sm font-semibold text-heading leading-tight">
-                        {user.firstName} {user.lastName}
-                      </h3>
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {roles.map((r, i) => (
-                          <span
-                            key={i}
-                            className="inline-block text-2xs font-medium text-text-muted bg-border/50 px-2 py-0.5 rounded-full"
-                          >
-                            {r}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Status Badge */}
-                    <span
-                      className={[
-                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
-                        user.isActive
-                          ? 'bg-success/10 text-success border border-success/20'
-                          : 'bg-danger/10 text-danger border border-danger/20',
-                      ].join(' ')}
-                    >
+          return (
+            <div
+              key={user.id}
+              className="bg-surface rounded-xl border border-border p-4 shadow-2xs space-y-3"
+            >
+              {/* Header: Name, Roles, Status */}
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-heading leading-tight">
+                    {user.firstName} {user.lastName}
+                  </h3>
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {roles.map((r, i) => (
                       <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${user.isActive ? 'bg-success' : 'bg-danger'
-                          }`}
-                        aria-hidden="true"
-                      />
-                      {user.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-
-                  {/* Contact details */}
-                  <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
-                    <div className="flex items-center gap-2">
-                      <Mail size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                      <span className="truncate">{user.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                      <span className="font-mono tabular-nums">{user.mobile || '—'}</span>
-                    </div>
-                    {user.secondaryPhone && (
-                      <div className="flex items-center gap-2">
-                        <Smartphone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                        <span className="font-mono tabular-nums">Sec: {user.secondaryPhone}</span>
-                      </div>
-                    )}
-                    {user.address && (
-                      <div className="flex items-start gap-2">
-                        <MapPin size={13} className="shrink-0 text-text-muted/70 mt-0.5" aria-hidden="true" />
-                        <span className="line-clamp-2">{user.address}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 pt-1 border-t border-border/40 text-xs">
-                      <Clock size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                      <span className="font-mono tabular-nums">
-                        Last login:{' '}
-                        {lastLoginMap[user.id] ? (
-                          <strong className="text-heading font-semibold">
-                            {formatDateTime(lastLoginMap[user.id])}
-                          </strong>
-                        ) : (
-                          <span className="text-text-muted">Never</span>
-                        )}
+                        key={i}
+                        className="inline-block text-2xs font-medium text-text-muted bg-border/50 px-2 py-0.5 rounded-full"
+                      >
+                        {r}
                       </span>
-                    </div>
-                  </div>
-
-                  {/* Action buttons footer */}
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => navigate(`/users/${user.id}`)}
-                      className="flex-1 text-xs"
-                    >
-                      <Eye size={13} className="mr-1.5" aria-hidden="true" />
-                      View
-                    </Button>
-
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleOpenEdit(user)}
-                      className="flex-1 text-xs"
-                    >
-                      <Pencil size={13} className="mr-1.5" aria-hidden="true" />
-                      Edit
-                    </Button>
-
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => setUserToDelete(user)}
-                      className="flex-1 text-xs"
-                    >
-                      <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
-                      Delete
-                    </Button>
+                    ))}
                   </div>
                 </div>
-              );
-            })
-          )}
-        </div>
 
-        {/* ── PAGINATION FOOTER STRIP ── */}
-        <div className="px-6 py-4 bg-bg border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-text-muted">
-            Showing <span className="font-medium text-heading">{startRow}-{endRow}</span> of <span className="font-medium text-heading">{totalRows}</span> users
-          </p>
+                {/* Status Badge */}
+                <StatusBadge status={user.isActive} size="sm" />
+              </div>
 
-          {/* Page controls */}
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-              className="text-xs h-8 px-2.5"
-            >
-              Prev
-            </Button>
+              {/* Contact details */}
+              <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
+                <div className="flex items-center gap-2">
+                  <Mail size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <span className="truncate">{user.email}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <span className="font-mono tabular-nums">{user.mobile || '—'}</span>
+                </div>
+                {user.secondaryPhone && (
+                  <div className="flex items-center gap-2">
+                    <Smartphone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                    <span className="font-mono tabular-nums">Sec: {user.secondaryPhone}</span>
+                  </div>
+                )}
+                {user.address && (
+                  <div className="flex items-start gap-2">
+                    <MapPin size={13} className="shrink-0 text-text-muted/70 mt-0.5" aria-hidden="true" />
+                    <span className="line-clamp-2">{user.address}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 pt-1 border-t border-border/40 text-xs">
+                  <Clock size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <span className="font-mono tabular-nums">
+                    Last login:{' '}
+                    {lastLoginMap[user.id] ? (
+                      <strong className="text-heading font-semibold">
+                        {formatDateTime(lastLoginMap[user.id])}
+                      </strong>
+                    ) : (
+                      <span className="text-text-muted">Never</span>
+                    )}
+                  </span>
+                </div>
+              </div>
 
-            {Array.from({ length: Math.max(1, pageCount) }, (_, i) => {
-              const isActive = i === currentPage;
-              return isActive ? (
-                <button
-                  key={i}
-                  type="button"
-                  className="min-w-[32px] h-8 px-2 text-xs font-semibold rounded-md bg-primary text-white shadow-xs select-none cursor-default"
-                >
-                  {i + 1}
-                </button>
-              ) : (
+              {/* Action buttons footer */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
                 <Button
-                  key={i}
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
-                  onClick={() => table.setPageIndex(i)}
-                  className="min-w-[32px] h-8 px-2 text-xs text-text-muted hover:text-heading hover:bg-surface"
+                  onClick={() => navigate(`/users/${user.id}`)}
+                  className="flex-1 text-xs"
                 >
-                  {i + 1}
+                  <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                  View
                 </Button>
-              );
-            })}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-              className="text-xs h-8 px-2.5"
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleOpenEdit(user)}
+                  className="flex-1 text-xs"
+                >
+                  <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                  Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setUserToDelete(user)}
+                  className="flex-1 text-xs"
+                >
+                  <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
+                  Delete
+                </Button>
+              </div>
+            </div>
+          );
+        }}
+      />
 
       {/* ── View User Details Modal using generic Modal component ── */}
       <Modal

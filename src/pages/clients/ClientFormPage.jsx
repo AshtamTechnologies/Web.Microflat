@@ -56,7 +56,6 @@ import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
 import { CONTACT_TYPE_OPTIONS } from '../../mocks/clients';
 import {
   getTodayIsoDate,
-  getEffectiveDateStatus,
   formatDateDisplay,
 } from '../../utils/effectiveDateUtils';
 import AddressesEditor from './components/AddressesEditor';
@@ -236,10 +235,6 @@ export default function ClientFormPage() {
     });
   };
 
-  // Common Effective Date ERP status
-  const effectiveDateStatus = useMemo(() => {
-    return getEffectiveDateStatus(form.effectiveDate);
-  }, [form.effectiveDate]);
 
   // Master validation
   const validateMasterForm = () => {
@@ -446,20 +441,13 @@ export default function ClientFormPage() {
             </div>
           </div>
 
-          {/* Right: Slim Inline Effective Date Control */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5 bg-surface/50 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-border/70 w-full sm:w-auto shrink-0">
-            <div className="flex items-center justify-between sm:justify-start gap-2">
-              <div className="flex items-center gap-1.5 shrink-0">
-                <Calendar size={13} className="text-primary shrink-0" />
-                <label htmlFor="effectiveDate" className="text-xs font-semibold text-heading whitespace-nowrap cursor-pointer">
-                  Effective Date <span className="text-danger">*</span>
-                </label>
-              </div>
-              {effectiveDateStatus && (
-                <Badge variant={effectiveDateStatus.badgeVariant} className="text-2xs px-1.5 py-0">
-                  {effectiveDateStatus.label}
-                </Badge>
-              )}
+          {/* Right: Clean Effective Date Control */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Calendar size={13} className="text-primary shrink-0" />
+              <label htmlFor="effectiveDate" className="text-xs font-semibold text-heading whitespace-nowrap cursor-pointer">
+                Effective Date <span className="text-danger">*</span>
+              </label>
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">

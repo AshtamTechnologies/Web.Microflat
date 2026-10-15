@@ -19,6 +19,7 @@ import {
   Upload,
   Trash2,
   FileText,
+  Save,
 } from 'lucide-react';
 import { IconPR } from '../../constants/icons';
 import toast from 'react-hot-toast';
@@ -40,6 +41,7 @@ import {
   PRIORITY_OPTIONS,
   REQUESTED_BY_OPTIONS,
   MOCK_MATERIALS,
+  PROJECT_OPTIONS,
 } from '../../mocks/purchaseRequisitions';
 import ItemsEditor from './components/ItemsEditor';
 
@@ -53,6 +55,7 @@ export default function PurchaseRequisitionCreate() {
   // Form State
   const [formData, setFormData] = useState({
     prNumber: generatedPRNumber,
+    projectId: '',
     prDate: todayStr,
     requestedBy: 'Ian Chesnut', // Current logged-in user
     department: DEPARTMENT_OPTIONS[0]?.value || 'Purchase',
@@ -83,6 +86,9 @@ export default function PurchaseRequisitionCreate() {
 
   const validateForm = () => {
     const newErrors = {};
+    if (!formData.projectId) {
+      newErrors.projectId = 'Please select a project';
+    }
     if (!formData.requestedBy) {
       newErrors.requestedBy = 'Please select who requested this requisition';
     }
@@ -98,6 +104,9 @@ export default function PurchaseRequisitionCreate() {
       newErrors.items = 'At least one item is required in the requisition';
     } else {
       items.forEach((it, idx) => {
+        if (!it.itemId) {
+          newErrors.items = `Item #${idx + 1} must have a selected Material Catalog Preset`;
+        }
         if (!it.itemCode?.trim() || !it.itemName?.trim()) {
           newErrors.items = `Item #${idx + 1} is missing item code or name`;
         }
@@ -184,6 +193,31 @@ export default function PurchaseRequisitionCreate() {
             </Badge>
           </div>
         }
+        actions={
+          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => navigate('/purchase-requisition')}
+              className="flex-1 sm:flex-initial"
+            >
+              <X size={16} className="mr-1.5" aria-hidden="true" />
+              Cancel
+            </Button>
+
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={handleSubmitForApproval}
+              className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
+            >
+              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
+              Save Requisition
+            </Button>
+          </div>
+        }
       />
 
       {/* Error Summary Banner */}
@@ -249,7 +283,21 @@ export default function PurchaseRequisitionCreate() {
             />
           </div>
 
-          {/* Row 2, Col 1: Department */}
+          {/* Row 2, Col 1: Project ID */}
+          <div>
+            <SearchableSelect
+              id="pr-project-id"
+              label="Project ID"
+              required
+              options={PROJECT_OPTIONS}
+              value={formData.projectId}
+              error={errors.projectId}
+              placeholder="Select project..."
+              onChange={(e) => handleFieldChange('projectId', e.target.value)}
+            />
+          </div>
+
+          {/* Row 2, Col 2: Department */}
           <div>
             <SearchableSelect
               id="pr-department"
@@ -263,7 +311,7 @@ export default function PurchaseRequisitionCreate() {
             />
           </div>
 
-          {/* Row 2, Col 2: Required Date */}
+          {/* Row 2, Col 3: Required Date */}
           <div>
             <DatePicker
               id="pr-required-date"
@@ -276,7 +324,7 @@ export default function PurchaseRequisitionCreate() {
             />
           </div>
 
-          {/* Row 2, Col 3: Priority */}
+          {/* Row 3, Col 1: Priority */}
           <div>
             <SearchableSelect
               id="pr-priority"
@@ -408,8 +456,8 @@ export default function PurchaseRequisitionCreate() {
           onClick={handleSubmitForApproval}
           className="w-full sm:w-auto font-semibold shadow-sm"
         >
-          <Send size={16} className="mr-1.5" />
-          Submit for Approval
+          <Save size={16} className="mr-1.5" />
+          Save Requisition
         </Button>
       </div>
     </div>

@@ -5,8 +5,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Pencil, Trash2 } from 'lucide-react';
-import { Badge } from '../../components/ui';
+import { Badge, StatusBadge, TableActions } from '../../components/ui';
 import {
   getContactTypeBadgeVariant,
   getCountryName,
@@ -16,7 +15,7 @@ import { formatDateDisplay, getEffectiveDateStatus } from '../../utils/effective
 
 const columnHelper = createColumnHelper();
 
-export function useClientsTable({ onDeleteClick }) {
+export function useClientsTable({ onDeleteClick, onEditClick, onViewClick }) {
   const columns = useMemo(() => [
     /* 1. COMPANY */
     columnHelper.accessor('companyName', {
@@ -30,6 +29,7 @@ export function useClientsTable({ onDeleteClick }) {
         return (
           <Link
             to={`/clients/${id}`}
+            state={{ readOnly: true }}
             className="flex flex-col py-0.5 max-w-xs group cursor-pointer"
             title={`View ${row.companyName}`}
           >
@@ -110,33 +110,13 @@ export function useClientsTable({ onDeleteClick }) {
       },
     }),
 
-    /* 5. STATUS (Read-only badge like VendorsPage, no switch) */
+    /* 5. STATUS */
     columnHelper.accessor('isActive', {
       id: 'status',
       header: 'STATUS',
       minSize: 110,
       size: 120,
-      cell: (info) => {
-        const isActive = Boolean(info.getValue());
-        return (
-          <span
-            className={[
-              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none',
-              isActive
-                ? 'bg-success/10 text-success border border-success/20'
-                : 'bg-danger/10 text-danger border border-danger/20',
-            ].join(' ')}
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                isActive ? 'bg-success' : 'bg-danger'
-              }`}
-              aria-hidden="true"
-            />
-            {isActive ? 'Active' : 'Inactive'}
-          </span>
-        );
-      },
+      cell: (info) => <StatusBadge status={Boolean(info.getValue())} size="sm" />,
     }),
 
     /* 6. CREATED */
@@ -198,29 +178,19 @@ export function useClientsTable({ onDeleteClick }) {
       enableResizing: false,
       cell: (info) => {
         const row = info.row.original;
-        const id = row.clientId || row.id;
         return (
-          <div className="flex items-center justify-end gap-1">
-            <Link
-              to={`/clients/${id}/effective-dates`}
-              className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
-              title="Edit Client"
-            >
-              <Pencil size={15} />
-            </Link>
-            <button
-              type="button"
-              onClick={() => onDeleteClick(row)}
-              className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-surface transition-colors cursor-pointer"
-              title="Delete Client"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
+          <TableActions
+            onView={onViewClick ? () => onViewClick(row) : undefined}
+            onEdit={onEditClick ? () => onEditClick(row) : undefined}
+            onDelete={onDeleteClick ? () => onDeleteClick(row) : undefined}
+            viewTitle="View Client details"
+            editTitle="Edit Client"
+            deleteTitle="Delete Client"
+          />
         );
       },
     }),
-  ], [onDeleteClick]);
+  ], [onDeleteClick, onEditClick, onViewClick]);
 
   return { columns };
 }

@@ -25,4 +25,8 @@ export { default as EmptyState }       from './EmptyState';
 export { default as FilterBar }        from './FilterBar';
 export { default as IconButton }       from './IconButton';
 export { default as ScrollableTabs }    from './ScrollableTabs';
+export { default as DataTable }         from './DataTable';
+export { default as TableToolbar }      from './TableToolbar';
+export { default as TableActions }      from './TableActions';
+export { default as StatusBadge }       from './StatusBadge';
 

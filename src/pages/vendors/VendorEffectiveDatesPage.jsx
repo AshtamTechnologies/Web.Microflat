@@ -928,15 +928,15 @@ export default function VendorEffectiveDatesPage() {
               {vendor.approvalStatus || 'Pending'}
             </Badge>
 
-            {!isReadOnly && (
+            {!isReadOnly && mode === 'VIEW' && selectedVersion && (
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => navigate(`/vendors/${vendor.id}/edit`)}
+                onClick={() => handleStartEdit(selectedVersion)}
                 disabled={!vendor.isActive}
                 className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit master details.' : `Edit ${vendor.vendorName} Master details`}
+                title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : `Edit ${vendor.vendorName} effective date details`}
               >
                 <Pencil size={13} aria-hidden="true" />
                 Edit Vendor

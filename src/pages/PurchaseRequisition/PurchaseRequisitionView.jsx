@@ -45,6 +45,7 @@ import {
   formatPRDateTime,
   getPRStatusBadgeVariant,
   getPRPriorityBadgeVariant,
+  getProjectName,
 } from '../../mocks/purchaseRequisitions';
 
 export default function PurchaseRequisitionView() {
@@ -320,6 +321,25 @@ export default function PurchaseRequisitionView() {
             label="PR Date"
             value={formatPRDate(pr.prDate)}
             mono
+          />
+
+          {/* Project ID */}
+          <DetailField
+            label="Project ID"
+            value={
+              pr.projectId ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-mono text-primary font-semibold">
+                    {pr.projectId}
+                  </span>
+                  <span className="text-text-muted text-xs">
+                    ({getProjectName(pr.projectId)})
+                  </span>
+                </div>
+              ) : (
+                '—'
+              )
+            }
           />
 
           {/* Requested By */}

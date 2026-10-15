@@ -146,6 +146,9 @@ export default function ItemsEditor({
   // Validate form fields before Add / Update
   const validateItemForm = () => {
     const errs = {};
+    if (!formState.itemId) {
+      errs.itemId = 'Please select a material from the catalog';
+    }
     if (!formState.itemCode || !formState.itemCode.trim()) {
       errs.itemCode = 'Select a material from the catalog';
     }
@@ -355,12 +358,13 @@ export default function ItemsEditor({
             <div>
               <SearchableSelect
                 id="item-catalog-preset"
-                label="Material Catalog Preset (Optional)"
+                label="Material Catalog Preset"
+                required
                 options={MATERIAL_SELECT_OPTIONS}
                 value={formState.itemId ? String(formState.itemId) : ''}
                 placeholder="-- Select Material from Catalog --"
                 searchPlaceholder="Search catalog..."
-                error={fieldErrors.itemCode || fieldErrors.itemName}
+                error={fieldErrors.itemId || fieldErrors.itemCode || fieldErrors.itemName}
                 onChange={(e) => handleFieldChange('itemId', e.target.value)}
               />
             </div>

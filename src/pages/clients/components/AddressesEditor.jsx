@@ -436,29 +436,24 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                           {row.zipCode || '—'}
                         </Td>
 
-                        {/* Status Switch Button */}
+                        {/* Status Badge (Static, edited via edit action) */}
                         <Td className="py-3 px-3.5 text-center">
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={row.isActive !== false}
-                            onClick={() => handleToggleRowActive(rowId)}
-                            title={`Click to mark ${row.isActive !== false ? 'Inactive' : 'Active'}`}
+                          <span
                             className={[
-                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium cursor-pointer transition-all duration-150 select-none shadow-2xs',
+                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none shadow-2xs',
                               row.isActive !== false
-                                ? 'bg-success/10 text-success border border-success/30 hover:bg-success/20'
-                                : 'bg-surface text-text-muted border border-border hover:bg-surface/80 hover:text-text',
+                                ? 'bg-success/10 text-success border border-success/30'
+                                : 'bg-surface text-text-muted border border-border',
                             ].join(' ')}
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                row.isActive !== false ? 'bg-success animate-pulse' : 'bg-text-muted/60'
+                                row.isActive !== false ? 'bg-success' : 'bg-text-muted/60'
                               }`}
                               aria-hidden="true"
                             />
                             {row.isActive !== false ? 'Active' : 'Inactive'}
-                          </button>
+                          </span>
                         </Td>
 
                         {/* Actions */}
@@ -525,13 +520,9 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                           </span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={row.isActive !== false}
-                        onClick={() => handleToggleRowActive(rowId)}
+                      <span
                         className={[
-                          'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer transition-colors shadow-2xs',
+                          'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium select-none shadow-2xs',
                           row.isActive !== false
                             ? 'bg-success/10 text-success border border-success/30'
                             : 'bg-surface text-text-muted border border-border',
@@ -543,7 +534,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                           }`}
                         />
                         {row.isActive !== false ? 'Active' : 'Inactive'}
-                      </button>
+                      </span>
                     </div>
 
                     <div>

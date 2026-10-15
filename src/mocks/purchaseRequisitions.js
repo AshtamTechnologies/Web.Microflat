@@ -101,6 +101,21 @@ export const ITEM_STATUS_OPTIONS = [
   { value: 'Rejected', label: 'Rejected' },
 ];
 
+export const PROJECT_OPTIONS = [
+  { value: 'PRJ-2026-001', label: 'PRJ-2026-001 - CNC Guideway Overhaul', projectName: 'CNC Guideway Overhaul' },
+  { value: 'PRJ-2026-002', label: 'PRJ-2026-002 - Granite Surface Plate Line Expansion', projectName: 'Granite Surface Plate Line Expansion' },
+  { value: 'PRJ-2026-003', label: 'PRJ-2026-003 - Shop Floor Automation & Spares', projectName: 'Shop Floor Automation & Spares' },
+  { value: 'PRJ-2026-004', label: 'PRJ-2026-004 - Tooling & R&D Prototyping', projectName: 'Tooling & R&D Prototyping' },
+  { value: 'PRJ-2026-005', label: 'PRJ-2026-005 - Facility Electrical Infrastructure Upgrade', projectName: 'Facility Electrical Infrastructure Upgrade' },
+  { value: 'PRJ-2026-006', label: 'PRJ-2026-006 - Assembly Line Pneumatic System Upgrade', projectName: 'Assembly Line Pneumatic System Upgrade' },
+];
+
+export function getProjectName(projectId) {
+  if (!projectId) return '—';
+  const prj = PROJECT_OPTIONS.find((p) => p.value === projectId);
+  return prj ? prj.projectName : projectId;
+}
+
 /**
  * Initial mock Purchase Requisition records
  */
@@ -108,6 +123,7 @@ export const mockPurchaseRequisitions = [
   {
     prId: 1001,
     prNumber: 'PR-2026-0001',
+    projectId: 'PRJ-2026-001',
     prDate: '2026-09-11',
     requestedBy: 'John Patel',
     department: 'Purchase',
@@ -167,6 +183,7 @@ export const mockPurchaseRequisitions = [
   {
     prId: 1002,
     prNumber: 'PR-2026-0002',
+    projectId: 'PRJ-2026-002',
     prDate: '2026-09-12',
     requestedBy: 'Meet Shah',
     department: 'Maintenance',
@@ -208,6 +225,7 @@ export const mockPurchaseRequisitions = [
   {
     prId: 1003,
     prNumber: 'PR-2026-0003',
+    projectId: 'PRJ-2026-003',
     prDate: '2026-09-13',
     requestedBy: 'Rahul Patel',
     department: 'Operations',
@@ -237,6 +255,7 @@ export const mockPurchaseRequisitions = [
   {
     prId: 1004,
     prNumber: 'PR-2026-0004',
+    projectId: 'PRJ-2026-004',
     prDate: '2026-09-15',
     requestedBy: 'Priya Mehta',
     department: 'Quality Assurance',
@@ -272,6 +291,66 @@ export const mockPurchaseRequisitions = [
         requiredDate: '2026-10-05',
         remarks: 'Precision turned tolerance H7',
         status: 'Rejected',
+      },
+    ],
+  },
+  {
+    prId: 1005,
+    prNumber: 'PR-2026-0005',
+    projectId: 'PRJ-2026-005',
+    prDate: '2026-09-18',
+    requestedBy: 'Arjun Sharma',
+    department: 'Tooling & R&D',
+    requiredDate: '2026-10-10',
+    priority: 'Urgent',
+    remarks: 'Custom fixtures and tooling fasteners for R&D prototyping cell.',
+    status: 'Pending Approval',
+    createdBy: 'Arjun Sharma',
+    createdDate: '2026-09-18T14:10:00',
+    modifiedBy: 'Arjun Sharma',
+    modifiedDate: '2026-09-18T14:10:00',
+    items: [
+      {
+        prItemId: 5008,
+        itemId: 205,
+        itemCode: 'MAT-FST-M6-125',
+        itemName: 'M6 Fastener',
+        specification: 'M6 × 125 MM High Tensile Zinc Plated',
+        quantity: 80,
+        uom: 'Nos',
+        requiredDate: '2026-10-10',
+        remarks: 'High tensile strictly',
+        status: 'Pending',
+      },
+    ],
+  },
+  {
+    prId: 1006,
+    prNumber: 'PR-2026-0006',
+    projectId: 'PRJ-2026-001',
+    prDate: '2026-09-20',
+    requestedBy: 'Meet Shah',
+    department: 'Production',
+    requiredDate: '2026-10-12',
+    priority: 'Normal',
+    remarks: 'Replacement hydraulic lubrication oil for heavy duty machine shop.',
+    status: 'Approved',
+    createdBy: 'Meet Shah',
+    createdDate: '2026-09-20T10:00:00',
+    modifiedBy: 'Ian Chesnut',
+    modifiedDate: '2026-09-21T11:20:00',
+    items: [
+      {
+        prItemId: 5009,
+        itemId: 211,
+        itemCode: 'MAT-OIL-068',
+        itemName: 'Hydraulic Oil ISO 68',
+        specification: 'Anti-Wear High Viscosity Index Drum Pack',
+        quantity: 100,
+        uom: 'Litre',
+        requiredDate: '2026-10-12',
+        remarks: 'Production shop replenishment',
+        status: 'Approved',
       },
     ],
   },

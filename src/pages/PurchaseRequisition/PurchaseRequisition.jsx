@@ -1,57 +1,45 @@
 /**
  * PurchaseRequisition.jsx — Purchase Requisition List Page.
- * Displays all purchase requisitions with resizable columns, sorting, pagination,
- * live search, status, priority, and date filters using TanStack React Table and Table.jsx system.
+ * Implements the system standard table grid UI matching Vendors and Clients:
+ *   - Unified table card container with integrated filter toolbar
+ *   - TanStack React Table with resizable columns, sort chevrons, and pagination
+ *   - Project ID column and search/filter support
+ *   - Live search, status filter, project filter, and date filter
+ *   - URL search parameter synchronization for seamless dashboard navigation
+ *   - Ghost action buttons (View, Edit, Delete) with ConfirmModal dialog
+ *   - Responsive mobile card view
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
   getPaginationRowModel,
-  flexRender,
   createColumnHelper,
 } from '@tanstack/react-table';
-import {
-  Search,
-  Plus,
-  Eye,
-  Pencil,
-  RotateCcw,
-  Calendar,
-  FileText,
-  Clock,
-  Layers,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  Inbox,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  Filter,
-} from 'lucide-react';
+import { Plus, FileText, Eye, Pencil, Trash2 } from 'lucide-react';
 import { IconPR } from '../../constants/icons';
 
 import {
   Button,
-  Input,
   DatePicker,
-  Select,
+  SearchableSelect,
   Badge,
-  Card,
-  TableContainer,
-  Th,
-  Td,
+  ConfirmModal,
   PageHeader,
+  DataTable,
+  TableToolbar,
+  TableActions,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
   formatPRDate,
   getPRStatusBadgeVariant,
   STATUS_OPTIONS,
+  PROJECT_OPTIONS,
+  getProjectName,
 } from '../../mocks/purchaseRequisitions';
 
 const columnHelper = createColumnHelper();
@@ -61,8 +49,18 @@ const STATUS_FILTER_OPTIONS = [
   ...STATUS_OPTIONS,
 ];
 
+const PROJECT_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Projects' },
+  ...PROJECT_OPTIONS.map((p) => ({
+    value: p.value,
+    label: `${p.value} - ${p.projectName}`,
+  })),
+];
+
 export default function PurchaseRequisition() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
   const {
     requisitions,
     filteredRequisitions,
@@ -70,9 +68,12 @@ export default function PurchaseRequisition() {
     setSearch,
     statusFilter,
     setStatusFilter,
+    projectFilter,
+    setProjectFilter,
     dateFilter,
     setDateFilter,
     resetFilters,
+    deletePR,
   } = usePurchaseRequisitionContext();
 
   const [sorting, setSorting] = useState([]);
@@ -81,27 +82,58 @@ export default function PurchaseRequisition() {
     pageIndex: 0,
     pageSize: 10,
   });
+  const [prToDelete, setPrToDelete] = useState(null);
+
+  // Sync URL search parameters on mount / route changes (e.g. from Dashboard)
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    const projectParam = searchParams.get('project') || searchParams.get('projectId');
+    const searchParam = searchParams.get('search');
+    const resetParam = searchParams.get('reset') || searchParams.get('filter');
+
+    if (resetParam === 'true' || resetParam === 'ALL' || resetParam === 'all') {
+      resetFilters();
+      return;
+    }
+
+    if (statusParam) {
+      const matchedStatus = STATUS_OPTIONS.find(
+        (s) => s.value.toLowerCase() === statusParam.toLowerCase()
+      );
+      if (matchedStatus) {
+        setStatusFilter(matchedStatus.value);
+      } else if (statusParam.toUpperCase() === 'ALL') {
+        setStatusFilter('ALL');
+      }
+    }
+
+    if (projectParam) {
+      const matchedProj = PROJECT_OPTIONS.find(
+        (p) => p.value.toLowerCase() === projectParam.toLowerCase()
+      );
+      if (matchedProj) {
+        setProjectFilter(matchedProj.value);
+      } else if (projectParam.toUpperCase() === 'ALL') {
+        setProjectFilter('ALL');
+      }
+    }
+
+    if (searchParam) {
+      setSearch(searchParam);
+    }
+  }, [searchParams, setStatusFilter, setProjectFilter, setSearch, resetFilters]);
 
   // Reset pagination to page 1 whenever filters change
   useEffect(() => {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-  }, [search, statusFilter, dateFilter]);
+  }, [search, statusFilter, projectFilter, dateFilter]);
 
   const hasActiveFilters = Boolean(
     search.trim() ||
       statusFilter !== 'ALL' ||
+      projectFilter !== 'ALL' ||
       dateFilter
   );
-
-  // Summary Metrics for quick ERP overview
-  const metrics = useMemo(() => {
-    return {
-      total: requisitions.length,
-      pending: requisitions.filter((r) => r.status === 'Pending Approval').length,
-      approved: requisitions.filter((r) => r.status === 'Approved').length,
-      rejected: requisitions.filter((r) => r.status === 'Rejected').length,
-    };
-  }, [requisitions]);
 
   /* ── Column Definitions with Resizing and Sorting ── */
   const columns = useMemo(
@@ -109,8 +141,8 @@ export default function PurchaseRequisition() {
       /* 1. PR NUMBER */
       columnHelper.accessor('prNumber', {
         header: 'PR NUMBER',
-        minSize: 140,
-        size: 155,
+        minSize: 130,
+        size: 145,
         cell: (info) => {
           const pr = info.row.original;
           return (
@@ -119,7 +151,7 @@ export default function PurchaseRequisition() {
               onClick={() =>
                 navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)
               }
-              className="font-semibold text-primary hover:underline inline-flex items-center gap-1.5 cursor-pointer text-left whitespace-nowrap"
+              className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1.5 cursor-pointer text-left whitespace-nowrap"
             >
               <FileText size={14} className="text-primary/70 shrink-0" />
               <span>{pr.prNumber}</span>
@@ -131,56 +163,83 @@ export default function PurchaseRequisition() {
       /* 2. PR DATE */
       columnHelper.accessor('prDate', {
         header: 'PR DATE',
-        minSize: 120,
-        size: 135,
+        minSize: 110,
+        size: 120,
         cell: (info) => (
-          <span className="text-text-muted text-xs sm:text-sm whitespace-nowrap">
+          <span className="text-text-muted text-xs font-mono whitespace-nowrap">
             {formatPRDate(info.getValue())}
           </span>
         ),
       }),
 
-      /* 3. REQUESTED BY */
+      /* 3. PROJECT ID (New Field) */
+      columnHelper.accessor('projectId', {
+        header: 'PROJECT ID',
+        minSize: 140,
+        size: 170,
+        cell: (info) => {
+          const projectId = info.getValue();
+          if (!projectId) {
+            return <span className="text-text-muted text-xs font-mono">—</span>;
+          }
+          const projectName = getProjectName(projectId);
+          return (
+            <div className="flex flex-col min-w-0">
+              <span className="font-mono text-xs font-semibold text-heading">
+                {projectId}
+              </span>
+              <span
+                className="text-2xs text-text-muted truncate max-w-[160px]"
+                title={projectName}
+              >
+                {projectName}
+              </span>
+            </div>
+          );
+        },
+      }),
+
+      /* 4. REQUESTED BY */
       columnHelper.accessor('requestedBy', {
         header: 'REQUESTED BY',
-        minSize: 150,
-        size: 170,
+        minSize: 130,
+        size: 150,
         cell: (info) => (
-          <span className="font-medium text-text text-xs sm:text-sm whitespace-nowrap">
+          <span className="font-medium text-text text-xs whitespace-nowrap">
             {info.getValue() || '—'}
           </span>
         ),
       }),
 
-      /* 4. DEPARTMENT */
+      /* 5. DEPARTMENT */
       columnHelper.accessor('department', {
         header: 'DEPARTMENT',
-        minSize: 140,
-        size: 160,
+        minSize: 120,
+        size: 140,
         cell: (info) => (
-          <span className="text-text-muted text-xs sm:text-sm whitespace-nowrap">
+          <span className="text-text-muted text-xs whitespace-nowrap">
             {info.getValue() || '—'}
           </span>
         ),
       }),
 
-      /* 5. REQUIRED DATE */
+      /* 6. REQUIRED DATE */
       columnHelper.accessor('requiredDate', {
         header: 'REQUIRED DATE',
-        minSize: 130,
-        size: 145,
+        minSize: 110,
+        size: 125,
         cell: (info) => (
-          <span className="text-text-muted text-xs sm:text-sm whitespace-nowrap">
+          <span className="text-text-muted text-xs font-mono whitespace-nowrap">
             {formatPRDate(info.getValue())}
           </span>
         ),
       }),
 
-      /* 6. STATUS */
+      /* 7. STATUS */
       columnHelper.accessor('status', {
         header: 'STATUS',
-        minSize: 165,
-        size: 180,
+        minSize: 130,
+        size: 145,
         cell: (info) => {
           const status = info.getValue() || 'Pending Approval';
           const statusVariant = getPRStatusBadgeVariant(status);
@@ -192,43 +251,26 @@ export default function PurchaseRequisition() {
         },
       }),
 
-      /* 7. ACTIONS */
+      /* 8. ACTIONS */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 100,
-        size: 110,
+        minSize: 110,
+        size: 120,
         enableResizing: false,
         enableSorting: false,
         cell: (info) => {
           const pr = info.row.original;
+          const prKey = pr.prNumber || pr.prId;
           return (
-            <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() =>
-                  navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)
-                }
-                title="View Requisition"
-                className="text-text-muted hover:text-primary hover:bg-surface cursor-pointer"
-              >
-                <Eye size={15} aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() =>
-                  navigate(
-                    `/purchase-requisition/${pr.prNumber || pr.prId}/edit`
-                  )
-                }
-                title="Edit Requisition"
-                className="text-text-muted hover:text-primary hover:bg-surface cursor-pointer"
-              >
-                <Pencil size={15} aria-hidden="true" />
-              </Button>
-            </div>
+            <TableActions
+              onView={() => navigate(`/purchase-requisition/${prKey}`)}
+              onEdit={() => navigate(`/purchase-requisition/${prKey}/edit`)}
+              onDelete={() => setPrToDelete(pr)}
+              viewTitle="View Requisition"
+              editTitle="Edit Requisition"
+              deleteTitle="Delete Requisition"
+            />
           );
         },
       }),
@@ -251,18 +293,18 @@ export default function PurchaseRequisition() {
     enableColumnResizing: true,
   });
 
-  const pageCount = table.getPageCount();
-  const currentPageIndex = table.getState().pagination.pageIndex;
-  const totalRows = filteredRequisitions.length;
-  const startRow = totalRows === 0 ? 0 : currentPageIndex * pagination.pageSize + 1;
-  const endRow = Math.min((currentPageIndex + 1) * pagination.pageSize, totalRows);
+  const handleDeleteConfirm = () => {
+    if (!prToDelete) return;
+    deletePR(prToDelete.prNumber || prToDelete.prId);
+    setPrToDelete(null);
+  };
 
   return (
     <div className="w-full space-y-6 pb-16">
       {/* ── Page Header ── */}
       <PageHeader
         title="Purchase Requisition"
-        subtitle="Manage purchase requisitions and track their status."
+        subtitle="Manage purchase requisitions and track their approval pipeline."
         icon={<IconPR className="h-6 w-6 text-primary" aria-hidden="true" />}
         badge={
           <Badge variant="role" className="text-xs">
@@ -274,7 +316,7 @@ export default function PurchaseRequisition() {
           <Button
             variant="primary"
             onClick={() => navigate('/purchase-requisition/create')}
-            className="shadow-sm font-semibold"
+            className="shadow-sm font-semibold text-xs"
           >
             <Plus size={16} className="mr-1.5" />
             Create Purchase Requisition
@@ -282,479 +324,194 @@ export default function PurchaseRequisition() {
         }
       />
 
-      {/* ── Summary KPI Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-        <Card
-          padding="sm"
-          className="flex items-center gap-3.5 border-border/80 bg-surface shadow-xs cursor-pointer hover:border-primary/40 transition-colors"
-          onClick={() => {
-            resetFilters();
-          }}
-        >
-          <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Layers size={20} />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-text-muted uppercase tracking-wider">
-              Total PRs
-            </div>
-            <div className="text-xl font-bold text-heading mt-0.5">
-              {metrics.total}
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          padding="sm"
-          className="flex items-center gap-3.5 border-border/80 bg-surface shadow-xs cursor-pointer hover:border-warning/40 transition-colors"
-          onClick={() => {
-            setStatusFilter('Pending Approval');
-          }}
-        >
-          <div className="w-10 h-10 rounded-lg bg-warning/10 text-warning flex items-center justify-center shrink-0">
-            <Clock size={20} />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-text-muted uppercase tracking-wider">
-              Pending
-            </div>
-            <div className="text-xl font-bold text-warning mt-0.5">
-              {metrics.pending}
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          padding="sm"
-          className="flex items-center gap-3.5 border-border/80 bg-surface shadow-xs cursor-pointer hover:border-success/40 transition-colors"
-          onClick={() => {
-            setStatusFilter('Approved');
-          }}
-        >
-          <div className="w-10 h-10 rounded-lg bg-success/10 text-success flex items-center justify-center shrink-0">
-            <CheckCircle2 size={20} />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-text-muted uppercase tracking-wider">
-              Approved
-            </div>
-            <div className="text-xl font-bold text-success mt-0.5">
-              {metrics.approved}
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          padding="sm"
-          className="flex items-center gap-3.5 border-border/80 bg-surface shadow-xs cursor-pointer hover:border-danger/40 transition-colors"
-          onClick={() => {
-            setStatusFilter('Rejected');
-          }}
-        >
-          <div className="w-10 h-10 rounded-lg bg-danger/10 text-danger flex items-center justify-center shrink-0">
-            <XCircle size={20} />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-text-muted uppercase tracking-wider">
-              Rejected
-            </div>
-            <div className="text-xl font-bold text-danger mt-0.5">
-              {metrics.rejected}
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Filters & Search Control Bar ── */}
-      <Card padding="md" className="space-y-4 shadow-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-end">
-          {/* Search Box */}
-          <div className="sm:col-span-2 md:col-span-5">
-            <Input
-              id="pr-search"
-              label="Search"
-              placeholder="Search by PR #, requester, department, or item..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              leftIcon={<Search size={16} />}
-            />
-          </div>
-
-          {/* Status Filter */}
-          <div className="md:col-span-3">
-            <Select
-              id="pr-status-filter"
-              label="Status Filter"
-              options={STATUS_FILTER_OPTIONS}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            />
-          </div>
-
-          {/* Date Filter */}
-          <div className="md:col-span-3">
-            <DatePicker
-              id="pr-date-filter"
-              name="dateFilter"
-              label="Date Filter"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-            />
-          </div>
-
-          {/* Reset Filters */}
-          <div className="md:col-span-1 flex items-end">
-            <Button
-              variant="secondary"
-              onClick={resetFilters}
-              disabled={!hasActiveFilters}
-              title="Reset all filters"
-              className="w-full h-10 px-0 flex items-center justify-center"
-            >
-              <RotateCcw size={15} />
-            </Button>
-          </div>
+            {/* ── Filter Toolbar ── */}
+      <TableToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search PR, project, requester, item..."
+        hasActiveFilters={hasActiveFilters}
+        onReset={resetFilters}
+      >
+        {/* Status Filter Dropdown */}
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="filter-pr-status"
+            placeholder="All Statuses"
+            searchPlaceholder="Search statuses..."
+            options={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          />
         </div>
 
-        {hasActiveFilters && (
-          <div className="flex items-center gap-2 pt-2 border-t border-border text-xs text-text-muted">
-            <Filter size={13} className="text-primary" />
-            <span>
-              Active filters applied. Showing {filteredRequisitions.length}{' '}
-              results.
-            </span>
-            <button
+        {/* Project Filter Dropdown */}
+        <div className="w-full sm:w-56">
+          <SearchableSelect
+            id="filter-pr-project"
+            placeholder="All Projects"
+            searchPlaceholder="Search projects..."
+            options={PROJECT_FILTER_OPTIONS}
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+          />
+        </div>
+
+        {/* Date Filter */}
+        <div className="w-full sm:w-36">
+          <DatePicker
+            id="filter-pr-date"
+            name="dateFilter"
+            placeholder="Filter Date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+          />
+        </div>
+      </TableToolbar>
+
+      {/* ── Standard TanStack DataTable & Responsive Mobile Cards ── */}
+      <DataTable
+        table={table}
+        columns={columns}
+        totalCount={filteredRequisitions.length}
+        entityName="requisitions"
+        emptyTitle="No purchase requisitions found"
+        emptyDescription={
+          hasActiveFilters
+            ? 'Try clearing or changing your filters to find what you are looking for.'
+            : 'No purchase requisitions have been created yet. Click create to add your first requisition.'
+        }
+        emptyAction={
+          hasActiveFilters ? (
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={resetFilters}
-              className="text-primary hover:underline font-medium ml-1 cursor-pointer"
+              className="text-xs text-primary"
             >
-              Clear all
-            </button>
-          </div>
-        )}
-      </Card>
-
-      {/* ── Desktop Data Table with Column Resizing & Sorting ── */}
-      <div className="hidden md:block">
-        <Card padding="none" className="overflow-hidden border border-border shadow-xs">
-          <TableContainer
-            tableStyle={{ width: '100%', minWidth: '980px' }}
-            tableClassName="w-full"
-          >
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} className="bg-surface border-b border-border">
-                  {headerGroup.headers.map((header) => {
-                    const sorted = header.column.getIsSorted();
-                    const canSort = header.column.getCanSort();
-                    const canResize = header.column.getCanResize();
-
-                    return (
-                      <Th
-                        key={header.id}
-                        style={{ width: header.getSize() }}
-                        isResizing={header.column.getIsResizing()}
-                        resizeHandler={
-                          canResize ? header.getResizeHandler() : undefined
-                        }
-                      >
-                        {header.isPlaceholder ? null : canSort ? (
-                          <button
-                            type="button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            className="group/th-btn flex items-center gap-1.5 w-full text-left select-none cursor-pointer hover:text-heading transition-colors"
-                          >
-                            <span className="truncate">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                            </span>
-
-                            <span className="shrink-0 ml-1 inline-flex items-center">
-                              {sorted === 'asc' ? (
-                                <ChevronUp
-                                  size={14}
-                                  className="text-primary stroke-[2.5]"
-                                  aria-hidden="true"
-                                />
-                              ) : sorted === 'desc' ? (
-                                <ChevronDown
-                                  size={14}
-                                  className="text-primary stroke-[2.5]"
-                                  aria-hidden="true"
-                                />
-                              ) : (
-                                <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <ChevronUp size={11} strokeWidth={2.5} />
-                                  <ChevronDown size={11} strokeWidth={2.5} />
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        ) : (
-                          <div
-                            className={`select-none ${
-                              header.id === 'actions'
-                                ? 'text-right w-full'
-                                : ''
-                            }`}
-                          >
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                          </div>
-                        )}
-                      </Th>
-                    );
-                  })}
-                </tr>
-              ))}
-            </thead>
-
-            <tbody className="divide-y divide-border bg-surface">
-              {table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length} className="py-14 text-center">
-                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto space-y-3">
-                      <div className="w-12 h-12 rounded-full bg-border/40 flex items-center justify-center text-text-muted">
-                        <Inbox size={24} />
-                      </div>
-                      <div className="text-base font-semibold text-heading">
-                        No purchase requisitions found
-                      </div>
-                      <p className="text-xs text-text-muted">
-                        {hasActiveFilters
-                          ? 'No requisitions match your current search and filter criteria.'
-                          : 'Get started by creating your first purchase requisition.'}
-                      </p>
-                      {hasActiveFilters ? (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={resetFilters}
-                          className="mt-2"
-                        >
-                          <RotateCcw size={14} className="mr-1" />
-                          Reset Filters
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() =>
-                            navigate('/purchase-requisition/create')
-                          }
-                          className="mt-2"
-                        >
-                          <Plus size={14} className="mr-1" />
-                          Create Purchase Requisition
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-bg/60 transition-colors group"
+              Clear filters
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => navigate('/purchase-requisition/create')}
+              className="text-xs"
+            >
+              <Plus size={14} className="mr-1" />
+              Create Purchase Requisition
+            </Button>
+          )
+        }
+        renderMobileCard={(row) => {
+          const pr = row.original;
+          const statusVariant = getPRStatusBadgeVariant(pr.status);
+          return (
+            <div
+              key={pr.id || pr.prNumber || pr.prId}
+              className="bg-surface border border-border rounded-xl p-4 shadow-2xs space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)
+                    }
+                    className="text-base font-bold text-primary hover:underline text-left font-mono"
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <Td
-                        key={cell.id}
-                        style={{ width: cell.column.getSize() }}
-                        className={cell.column.id === 'actions' ? 'text-right' : ''}
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </Td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </TableContainer>
-
-          {/* Pagination Footer */}
-          {pageCount > 1 && (
-            <div className="flex items-center justify-between px-6 py-3 border-t border-border bg-surface text-xs text-text-muted">
-              <div>
-                Showing {startRow} to {endRow} of {totalRows} entries
+                    {pr.prNumber}
+                  </button>
+                  <div className="text-xs text-text-muted mt-0.5 font-mono">
+                    Date: {formatPRDate(pr.prDate)}
+                  </div>
+                </div>
+                <Badge variant={statusVariant}>{pr.status}</Badge>
               </div>
-              <div className="flex items-center gap-1">
+
+              <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/60">
+                <div>
+                  <span className="text-text-muted">Project ID:</span>
+                  <div className="font-semibold text-heading font-mono mt-0.5 truncate">
+                    {pr.projectId || '—'}
+                  </div>
+                  {pr.projectId && (
+                    <div className="text-2xs text-text-muted truncate">
+                      {getProjectName(pr.projectId)}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <span className="text-text-muted">Requested By:</span>
+                  <div className="font-medium text-text mt-0.5 truncate">
+                    {pr.requestedBy}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-text-muted">Department:</span>
+                  <div className="font-medium text-text mt-0.5 truncate">
+                    {pr.department}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-text-muted">Required Date:</span>
+                  <div className="font-medium text-text mt-0.5 font-mono">
+                    {formatPRDate(pr.requiredDate)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons footer */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={!table.getCanPreviousPage()}
-                  onClick={() => table.previousPage()}
-                  className="h-8 px-2.5 text-xs"
+                  onClick={() =>
+                    navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)
+                  }
+                  className="flex-1 text-xs"
                 >
-                  Previous
+                  <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                  View
                 </Button>
-                {Array.from({ length: pageCount }, (_, i) => i + 1).map((pg) => (
-                  <Button
-                    key={pg}
-                    variant={pg === currentPageIndex + 1 ? 'primary' : 'secondary'}
-                    size="sm"
-                    onClick={() => table.setPageIndex(pg - 1)}
-                    className="h-8 w-8 p-0 text-xs"
-                  >
-                    {pg}
-                  </Button>
-                ))}
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={!table.getCanNextPage()}
-                  onClick={() => table.nextPage()}
-                  className="h-8 px-2.5 text-xs"
+                  onClick={() =>
+                    navigate(`/purchase-requisition/${pr.prNumber || pr.prId}/edit`)
+                  }
+                  className="flex-1 text-xs"
                 >
-                  Next
+                  <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                  Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setPrToDelete(pr)}
+                  className="flex-1 text-xs"
+                >
+                  <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
+                  Delete
                 </Button>
               </div>
             </div>
-          )}
-        </Card>
-      </div>
+          );
+        }}
+      />
 
-      {/* ── Mobile Responsive Card View ── */}
-      <div className="block md:hidden space-y-3">
-        {table.getRowModel().rows.length === 0 ? (
-          <Card padding="lg" className="text-center py-10">
-            <div className="w-10 h-10 rounded-full bg-border/40 flex items-center justify-center text-text-muted mx-auto mb-2">
-              <Inbox size={20} />
-            </div>
-            <div className="text-sm font-semibold text-heading">
-              No purchase requisitions found
-            </div>
-            <p className="text-xs text-text-muted mt-1">
-              Try adjusting your search or filters.
-            </p>
-          </Card>
-        ) : (
-          table.getRowModel().rows.map((row) => {
-            const pr = row.original;
-            const statusVariant = getPRStatusBadgeVariant(pr.status);
-
-            return (
-              <Card
-                key={pr.prId}
-                padding="md"
-                className="space-y-3 border-border hover:border-primary/40 transition-colors shadow-xs"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          `/purchase-requisition/${pr.prNumber || pr.prId}`
-                        )
-                      }
-                      className="text-base font-bold text-primary hover:underline text-left"
-                    >
-                      {pr.prNumber}
-                    </button>
-                    <div className="text-xs text-text-muted mt-0.5">
-                      Date: {formatPRDate(pr.prDate)}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <Badge variant={statusVariant}>{pr.status}</Badge>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/60">
-                  <div>
-                    <span className="text-text-muted">Requested By:</span>
-                    <div className="font-medium text-text mt-0.5">
-                      {pr.requestedBy}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-text-muted">Department:</span>
-                    <div className="font-medium text-text mt-0.5">
-                      {pr.department}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-text-muted">Required Date:</span>
-                    <div className="font-medium text-text mt-0.5">
-                      {formatPRDate(pr.requiredDate)}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-text-muted">Items Count:</span>
-                    <div className="font-medium text-text mt-0.5">
-                      {pr.items?.length || 0} items
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      navigate(
-                        `/purchase-requisition/${pr.prNumber || pr.prId}`
-                      )
-                    }
-                    className="flex-1 text-xs"
-                  >
-                    <Eye size={13} className="mr-1" />
-                    View
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      navigate(
-                        `/purchase-requisition/${pr.prNumber || pr.prId}/edit`
-                      )
-                    }
-                    className="flex-1 text-xs"
-                  >
-                    <Pencil size={13} className="mr-1" />
-                    Edit
-                  </Button>
-                </div>
-              </Card>
-            );
-          })
-        )}
-
-        {/* Mobile pagination */}
-        {pageCount > 1 && (
-          <div className="flex items-center justify-between pt-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!table.getCanPreviousPage()}
-              onClick={() => table.previousPage()}
-              className="text-xs"
-            >
-              Previous
-            </Button>
-            <span className="text-xs text-text-muted">
-              Page {currentPageIndex + 1} of {pageCount}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!table.getCanNextPage()}
-              onClick={() => table.nextPage()}
-              className="text-xs"
-            >
-              Next
-            </Button>
-          </div>
-        )}
-      </div>
+{/* Delete Confirmation Modal */}
+      {prToDelete && (
+        <ConfirmModal
+          isOpen={Boolean(prToDelete)}
+          title="Delete Purchase Requisition"
+          message={`Are you sure you want to delete purchase requisition ${prToDelete.prNumber}? This action cannot be undone.`}
+          confirmLabel="Delete Requisition"
+          confirmVariant="danger"
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setPrToDelete(null)}
+        />
+      )}
     </div>
   );
 }

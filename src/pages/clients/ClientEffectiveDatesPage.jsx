@@ -107,6 +107,8 @@ export default function ClientEffectiveDatesPage() {
   const backPath = location.state?.from || '/clients';
   const backLabel = location.state?.backLabel || 'Clients';
 
+  const isReadOnly = Boolean(location.state?.readOnly);
+
   const client = getClientById(id);
 
   // All versions computed with live temporal statuses
@@ -618,25 +620,27 @@ export default function ClientEffectiveDatesPage() {
                 <Eye size={15} />
               </Button>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleStartEdit(row)}
-                title="Edit this version"
-                className={
-                  isSelected && mode === 'EDIT'
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-text-muted hover:text-primary hover:bg-surface'
-                }
-              >
-                <Pencil size={15} />
-              </Button>
+              {!isReadOnly && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleStartEdit(row)}
+                  title="Edit this version"
+                  className={
+                    isSelected && mode === 'EDIT'
+                      ? 'bg-primary/15 text-primary'
+                      : 'text-text-muted hover:text-primary hover:bg-surface'
+                  }
+                >
+                  <Pencil size={15} />
+                </Button>
+              )}
             </div>
           );
         },
       }),
     ],
-    [activeVersion, selectedVersion, mode]
+    [activeVersion, selectedVersion, mode, isReadOnly]
   );
 
   const table = useReactTable({
@@ -714,7 +718,7 @@ export default function ClientEffectiveDatesPage() {
               {client.contactTypeId || 'Customer'}
             </Badge>
 
-            {mode === 'VIEW' && selectedVersion && (
+            {!isReadOnly && mode === 'VIEW' && selectedVersion && (
               <Button
                 type="button"
                 variant="secondary"
@@ -743,15 +747,17 @@ export default function ClientEffectiveDatesPage() {
             </p>
           </div>
 
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleStartAdd}
-            className="text-xs shrink-0 w-full sm:w-auto justify-center"
-          >
-            <Plus size={14} className="mr-1.5" />
-            Add New Effective Date
-          </Button>
+          {!isReadOnly && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleStartAdd}
+              className="text-xs shrink-0 w-full sm:w-auto justify-center"
+            >
+              <Plus size={14} className="mr-1.5" />
+              Add New Effective Date
+            </Button>
+          )}
         </div>
 
         {/* ── Mobile Card List (< md) ── */}
@@ -815,19 +821,21 @@ export default function ClientEffectiveDatesPage() {
                         <Eye size={14} />
                       </Button>
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleStartEdit(ver)}
-                        title="Edit this version"
-                        className={`h-7 w-7 ${
-                          isSelected && mode === 'EDIT'
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-text-muted hover:text-primary hover:bg-surface'
-                        }`}
-                      >
-                        <Pencil size={14} />
-                      </Button>
+                      {!isReadOnly && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleStartEdit(ver)}
+                          title="Edit this version"
+                          className={`h-7 w-7 ${
+                            isSelected && mode === 'EDIT'
+                              ? 'bg-primary/15 text-primary'
+                              : 'text-text-muted hover:text-primary hover:bg-surface'
+                          }`}
+                        >
+                          <Pencil size={14} />
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -1008,7 +1016,7 @@ export default function ClientEffectiveDatesPage() {
 
           {/* Panel Top Actions */}
           <div className="flex items-center gap-2 self-start sm:self-auto w-full sm:w-auto justify-end">
-            {mode === 'VIEW' && selectedVersion && (
+            {!isReadOnly && mode === 'VIEW' && selectedVersion && (
               <Button
                 variant="secondary"
                 size="sm"

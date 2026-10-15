@@ -35,8 +35,11 @@ import {
   ConfirmModal,
   TableContainer,
   Th,
-  Td,
   PageHeader,
+  DataTable,
+  TableToolbar,
+  TableActions,
+  StatusBadge,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { getStateName } from '../../mocks/vendors';
@@ -266,25 +269,7 @@ export default function VendorsPage() {
             return <span className="text-text-muted text-xs font-mono">—</span>;
           }
 
-          const isActive = row.isActive;
-          return (
-            <span
-              className={[
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium select-none',
-                isActive
-                  ? 'bg-success/10 text-success border border-success/20'
-                  : 'bg-danger/10 text-danger border border-danger/20',
-              ].join(' ')}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isActive ? 'bg-success' : 'bg-danger'
-                }`}
-                aria-hidden="true"
-              />
-              {isActive ? 'Active' : 'Inactive'}
-            </span>
-          );
+          return <StatusBadge status={row.isActive} size="sm" />;
         },
       }),
 
@@ -315,40 +300,14 @@ export default function VendorsPage() {
           const row = info.row.original;
 
           return (
-            <div className="flex items-center justify-end gap-1">
-              {/* View Ghost Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate(`/vendors/${row.id}/effective-dates`, { state: { readOnly: true } })}
-                title="View vendor details"
-                className="text-text-muted hover:text-info hover:bg-surface"
-              >
-                <Eye size={15} aria-hidden="true" />
-              </Button>
-
-              {/* Edit Ghost Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate(`/vendors/${row.id}/effective-dates`)}
-                title="Edit vendor"
-                className="text-text-muted hover:text-primary hover:bg-surface"
-              >
-                <Pencil size={15} aria-hidden="true" />
-              </Button>
-
-              {/* Delete Ghost Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setVendorToDelete(row)}
-                title="Delete vendor"
-                className="text-text-muted hover:text-danger hover:bg-surface"
-              >
-                <Trash2 size={15} aria-hidden="true" />
-              </Button>
-            </div>
+            <TableActions
+              onView={() => navigate(`/vendors/${row.id}/effective-dates`, { state: { readOnly: true } })}
+              onEdit={() => navigate(`/vendors/${row.id}/effective-dates`)}
+              onDelete={() => setVendorToDelete(row)}
+              viewTitle="View vendor details"
+              editTitle="Edit vendor"
+              deleteTitle="Delete vendor"
+            />
           );
         },
       }),
@@ -408,408 +367,151 @@ export default function VendorsPage() {
         }
       />
 
-      {/* ── DESKTOP VIEW (md+): Full Table ── */}
-      <div className="hidden md:block">
-        <div className="bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
-          {/* Toolbar */}
-          <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center flex-1 gap-3 flex-wrap">
-              <div className="w-full sm:w-72">
-                <Input
-                  id="vendors-search"
-                  type="search"
-                  placeholder="Search by name, code, contact, city..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  leftIcon={<Search size={16} aria-hidden="true" />}
-                />
-              </div>
-
-              <div className="w-full sm:w-48">
-                <SearchableSelect
-                  id="filter-approval"
-                  placeholder="All Approvals"
-                  searchPlaceholder="Search approvals..."
-                  options={APPROVAL_FILTER_OPTIONS}
-                  value={approvalFilter}
-                  onChange={(e) => setApprovalFilter(e.target.value)}
-                />
-              </div>
-
-              <div className="w-full sm:w-44">
-                <SearchableSelect
-                  id="filter-status"
-                  placeholder="All Statuses"
-                  searchPlaceholder="Search statuses..."
-                  options={STATUS_FILTER_OPTIONS}
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                />
-              </div>
-
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetFilters}
-                  className="text-xs text-text-muted hover:text-danger flex items-center gap-1.5 h-10 px-3"
-                >
-                  <RotateCcw size={14} />
-                  Reset Filters
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Table Container */}
-          <TableContainer>
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} className="bg-surface/60 border-b border-border">
-                  {headerGroup.headers.map((header) => {
-                    const canSort = header.column.getCanSort();
-                    const sorted = header.column.getIsSorted();
-
-                    return (
-                      <Th
-                        key={header.id}
-                        style={{ width: header.getSize() }}
-                        className={`relative py-3.5 px-6 select-none ${
-                          canSort ? 'cursor-pointer hover:bg-surface' : ''
-                        }`}
-                      >
-                        {header.isPlaceholder ? null : canSort ? (
-                          <button
-                            type="button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            className="group/th-btn flex items-center gap-1.5 w-full text-left select-none cursor-pointer hover:text-heading transition-colors"
-                          >
-                            <span className="truncate">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                            </span>
-
-                            <span className="shrink-0 ml-1 inline-flex items-center">
-                              {sorted === 'asc' ? (
-                                <ChevronUp size={14} className="text-primary stroke-[2.5]" aria-hidden="true" />
-                              ) : sorted === 'desc' ? (
-                                <ChevronDown size={14} className="text-primary stroke-[2.5]" aria-hidden="true" />
-                              ) : (
-                                <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <ChevronUp size={11} strokeWidth={2.5} />
-                                  <ChevronDown size={11} strokeWidth={2.5} />
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        ) : (
-                          <div className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''}`}>
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                          </div>
-                        )}
-                      </Th>
-                    );
-                  })}
-                </tr>
-              ))}
-            </thead>
-
-            <tbody className="divide-y divide-border bg-bg">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, rIdx) => (
-                  <tr key={`skeleton-${rIdx}`} className="animate-pulse">
-                    {columns.map((_, cIdx) => (
-                      <td key={`skel-cell-${cIdx}`} className="py-4 px-6">
-                        <div className="h-4 bg-surface rounded w-3/4" />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length} className="py-16 text-center">
-                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-                      <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center text-text-muted mb-3">
-                        <SearchX size={24} className="opacity-60" aria-hidden="true" />
-                      </div>
-                      <h4 className="text-sm font-semibold text-heading">No vendors match your search</h4>
-                      <p className="text-xs text-text-muted mt-1 mb-4">
-                        {hasActiveFilters
-                          ? 'Try clearing or changing your search filters to find what you are looking for.'
-                          : 'No vendors have been added yet.'}
-                      </p>
-                      {hasActiveFilters && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={resetFilters}
-                          className="text-primary hover:text-primary hover:bg-primary/10"
-                        >
-                          Clear all filters
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-surface/50 transition-colors duration-120 group"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <Td key={cell.id} style={{ width: cell.column.getSize() }}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </Td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </TableContainer>
-
-          {/* Desktop Pagination */}
-          <div className="px-6 py-4 bg-bg border-t border-border flex items-center justify-between">
-            <p className="text-xs text-text-muted">
-              Showing <span className="font-medium text-heading">{startRow}-{endRow}</span> of <span className="font-medium text-heading">{totalRows}</span> vendors
-            </p>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted">Rows per page:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  table.setPageSize(Number(e.target.value));
-                }}
-                className="text-xs border border-border rounded-lg bg-surface px-2 py-1 text-text focus:outline-hidden focus:ring-1 focus:ring-primary"
-              >
-                {[5, 10, 20, 50].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-
-              <div className="h-4 w-px bg-border mx-2" />
-
-              <span className="text-xs text-text-muted">
-                Page <span className="font-medium text-heading">{currentPage + 1}</span> of{' '}
-                <span className="font-medium text-heading">{Math.max(1, pageCount)}</span>
-              </span>
-
-              <div className="flex items-center gap-1 ml-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                  className="h-8 px-2.5 text-xs"
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                  className="h-8 px-2.5 text-xs"
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── MOBILE VIEW (< md): Card List ── */}
-      <div className="block md:hidden space-y-4">
-        {/* Mobile Filters */}
-        <div className="bg-surface border border-border rounded-xl p-3.5 space-y-3 shadow-2xs">
-          <Input
-            id="mobile-vendors-search"
-            type="search"
-            placeholder="Search vendors..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            leftIcon={<Search size={16} aria-hidden="true" />}
+      {/* ── Standard Table Toolbar ── */}
+      <TableToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name, code, contact, city..."
+        hasActiveFilters={hasActiveFilters}
+        onReset={resetFilters}
+        resetLabel="Reset Filters"
+      >
+        <div className="w-full sm:w-48">
+          <SearchableSelect
+            id="filter-approval"
+            placeholder="All Approvals"
+            searchPlaceholder="Search approvals..."
+            options={APPROVAL_FILTER_OPTIONS}
+            value={approvalFilter}
+            onChange={(e) => setApprovalFilter(e.target.value)}
           />
+        </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <SearchableSelect
-              id="mobile-filter-approval"
-              placeholder="Approval"
-              options={APPROVAL_FILTER_OPTIONS}
-              value={approvalFilter}
-              onChange={(e) => setApprovalFilter(e.target.value)}
-            />
-            <SearchableSelect
-              id="mobile-filter-status"
-              placeholder="Status"
-              options={STATUS_FILTER_OPTIONS}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            />
-          </div>
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="filter-status"
+            placeholder="All Statuses"
+            searchPlaceholder="Search statuses..."
+            options={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          />
+        </div>
+      </TableToolbar>
 
-          {hasActiveFilters && (
+      {/* ── Standard TanStack DataTable & Mobile Responsive Cards ── */}
+      <DataTable
+        table={table}
+        columns={columns}
+        isLoading={loading}
+        totalCount={totalRows}
+        entityName="vendors"
+        emptyTitle="No vendors match your search"
+        emptyDescription={
+          hasActiveFilters
+            ? 'Try clearing or changing your search filters to find what you are looking for.'
+            : 'No vendors have been added yet.'
+        }
+        emptyAction={
+          hasActiveFilters ? (
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={resetFilters}
-              className="w-full text-xs text-text-muted hover:text-danger h-8 justify-center"
+              className="text-xs text-primary"
             >
-              <RotateCcw size={13} className="mr-1.5" />
-              Reset Filters
+              Clear filters
             </Button>
-          )}
-        </div>
-
-        {/* Mobile Cards List */}
-        <div className="space-y-3">
-          {table.getRowModel().rows.length === 0 ? (
-            <div className="p-8 text-center bg-surface border border-border rounded-xl">
-              <SearchX size={24} className="mx-auto text-text-muted opacity-60 mb-2" />
-              <p className="text-xs font-semibold text-heading">No vendors found</p>
-              <p className="text-2xs text-text-muted mt-0.5">Try changing your search terms</p>
-            </div>
-          ) : (
-            table.getRowModel().rows.map((row) => {
-              const vendor = row.original;
-              return (
-                <div
-                  key={vendor.id}
-                  className="bg-surface border border-border rounded-xl p-4 shadow-2xs space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs font-bold text-primary">
-                          {vendor.vendorCode}
-                        </span>
-                        <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
-                          {vendor.approvalStatus}
-                        </Badge>
-                      </div>
-                      <Link
-                        to={`/vendors/${vendor.id}/effective-dates`}
-                        className="block text-sm font-semibold text-heading leading-tight mt-1 hover:text-primary"
-                      >
-                        {vendor.vendorName}
-                      </Link>
-                      <p className="text-xs text-text-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
-                        <span>Contact: {vendor.contactPersonName}</span>
-                        <span>•</span>
-                        <span className="font-mono text-2xs font-medium text-heading">
-                          Eff: {formatDateDisplay(vendor.effectiveDate)}
-                        </span>
-                      </p>
-                    </div>
-
-                    {(vendor.approvalStatus || '').toLowerCase() === 'approved' && (
-                      <span
-                        className={[
-                          'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
-                          vendor.isActive
-                            ? 'bg-success/10 text-success border border-success/20'
-                            : 'bg-danger/10 text-danger border border-danger/20',
-                        ].join(' ')}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            vendor.isActive ? 'bg-success' : 'bg-danger'
-                          }`}
-                          aria-hidden="true"
-                        />
-                        {vendor.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    )}
+          ) : null
+        }
+        renderMobileCard={(row) => {
+          const vendor = row.original;
+          return (
+            <div
+              key={vendor.id}
+              className="bg-surface border border-border rounded-xl p-4 shadow-2xs space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-xs font-bold text-primary">
+                      {vendor.vendorCode}
+                    </span>
+                    <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
+                      {vendor.approvalStatus}
+                    </Badge>
                   </div>
-
-                  {/* Contact & Location details */}
-                  <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
-                    <div className="flex items-center gap-2">
-                      <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                      <span className="font-mono tabular-nums">{vendor.phoneNo || '—'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                      <span className="truncate">
-                        {vendor.city ? `${vendor.city}, ${getStateName(vendor.countryId, vendor.stateId)}` : '—'}
-                      </span>
-                    </div>
-                  </div>
-
-
-
-                  {/* Action buttons footer */}
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`, { state: { readOnly: true } })}
-                      className="flex-1 text-xs"
-                    >
-                      <Eye size={13} className="mr-1.5" aria-hidden="true" />
-                      View
-                    </Button>
-
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`)}
-                      className="flex-1 text-xs"
-                    >
-                      <Pencil size={13} className="mr-1.5" aria-hidden="true" />
-                      Edit
-                    </Button>
-
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => setVendorToDelete(vendor)}
-                      className="flex-1 text-xs"
-                    >
-                      <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
-                      Delete
-                    </Button>
-                  </div>
+                  <Link
+                    to={`/vendors/${vendor.id}/effective-dates`}
+                    className="block text-sm font-semibold text-heading leading-tight mt-1 hover:text-primary"
+                  >
+                    {vendor.vendorName}
+                  </Link>
+                  <p className="text-xs text-text-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span>Contact: {vendor.contactPersonName}</span>
+                    <span>•</span>
+                    <span className="font-mono text-2xs font-medium text-heading">
+                      Eff: {formatDateDisplay(vendor.effectiveDate)}
+                    </span>
+                  </p>
                 </div>
-              );
-            })
-          )}
-        </div>
 
-        {/* Mobile Pagination */}
-        <div className="px-4 py-3 bg-bg border-t border-border flex items-center justify-between text-xs text-text-muted">
-          <span>{startRow}-{endRow} of {totalRows}</span>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-              className="h-8 px-2.5 text-xs"
-            >
-              Prev
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-              className="h-8 px-2.5 text-xs"
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      </div>
+                {(vendor.approvalStatus || '').toLowerCase() === 'approved' && (
+                  <StatusBadge status={vendor.isActive} size="sm" />
+                )}
+              </div>
+
+              {/* Contact & Location details */}
+              <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
+                <div className="flex items-center gap-2">
+                  <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <span className="font-mono tabular-nums">{vendor.phoneNo || '—'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MapPin size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <span className="truncate">
+                    {vendor.city ? `${vendor.city}, ${getStateName(vendor.countryId, vendor.stateId)}` : '—'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action buttons footer */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`, { state: { readOnly: true } })}
+                  className="flex-1 text-xs"
+                >
+                  <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                  View
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`)}
+                  className="flex-1 text-xs"
+                >
+                  <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                  Edit
+                </Button>
+
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setVendorToDelete(vendor)}
+                  className="flex-1 text-xs"
+                >
+                  <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
+                  Delete
+                </Button>
+              </div>
+            </div>
+          );
+        }}
+      />
 
       {/* ── Delete Vendor Confirmation Modal ── */}
       <ConfirmModal

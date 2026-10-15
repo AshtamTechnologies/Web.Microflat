@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import {
   mockPurchaseRequisitions,
   MOCK_MATERIALS,
+  getProjectName,
 } from '../../mocks/purchaseRequisitions';
 
 export function usePurchaseRequisitions() {
@@ -15,6 +16,7 @@ export function usePurchaseRequisitions() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
+  const [projectFilter, setProjectFilter] = useState('ALL');
   const [dateFilter, setDateFilter] = useState('');
 
   // Auto-generate next PR number in format PR-YYYY-XXXX
@@ -64,6 +66,7 @@ export function usePurchaseRequisitions() {
       const newRecord = {
         prId: newPRId,
         prNumber: generatedPRNumber,
+        projectId: formData.projectId || '',
         prDate: formData.prDate || new Date().toISOString().split('T')[0],
         requestedBy: formData.requestedBy || 'Current User',
         department: formData.department || 'Purchase',
@@ -113,6 +116,7 @@ export function usePurchaseRequisitions() {
             ...pr,
             ...formData,
             prNumber: pr.prNumber, // PR Number remains immutable
+            projectId: formData.projectId !== undefined ? formData.projectId : pr.projectId,
             modifiedBy: formData.requestedBy || pr.requestedBy || 'Current User',
             modifiedDate: now,
             items: Array.isArray(formData.items)
@@ -223,10 +227,12 @@ export function usePurchaseRequisitions() {
   // Filtered dataset
   const filteredRequisitions = useMemo(() => {
     return requisitions.filter((pr) => {
-      // 1. Search Query filter (matches PR Number, Requested By, Department)
+      // 1. Search Query filter (matches PR Number, Project ID, Project Name, Requested By, Department, Item)
       if (search.trim()) {
         const query = search.trim().toLowerCase();
         const matchNumber = (pr.prNumber || '').toLowerCase().includes(query);
+        const matchProject = (pr.projectId || '').toLowerCase().includes(query) ||
+          getProjectName(pr.projectId).toLowerCase().includes(query);
         const matchRequester = (pr.requestedBy || '').toLowerCase().includes(query);
         const matchDept = (pr.department || '').toLowerCase().includes(query);
         const matchItem = (pr.items || []).some(
@@ -235,7 +241,7 @@ export function usePurchaseRequisitions() {
             (it.itemName || '').toLowerCase().includes(query)
         );
 
-        if (!matchNumber && !matchRequester && !matchDept && !matchItem) {
+        if (!matchNumber && !matchProject && !matchRequester && !matchDept && !matchItem) {
           return false;
         }
       }
@@ -254,7 +260,14 @@ export function usePurchaseRequisitions() {
         }
       }
 
-      // 4. Date Filter (matches PR date or required date)
+      // 4. Project Filter
+      if (projectFilter !== 'ALL') {
+        if ((pr.projectId || '').toLowerCase() !== projectFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 5. Date Filter (matches PR date or required date)
       if (dateFilter) {
         const prDatePart = (pr.prDate || '').split('T')[0];
         const reqDatePart = (pr.requiredDate || '').split('T')[0];
@@ -265,13 +278,14 @@ export function usePurchaseRequisitions() {
 
       return true;
     });
-  }, [requisitions, search, statusFilter, priorityFilter, dateFilter]);
+  }, [requisitions, search, statusFilter, priorityFilter, projectFilter, dateFilter]);
 
   // Reset search and filters
   const resetFilters = useCallback(() => {
     setSearch('');
     setStatusFilter('ALL');
     setPriorityFilter('ALL');
+    setProjectFilter('ALL');
     setDateFilter('');
   }, []);
 
@@ -285,6 +299,8 @@ export function usePurchaseRequisitions() {
     setStatusFilter,
     priorityFilter,
     setPriorityFilter,
+    projectFilter,
+    setProjectFilter,
     dateFilter,
     setDateFilter,
     resetFilters,

@@ -228,7 +228,7 @@ export default function VendorBankDetailsViewPage() {
             </div>
             <div className="px-3 py-1.5 rounded-lg border border-success/20 bg-success/5 text-center">
               <span className="text-2xs text-success block uppercase tracking-wider font-medium">
-                Active for Payout
+                Active Accounts
               </span>
               <span className="text-sm font-bold text-success tabular-nums">
                 {activeCount}
@@ -330,18 +330,8 @@ export default function VendorBankDetailsViewPage() {
                             {account.accountType || 'Current'}
                           </Badge>
                           <Badge variant={account.isActive ? 'active' : 'inactive'} size="sm">
-                            {account.isActive ? 'Active for Payout' : 'Inactive'}
+                            {account.isActive ? 'Active' : 'Inactive'}
                           </Badge>
-                          {index === 0 && account.isActive && (
-                            <Badge variant="approved" size="sm" className="font-semibold">
-                              Primary Payout Account
-                            </Badge>
-                          )}
-                          {isHighlighted && (
-                            <Badge variant="pending" size="sm">
-                              Selected Account
-                            </Badge>
-                          )}
                         </div>
                         <p className="text-2xs text-text-muted mt-0.5 flex items-center gap-1.5">
                           <MapPin size={12} className="text-text-muted/70" />
@@ -467,7 +457,7 @@ export default function VendorBankDetailsViewPage() {
                     {/* Account Status */}
                     <DetailField label="Account Status">
                       <Badge variant={account.isActive ? 'active' : 'inactive'} size="sm">
-                        {account.isActive ? 'Active for vendor payouts' : 'Inactive account'}
+                        {account.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                     </DetailField>
 
@@ -519,7 +509,7 @@ export default function VendorBankDetailsViewPage() {
                                   {att.fileName}
                                 </span>
                                 <span className="text-2xs text-text-muted/70 font-mono block mt-0.5">
-                                  {att.fileSize || 'Standard file'} • {att.uploadedAt || 'Uploaded'}
+                                  {att.fileSize || 'Standard file'} • Uploaded {att.uploadedAt ? formatDate(att.uploadedAt) : 'Recently'}
                                 </span>
                               </div>
                             </div>
@@ -597,7 +587,7 @@ export default function VendorBankDetailsViewPage() {
                   {previewingFile.fileName} ({previewingFile.fileSize || 'Standard file'})
                 </p>
                 <p className="text-2xs text-text-muted mt-1">
-                  Uploaded on {previewingFile.uploadedAt || 'Recently'}
+                  Uploaded on {previewingFile.uploadedAt ? formatDate(previewingFile.uploadedAt) : 'Recently'}
                 </p>
               </div>
 
