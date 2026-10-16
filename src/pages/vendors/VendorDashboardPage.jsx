@@ -46,6 +46,7 @@ import toast from 'react-hot-toast';
 
 import {
   Button,
+  CancelButton,
   Card,
   Badge,
   Modal,
@@ -661,16 +662,12 @@ export default function VendorDashboardPage() {
             </div>
 
             <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-2 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="sm"
                 className="w-full sm:w-auto"
                 onClick={() => setRejectingVendor(null)}
                 disabled={actionLoading}
-              >
-                Cancel
-              </Button>
+              />
               <Button
                 type="button"
                 variant="danger"

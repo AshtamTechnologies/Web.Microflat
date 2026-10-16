@@ -61,6 +61,8 @@ import toast from 'react-hot-toast';
 
 import {
   Button,
+  SaveButton,
+  CancelButton,
   Input,
   Checkbox,
   DatePicker,
@@ -1062,26 +1064,23 @@ export default function ClientEffectiveDatesPage() {
 
             {(mode === 'EDIT' || mode === 'ADD') && (
               <>
-                <Button
-                  variant="secondary"
+                <CancelButton
                   size="sm"
                   onClick={handleCancel}
                   disabled={isSaving}
                   className="text-xs shadow-2xs"
-                >
-                  <X size={13} className="mr-1.5" />
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
+                />
+                <SaveButton
+                  type="button"
                   size="sm"
                   onClick={handleSubmit}
+                  loading={isSaving}
+                  loadingText="Saving..."
                   disabled={isSaving}
                   className="text-xs"
                 >
-                  <Save size={13} className="mr-1.5" />
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </Button>
+                  Save Changes
+                </SaveButton>
               </>
             )}
           </div>
@@ -1702,27 +1701,22 @@ export default function ClientEffectiveDatesPage() {
 
             {/* Bottom Actions Bar */}
             <div className="pt-4 border-t border-border flex items-center justify-end gap-2.5 w-full sm:w-auto">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="sm"
                 onClick={handleCancel}
                 disabled={isSaving}
                 className="text-xs flex-1 sm:flex-none justify-center shadow-2xs font-medium"
-              >
-                <X size={14} className="mr-1.5" />
-                Cancel
-              </Button>
-              <Button
+              />
+              <SaveButton
                 type="submit"
-                variant="primary"
                 size="sm"
+                loading={isSaving}
+                loadingText="Saving..."
                 disabled={isSaving}
                 className="text-xs flex-1 sm:flex-none justify-center font-semibold shadow-2xs"
               >
-                <Save size={14} className="mr-1.5" />
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </Button>
+                Save Changes
+              </SaveButton>
             </div>
           </form>
         )}

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import {
   Button,
+  CancelButton,
   Card,
   Input,
   SearchableSelect,
@@ -161,16 +162,11 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
             <span className="text-xs font-medium text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-md">
               Editing address #{editingIndex + 1}
             </span>
-            <Button
-              type="button"
-              variant="secondary"
+            <CancelButton
               size="sm"
               onClick={handleCancelEdit}
               className="text-xs shadow-2xs"
-            >
-              <X size={13} className="mr-1" />
-              Cancel
-            </Button>
+            />
           </div>
         )}
       </div>
@@ -313,16 +309,11 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
 
           <div className="flex items-center gap-2">
             {isEditing && (
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="sm"
                 onClick={handleCancelEdit}
                 className="text-xs shadow-2xs"
-              >
-                <X size={13} className="mr-1" />
-                Cancel
-              </Button>
+              />
             )}
             <Button
               type="button"

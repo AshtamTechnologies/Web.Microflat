@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import {
   Button,
+  CancelButton,
   Card,
   Input,
   StatusSwitch,
@@ -151,16 +152,11 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
             <span className="text-xs font-medium text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-md">
               Editing contact #{editingIndex + 1}
             </span>
-            <Button
-              type="button"
-              variant="secondary"
+            <CancelButton
               size="sm"
               onClick={handleCancelEdit}
               className="text-xs shadow-2xs"
-            >
-              <X size={13} className="mr-1" />
-              Cancel
-            </Button>
+            />
           </div>
         )}
       </div>
@@ -269,16 +265,11 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
           {isEditing && (
-            <Button
-              type="button"
-              variant="secondary"
+            <CancelButton
               size="sm"
               onClick={handleCancelEdit}
               className="text-xs shadow-2xs"
-            >
-              <X size={13} className="mr-1" />
-              Cancel
-            </Button>
+            />
           )}
           <Button
             type="button"

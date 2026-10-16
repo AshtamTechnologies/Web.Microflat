@@ -25,6 +25,8 @@ import {
   DatePicker,
   SearchableSelect,
   Button,
+  SaveButton,
+  CancelButton,
   Badge,
   Modal,
   TableContainer,
@@ -1026,29 +1028,20 @@ export default function SeriesSetupPage() {
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
+              <CancelButton
                 onClick={handleCloseEditModal}
                 disabled={isUpdating}
                 className="justify-center"
-              >
-                <X size={15} className="mr-1.5" aria-hidden="true" />
-                Cancel
-              </Button>
+              />
 
-              <Button
+              <SaveButton
                 type="submit"
-                variant="primary"
-                size="md"
                 loading={isUpdating}
                 disabled={isUpdating}
                 className="justify-center font-semibold shadow-2xs"
               >
-                <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
                 Save Changes
-              </Button>
+              </SaveButton>
             </div>
           </form>
         )}
@@ -1148,16 +1141,12 @@ export default function SeriesSetupPage() {
 
               {/* Footer Actions */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="md"
+                <CancelButton
                   onClick={() => setViewingVersion(null)}
                   className="justify-center"
                 >
-                  <X size={15} className="mr-1.5" aria-hidden="true" />
                   Close
-                </Button>
+                </CancelButton>
                 <Button
                   type="button"
                   variant="primary"

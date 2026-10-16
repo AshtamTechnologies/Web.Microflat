@@ -47,6 +47,7 @@ import { IconInquiry } from '../../constants/icons';
 
 import {
   Button,
+  CancelButton,
   Badge,
   Card,
   DetailField,
@@ -1213,14 +1214,13 @@ export default function InquiryViewPage() {
 
             {/* Actions */}
             <div className="flex items-center justify-between pt-2 border-t border-border">
-              <Button
-                type="button"
+              <CancelButton
                 variant="ghost"
                 size="sm"
                 onClick={() => setPreviewItem(null)}
               >
                 Close Preview
-              </Button>
+              </CancelButton>
 
               <Button
                 type="button"

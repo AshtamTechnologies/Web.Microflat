@@ -24,6 +24,8 @@ import toast from 'react-hot-toast';
 
 import {
   Button,
+  SaveButton,
+  CancelButton,
   Card,
   Input,
   RichTextEditor,
@@ -242,9 +244,7 @@ export default function PurchaseRequisitionEdit() {
         }
         actions={
           <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
-            <Button
-              type="button"
-              variant="secondary"
+            <CancelButton
               size="md"
               onClick={() =>
                 navigate(
@@ -252,21 +252,16 @@ export default function PurchaseRequisitionEdit() {
                 )
               }
               className="flex-1 sm:flex-initial"
-            >
-              <X size={16} className="mr-1.5" aria-hidden="true" />
-              Cancel
-            </Button>
+            />
 
-            <Button
+            <SaveButton
               type="button"
-              variant="primary"
               size="md"
               onClick={handleSubmitForApproval}
               className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
             >
-              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
               Save Changes
-            </Button>
+            </SaveButton>
           </div>
         }
       />
@@ -491,29 +486,22 @@ export default function PurchaseRequisitionEdit() {
 
       {/* ── Section 3: Bottom Form Actions ── */}
       <div className="mf-form-actions">
-        <Button
-          type="button"
-          variant="secondary"
+        <CancelButton
           onClick={() =>
             navigate(
               `/purchase-requisition/${originalPR.prNumber || originalPR.prId}`
             )
           }
           className="w-full sm:w-auto"
-        >
-          <X size={16} className="mr-1.5" />
-          Cancel
-        </Button>
+        />
 
-        <Button
+        <SaveButton
           type="button"
-          variant="primary"
           onClick={handleSubmitForApproval}
           className="w-full sm:w-auto font-semibold shadow-sm"
         >
-          <Save size={16} className="mr-1.5" />
           Save Changes
-        </Button>
+        </SaveButton>
       </div>
     </div>
   );

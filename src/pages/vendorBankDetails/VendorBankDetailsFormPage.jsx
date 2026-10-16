@@ -39,6 +39,8 @@ import { IconBankDetails } from '../../constants/icons';
 
 import {
   Button,
+  SaveButton,
+  CancelButton,
   Card,
   Input,
   SearchableSelect,
@@ -704,30 +706,25 @@ export default function VendorBankDetailsFormPage() {
         }
         actions={
           <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
-            <Button
-              type="button"
-              variant="secondary"
+            <CancelButton
               size="md"
               onClick={handleCancel}
               disabled={isSubmitting}
               className="flex-1 sm:flex-initial"
-            >
-              <X size={16} className="mr-1.5" aria-hidden="true" />
-              Cancel
-            </Button>
+            />
 
-            <Button
+            <SaveButton
               type="button"
-              variant="primary"
               size="md"
               onClick={handleFormActionClick}
               disabled={isSubmitting || !selectedVendorId}
+              loading={isSubmitting}
+              loadingText="Saving..."
               title={!selectedVendorId ? 'Please select a vendor first' : undefined}
               className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
             >
-              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
-              {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Bank Account'}
-            </Button>
+              {isEditing ? 'Save Changes' : 'Save Bank Account'}
+            </SaveButton>
           </div>
         }
       />
@@ -845,9 +842,7 @@ export default function VendorBankDetailsFormPage() {
           </div>
 
           {isEditing && (
-            <Button
-              type="button"
-              variant="secondary"
+            <CancelButton
               size="sm"
               onClick={() => {
                 handleCancelEdit();
@@ -856,9 +851,8 @@ export default function VendorBankDetailsFormPage() {
               }}
               className="text-xs self-start sm:self-auto shadow-2xs"
             >
-              <X size={14} className="mr-1" />
               Cancel Edit
-            </Button>
+            </CancelButton>
           )}
         </div>
 
@@ -1221,28 +1215,23 @@ export default function VendorBankDetailsFormPage() {
 
             {/* Action Buttons */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/60">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="sm"
                 onClick={handleCancel}
                 className="text-xs shadow-2xs"
-              >
-                <X size={13} className="mr-1" />
-                Cancel
-              </Button>
-              <Button
+              />
+              <SaveButton
                 type="button"
-                variant="primary"
                 size="sm"
                 onClick={handleFormActionClick}
                 disabled={isSubmitting || !selectedVendorId}
+                loading={isSubmitting}
+                loadingText="Saving..."
                 title={!selectedVendorId ? 'Please select a vendor first' : undefined}
                 className="text-xs font-semibold shadow-2xs"
               >
-                <Save size={14} className="mr-1.5" />
-                {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Bank Account'}
-              </Button>
+                {isEditing ? 'Save Changes' : 'Save Bank Account'}
+              </SaveButton>
             </div>
           </div>
       </Card>

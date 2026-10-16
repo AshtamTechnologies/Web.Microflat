@@ -49,6 +49,7 @@ import toast from 'react-hot-toast';
 
 import {
   Button,
+  CancelButton,
   Card,
   Badge,
   Modal,
@@ -710,7 +711,7 @@ export default function PurchaseRequisitionDashboardPage() {
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-              <Button
+              <CancelButton
                 variant="ghost"
                 size="sm"
                 onClick={() => {
@@ -718,9 +719,7 @@ export default function PurchaseRequisitionDashboardPage() {
                   setRejectComments('');
                 }}
                 disabled={actionLoading}
-              >
-                Cancel
-              </Button>
+              />
               <Button
                 variant="danger"
                 size="sm"

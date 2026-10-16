@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { UserPlus, UserCheck, MessageSquare, AlertCircle } from 'lucide-react';
-import { Modal, Button, SearchableSelect, Textarea } from '../../../components/ui';
+import { Modal, Button, CancelButton, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiriesContext } from '../../../context/InquiriesContext';
 import { useUsersContext } from '../../../context/UsersContext';
 
@@ -135,15 +135,11 @@ export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
 
         {/* Modal Action Buttons */}
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
-          <Button
-            type="button"
-            variant="secondary"
+          <CancelButton
             size="md"
             onClick={onClose}
             disabled={submitting}
-          >
-            Cancel
-          </Button>
+          />
           <Button
             type="submit"
             variant="primary"

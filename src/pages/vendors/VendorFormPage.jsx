@@ -36,6 +36,8 @@ import { IconVendor } from '../../constants/icons';
 
 import {
   Button,
+  SaveButton,
+  CancelButton,
   Input,
   DatePicker,
   SearchableSelect,
@@ -529,26 +531,17 @@ export default function VendorFormPage() {
         }
         actions={
           <div className="flex items-center gap-3 shrink-0">
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
+            <CancelButton
               onClick={handleCancel}
               disabled={loading}
-            >
-              <X size={16} className="mr-1.5" aria-hidden="true" />
-              Cancel
-            </Button>
-            <Button
+            />
+            <SaveButton
               type="submit"
-              variant="primary"
-              size="md"
               loading={loading}
               disabled={loading}
             >
-              <Save size={16} className="mr-1.5" aria-hidden="true" />
               {isEdit ? 'Save Changes' : 'Create Vendor'}
-            </Button>
+            </SaveButton>
           </div>
         }
       />
@@ -1208,27 +1201,19 @@ export default function VendorFormPage() {
         </div>
 
         <div className="flex items-center justify-end gap-3 w-full sm:w-auto">
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
+          <CancelButton
             onClick={handleCancel}
             disabled={loading}
             className="flex-1 sm:flex-initial"
-          >
-            Cancel
-          </Button>
-          <Button
+          />
+          <SaveButton
             type="submit"
-            variant="primary"
-            size="md"
             loading={loading}
             disabled={loading}
             className="flex-1 sm:flex-initial"
           >
-            <Save size={16} className="mr-1.5" aria-hidden="true" />
             {isEdit ? 'Save Changes' : 'Create Vendor'}
-          </Button>
+          </SaveButton>
         </div>
       </div>
 

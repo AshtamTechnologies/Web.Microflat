@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 
 import {
   Button,
+  CancelButton,
   Card,
   Input,
   SearchableSelect,
@@ -338,16 +339,11 @@ export default function ItemsEditor({
           </div>
 
           {isEditing && (
-            <Button
-              type="button"
-              variant="secondary"
+            <CancelButton
               size="sm"
               onClick={resetForm}
               className="text-xs self-start sm:self-auto"
-            >
-              <X size={14} className="mr-1" />
-              Cancel
-            </Button>
+            />
           )}
         </div>
 
@@ -440,16 +436,11 @@ export default function ItemsEditor({
           {/* Form Action Buttons */}
           <div className="flex items-center justify-end gap-2.5 pt-2">
             {isEditing && (
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="sm"
                 onClick={resetForm}
                 className="cursor-pointer"
-              >
-                <X size={15} className="mr-1.5" />
-                Cancel
-              </Button>
+              />
             )}
 
             <Button

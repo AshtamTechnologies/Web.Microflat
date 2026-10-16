@@ -23,6 +23,7 @@ import React from 'react';
 import { AlertTriangle, Trash2, HelpCircle } from 'lucide-react';
 import Modal from './Modal';
 import Button from './Button';
+import CancelButton from './CancelButton';
 
 const iconVariants = {
   danger: 'bg-danger/10 text-danger border border-danger/20',
@@ -97,15 +98,13 @@ export default function ConfirmModal({
 
         {/* Modal Footer Actions */}
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
-          <Button
-            type="button"
-            variant="secondary"
+          <CancelButton
             size="md"
             onClick={onClose}
             disabled={loading}
           >
             {cancelText}
-          </Button>
+          </CancelButton>
           <Button
             type="button"
             variant={effectiveVariant === 'primary' ? 'primary' : 'danger'}

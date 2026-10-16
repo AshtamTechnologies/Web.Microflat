@@ -30,6 +30,7 @@ import { IconPR } from '../../constants/icons';
 
 import {
   Button,
+  CancelButton,
   Card,
   Badge,
   DetailField,
@@ -601,15 +602,11 @@ export default function PurchaseRequisitionView() {
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="md"
                 onClick={handleCloseApprove}
                 disabled={isSubmittingApprove}
-              >
-                Cancel
-              </Button>
+              />
               <Button
                 type="submit"
                 variant="primary"
@@ -666,15 +663,11 @@ export default function PurchaseRequisitionView() {
 
             {/* Action Buttons */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="md"
                 onClick={handleCloseReject}
                 disabled={isSubmittingReject}
-              >
-                Cancel
-              </Button>
+              />
               <Button
                 type="submit"
                 variant="danger"

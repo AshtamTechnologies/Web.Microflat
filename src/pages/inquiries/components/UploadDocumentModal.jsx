@@ -15,7 +15,7 @@ import {
   Plus,
   FileCheck,
 } from 'lucide-react';
-import { Modal, Button, Input, SearchableSelect, Textarea } from '../../../components/ui';
+import { Modal, Button, CancelButton, Input, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiryDocumentsContext } from '../../../context/InquiryDocumentsContext';
 import { useDocumentTypesContext } from '../../../context/DocumentTypesContext';
 import { formatFileSizeKB } from '../../../mocks/inquiryDocuments';
@@ -417,15 +417,11 @@ export default function UploadDocumentModal({
 
         {/* Footer Actions */}
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
-          <Button
-            type="button"
-            variant="secondary"
+          <CancelButton
             size="md"
             onClick={onClose}
             disabled={submitting}
-          >
-            Cancel
-          </Button>
+          />
           <Button
             type="submit"
             variant="primary"

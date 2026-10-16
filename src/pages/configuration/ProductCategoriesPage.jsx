@@ -29,6 +29,8 @@ import toast from 'react-hot-toast';
 import {
   Card,
   Button,
+  SaveButton,
+  CancelButton,
   Input,
   SearchableSelect,
   Toggle,
@@ -945,28 +947,19 @@ export default function ProductCategoriesPage() {
 
           {/* Modal Footer Actions */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
+            <CancelButton
               onClick={handleCloseModal}
               disabled={isSubmitting}
               className="justify-center"
-            >
-              <X size={15} className="mr-1.5" aria-hidden="true" />
-              Cancel
-            </Button>
-            <Button
+            />
+            <SaveButton
               type="submit"
-              variant="primary"
-              size="md"
               loading={isSubmitting}
               disabled={isSubmitting}
               className="justify-center font-semibold shadow-2xs"
             >
-              <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
               {editingCategory ? 'Save Changes' : 'Create Category'}
-            </Button>
+            </SaveButton>
           </div>
         </form>
       </Modal>
@@ -1070,16 +1063,12 @@ export default function ProductCategoriesPage() {
 
             {/* Footer Actions */}
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
+              <CancelButton
                 onClick={() => setViewingCategory(null)}
                 className="justify-center"
               >
-                <X size={15} className="mr-1.5" aria-hidden="true" />
                 Close
-              </Button>
+              </CancelButton>
               <Button
                 type="button"
                 variant="primary"

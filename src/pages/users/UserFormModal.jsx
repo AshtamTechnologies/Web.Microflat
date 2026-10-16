@@ -15,8 +15,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
-import { Modal, Input, Textarea, SearchableMultiSelect, Button, StatusSwitch } from '../../components/ui';
+import { Modal, Input, Textarea, SearchableMultiSelect, SaveButton, CancelButton, StatusSwitch } from '../../components/ui';
 import { ROLE_OPTIONS } from '../../mocks/users';
 
 const INITIAL_FORM = {
@@ -289,28 +288,19 @@ export default function UserFormModal({
 
         {/* Modal Footer Actions */}
         <div className="flex items-center justify-end gap-3 pt-5 mt-6 border-t border-border">
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
+          <CancelButton
             onClick={onClose}
             disabled={loading}
             className="flex-1 sm:flex-none justify-center"
-          >
-            <X size={15} className="mr-1.5" aria-hidden="true" />
-            Cancel
-          </Button>
-          <Button
+          />
+          <SaveButton
             type="submit"
-            variant="primary"
-            size="md"
             loading={loading}
             disabled={loading}
             className="flex-1 sm:flex-none justify-center font-semibold shadow-2xs"
           >
-            <Save size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
             {isEdit ? 'Save Changes' : 'Create User'}
-          </Button>
+          </SaveButton>
         </div>
       </form>
     </Modal>

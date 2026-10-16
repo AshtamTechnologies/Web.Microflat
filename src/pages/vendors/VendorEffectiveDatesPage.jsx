@@ -49,6 +49,8 @@ import toast from 'react-hot-toast';
 
 import {
   Button,
+  SaveButton,
+  CancelButton,
   Input,
   DatePicker,
   SearchableSelect,
@@ -1336,26 +1338,23 @@ export default function VendorEffectiveDatesPage() {
 
             {(mode === 'EDIT' || mode === 'ADD') && (
               <>
-                <Button
-                  variant="secondary"
+                <CancelButton
                   size="sm"
                   onClick={handleCancel}
                   disabled={isSaving}
                   className="text-xs shadow-2xs"
-                >
-                  <X size={13} className="mr-1.5" />
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
+                />
+                <SaveButton
+                  type="button"
                   size="sm"
                   onClick={handleSubmit}
+                  loading={isSaving}
+                  loadingText="Saving..."
                   disabled={isSaving}
                   className="text-xs"
                 >
-                  <Save size={13} className="mr-1.5" />
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </Button>
+                  Save Changes
+                </SaveButton>
               </>
             )}
           </div>
@@ -1935,25 +1934,21 @@ export default function VendorEffectiveDatesPage() {
 
             {/* Bottom Actions Bar */}
             <div className="pt-4 border-t border-border flex items-center justify-end gap-2.5">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="sm"
                 onClick={handleCancel}
                 disabled={isSaving}
                 className="shadow-2xs"
-              >
-                <X size={14} className="mr-1.5" />
-                Cancel
-              </Button>
-              <Button
+              />
+              <SaveButton
                 type="submit"
-                variant="primary"
+                size="sm"
+                loading={isSaving}
+                loadingText="Saving..."
                 disabled={isSaving}
               >
-                <Save size={15} className="mr-1.5" />
-                {isSaving ? 'Saving...' : mode === 'ADD' ? 'Add Effective Date' : 'Save Changes'}
-              </Button>
+                {mode === 'ADD' ? 'Add Effective Date' : 'Save Changes'}
+              </SaveButton>
             </div>
           </form>
         )}
@@ -2139,15 +2134,11 @@ export default function VendorEffectiveDatesPage() {
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="md"
                 onClick={handleCloseApprove}
                 disabled={isSubmittingApprove}
-              >
-                Cancel
-              </Button>
+              />
               <Button
                 type="submit"
                 variant="primary"
@@ -2230,15 +2221,11 @@ export default function VendorEffectiveDatesPage() {
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="md"
                 onClick={handleCloseReject}
                 disabled={isSubmittingReject}
-              >
-                Cancel
-              </Button>
+              />
               <Button
                 type="submit"
                 variant="danger"
@@ -2323,15 +2310,11 @@ export default function VendorEffectiveDatesPage() {
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="md"
                 onClick={handleCloseDeactivate}
                 disabled={isSubmittingDeactivate}
-              >
-                Cancel
-              </Button>
+              />
               <Button
                 type="submit"
                 variant="danger"
@@ -2378,15 +2361,11 @@ export default function VendorEffectiveDatesPage() {
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
+              <CancelButton
                 size="md"
                 onClick={handleCloseActivate}
                 disabled={isSubmittingActivate}
-              >
-                Cancel
-              </Button>
+              />
               <Button
                 type="button"
                 variant="primary"

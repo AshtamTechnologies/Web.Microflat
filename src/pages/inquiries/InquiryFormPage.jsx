@@ -47,6 +47,8 @@ import {
 
 import {
   Button,
+  SaveButton,
+  CancelButton,
   Input,
   Checkbox,
   DatePicker,
@@ -1039,29 +1041,22 @@ export default function InquiryFormPage() {
         }
         actions={
           <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
-            <Button
-              type="button"
-              variant="secondary"
+            <CancelButton
               size="md"
               onClick={handleCancel}
               disabled={loading}
               className="flex-1 sm:flex-initial"
-            >
-              <X size={16} className="mr-1.5" aria-hidden="true" />
-              Cancel
-            </Button>
+            />
 
-            <Button
+            <SaveButton
               type="submit"
-              variant="primary"
               size="md"
               loading={loading}
               disabled={loading}
               className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
             >
-              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
               {isEdit ? 'Save Changes' : 'Save Inquiry'}
-            </Button>
+            </SaveButton>
           </div>
         }
       />
@@ -1821,17 +1816,15 @@ export default function InquiryFormPage() {
                 <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
               </Button>
 
-              <Button
+              <SaveButton
                 type="submit"
-                variant="primary"
                 size="md"
                 loading={loading}
                 disabled={loading}
                 className="w-full sm:w-auto justify-center font-semibold shadow-xs"
               >
-                <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
                 {isEdit ? 'Save Changes' : 'Save Inquiry'}
-              </Button>
+              </SaveButton>
             </div>
           </div>
         </div>
@@ -2229,17 +2222,15 @@ export default function InquiryFormPage() {
               </Button>
             </div>
 
-            <Button
+            <SaveButton
               type="submit"
-              variant="primary"
               size="md"
               loading={loading}
               disabled={loading}
               className="w-full sm:w-auto justify-center font-semibold shadow-xs"
             >
-              <Save size={16} className="mr-1.5 shrink-0" />
               {isEdit ? 'Save Changes' : 'Save Inquiry'}
-            </Button>
+            </SaveButton>
           </div>
         </div>
       )}

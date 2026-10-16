@@ -39,6 +39,8 @@ import toast from 'react-hot-toast';
 
 import {
   Button,
+  SaveButton,
+  CancelButton,
   Input,
   Select,
   StatusSwitch,
@@ -345,27 +347,22 @@ export default function ClientFormPage() {
       </div>
 
       <div className="flex items-center gap-2.5 justify-end w-full sm:w-auto">
-        <Button
-          type="button"
-          variant="secondary"
+        <CancelButton
           size="sm"
           onClick={handleCancel}
           disabled={isSubmitting}
           className="flex-1 sm:flex-none justify-center"
-        >
-          <X size={14} className="mr-1.5" aria-hidden="true" />
-          Cancel
-        </Button>
-        <Button
+        />
+        <SaveButton
           type="submit"
-          variant="primary"
           size="sm"
           disabled={isSubmitting}
+          loading={isSubmitting}
+          loadingText="Saving Client..."
           className="flex-1 sm:flex-none justify-center font-semibold shadow-2xs"
         >
-          <Save size={14} className="mr-1.5 shrink-0" aria-hidden="true" />
-          {isSubmitting ? 'Saving Client...' : isEdit ? 'Save Changes' : 'Save Client'}
-        </Button>
+          {isEdit ? 'Save Changes' : 'Save Client'}
+        </SaveButton>
       </div>
     </div>
   );
@@ -396,27 +393,22 @@ export default function ClientFormPage() {
         }
         actions={
           <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
-            <Button
-              type="button"
-              variant="secondary"
+            <CancelButton
               size="md"
               onClick={handleCancel}
               disabled={isSubmitting}
               className="flex-1 sm:flex-initial"
-            >
-              <X size={16} className="mr-1.5" aria-hidden="true" />
-              Cancel
-            </Button>
-            <Button
+            />
+            <SaveButton
               type="submit"
-              variant="primary"
               size="md"
               disabled={isSubmitting}
+              loading={isSubmitting}
+              loadingText="Saving Client..."
               className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
             >
-              <Save size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
-              {isSubmitting ? 'Saving Client...' : isEdit ? 'Save Changes' : 'Save Client'}
-            </Button>
+              {isEdit ? 'Save Changes' : 'Save Client'}
+            </SaveButton>
           </div>
         }
       />

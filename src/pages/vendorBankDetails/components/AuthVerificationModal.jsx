@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Lock, ShieldAlert, Eye, EyeOff, AlertCircle, Check, Trash2 } from 'lucide-react';
-import { Modal, Button, Input } from '../../../components/ui';
+import { Modal, Button, CancelButton, Input } from '../../../components/ui';
 import { useUsersContext } from '../../../context/UsersContext';
 
 export default function AuthVerificationModal({
@@ -214,15 +214,11 @@ export default function AuthVerificationModal({
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
-          <Button
-            type="button"
-            variant="secondary"
+          <CancelButton
             size="md"
             onClick={onClose}
             disabled={isVerifying}
-          >
-            Cancel
-          </Button>
+          />
           <Button
             type="submit"
             variant={isDelete ? 'danger' : 'primary'}
