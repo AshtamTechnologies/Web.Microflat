@@ -1,6 +1,7 @@
 /**
  * vendorVersions.js — Utilities for effective-dated vendor version history.
  */
+import { getTodayISO, toISODate } from './dateUtils';
 
 /**
  * Returns the version with the latest EffectiveDate <= asOfDate;
@@ -21,7 +22,7 @@ export function getActiveVendorVersion(vendor, asOfDate = new Date()) {
     // If effectiveVersions is not yet present, construct fallback from vendor top-level properties
     return {
       id: vendor.id ? `ver_${vendor.id}_0` : 'ver_0',
-      effectiveDate: vendor.effectiveDate || new Date().toISOString().slice(0, 10),
+      effectiveDate: vendor.effectiveDate || getTodayISO(),
       contactPersonName: vendor.contactPersonName || '',
       phoneNo: vendor.phoneNo || '',
       alternatePhoneNo: vendor.alternatePhoneNo || '',
@@ -42,7 +43,7 @@ export function getActiveVendorVersion(vendor, asOfDate = new Date()) {
 
   const asOfStr =
     asOfDate instanceof Date
-      ? asOfDate.toISOString().slice(0, 10)
+      ? toISODate(asOfDate)
       : String(asOfDate).slice(0, 10);
 
   // Versions with effectiveDate <= asOfDate

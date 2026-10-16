@@ -26,30 +26,29 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  ArrowLeft,
-  Pencil,
-  Building2,
-  Landmark,
-  Eye,
-  EyeOff,
-  Copy,
-  Check,
-  Paperclip,
-  FileText,
-  Image as ImageIcon,
-  Download,
-  AlertCircle,
-  Clock,
-  ShieldCheck,
-  Plus,
-  CreditCard,
-  MapPin,
-  Maximize2,
-  ChevronUp,
-  ChevronDown,
-  FileCheck,
-} from 'lucide-react';
-import { IconBankDetails } from '../../constants/icons';
+  IconAdd,
+  IconAttachment,
+  IconBack,
+  IconBankDetails,
+  IconBuilding2,
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconClock,
+  IconCopy,
+  IconCreditCard,
+  IconDocumentTypes,
+  IconDownload,
+  IconEdit,
+  IconError,
+  IconEyeOff,
+  IconFileText,
+  IconImage,
+  IconLocation,
+  IconMaximize2,
+  IconShieldCheck,
+  IconView,
+} from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -87,9 +86,9 @@ function getFileIcon(fileName = '', fileType = '') {
   const name = (fileName || '').toLowerCase();
   const type = (fileType || '').toLowerCase();
   if (name.endsWith('.pdf') || type.includes('pdf')) {
-    return <FileText size={18} className="text-danger shrink-0" />;
+    return <IconFileText size={18} className="text-danger shrink-0" />;
   }
-  return <ImageIcon size={18} className="text-primary shrink-0" />;
+  return <IconImage size={18} className="text-primary shrink-0" />;
 }
 
 export default function VendorBankDetailsViewPage() {
@@ -268,7 +267,7 @@ export default function VendorBankDetailsViewPage() {
 
           return (
             <div className="flex items-center gap-2 flex-wrap py-0.5 min-w-0">
-              <Landmark size={15} className="text-primary shrink-0" />
+              <IconBankDetails size={15} className="text-primary shrink-0" />
               <span className="text-xs font-bold text-heading truncate">
                 {row.bankName}
               </span>
@@ -346,7 +345,7 @@ export default function VendorBankDetailsViewPage() {
                     : 'text-text-muted hover:text-primary hover:bg-surface'
                 }`}
               >
-                <Eye size={15} />
+                <IconView size={15} />
               </Button>
 
               <Button
@@ -358,7 +357,7 @@ export default function VendorBankDetailsViewPage() {
                 title="Edit this account"
                 className="h-7 w-7 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors"
               >
-                <Pencil size={14} />
+                <IconEdit size={14} />
               </Button>
             </div>
           );
@@ -389,13 +388,13 @@ export default function VendorBankDetailsViewPage() {
     return (
       <div className="w-full py-12 px-4 sm:px-6">
         <div className="bg-surface border border-border rounded-2xl p-8 text-center space-y-4 max-w-xl mx-auto shadow-sm">
-          <AlertCircle size={40} className="text-warning mx-auto" />
+          <IconError size={40} className="text-warning mx-auto" />
           <h2 className="text-xl font-bold text-heading">Vendor Not Found</h2>
           <p className="text-sm text-text-muted">
             The requested vendor record with ID &quot;{vendorId}&quot; does not exist or has been removed.
           </p>
           <Button variant="primary" onClick={() => navigate('/vendor-bank-details')}>
-            <ArrowLeft size={16} className="mr-2" />
+            <IconBack size={16} className="mr-2" />
             Back to Bank Details
           </Button>
         </div>
@@ -463,7 +462,7 @@ export default function VendorBankDetailsViewPage() {
                     : `Edit ${selectedAccount.bankName} details`
                 }
               >
-                <Pencil size={13} aria-hidden="true" />
+                <IconEdit size={13} aria-hidden="true" />
                 Edit Bank Details
               </Button>
             )}
@@ -481,7 +480,7 @@ export default function VendorBankDetailsViewPage() {
                   : 'Add a new bank account for this vendor'
               }
             >
-              <Plus size={14} className="stroke-[2.5]" aria-hidden="true" />
+              <IconAdd size={14} className="" aria-hidden="true" />
               Add Bank Account
             </Button>
           </div>
@@ -493,7 +492,7 @@ export default function VendorBankDetailsViewPage() {
         <div className="rounded-xl border border-danger/30 bg-danger/[0.04] p-3.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-start sm:items-center gap-2.5 min-w-0">
             <div className="p-1.5 rounded-lg bg-danger/10 text-danger shrink-0 mt-0.5 sm:mt-0">
-              <AlertCircle size={16} className="stroke-[2.2]" />
+              <IconError size={16} className="" />
             </div>
             <div className="text-xs text-heading flex items-center gap-1.5 flex-wrap">
               <span className="font-bold text-danger">Inactive Reason:</span>
@@ -502,7 +501,7 @@ export default function VendorBankDetailsViewPage() {
               </span>
               {vendor.inactiveDate && (
                 <span className="text-2xs font-mono text-text-muted ml-1">
-                  ({vendor.inactiveDate})
+                  ({formatDate(vendor.inactiveDate)})
                 </span>
               )}
             </div>
@@ -556,7 +555,7 @@ export default function VendorBankDetailsViewPage() {
         <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm sm:text-base font-bold text-heading flex items-center gap-2">
-              <Landmark size={17} className="text-primary shrink-0" />
+              <IconBankDetails size={17} className="text-primary shrink-0" />
               Registered Bank Accounts ({bankAccounts.length})
             </h2>
             <p className="text-xs text-text-muted mt-0.5">
@@ -576,7 +575,7 @@ export default function VendorBankDetailsViewPage() {
                 : 'Add a new bank account'
             }
           >
-            <Plus size={14} className="mr-1.5" />
+            <IconAdd size={14} className="mr-1.5" />
             Add Bank Account
           </Button>
         </div>
@@ -642,7 +641,7 @@ export default function VendorBankDetailsViewPage() {
                             : 'text-text-muted hover:text-primary hover:bg-surface'
                         }`}
                       >
-                        <Eye size={14} />
+                        <IconView size={14} />
                       </Button>
 
                       <Button
@@ -654,7 +653,7 @@ export default function VendorBankDetailsViewPage() {
                         title="Edit this account"
                         className="h-7 w-7 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors"
                       >
-                        <Pencil size={13} />
+                        <IconEdit size={13} />
                       </Button>
                     </div>
                   </div>
@@ -662,7 +661,7 @@ export default function VendorBankDetailsViewPage() {
                   {/* Bottom: Branch / Location */}
                   <div className="mt-2 pt-2 border-t border-border/60 flex items-center justify-between text-2xs text-text-muted">
                     <span className="truncate flex items-center gap-1">
-                      <MapPin size={11} className="shrink-0 text-text-muted/70" />
+                      <IconLocation size={11} className="shrink-0 text-text-muted/70" />
                       {acc.branchName || 'Main Branch'}
                     </span>
                   </div>
@@ -714,21 +713,21 @@ export default function VendorBankDetailsViewPage() {
 
                             <span className="shrink-0 ml-1 inline-flex items-center">
                               {sorted === 'asc' ? (
-                                <ChevronUp
+                                <IconChevronUp
                                   size={14}
-                                  className="text-primary stroke-[2.5]"
+                                  className="text-primary"
                                   aria-hidden="true"
                                 />
                               ) : sorted === 'desc' ? (
-                                <ChevronDown
+                                <IconChevronDown
                                   size={14}
-                                  className="text-primary stroke-[2.5]"
+                                  className="text-primary"
                                   aria-hidden="true"
                                 />
                               ) : (
                                 <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <ChevronUp size={11} strokeWidth={2.5} />
-                                  <ChevronDown size={11} strokeWidth={2.5} />
+                                  <IconChevronUp size={11} />
+                                  <IconChevronDown size={11} />
                                 </span>
                               )}
                             </span>
@@ -836,7 +835,7 @@ export default function VendorBankDetailsViewPage() {
                     : 'Edit this account'
                 }
               >
-                <Pencil size={13} className="mr-1.5" />
+                <IconEdit size={13} className="mr-1.5" />
                 Edit this account
               </Button>
             </div>
@@ -867,7 +866,7 @@ export default function VendorBankDetailsViewPage() {
             {/* Section 1: Account Information */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <CreditCard size={15} className="text-primary" />
+                <IconCreditCard size={15} className="text-primary" />
                 Beneficiary & Account Information
               </div>
 
@@ -876,7 +875,7 @@ export default function VendorBankDetailsViewPage() {
                 <DetailField
                   label="Account Holder Name"
                   value={selectedAccount.accountHolderName}
-                  icon={Building2}
+                  icon={IconBuilding2}
                 />
 
                 {/* Account Number with Reveal and Copy */}
@@ -902,7 +901,7 @@ export default function VendorBankDetailsViewPage() {
                         }
                         aria-label="Toggle account number visibility"
                       >
-                        {isSelectedAccountRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
+                        {isSelectedAccountRevealed ? <IconEyeOff size={14} /> : <IconView size={14} />}
                       </button>
                       <button
                         type="button"
@@ -918,9 +917,9 @@ export default function VendorBankDetailsViewPage() {
                         aria-label="Copy account number"
                       >
                         {copiedKey === `panel_acc_${selectedAccId}` ? (
-                          <Check size={14} className="text-success" />
+                          <IconCheck size={14} className="text-success" />
                         ) : (
-                          <Copy size={14} />
+                          <IconCopy size={14} />
                         )}
                       </button>
                     </div>
@@ -969,9 +968,9 @@ export default function VendorBankDetailsViewPage() {
                           aria-label="Copy IFSC code"
                         >
                           {copiedKey === `panel_ifsc_${selectedAccId}` ? (
-                            <Check size={13} className="text-success" />
+                            <IconCheck size={13} className="text-success" />
                           ) : (
-                            <Copy size={13} />
+                            <IconCopy size={13} />
                           )}
                         </button>
                       )}
@@ -993,7 +992,7 @@ export default function VendorBankDetailsViewPage() {
             {/* Section 2: Branch & Routing Details */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <MapPin size={15} className="text-primary" />
+                <IconLocation size={15} className="text-primary" />
                 Branch & Routing Details
               </div>
 
@@ -1012,7 +1011,7 @@ export default function VendorBankDetailsViewPage() {
             {/* Section 3: Disbursement Remarks & Audit Trail */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <FileText size={15} className="text-primary" />
+                <IconFileText size={15} className="text-primary" />
                 Disbursement Remarks & Audit Trail
               </div>
 
@@ -1061,7 +1060,7 @@ export default function VendorBankDetailsViewPage() {
             <div className="space-y-3 pt-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                  <Paperclip size={15} className="text-primary" />
+                  <IconAttachment size={15} className="text-primary" />
                   Bank Proof Attachments & Supporting Documents
                   <span className="text-2xs font-normal text-text-muted ml-1">
                     ({selectedAttachments.length})
@@ -1110,7 +1109,7 @@ export default function VendorBankDetailsViewPage() {
                           title="View preview"
                           className="h-8 w-8 text-text-muted group-hover:text-primary hover:bg-primary/10"
                         >
-                          <Maximize2 size={13} />
+                          <IconMaximize2 size={13} />
                         </Button>
                         <Button
                           variant="ghost"
@@ -1119,7 +1118,7 @@ export default function VendorBankDetailsViewPage() {
                           title="Download document"
                           className="h-8 w-8 text-text-muted hover:text-primary hover:bg-primary/10"
                         >
-                          <Download size={13} />
+                          <IconDownload size={13} />
                         </Button>
                       </div>
                     </div>
@@ -1132,7 +1131,7 @@ export default function VendorBankDetailsViewPage() {
       ) : (
         <Card padding="lg" className="text-center py-12 border-dashed border-border shadow-2xs space-y-3">
           <div className="w-12 h-12 rounded-xl bg-surface border border-border flex items-center justify-center mx-auto text-text-muted">
-            <Landmark size={24} />
+            <IconBankDetails size={24} />
           </div>
           <h4 className="text-sm font-semibold text-heading">No Bank Details Registered</h4>
           <p className="text-xs text-text-muted max-w-md mx-auto">
@@ -1145,7 +1144,7 @@ export default function VendorBankDetailsViewPage() {
               disabled={vendor.isActive === false}
               className="text-xs font-semibold shadow-2xs"
             >
-              <Plus size={14} className="mr-1.5" />
+              <IconAdd size={14} className="mr-1.5" />
               Add Bank Account
             </Button>
           </div>
@@ -1180,7 +1179,7 @@ export default function VendorBankDetailsViewPage() {
                 {previewItem.uploadedAt && (
                   <span>
                     Uploaded:{' '}
-                    <strong className="text-heading font-mono">{previewItem.uploadedAt}</strong>
+                    <strong className="text-heading font-mono">{formatDate(previewItem.uploadedAt)}</strong>
                   </span>
                 )}
               </div>
@@ -1206,20 +1205,20 @@ export default function VendorBankDetailsViewPage() {
                 /* Enhanced visual certificate / document card presentation for mock documents */
                 <div className="w-full max-w-lg bg-surface border-2 border-border/80 rounded-2xl p-6 shadow-sm text-center space-y-4 relative overflow-hidden">
                   <div className="absolute top-0 right-0 transform translate-x-4 -translate-y-4 opacity-5 pointer-events-none">
-                    <ShieldCheck size={180} />
+                    <IconShieldCheck size={180} />
                   </div>
 
                   <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto border border-primary/20 shadow-xs">
                     {previewItem.fileName?.toLowerCase().endsWith('.pdf') ? (
-                      <FileText size={28} className="text-danger" />
+                      <IconFileText size={28} className="text-danger" />
                     ) : (
-                      <FileCheck size={28} className="text-primary" />
+                      <IconDocumentTypes size={28} className="text-primary" />
                     )}
                   </div>
 
                   <div className="space-y-1">
                     <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-2xs font-bold bg-success/10 text-success border border-success/20">
-                      <ShieldCheck size={12} /> Verified Banking Document Proof
+                      <IconShieldCheck size={12} /> Verified Banking Document Proof
                     </span>
                     <h4 className="text-base font-bold text-heading mt-2">
                       {previewItem.documentName || previewItem.fileName}
@@ -1278,7 +1277,7 @@ export default function VendorBankDetailsViewPage() {
                 size="sm"
                 onClick={(e) => handleDownloadAttachment(previewItem, e)}
               >
-                <Download size={14} className="mr-1.5" />
+                <IconDownload size={14} className="mr-1.5" />
                 Download Document
               </Button>
             </div>

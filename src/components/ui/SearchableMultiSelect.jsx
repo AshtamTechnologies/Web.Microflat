@@ -32,6 +32,7 @@ export default function SearchableMultiSelect({
   hint = null,
   disabled = false,
   maxDisplayTags = 2,
+  size = 'md',
   className = '',
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -206,7 +207,7 @@ export default function SearchableMultiSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={[
-          'w-full min-h-[40px] rounded-control border bg-bg text-left text-sm',
+          'w-full rounded-control border bg-bg text-left', size === 'sm' ? 'min-h-[var(--control-height-sm)] text-xs' : size === 'lg' ? 'min-h-[var(--control-height-lg)] text-base' : 'min-h-[var(--control-height-md)] text-sm',
           'px-3 py-1 flex items-center justify-between gap-2',
           'transition-all duration-150 ease-in-out cursor-pointer',
           'outline-none select-none',

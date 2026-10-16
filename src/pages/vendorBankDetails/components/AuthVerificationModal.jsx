@@ -4,7 +4,15 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Lock, ShieldAlert, Eye, EyeOff, AlertCircle, Check, Trash2 } from 'lucide-react';
+import {
+  IconCheck,
+  IconDelete,
+  IconError,
+  IconEyeOff,
+  IconLock,
+  IconShieldAlert,
+  IconView,
+} from '../../../constants/icons';
 import { Modal, Button, CancelButton, Input } from '../../../components/ui';
 import { useUsersContext } from '../../../context/UsersContext';
 
@@ -123,7 +131,7 @@ export default function AuthVerificationModal({
               isDelete ? 'bg-danger/10 text-danger' : 'bg-primary/10 text-primary'
             }`}
           >
-            {isDelete ? <ShieldAlert size={20} /> : <Lock size={20} />}
+            {isDelete ? <IconShieldAlert size={20} /> : <IconLock size={20} />}
           </div>
           <div className="flex-1 min-w-0 text-xs">
             <h4 className="font-bold text-heading text-xs">
@@ -149,7 +157,7 @@ export default function AuthVerificationModal({
         {/* Error message */}
         {error && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-danger/10 border border-danger/20 text-xs text-danger animate-in fade-in duration-150">
-            <AlertCircle size={15} className="shrink-0 mt-0.5" />
+            <IconError size={15} className="shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
@@ -158,53 +166,30 @@ export default function AuthVerificationModal({
         <div className="space-y-3 pt-1">
           <div>
             <Input
-              id="auth-login-username"
-              name="username"
-              type="text"
-              label="Login Username or Email"
-              placeholder="e.g. ian.chesnut@gmail.com or admin"
+              id="auth-login-password"
+              name="password"
+              label="Login Password"
               required
-              value={username}
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Enter your login password"
+              value={password}
               onChange={(e) => {
-                setUsername(e.target.value);
+                setPassword(e.target.value);
                 if (error) setError('');
               }}
-              autoComplete="username"
+              error={error}
+              rightElement={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="text-text-muted hover:text-heading p-1 rounded cursor-pointer transition-colors"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <IconEyeOff size={16} /> : <IconView size={16} />}
+                </button>
+              }
             />
-          </div>
-
-          <div>
-            <label
-              htmlFor="auth-login-password"
-              className="text-xs font-semibold text-heading block mb-1.5"
-            >
-              Login Password <span className="text-danger">*</span>
-            </label>
-            <div className="relative">
-              <input
-                id="auth-login-password"
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Enter your login password"
-                required
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (error) setError('');
-                }}
-                autoComplete="current-password"
-                className="w-full rounded-lg border border-border bg-bg text-text text-sm px-3.5 py-2.5 pr-10 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-heading p-1 rounded cursor-pointer transition-colors"
-                title={showPassword ? 'Hide password' : 'Show password'}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
             <p className="text-2xs text-text-muted mt-1.5">
               Hint: You can use active credentials (e.g. <span className="font-mono text-heading">ian.chesnut@gmail.com</span> /{' '}
               <span className="font-mono text-heading">admin123</span>).
@@ -228,12 +213,12 @@ export default function AuthVerificationModal({
           >
             {isDelete ? (
               <>
-                <Trash2 size={14} />
+                <IconDelete size={14} />
                 <span>Verify & Delete</span>
               </>
             ) : (
               <>
-                <Check size={14} />
+                <IconCheck size={14} />
                 <span>Verify & Update</span>
               </>
             )}

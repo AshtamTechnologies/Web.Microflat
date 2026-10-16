@@ -53,7 +53,7 @@ export const INITIAL_VENDOR_BANK_DETAILS = [
     ],
     createdAt: '2024-01-16',
     createdBy: 'Ian Chesnut',
-    updatedAt: '2024-06-10 03:45 PM',
+    updatedAt: '2024-06-10T15:45:00',
     updatedBy: 'Arjun Sharma',
   },
   {
@@ -74,7 +74,7 @@ export const INITIAL_VENDOR_BANK_DETAILS = [
     attachments: [],
     createdAt: '2024-01-16',
     createdBy: 'Ian Chesnut',
-    updatedAt: '2024-03-20 02:15 PM',
+    updatedAt: '2024-03-20T14:15:00',
     updatedBy: 'Ian Chesnut',
   },
   {
@@ -134,7 +134,7 @@ export const INITIAL_VENDOR_BANK_DETAILS = [
     ],
     createdAt: '2024-03-12',
     createdBy: 'Arjun Sharma',
-    updatedAt: '2024-05-12 01:20 PM',
+    updatedAt: '2024-05-12T13:20:00',
     updatedBy: 'Priya Mehta',
   },
   {

@@ -3,7 +3,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, MessageSquare } from 'lucide-react';
+import {
+  IconMessageSquare,
+  IconRefresh,
+} from '../../../constants/icons';
 import { Modal, Button, CancelButton, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiriesContext } from '../../../context/InquiriesContext';
 import { STATUS_OPTIONS, getStatusOption } from '../../../mocks/inquiries';
@@ -119,7 +122,7 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
             loading={submitting}
             disabled={submitting}
           >
-            <RefreshCw size={15} className="mr-1.5" />
+            <IconRefresh size={15} className="mr-1.5" />
             Update Status
           </Button>
         </div>

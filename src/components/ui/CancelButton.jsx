@@ -1,20 +1,19 @@
-import React from 'react';
-import { X } from 'lucide-react';
+import { IconClose } from '../../constants/icons';
 import Button from './Button';
 
 /**
  * CancelButton — Centralized Cancel Action Button.
  *
  * Centralizes the Cancel button styling (secondary), action type ('button'),
- * icon (X), and default text ('Cancel') across the entire application.
- * Changing the Cancel button styling, icon, or behavior here updates all pages
- * automatically from ONE place.
+ * icon (IconClose), and default text ('Cancel') across the entire application.
+ * Sized and spaced by CSS.
  *
  * Props:
  *   label?: string
- *   icon?: React.ComponentType | null (default: X)
- *   iconSize?: number (default: 16)
- *   iconClassName?: string (default: 'mr-1.5 shrink-0')
+ *   icon?: React.ComponentType | null (default: IconClose)
+ *   iconSize?: number (accepted but ignored for backward compatibility)
+ *   iconClassName?: string (accepted but ignored for backward compatibility)
+ *   iconRight?: React.ComponentType | React.ReactNode
  *   showIcon?: boolean (default: true)
  *   variant?: 'secondary' | 'ghost' | 'danger-soft' (default: 'secondary')
  *   size?: 'sm' | 'md' | 'lg' | 'icon' (default: 'md')
@@ -26,9 +25,10 @@ import Button from './Button';
 export default function CancelButton({
   children,
   label,
-  icon: Icon = X,
-  iconSize = 16,
-  iconClassName = 'mr-1.5 shrink-0',
+  icon: Icon = IconClose,
+  iconSize: _iconSize, // accepted but ignored for backward compatibility
+  iconClassName: _iconClassName, // accepted but ignored for backward compatibility
+  iconRight,
   showIcon = true,
   variant = 'secondary',
   type = 'button',
@@ -38,6 +38,7 @@ export default function CancelButton({
   onClick,
   ...rest
 }) {
+  void _iconSize; void _iconClassName;
   const content = children ?? label ?? 'Cancel';
 
   return (
@@ -48,11 +49,10 @@ export default function CancelButton({
       disabled={disabled}
       onClick={onClick}
       className={className}
+      icon={showIcon ? Icon : undefined}
+      iconRight={iconRight}
       {...rest}
     >
-      {showIcon && Icon && (
-        <Icon size={iconSize} className={iconClassName} aria-hidden="true" />
-      )}
       {content}
     </Button>
   );

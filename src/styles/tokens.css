@@ -212,6 +212,14 @@
   --modal-width-lg:  42rem;
   --modal-width-xl:  56rem;
   --modal-width-2xl: 64rem;
+
+  /* ── 16. Icon Scale ──────────────────────────────────────────────────────── */
+  --icon-xs:     0.75rem;  /* 12px */
+  --icon-sm:     0.875rem; /* 14px */
+  --icon-md:     1rem;     /* 16px */
+  --icon-lg:     1.125rem; /* 18px */
+  --icon-xl:     1.5rem;   /* 24px */
+  --icon-stroke: 2;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

@@ -87,7 +87,7 @@ export default function SubSidebar({
                 {Icon && (
                   <Icon
                     size={16}
-                    strokeWidth={isActive ? 2.2 : 1.75}
+
                     className={`shrink-0 transition-transform duration-150 ${
                       isActive
                         ? 'text-primary scale-105'

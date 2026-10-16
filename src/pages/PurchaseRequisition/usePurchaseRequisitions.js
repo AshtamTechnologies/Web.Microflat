@@ -10,6 +10,7 @@ import {
   MOCK_MATERIALS,
   getProjectName,
 } from '../../mocks/purchaseRequisitions';
+import { getTodayISO } from '../../utils/dateUtils';
 
 export function usePurchaseRequisitions() {
   const [requisitions, setRequisitions] = useState(mockPurchaseRequisitions);
@@ -67,7 +68,7 @@ export function usePurchaseRequisitions() {
         prId: newPRId,
         prNumber: generatedPRNumber,
         projectId: formData.projectId || '',
-        prDate: formData.prDate || new Date().toISOString().split('T')[0],
+        prDate: formData.prDate || getTodayISO(),
         requestedBy: formData.requestedBy || 'Current User',
         department: formData.department || 'Purchase',
         requiredDate: formData.requiredDate || '',

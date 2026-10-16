@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { INITIAL_PRODUCT_CATEGORIES } from '../mocks/productCategories';
+import { getTodayISO } from '../utils/dateUtils';
 
 const ProductCategoriesContext = createContext(null);
 
@@ -19,7 +20,7 @@ export function ProductCategoriesProvider({ children }) {
     await new Promise((r) => setTimeout(r, 500));
 
     const newId = `cat_${Date.now()}`;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayISO();
 
     const newCat = {
       categoryId: newId,

@@ -7,24 +7,23 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Pencil,
-  Trash2,
-  Mail,
-  Phone,
-  Smartphone,
-  MapPin,
-  ShieldCheck,
-  Hash,
-  Clock,
-  Laptop,
-  Smartphone as MobileIcon,
-  Tablet,
-  History,
-  User,
-  Shield,
-} from 'lucide-react';
-import { IconUsers } from '../../constants/icons';
+  IconBack,
+  IconClock,
+  IconDelete,
+  IconEdit,
+  IconHistory,
+  IconLaptop,
+  IconLocation,
+  IconMail,
+  IconPhone,
+  IconSeriesSetup,
+  IconShield,
+  IconShieldCheck,
+  IconSmartphone,
+  IconTablet,
+  IconUser,
+  IconUsers,
+} from '../../constants/icons';
 
 import {
   Card,
@@ -39,7 +38,7 @@ import {
 } from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
 import { useUserSessions } from '../../context/UserSessionsContext';
-import { formatDateTime, formatDuration } from '../../utils/dateTime';
+import { formatDateTime, formatDuration } from '../../utils/dateUtils';
 import UserFormModal from './UserFormModal';
 
 export default function UserViewPage() {
@@ -80,11 +79,11 @@ export default function UserViewPage() {
   function getDeviceIcon(device = '') {
     switch (device.toLowerCase()) {
       case 'mobile':
-        return <MobileIcon size={14} className="text-primary/70 shrink-0" />;
+        return <IconSmartphone size={14} className="text-primary/70 shrink-0" />;
       case 'tablet':
-        return <Tablet size={14} className="text-primary/70 shrink-0" />;
+        return <IconTablet size={14} className="text-primary/70 shrink-0" />;
       default:
-        return <Laptop size={14} className="text-primary/70 shrink-0" />;
+        return <IconLaptop size={14} className="text-primary/70 shrink-0" />;
     }
   }
 
@@ -107,22 +106,18 @@ export default function UserViewPage() {
     return (
       <div className="space-y-6 pb-12 w-full">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => navigate('/users')}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer shrink-0"
+            icon={<IconBack className="group-hover:-translate-x-0.5 transition-transform" />}
           >
-            <ArrowLeft
-              size={14}
-              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform shrink-0"
-              aria-hidden="true"
-            />
-            <span>Back to Users</span>
-          </button>
+            Back to Users
+          </Button>
         </div>
 
         <Card padding="lg" className="text-center py-16">
-          <User size={40} className="mx-auto text-text-muted/40 mb-3" />
+          <IconUser size={40} className="mx-auto text-text-muted/40 mb-3" />
           <h2 className="text-lg font-bold text-heading">User Not Found</h2>
           <p className="text-xs text-text-muted mt-1 max-w-md mx-auto">
             The requested user account (ID: <code className="font-mono text-primary">{id}</code>) does not exist or has been removed.
@@ -133,7 +128,7 @@ export default function UserViewPage() {
             onClick={() => navigate('/users')}
             className="mt-5"
           >
-            Return to User Directory
+            Back to Users
           </Button>
         </Card>
       </div>
@@ -174,18 +169,16 @@ export default function UserViewPage() {
               variant="secondary"
               size="md"
               onClick={() => setIsEditModalOpen(true)}
-              className="flex items-center gap-1.5 shadow-2xs"
+              icon={<IconEdit />}
             >
-              <Pencil size={15} />
               Edit User
             </Button>
             <Button
               variant="danger-soft"
               size="md"
               onClick={() => setIsDeleteModalOpen(true)}
-              className="flex items-center gap-1.5 shadow-2xs"
+              icon={<IconDelete />}
             >
-              <Trash2 size={15} />
               Delete
             </Button>
           </div>
@@ -213,7 +206,7 @@ export default function UserViewPage() {
               )}
             </div>
             <p className="text-xs sm:text-sm text-text-muted mt-1 flex items-center gap-1.5">
-              <Mail size={13} className="shrink-0 text-text-muted/70" />
+              <IconMail size={13} className="shrink-0 text-text-muted/70" />
               <span className="truncate font-medium">{user.email || '—'}</span>
             </p>
           </div>
@@ -226,7 +219,7 @@ export default function UserViewPage() {
             <DetailField
               label="Primary Mobile"
               value={user.mobile}
-              icon={Phone}
+              icon={IconPhone}
               isPhone
               mono
             />
@@ -237,7 +230,7 @@ export default function UserViewPage() {
             <DetailField
               label="Secondary Phone"
               value={user.secondaryPhone || 'Not provided'}
-              icon={Smartphone}
+              icon={IconSmartphone}
               mono
             />
           </div>
@@ -251,7 +244,7 @@ export default function UserViewPage() {
                     key={i}
                     className="inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium bg-primary/10 text-primary border border-primary/20"
                   >
-                    <ShieldCheck size={12} className="shrink-0" />
+                    <IconShieldCheck size={12} className="shrink-0" />
                     {r}
                   </span>
                 ))}
@@ -262,7 +255,7 @@ export default function UserViewPage() {
 
         {/* Address */}
         <div className="p-3.5 bg-surface/40 border border-border rounded-xl flex items-start gap-3">
-          <MapPin size={16} className="text-primary shrink-0 mt-0.5" />
+          <IconLocation size={16} className="text-primary shrink-0 mt-0.5" />
           <div className="space-y-0.5 min-w-0 flex-1">
             <DetailField
               label="Registered Address"
@@ -280,7 +273,7 @@ export default function UserViewPage() {
         <div className="flex items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-bold text-heading tracking-tight flex items-center gap-2">
-              <History size={17} className="text-primary" />
+              <IconHistory size={17} className="text-primary" />
               Recent Logins
             </h2>
             <p className="text-xs text-text-muted mt-0.5">
@@ -386,7 +379,7 @@ export default function UserViewPage() {
             </TableContainer>
           ) : (
             <div className="py-10 text-center text-text-muted">
-              <History size={26} className="mx-auto text-text-muted/50 mb-2" />
+              <IconHistory size={26} className="mx-auto text-text-muted/50 mb-2" />
               <p className="font-semibold text-heading text-xs">No login history yet</p>
               <p className="text-2xs mt-0.5">This user has not authenticated to the system.</p>
             </div>
@@ -467,7 +460,7 @@ export default function UserViewPage() {
             })
           ) : (
             <div className="p-8 text-center bg-surface/30 border border-dashed border-border rounded-xl text-text-muted">
-              <History size={24} className="mx-auto text-text-muted/50 mb-1.5" />
+              <IconHistory size={24} className="mx-auto text-text-muted/50 mb-1.5" />
               <p className="font-semibold text-heading text-xs">No login history yet</p>
               <p className="text-2xs mt-0.5">This user has not authenticated to the system.</p>
             </div>

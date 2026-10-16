@@ -13,19 +13,19 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  Search,
-  Plus,
-  ChevronUp,
-  ChevronDown,
-  Trash2,
-  Pencil,
-  Eye,
-  Phone,
-  MapPin,
-  SearchX,
-  RotateCcw,
-} from 'lucide-react';
-import { IconVendor } from '../../constants/icons';
+  IconAdd,
+  IconChevronDown,
+  IconChevronUp,
+  IconDelete,
+  IconEdit,
+  IconLocation,
+  IconPhone,
+  IconReset,
+  IconSearch,
+  IconSearchEmpty,
+  IconVendor,
+  IconView,
+} from '../../constants/icons';
 
 import {
   Button,
@@ -359,7 +359,7 @@ export default function VendorsPage() {
             onClick={() => navigate('/vendors/new')}
             className="shadow-sm text-xs font-semibold"
           >
-            <Plus size={16} className="mr-1.5" aria-hidden="true" />
+            <IconAdd size={16} className="mr-1.5" aria-hidden="true" />
             Add Vendor
           </Button>
         }
@@ -463,11 +463,11 @@ export default function VendorsPage() {
               {/* Contact & Location details */}
               <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
                 <div className="flex items-center gap-2">
-                  <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <IconPhone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
                   <span className="font-mono tabular-nums">{vendor.phoneNo || '—'}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <MapPin size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <IconLocation size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
                   <span className="truncate">
                     {vendor.city ? `${vendor.city}, ${getStateName(vendor.countryId, vendor.stateId)}` : '—'}
                   </span>
@@ -482,7 +482,7 @@ export default function VendorsPage() {
                   onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`, { state: { readOnly: true } })}
                   className="flex-1 text-xs"
                 >
-                  <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconView size={13} className="mr-1.5" aria-hidden="true" />
                   View
                 </Button>
 
@@ -492,7 +492,7 @@ export default function VendorsPage() {
                   onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`)}
                   className="flex-1 text-xs"
                 >
-                  <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconEdit size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
                 </Button>
               </div>

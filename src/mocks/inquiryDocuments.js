@@ -82,7 +82,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'Customer RFQ Technical Specifications',
     currentVersionNo: 2,
     createdBy: 'Ian Chesnut',
-    createdOn: '2026-10-01 09:35 AM',
+    createdOn: '2026-10-01T09:35:00',
     versions: [
       {
         versionId: 'ver_101_1_2',
@@ -93,7 +93,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Updated dimensional tolerance requirements for bore concentricity & surface flatness',
         isCurrent: true,
         uploadedBy: 'Ian Chesnut',
-        uploadedOn: '2026-10-02 11:10 AM',
+        uploadedOn: '2026-10-02T11:10:00',
       },
       {
         versionId: 'ver_101_1_1',
@@ -104,7 +104,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Initial customer request document submitted via portal',
         isCurrent: false,
         uploadedBy: 'Ian Chesnut',
-        uploadedOn: '2026-10-01 09:35 AM',
+        uploadedOn: '2026-10-01T09:35:00',
       },
     ],
   },
@@ -115,7 +115,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'Granite Surface Plate GA Drawing & Stand Layout',
     currentVersionNo: 1,
     createdBy: 'Arjun Sharma',
-    createdOn: '2026-10-02 02:40 PM',
+    createdOn: '2026-10-02T14:40:00',
     versions: [
       {
         versionId: 'ver_101_2_1',
@@ -126,7 +126,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'General arrangement AutoCAD drawing of 2000x1000 granite plate with screw levelling foundation',
         isCurrent: true,
         uploadedBy: 'Arjun Sharma',
-        uploadedOn: '2026-10-02 02:40 PM',
+        uploadedOn: '2026-10-02T14:40:00',
       },
     ],
   },
@@ -139,7 +139,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'BHD Precision Valve Spindle RFQ Dossier',
     currentVersionNo: 1,
     createdBy: 'Ian Chesnut',
-    createdOn: '2026-10-01 10:50 AM',
+    createdOn: '2026-10-01T10:50:00',
     versions: [
       {
         versionId: 'ver_102_1_1',
@@ -150,7 +150,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'RFQ tender document with raw material chemical composition certificate requirements',
         isCurrent: true,
         uploadedBy: 'Ian Chesnut',
-        uploadedOn: '2026-10-01 10:50 AM',
+        uploadedOn: '2026-10-01T10:50:00',
       },
     ],
   },
@@ -161,7 +161,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'SS316L Valve Spindle Blueprint Rev C',
     currentVersionNo: 2,
     createdBy: 'Scott Walter',
-    createdOn: '2026-10-02 04:15 PM',
+    createdOn: '2026-10-02T16:15:00',
     versions: [
       {
         versionId: 'ver_102_2_2',
@@ -172,7 +172,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Included surface roughness callout Ra 0.4 on seat diameter',
         isCurrent: true,
         uploadedBy: 'Scott Walter',
-        uploadedOn: '2026-10-03 01:20 PM',
+        uploadedOn: '2026-10-03T13:20:00',
       },
       {
         versionId: 'ver_102_2_1',
@@ -183,7 +183,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Preliminary machining layout',
         isCurrent: false,
         uploadedBy: 'Scott Walter',
-        uploadedOn: '2026-10-02 04:15 PM',
+        uploadedOn: '2026-10-02T16:15:00',
       },
     ],
   },
@@ -194,7 +194,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'Official Commercial Offer QT-2026-883',
     currentVersionNo: 1,
     createdBy: 'Scott Walter',
-    createdOn: '2026-10-04 03:20 PM',
+    createdOn: '2026-10-04T15:20:00',
     versions: [
       {
         versionId: 'ver_102_3_1',
@@ -205,7 +205,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Quotation sent to client with 4-week delivery commitment',
         isCurrent: true,
         uploadedBy: 'Scott Walter',
-        uploadedOn: '2026-10-04 03:20 PM',
+        uploadedOn: '2026-10-04T15:20:00',
       },
     ],
   },
@@ -218,7 +218,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'HMC Hydraulic Clamping Fixture Scope of Work',
     currentVersionNo: 1,
     createdBy: 'Ian Chesnut',
-    createdOn: '2026-10-02 11:15 AM',
+    createdOn: '2026-10-02T11:15:00',
     versions: [
       {
         versionId: 'ver_103_1_1',
@@ -229,7 +229,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Customer technical requirement brief',
         isCurrent: true,
         uploadedBy: 'Ian Chesnut',
-        uploadedOn: '2026-10-02 11:15 AM',
+        uploadedOn: '2026-10-02T11:15:00',
       },
     ],
   },
@@ -240,7 +240,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'Pallet 630mm Clamping Station Concept 3D & Schematics',
     currentVersionNo: 2,
     createdBy: 'Ian Chesnut',
-    createdOn: '2026-10-03 03:30 PM',
+    createdOn: '2026-10-03T15:30:00',
     versions: [
       {
         versionId: 'ver_103_2_2',
@@ -251,7 +251,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Final approved tooling layout with integrated manifold blocks',
         isCurrent: true,
         uploadedBy: 'Ian Chesnut',
-        uploadedOn: '2026-10-05 09:00 AM',
+        uploadedOn: '2026-10-05T09:00:00',
       },
       {
         versionId: 'ver_103_2_1',
@@ -262,7 +262,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Concept proposal layout',
         isCurrent: false,
         uploadedBy: 'Ian Chesnut',
-        uploadedOn: '2026-10-03 03:30 PM',
+        uploadedOn: '2026-10-03T15:30:00',
       },
     ],
   },
@@ -273,7 +273,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'Customer Purchase Order PO-KT-2026-9024',
     currentVersionNo: 1,
     createdBy: 'Ian Chesnut',
-    createdOn: '2026-10-06 05:10 PM',
+    createdOn: '2026-10-06T17:10:00',
     versions: [
       {
         versionId: 'ver_103_3_1',
@@ -284,7 +284,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Official signed PO copy and payment receipt',
         isCurrent: true,
         uploadedBy: 'Ian Chesnut',
-        uploadedOn: '2026-10-06 05:10 PM',
+        uploadedOn: '2026-10-06T17:10:00',
       },
     ],
   },
@@ -297,7 +297,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'NABL Surface Plate Calibration Procedure Sheet',
     currentVersionNo: 1,
     createdBy: 'Priya Mehta',
-    createdOn: '2026-10-03 10:30 AM',
+    createdOn: '2026-10-03T10:30:00',
     versions: [
       {
         versionId: 'ver_105_1_1',
@@ -308,7 +308,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'Laboratory standard operating procedure for laser interferometer verification',
         isCurrent: true,
         uploadedBy: 'Priya Mehta',
-        uploadedOn: '2026-10-03 10:30 AM',
+        uploadedOn: '2026-10-03T10:30:00',
       },
     ],
   },
@@ -321,7 +321,7 @@ export const mockInquiryDocuments = [
     documentTitle: 'DIN 876-1 Export RFQ Documentation',
     currentVersionNo: 1,
     createdBy: 'Natali Emanuel',
-    createdOn: '2026-10-03 03:15 PM',
+    createdOn: '2026-10-03T15:15:00',
     versions: [
       {
         versionId: 'ver_106_1_1',
@@ -332,7 +332,7 @@ export const mockInquiryDocuments = [
         changeRemarks: 'German DIN standard technical requirements sheet',
         isCurrent: true,
         uploadedBy: 'Natali Emanuel',
-        uploadedOn: '2026-10-03 03:15 PM',
+        uploadedOn: '2026-10-03T15:15:00',
       },
     ],
   },

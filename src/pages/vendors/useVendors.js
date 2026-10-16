@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { mockVendors } from '../../mocks/vendors';
 import { getActiveVendorVersion } from '../../utils/vendorVersions';
+import { getTodayISO } from '../../utils/dateUtils';
 
 let nextSeqNumber = mockVendors.length + 1;
 let nextIdNumber = mockVendors.length + 1;
@@ -118,7 +119,7 @@ export function useVendors() {
     const vendorCode = formData.vendorCode?.trim() || `VEN-${String(nextSeqNumber).padStart(4, '0')}`;
     nextSeqNumber += 1;
 
-    const effectiveDate = formData.effectiveDate || new Date().toISOString().slice(0, 10);
+    const effectiveDate = formData.effectiveDate || getTodayISO();
 
     const initialVersion = {
       id: `ver_${Date.now()}`,

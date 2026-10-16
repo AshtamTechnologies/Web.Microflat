@@ -5,6 +5,7 @@
  */
 
 import { computeRevisionStatuses } from './effectiveDateUtils';
+import { getTodayISO, toISODate } from './dateUtils';
 
 /**
  * Returns the version with the latest EffectiveDate <= asOfDate;
@@ -25,7 +26,7 @@ export function getActiveClientVersion(client, asOfDate = new Date()) {
     // If effectiveVersions is not yet present, construct fallback from client top-level properties
     return {
       id: client.clientId ? `ver_${client.clientId}_0` : 'ver_0',
-      effectiveDate: client.effectiveDate || (client.createdAt ? client.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+      effectiveDate: client.effectiveDate || (client.createdAt ? client.createdAt.slice(0, 10) : getTodayISO()),
       companyName: client.companyName || '',
       billingName: client.billingName || '',
       contactTypeId: client.contactTypeId || 'Customer',
@@ -44,7 +45,7 @@ export function getActiveClientVersion(client, asOfDate = new Date()) {
 
   const asOfStr =
     asOfDate instanceof Date
-      ? asOfDate.toISOString().slice(0, 10)
+      ? toISODate(asOfDate)
       : String(asOfDate).slice(0, 10);
 
   // Versions with effectiveDate <= asOfDate
@@ -85,7 +86,7 @@ export function getClientRevisions(client) {
     list = [
       {
         id: client.clientId ? `ver_${client.clientId}_1` : 'ver_1',
-        effectiveDate: client.effectiveDate || (client.createdAt ? client.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+        effectiveDate: client.effectiveDate || (client.createdAt ? client.createdAt.slice(0, 10) : getTodayISO()),
         companyName: client.companyName || '',
         billingName: client.billingName || '',
         contactTypeId: client.contactTypeId || 'Customer',

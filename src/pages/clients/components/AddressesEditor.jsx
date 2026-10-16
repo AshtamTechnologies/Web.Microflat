@@ -7,16 +7,17 @@
 
 import { useMemo, useCallback, useState } from 'react';
 import {
-  MapPin,
-  Plus,
-  Pencil,
-  Trash2,
-  X,
-  Check,
-  Building,
-} from 'lucide-react';
+  IconAdd,
+  IconBuilding,
+  IconCheck,
+  IconClose,
+  IconDelete,
+  IconEdit,
+  IconLocation,
+} from '../../../constants/icons';
 import {
   Button,
+  IconButton,
   CancelButton,
   Card,
   Input,
@@ -142,7 +143,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <MapPin size={17} />
+            <IconLocation size={17} />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -324,12 +325,12 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
             >
               {isEditing ? (
                 <>
-                  <Check size={14} className="mr-1.5" />
+                  <IconCheck size={14} className="mr-1.5" />
                   Update Address
                 </>
               ) : (
                 <>
-                  <Plus size={14} className="mr-1.5" />
+                  <IconAdd size={14} className="mr-1.5" />
                   Add Address
                 </>
               )}
@@ -342,7 +343,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
       <div className="space-y-2.5">
         {effectiveRows.length === 0 ? (
           <div className="text-center py-8 px-4 border border-dashed border-border rounded-xl bg-surface/20 space-y-1.5">
-            <Building size={22} className="mx-auto text-text-muted/60" />
+            <IconBuilding size={22} className="mx-auto text-text-muted/60" />
             <p className="text-xs font-medium text-heading">No addresses added</p>
             <p className="text-2xs text-text-muted">
               Use the form above to add a billing or shipping address for this client.
@@ -450,24 +451,24 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                         {/* Actions */}
                         <Td className="py-2.5 px-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
+                            <IconButton
+                              icon={IconEdit}
+                              size="sm"
+                              variant="ghost"
                               onClick={() => handleStartEdit(row)}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all shadow-2xs cursor-pointer"
                               title="Edit Address"
                               aria-label="Edit Address"
-                            >
-                              <Pencil size={14} className="shrink-0" />
-                            </button>
-                            <button
-                              type="button"
+                              className="hover:text-primary hover:bg-surface"
+                            />
+                            <IconButton
+                              icon={IconDelete}
+                              size="sm"
+                              variant="ghost"
                               onClick={() => setAddressToDelete(row)}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
                               title="Remove Address"
                               aria-label="Remove Address"
-                            >
-                              <Trash2 size={14} className="shrink-0" />
-                            </button>
+                              className="hover:text-danger hover:bg-danger/10"
+                            />
                           </div>
                         </Td>
                       </tr>
@@ -550,7 +551,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                         onClick={() => handleStartEdit(row)}
                         className="text-xs"
                       >
-                        <Pencil size={13} className="mr-1" />
+                        <IconEdit size={13} className="mr-1" />
                         Edit
                       </Button>
                       <Button
@@ -560,7 +561,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                         onClick={() => setAddressToDelete(row)}
                         className="text-xs text-danger"
                       >
-                        <Trash2 size={13} className="mr-1" />
+                        <IconDelete size={13} className="mr-1" />
                         Remove
                       </Button>
                     </div>

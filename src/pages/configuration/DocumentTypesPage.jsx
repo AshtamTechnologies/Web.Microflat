@@ -8,22 +8,21 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  FileCheck,
-  Plus,
-  Search,
-  Pencil,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  AlertTriangle,
-  FolderLock,
-  Tag,
-  Layers,
-  X,
-  Save,
-  Eye,
-} from 'lucide-react';
-import { IconDocumentTypes } from '../../constants/icons';
+  IconAdd,
+  IconArrowDown,
+  IconArrowUp,
+  IconArrowUpDown,
+  IconClose,
+  IconDocumentTypes,
+  IconEdit,
+  IconFolderLock,
+  IconLayers,
+  IconSave,
+  IconSearch,
+  IconTag,
+  IconView,
+  IconWarning,
+} from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -236,7 +235,7 @@ export default function DocumentTypesPage() {
         cell: ({ row }) => (
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <FileCheck size={15} />
+              <IconDocumentTypes size={15} />
             </div>
             <span className="font-semibold text-heading text-sm">
               {row.original.typeName}
@@ -381,7 +380,7 @@ export default function DocumentTypesPage() {
             onClick={handleOpenAdd}
             className="self-start sm:self-auto shrink-0 shadow-xs"
           >
-            <Plus size={16} className="mr-1.5" />
+            <IconAdd size={16} className="mr-1.5" />
             Add Document Type
           </Button>
         }
@@ -396,7 +395,7 @@ export default function DocumentTypesPage() {
             placeholder="Search by document type name..."
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            leftIcon={<Search size={15} />}
+            leftIcon={<IconSearch size={15} />}
             rightElement={
               globalFilter ? (
                 <button
@@ -404,7 +403,7 @@ export default function DocumentTypesPage() {
                   onClick={() => setGlobalFilter('')}
                   className="text-text-muted hover:text-text cursor-pointer p-1"
                 >
-                  <X size={14} />
+                  <IconClose size={14} />
                 </button>
               ) : null
             }
@@ -455,11 +454,11 @@ export default function DocumentTypesPage() {
                         {header.column.getCanSort() && (
                           <span className="text-text-muted/60 transition-opacity">
                             {isSorted === 'asc' ? (
-                              <ArrowUp size={13} className="text-primary" />
+                              <IconArrowUp size={13} className="text-primary" />
                             ) : isSorted === 'desc' ? (
-                              <ArrowDown size={13} className="text-primary" />
+                              <IconArrowDown size={13} className="text-primary" />
                             ) : (
-                              <ArrowUpDown
+                              <IconArrowUpDown
                                 size={12}
                                 className="opacity-0 group-hover/th:opacity-100"
                               />
@@ -517,7 +516,7 @@ export default function DocumentTypesPage() {
                   className="px-4 py-12 text-center text-text-muted text-sm"
                 >
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <FileCheck size={32} className="text-text-muted/50" />
+                    <IconDocumentTypes size={32} className="text-text-muted/50" />
                     <p className="font-semibold text-heading">
                       No document types found
                     </p>
@@ -557,7 +556,7 @@ export default function DocumentTypesPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <FileCheck size={16} />
+                      <IconDocumentTypes size={16} />
                     </div>
                     <div>
                       <h3 className="font-semibold text-heading text-sm">{dt.typeName}</h3>
@@ -617,7 +616,7 @@ export default function DocumentTypesPage() {
                     onClick={() => setViewingItem(dt)}
                     className="text-xs"
                   >
-                    <Eye size={13} className="mr-1.5" />
+                    <IconView size={13} className="mr-1.5" />
                     View
                   </Button>
                   <Button
@@ -627,7 +626,7 @@ export default function DocumentTypesPage() {
                     onClick={() => handleOpenEdit(dt)}
                     className="text-xs"
                   >
-                    <Pencil size={13} className="mr-1.5" />
+                    <IconEdit size={13} className="mr-1.5" />
                     Edit
                   </Button>
                 </div>
@@ -636,7 +635,7 @@ export default function DocumentTypesPage() {
           })
         ) : (
           <div className="bg-bg border border-border rounded-xl p-8 text-center text-text-muted">
-            <FileCheck size={28} className="mx-auto text-text-muted/50 mb-2" />
+            <IconDocumentTypes size={28} className="mx-auto text-text-muted/50 mb-2" />
             <p className="font-semibold text-heading text-sm">No document types found</p>
             <p className="text-xs mt-1">Click &quot;+ Add Document Type&quot; to create one.</p>
           </div>
@@ -734,9 +733,7 @@ export default function DocumentTypesPage() {
           {/* Status Switch (Active / Inactive) */}
           <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
             <div>
-              <label className="text-sm font-semibold text-heading block">
-                Status
-              </label>
+              <span className="mf-label block">Status</span>
               <p className="text-xs text-text-muted mt-0.5">
                 Set document type active or inactive
               </p>
@@ -783,7 +780,7 @@ export default function DocumentTypesPage() {
             <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0 flex-1">
                 <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                  <FileCheck size={20} />
+                  <IconDocumentTypes size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="text-base font-bold text-heading break-words leading-snug">
@@ -883,7 +880,7 @@ export default function DocumentTypesPage() {
                 }}
                 className="justify-center font-semibold shadow-2xs"
               >
-                <Pencil size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                <IconEdit size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
                 Edit
               </Button>
             </div>

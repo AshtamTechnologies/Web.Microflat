@@ -18,11 +18,11 @@ import {
   getPaginationRowModel,
 } from '@tanstack/react-table';
 import {
-  Plus,
-  Pencil,
-  Eye,
-} from 'lucide-react';
-import { IconClient } from '../../constants/icons';
+  IconAdd,
+  IconClient,
+  IconEdit,
+  IconView,
+} from '../../constants/icons';
 import {
   Button,
   Card,
@@ -119,7 +119,7 @@ export default function ClientsPage() {
             onClick={() => navigate('/clients/new')}
             className="shadow-2xs text-xs font-semibold"
           >
-            <Plus size={15} className="mr-1.5" />
+            <IconAdd size={15} className="mr-1.5" />
             Add Client
           </Button>
         }
@@ -241,7 +241,7 @@ export default function ClientsPage() {
                   onClick={() => navigate(`/clients/${id}/effective-dates`, { state: { readOnly: true } })}
                   className="flex-1 text-xs"
                 >
-                  <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconView size={13} className="mr-1.5" aria-hidden="true" />
                   View
                 </Button>
 
@@ -251,7 +251,7 @@ export default function ClientsPage() {
                   onClick={() => navigate(`/clients/${id}/effective-dates`)}
                   className="flex-1 text-xs"
                 >
-                  <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconEdit size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
                 </Button>
               </div>

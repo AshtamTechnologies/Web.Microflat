@@ -13,26 +13,24 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Save,
-  X,
-  Truck,
-  Building2,
-  Contact,
-  MapPin,
-  FileText,
-  ShieldCheck,
-  AlertCircle,
-  Paperclip,
-  UploadCloud,
-  Image as ImageIcon,
-  Trash2,
-  Eye,
-  Download,
-  ExternalLink,
-} from 'lucide-react';
-import { IconVendor } from '../../constants/icons';
+import {  IconAttachment,
+  IconBack,
+  IconBuilding2,
+  IconClose,
+  IconContact,
+  IconDelete,
+  IconDownload,
+  IconError,
+  IconExternalLink,
+  IconFileText,
+  IconImage,
+  IconLocation,
+  IconSave,
+  IconShieldCheck,
+  IconUpload,
+  IconVendor,
+  IconView,
+} from '../../constants/icons';
 
 import {
   Button,
@@ -46,8 +44,11 @@ import {
   Card,
   Modal,
   PageHeader,
+  Textarea,
+  IconButton,
+  FormActionsBar,
 } from '../../components/ui';
-import { formatDate } from '../../utils/dateUtils';
+import { formatDate, getTodayISO } from '../../utils/dateUtils';
 import { useVendorsContext } from '../../context/VendorsContext';
 import {
   COUNTRY_OPTIONS,
@@ -93,14 +94,14 @@ function getFileIcon(fileName = '', fileType = '') {
   const type = fileType.toLowerCase();
 
   if (name.endsWith('.pdf') || type.includes('pdf')) {
-    return <FileText size={18} className="text-danger shrink-0" />;
+    return <IconFileText size={18} className="text-danger shrink-0" />;
   }
-  return <ImageIcon size={18} className="text-primary shrink-0" />;
+  return <IconImage size={18} className="text-primary shrink-0" />;
 }
 
 const INITIAL_FORM = {
   vendorCode: '',
-  effectiveDate: new Date().toISOString().slice(0, 10),
+  effectiveDate: getTodayISO(),
   vendorName: '',
   contactPersonName: '',
   phoneNo: '',
@@ -381,7 +382,7 @@ export default function VendorFormPage() {
         fileSizeBytes: file.size,
         fileType: file.type || 'application/octet-stream',
         fileUrl,
-        uploadedAt: new Date().toISOString().slice(0, 10),
+        uploadedAt: getTodayISO(),
       };
     });
 
@@ -499,14 +500,14 @@ export default function VendorFormPage() {
       <div className="max-w-4xl mx-auto py-12 px-4 text-center">
         <Card padding="lg" className="space-y-4">
           <div className="w-12 h-12 rounded-full bg-danger/10 text-danger flex items-center justify-center mx-auto">
-            <AlertCircle size={24} />
+            <IconError size={24} />
           </div>
           <h2 className="text-lg font-bold text-heading">Vendor Not Found</h2>
           <p className="text-sm text-text-muted">
             The requested vendor with ID "{id}" could not be located in the database.
           </p>
           <Button variant="primary" onClick={() => navigate('/vendors')}>
-            Return to Vendors
+            Back to Vendors
           </Button>
         </Card>
       </div>
@@ -517,30 +518,33 @@ export default function VendorFormPage() {
     <form onSubmit={handleSubmit} noValidate className="space-y-6 pb-20">
       {/* ── Top Page Header & Navigation ── */}
       <PageHeader
-        title={isEdit ? `Edit Vendor: ${existingVendor?.vendorName}` : 'Add New Vendor'}
+        title={isEdit ? `Edit Vendor: ${existingVendor?.vendorName}` : 'Add Vendor'}
         icon={<IconVendor className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            icon={IconBack}
             onClick={handleCancel}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
-            <ArrowLeft size={14} className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform duration-150" aria-hidden="true" />
-            <span>Back to Vendors</span>
-          </button>
+            Back to Vendors
+          </Button>
         }
         actions={
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
             <CancelButton
               onClick={handleCancel}
               disabled={loading}
+              size="sm"
             />
             <SaveButton
               type="submit"
               loading={loading}
               disabled={loading}
+              size="sm"
             >
-              {isEdit ? 'Save Changes' : 'Create Vendor'}
+              {isEdit ? 'Save Changes' : 'Save'}
             </SaveButton>
           </div>
         }
@@ -551,7 +555,7 @@ export default function VendorFormPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-5 border-b border-border">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Truck size={18} />
+              <IconVendor size={18} />
             </div>
             <div>
               <h2 className="text-base font-bold text-heading">
@@ -613,9 +617,7 @@ export default function VendorFormPage() {
 
           {/* Status Switch */}
           <div className="flex flex-col justify-between pt-2 border-t border-border/70">
-            <label className="text-sm font-medium text-heading block leading-none mb-2">
-              Account Status <span className="text-danger" aria-hidden="true">*</span>
-            </label>
+            <span className="mf-label block mb-2">Account Status <span className="mf-required" aria-hidden="true">*</span></span>
             <div className="flex items-center gap-3 h-[42px]">
               <StatusSwitch
                 id="vendor-status-switch"
@@ -642,7 +644,7 @@ export default function VendorFormPage() {
             {!form.isActive && (
               <div className="mt-4 p-4 rounded-xl border border-danger/30 bg-danger/[0.04] space-y-2 animate-in fade-in duration-200">
                 <div className="flex items-center gap-2 text-danger font-semibold text-xs uppercase tracking-wider">
-                  <AlertCircle size={15} className="shrink-0" />
+                  <IconError size={15} className="shrink-0" />
                   <span>Reason for Inactivation (Compulsory)</span>
                   <span className="text-danger" aria-hidden="true">*</span>
                 </div>
@@ -650,29 +652,18 @@ export default function VendorFormPage() {
                   Please provide a detailed comment or reason why this vendor is being deactivated. This will be visible on the vendor's profile and audit logs.
                 </p>
                 <div className="flex flex-col gap-1 pt-1">
-                  <label htmlFor="inactiveComment" className="text-xs font-semibold text-heading">
-                    Inactive Comment <span className="text-danger">*</span>
-                  </label>
-                  <textarea
+                  <Textarea
                     id="inactiveComment"
                     name="inactiveComment"
-                    rows={3}
+                    label="Inactive Comment"
                     required
+                    rows={3}
                     placeholder="e.g. Disqualified due to repeated quality rejections on batch #4810; vendor placed on hold until audit clearance..."
                     value={form.inactiveComment || ''}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    className={`w-full rounded-lg border bg-bg text-text text-sm p-3 placeholder:text-text-muted transition-colors duration-150 ease-in-out outline-none focus:ring-2 ${
-                      errors.inactiveComment
-                        ? 'border-danger focus:ring-danger/20 focus:border-danger'
-                        : 'border-border focus:ring-primary/20 focus:border-primary hover:border-text-muted'
-                    }`}
+                    error={errors.inactiveComment}
                   />
-                  {errors.inactiveComment && (
-                    <span className="text-xs font-medium text-danger mt-0.5">
-                      {errors.inactiveComment}
-                    </span>
-                  )}
                 </div>
               </div>
             )}
@@ -684,7 +675,7 @@ export default function VendorFormPage() {
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <Contact size={18} className="text-primary" aria-hidden="true" />
+            <IconContact size={18} className="text-primary" aria-hidden="true" />
             <span>2. Contact Information</span>
           </div>
           <span className="text-xs text-text-muted font-normal">
@@ -793,7 +784,7 @@ export default function VendorFormPage() {
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <MapPin size={18} className="text-primary" aria-hidden="true" />
+            <IconLocation size={18} className="text-primary" aria-hidden="true" />
             <span>3. Address & Location</span>
           </div>
           <span className="text-xs text-text-muted font-normal">
@@ -912,7 +903,7 @@ export default function VendorFormPage() {
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <FileText size={18} className="text-primary" aria-hidden="true" />
+            <IconFileText size={18} className="text-primary" aria-hidden="true" />
             <span>4. Procurement & Quality Notes</span>
           </div>
           <span className="text-xs text-text-muted font-normal">
@@ -920,27 +911,22 @@ export default function VendorFormPage() {
           </span>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="notes" className="text-sm font-medium text-heading">
-            Internal Notes / ISO Certifications / Special Capabilities
-          </label>
-          <textarea
+        <Textarea
             id="notes"
             name="notes"
+            label="Internal Notes / ISO Certifications / Special Capabilities"
             rows={4}
             placeholder="Add any internal remarks, capability notes, tooling standards, or ISO certification references..."
             value={form.notes}
             onChange={handleChange}
-            className="w-full rounded-lg border border-border bg-bg text-text text-sm p-3 placeholder:text-text-muted transition-colors duration-150 ease-in-out outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary hover:border-text-muted"
           />
-        </div>
       </Card>
 
       {/* ── SECTION 5: ATTACHMENTS & SUPPORTING DOCUMENTS ── */}
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-3 mb-5 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <Paperclip size={18} className="text-primary" aria-hidden="true" />
+            <IconAttachment size={18} className="text-primary" aria-hidden="true" />
             <span>5. Attachments & Supporting Documents</span>
           </div>
           <div className="flex items-center gap-2">
@@ -978,9 +964,7 @@ export default function VendorFormPage() {
 
               {/* Drag & Drop Zone and File Browser */}
               <div className="flex flex-col justify-between">
-                <label className="text-sm font-medium text-heading block leading-none mb-2">
-                  Select File(s)
-                </label>
+                <span className="mf-label block mb-2">Select File(s)</span>
                 <div
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -991,6 +975,7 @@ export default function VendorFormPage() {
                       : 'border-border hover:border-primary/60 bg-bg hover:bg-surface/60'
                     }`}
                 >
+                  {/* Native file input hidden for custom drag-drop styling */}
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1000,7 +985,7 @@ export default function VendorFormPage() {
                     className="hidden"
                   />
                   <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
-                    <UploadCloud size={20} />
+                    <IconUpload size={20} />
                   </div>
                   <p className="text-xs font-medium text-heading">
                     <span className="text-primary hover:underline font-semibold">Click to choose files</span> or drag & drop here
@@ -1024,7 +1009,7 @@ export default function VendorFormPage() {
             {(!form.attachments || form.attachments.length === 0) ? (
               <div className="border border-border/80 rounded-xl p-8 text-center bg-surface/20">
                 <div className="w-10 h-10 rounded-full bg-border/50 text-text-muted flex items-center justify-center mx-auto mb-2.5">
-                  <Paperclip size={18} />
+                  <IconAttachment size={18} />
                 </div>
                 <p className="text-xs font-medium text-heading">No documents attached yet</p>
                 <p className="text-2xs text-text-muted mt-0.5 max-w-sm mx-auto">
@@ -1054,44 +1039,43 @@ export default function VendorFormPage() {
                           {att.uploadedAt && (
                             <>
                               <span>•</span>
-                              <span className="text-2xs font-mono text-text-muted">Added: {att.uploadedAt}</span>
+                              <span className="text-2xs font-mono text-text-muted">Added: {formatDate(att.uploadedAt)}</span>
                             </>
                           )}
                         </p>
                       </div>
                     </div>
 
-                    {/* Right: Actions (Preview, Download, Delete) */}
+                    {/* Right: Actions (Preview, IconDownload, Delete) */}
                     <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewItem(att)}
+                      <IconButton
+                        icon={IconView}
+                        size="sm"
+                        variant="ghost"
                         title="Preview attachment"
-                        className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface border border-border transition-colors cursor-pointer"
-                        aria-label={`Preview ${att.documentName}`}
-                      >
-                        <Eye size={14} />
-                      </button>
+                        aria-label="Preview attachment"
+                        onClick={() => setPreviewItem(att)}
+                      />
 
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadAttachment(att)}
+                      <IconButton
+                        icon={IconDownload}
+                        size="sm"
+                        variant="ghost"
                         title="Download attachment"
-                        className="p-1.5 rounded-lg text-text-muted hover:text-success hover:bg-surface border border-border transition-colors cursor-pointer"
-                        aria-label={`Download ${att.documentName}`}
-                      >
-                        <Download size={14} />
-                      </button>
+                        aria-label="Download attachment"
+                        onClick={() => handleDownloadAttachment(att)}
+                        className="hover:text-success"
+                      />
 
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAttachment(att.id)}
+                      <IconButton
+                        icon={IconDelete}
+                        size="sm"
+                        variant="ghost"
                         title="Remove attachment"
-                        className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 border border-border hover:border-danger/30 transition-colors cursor-pointer"
-                        aria-label={`Remove ${att.documentName}`}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        aria-label="Remove attachment"
+                        onClick={() => handleRemoveAttachment(att.id)}
+                        className="hover:text-danger hover:bg-danger/10"
+                      />
                     </div>
                   </div>
                 ))}
@@ -1110,7 +1094,7 @@ export default function VendorFormPage() {
             className="w-full flex items-center justify-between text-left cursor-pointer select-none group"
           >
             <div className="flex items-center gap-2">
-              <ShieldCheck size={18} className="text-text-muted group-hover:text-primary transition-colors" />
+              <IconShieldCheck size={18} className="text-text-muted group-hover:text-primary transition-colors" />
               <span className="text-sm font-semibold text-heading">
                 6. System-Managed Approval & Audit Info
               </span>
@@ -1266,9 +1250,9 @@ export default function VendorFormPage() {
                   type="button"
                   variant="secondary"
                   size="sm"
+                  icon={IconExternalLink}
                   onClick={() => window.open(previewItem.fileUrl, '_blank')}
                 >
-                  <ExternalLink size={14} className="mr-1.5" />
                   Open in Tab
                 </Button>
               )}
@@ -1276,15 +1260,16 @@ export default function VendorFormPage() {
                 type="button"
                 variant="primary"
                 size="sm"
+                icon={IconDownload}
                 onClick={() => handleDownloadAttachment(previewItem)}
               >
-                <Download size={14} className="mr-1.5" />
                 Download
               </Button>
             </div>
           </div>
         </Modal>
       )}
+
     </form>
   );
 }

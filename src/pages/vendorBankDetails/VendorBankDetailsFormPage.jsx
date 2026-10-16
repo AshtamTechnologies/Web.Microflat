@@ -16,26 +16,25 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft,
-  Save,
-  Plus,
-  Check,
-  X,
-  Pencil,
-  Trash2,
-  Eye,
-  EyeOff,
-  Landmark,
-  Building2,
-  Info,
-  UploadCloud,
-  Paperclip,
-  FileText,
-  Image as ImageIcon,
-  FileSpreadsheet,
-  Download,
-} from 'lucide-react';
-import { IconBankDetails } from '../../constants/icons';
+  IconAdd,
+  IconAttachment,
+  IconBack,
+  IconBankDetails,
+  IconBuilding2,
+  IconCheck,
+  IconClose,
+  IconDelete,
+  IconDownload,
+  IconEdit,
+  IconEyeOff,
+  IconFileSpreadsheet,
+  IconFileText,
+  IconImage,
+  IconInfo,
+  IconSave,
+  IconUpload,
+  IconView,
+} from '../../constants/icons';
 
 import {
   Button,
@@ -54,6 +53,7 @@ import {
   Th,
   Td,
   PageHeader,
+  IconButton,
 } from '../../components/ui';
 
 import { useVendorsContext } from '../../context/VendorsContext';
@@ -65,7 +65,7 @@ import {
   BANK_DOCUMENT_TYPE_OPTIONS,
 } from '../../mocks/vendorBankDetails';
 import { getCountryName } from '../../mocks/vendors';
-import { formatDate } from '../../utils/dateUtils';
+import { formatDate, getTodayISO } from '../../utils/dateUtils';
 
 const INITIAL_BANK_FORM = {
   bankDetailId: null,
@@ -107,7 +107,7 @@ function getApprovalBadgeVariant(status) {
 function getFileIcon(fileName = '', fileType = '') {
   const lower = fileName.toLowerCase();
   if (lower.endsWith('.pdf') || fileType.includes('pdf')) {
-    return <FileText size={18} className="text-danger" />;
+    return <IconFileText size={18} className="text-danger" />;
   }
   if (
     lower.endsWith('.png') ||
@@ -116,9 +116,9 @@ function getFileIcon(fileName = '', fileType = '') {
     lower.endsWith('.webp') ||
     fileType.includes('image')
   ) {
-    return <ImageIcon size={18} className="text-info" />;
+    return <IconImage size={18} className="text-info" />;
   }
-  return <Paperclip size={18} className="text-primary" />;
+  return <IconAttachment size={18} className="text-primary" />;
 }
 
 export default function VendorBankDetailsFormPage() {
@@ -619,7 +619,7 @@ export default function VendorBankDetailsFormPage() {
           ? `${(f.size / (1024 * 1024)).toFixed(1)} MB`
           : `${Math.max(1, Math.round(f.size / 1024))} KB`,
       fileType: f.type || 'application/octet-stream',
-      uploadedAt: new Date().toISOString().slice(0, 10),
+      uploadedAt: getTodayISO(),
     }));
 
     const current = Array.isArray(formState.attachments) ? formState.attachments : [];
@@ -692,38 +692,30 @@ export default function VendorBankDetailsFormPage() {
         subtitle="Manage bank accounts, payment routes, and IFSC codes for vendor settlements"
         icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            icon={IconBack}
             onClick={handleCancel}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
-            <ArrowLeft
-              size={14}
-              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
-            />
-            <span>Back to Bank Details</span>
-          </button>
+            Back to Bank Details
+          </Button>
         }
         actions={
-          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
+          <div className="flex items-center gap-2">
             <CancelButton
-              size="md"
               onClick={handleCancel}
               disabled={isSubmitting}
-              className="flex-1 sm:flex-initial"
+              size="sm"
             />
-
             <SaveButton
-              type="button"
-              size="md"
-              onClick={handleFormActionClick}
-              disabled={isSubmitting || !selectedVendorId}
+              onClick={handleSaveChanges}
               loading={isSubmitting}
-              loadingText="Saving..."
-              title={!selectedVendorId ? 'Please select a vendor first' : undefined}
-              className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
+              disabled={isSubmitting}
+              size="sm"
             >
-              {isEditing ? 'Save Changes' : 'Save Bank Account'}
+              {isEditMode ? 'Save Changes' : 'Save'}
             </SaveButton>
           </div>
         }
@@ -733,7 +725,7 @@ export default function VendorBankDetailsFormPage() {
       <Card padding="md" className="space-y-4 shadow-2xs">
         <div className="flex items-center gap-2.5 border-b border-border pb-3">
           <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Building2 size={17} />
+            <IconBuilding2 size={17} />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-heading">Vendor Information</h3>
@@ -806,7 +798,7 @@ export default function VendorBankDetailsFormPage() {
         {/* Existing accounts notice in add mode */}
         {!isEditMode && selectedVendorId && draftRows.length > 0 && (
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-info/10 text-info border border-info/20 text-xs">
-            <Info size={16} className="shrink-0 mt-0.5" />
+            <IconInfo size={16} className="shrink-0 mt-0.5" />
             <p>
               This vendor already has <strong>{draftRows.length}</strong> bank account(s) on record.
               Edit them below or add a new one.
@@ -820,7 +812,7 @@ export default function VendorBankDetailsFormPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Landmark size={17} />
+              <IconBankDetails size={17} />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -941,7 +933,7 @@ export default function VendorBankDetailsFormPage() {
                       title={showAccountNumber ? 'Hide account number' : 'Show account number'}
                       aria-label={showAccountNumber ? 'Hide account number' : 'Show account number'}
                     >
-                      {showAccountNumber ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {showAccountNumber ? <IconEyeOff size={16} /> : <IconView size={16} />}
                     </button>
                   }
                 />
@@ -971,7 +963,7 @@ export default function VendorBankDetailsFormPage() {
                       title={showConfirmAccountNumber ? 'Hide confirm account number' : 'Show confirm account number'}
                       aria-label={showConfirmAccountNumber ? 'Hide confirm account number' : 'Show confirm account number'}
                     >
-                      {showConfirmAccountNumber ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {showConfirmAccountNumber ? <IconEyeOff size={16} /> : <IconView size={16} />}
                     </button>
                   }
                 />
@@ -1065,9 +1057,7 @@ export default function VendorBankDetailsFormPage() {
 
               {/* Account Status Switch */}
               <div className="flex flex-col gap-1.5 pt-2">
-                <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider">
-                  Account Status
-                </label>
+                <span className="mf-label text-2xs uppercase tracking-wider">Account Status</span>
                 <div className="flex items-center gap-3">
                   <StatusSwitch
                     id="bank-isActive-switch"
@@ -1085,7 +1075,7 @@ export default function VendorBankDetailsFormPage() {
             <div className="p-4 rounded-xl border border-border bg-surface/40 space-y-3">
               <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
                 <div className="flex items-center gap-2">
-                  <Paperclip size={15} className="text-primary" />
+                  <IconAttachment size={15} className="text-primary" />
                   <span className="text-xs font-semibold text-heading uppercase tracking-wider">
                     Bank Proof / Attachment (Optional)
                   </span>
@@ -1115,9 +1105,7 @@ export default function VendorBankDetailsFormPage() {
 
                 {/* File Dropzone */}
                 <div className="md:col-span-2">
-                  <label className="text-sm font-medium text-heading block leading-none mb-2">
-                    Upload Bank Document
-                  </label>
+                  <span className="mf-label block mb-2">Upload Bank Document</span>
                   <div
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -1137,6 +1125,7 @@ export default function VendorBankDetailsFormPage() {
                         : 'border-border hover:border-primary/60 bg-bg hover:bg-surface/60',
                     ].join(' ')}
                   >
+                    {/* Native file input hidden for custom drag-drop styling */}
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -1149,7 +1138,7 @@ export default function VendorBankDetailsFormPage() {
                       className="hidden"
                     />
                     <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1.5">
-                      <UploadCloud size={17} />
+                      <IconUpload size={17} />
                     </div>
                     <p className="text-xs font-medium text-heading">
                       <span className="text-primary hover:underline font-semibold">
@@ -1197,15 +1186,15 @@ export default function VendorBankDetailsFormPage() {
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAttachment(att.id)}
-                          className="text-text-muted hover:text-danger p-1 rounded hover:bg-surface cursor-pointer transition-colors shrink-0"
+                        <IconButton
+                          icon={IconDelete}
+                          size="sm"
+                          variant="ghost"
                           title="Remove attachment"
                           aria-label="Remove attachment"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                          onClick={() => handleRemoveAttachment(att.id)}
+                          className="hover:text-danger hover:bg-danger/10 shrink-0"
+                        />
                       </div>
                     ))}
                   </div>
@@ -1241,7 +1230,7 @@ export default function VendorBankDetailsFormPage() {
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Landmark size={17} />
+              <IconBankDetails size={17} />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-heading">
@@ -1256,7 +1245,7 @@ export default function VendorBankDetailsFormPage() {
 
         {sortedGridRows.length === 0 ? (
           <div className="text-center py-10 px-4 border border-dashed border-border rounded-xl bg-surface/30 space-y-2">
-            <Landmark size={24} className="mx-auto text-text-muted/60" />
+            <IconBankDetails size={24} className="mx-auto text-text-muted/60" />
             <p className="text-xs font-semibold text-heading">No bank accounts yet</p>
             <p className="text-2xs text-text-muted">
               Use the form above to add the vendor&apos;s first bank account.
@@ -1347,7 +1336,7 @@ export default function VendorBankDetailsFormPage() {
                                 className="inline-flex items-center gap-1 text-2xs text-primary font-medium mt-0.5 hover:underline cursor-pointer text-left"
                                 title="Click to view attachments"
                               >
-                                <Paperclip size={11} /> {row.attachments.length} attachment(s)
+                                <IconAttachment size={11} /> {row.attachments.length} attachment(s)
                               </button>
                             )}
                           </div>
@@ -1378,7 +1367,7 @@ export default function VendorBankDetailsFormPage() {
                               title={isRevealed ? 'Mask account number' : 'Reveal account number'}
                               aria-label={isRevealed ? 'Mask account number' : 'Reveal account number'}
                             >
-                              {isRevealed ? <EyeOff size={13} /> : <Eye size={13} />}
+                              {isRevealed ? <IconEyeOff size={13} /> : <IconView size={13} />}
                             </button>
                           </div>
                         </Td>
@@ -1417,7 +1406,7 @@ export default function VendorBankDetailsFormPage() {
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-2xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/25 transition-colors cursor-pointer shadow-2xs"
                               title={`View ${row.attachments.length} attachment(s)`}
                             >
-                              <Paperclip size={11} />
+                              <IconAttachment size={11} />
                               <span>{row.attachments.length} File{row.attachments.length > 1 ? 's' : ''}</span>
                             </button>
                           ) : (
@@ -1430,7 +1419,7 @@ export default function VendorBankDetailsFormPage() {
                               className="text-2xs text-text-muted hover:text-heading cursor-pointer inline-flex items-center gap-1"
                               title="No attachments. Click to inspect."
                             >
-                              <Paperclip size={11} className="opacity-40" />
+                              <IconAttachment size={11} className="opacity-40" />
                               <span>0</span>
                             </button>
                           )}
@@ -1474,7 +1463,7 @@ export default function VendorBankDetailsFormPage() {
                               className={isCurrentlyEditing ? "h-7 w-7 shadow-2xs" : "text-text-muted hover:text-primary hover:bg-surface h-7 w-7"}
                               aria-label={`Edit ${row.bankName}`}
                             >
-                              <Pencil size={13} />
+                              <IconEdit size={13} />
                             </Button>
 
                             {/* Delete bank account (Requires Auth) */}
@@ -1490,7 +1479,7 @@ export default function VendorBankDetailsFormPage() {
                               className="text-text-muted hover:text-danger hover:bg-danger/10 h-7 w-7"
                               aria-label={`Delete ${row.bankName}`}
                             >
-                              <Trash2 size={13} />
+                              <IconDelete size={13} />
                             </Button>
                           </div>
                         </Td>
@@ -1550,7 +1539,7 @@ export default function VendorBankDetailsFormPage() {
                             }}
                             className="inline-flex items-center gap-1 text-2xs text-primary font-medium mt-0.5 hover:underline cursor-pointer"
                           >
-                            <Paperclip size={11} /> {row.attachments.length} attachment(s)
+                            <IconAttachment size={11} /> {row.attachments.length} attachment(s)
                           </button>
                         )}
                       </div>
@@ -1566,7 +1555,7 @@ export default function VendorBankDetailsFormPage() {
                           className={`h-7 w-7 ${isCurrentlyEditing ? '' : 'text-text-muted hover:text-primary'}`}
                           title="Edit account"
                         >
-                          <Pencil size={13} />
+                          <IconEdit size={13} />
                         </Button>
                         <Button
                           type="button"
@@ -1580,7 +1569,7 @@ export default function VendorBankDetailsFormPage() {
                           title="Delete account"
                           aria-label={`Delete ${row.bankName}`}
                         >
-                          <Trash2 size={13} />
+                          <IconDelete size={13} />
                         </Button>
                       </div>
                     </div>
@@ -1599,7 +1588,7 @@ export default function VendorBankDetailsFormPage() {
                             onClick={() => toggleRevealAccount(rowId)}
                             className="text-text-muted hover:text-heading"
                           >
-                            {isRevealed ? <EyeOff size={12} /> : <Eye size={12} />}
+                            {isRevealed ? <IconEyeOff size={12} /> : <IconView size={12} />}
                           </button>
                         </div>
                       </div>
@@ -1632,7 +1621,7 @@ export default function VendorBankDetailsFormPage() {
                             onClick={() => setViewingAttachmentsRow(row)}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 cursor-pointer"
                           >
-                            <Paperclip size={10} /> {row.attachments.length} View
+                            <IconAttachment size={10} /> {row.attachments.length} View
                           </button>
                         ) : (
                           <span className="text-text-muted font-mono">None</span>
@@ -1661,7 +1650,7 @@ export default function VendorBankDetailsFormPage() {
         }}
         title="Discard Unsaved Changes?"
         message="You have unsaved changes in this vendor's bank accounts draft. If you leave now, these changes will be lost."
-        confirmText="Discard Changes"
+        confirmText="Cancel"
         cancelText="Continue Editing"
         variant="warning"
       />
@@ -1695,7 +1684,7 @@ export default function VendorBankDetailsFormPage() {
               }`
             : ''
         }
-        icon={Paperclip}
+        icon={IconAttachment}
         size="lg"
       >
         <div className="space-y-4">
@@ -1748,7 +1737,7 @@ export default function VendorBankDetailsFormPage() {
                         }}
                         className="text-xs font-medium"
                       >
-                        <Eye size={13} className="mr-1.5" />
+                        <IconView size={13} className="mr-1.5" />
                         Preview
                       </Button>
                       <Button
@@ -1761,7 +1750,7 @@ export default function VendorBankDetailsFormPage() {
                         className="text-xs text-text-muted hover:text-primary"
                         title="Download file"
                       >
-                        <Download size={13} className="mr-1.5" />
+                        <IconDownload size={13} className="mr-1.5" />
                         Download
                       </Button>
                     </div>
@@ -1774,18 +1763,19 @@ export default function VendorBankDetailsFormPage() {
                 <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3 mt-3 animate-fadeIn">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Eye size={14} className="text-primary" />
+                      <IconView size={14} className="text-primary" />
                       <span className="text-xs font-semibold text-heading">
                         Document Preview: {previewingFile.fileName}
                       </span>
                     </div>
-                    <button
-                      type="button"
+                    <IconButton
+                      icon={IconClose}
+                      size="sm"
+                      variant="ghost"
+                      title="Close preview"
+                      aria-label="Close preview"
                       onClick={() => setPreviewingFile(null)}
-                      className="p-1 text-text-muted hover:text-heading rounded cursor-pointer"
-                    >
-                      <X size={14} />
-                    </button>
+                    />
                   </div>
                   <div className="p-6 rounded-lg bg-bg border border-border text-center space-y-2">
                     <div className="w-12 h-12 mx-auto rounded-xl bg-primary/10 text-primary flex items-center justify-center">
@@ -1808,7 +1798,7 @@ export default function VendorBankDetailsFormPage() {
             </div>
           ) : (
             <div className="py-8 text-center space-y-2 border border-dashed border-border rounded-xl bg-surface/30">
-              <Paperclip size={24} className="mx-auto text-text-muted/60" />
+              <IconAttachment size={24} className="mx-auto text-text-muted/60" />
               <p className="text-xs font-semibold text-heading">No attachments found</p>
               <p className="text-2xs text-text-muted max-w-sm mx-auto">
                 No bank proof documents have been attached to this bank account yet. You can click &quot;Edit&quot; on this account to upload Cancelled Cheque, Passbook, or Bank Letter.

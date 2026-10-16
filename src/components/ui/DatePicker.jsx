@@ -80,6 +80,7 @@ export default function DatePicker({
   error = null,
   hint = null,
   disabled = false,
+  size = 'md',
   className = '',
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -313,14 +314,13 @@ export default function DatePicker({
   return (
     <div className="flex flex-col gap-1.5 w-full">
       {label && (
-        <label
-          htmlFor={id}
-          className="form-label flex items-center justify-between"
-        >
-          <span className="mf-label">
-            {label}
-            {required && <span className="mf-required" aria-hidden="true">*</span>}
-          </span>
+        <label htmlFor={id} className="mf-label">
+          {label}
+          {required && (
+            <span className="mf-required" aria-hidden="true">
+              *
+            </span>
+          )}
         </label>
       )}
 
@@ -338,7 +338,7 @@ export default function DatePicker({
             }
           }}
           className={[
-            'w-full h-10 flex items-center justify-between rounded-control border bg-bg text-text text-sm text-left',
+            'w-full flex items-center justify-between rounded-control border bg-bg text-text text-left', size === 'sm' ? 'h-[var(--control-height-sm)] text-xs' : size === 'lg' ? 'h-[var(--control-height-lg)] text-base' : 'h-[var(--control-height-md)] text-sm',
             'px-3 leading-snug cursor-pointer select-none transition-all duration-150',
             hasError
               ? 'border-danger focus:ring-danger/20 focus:border-danger'

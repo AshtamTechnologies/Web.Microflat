@@ -233,12 +233,6 @@ body {
   margin-left: 0.125rem;
 }
 
-/* Native label fallback: ensures any raw label in the system follows the standard */
-label:not(.sr-only):not([class*="text-xs"]):not([class*="text-[1"]):not([class*="text-2xl"]):not([class*="text-3xl"]) {
-  font-size: var(--label-font-size, 0.875rem);
-  color: var(--label-color, var(--heading));
-  letter-spacing: normal;
-}
 
 /* ── Centralized View / Detail Field Styles ───────────────────────────────── */
 .view-field-label {

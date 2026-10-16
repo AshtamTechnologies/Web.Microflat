@@ -11,7 +11,7 @@
  *   ...rest — forwarded to <select>
  */
 
-import { ChevronDown } from 'lucide-react';
+import { IconChevronDown } from '../../constants/icons';
 
 export default function Select({
   label,
@@ -66,7 +66,7 @@ export default function Select({
 
         {/* Dropdown chevron */}
         <span className="absolute right-3 flex items-center pointer-events-none text-text-muted">
-          <ChevronDown size={15} aria-hidden="true" />
+          <IconChevronDown size={15} aria-hidden="true" />
         </span>
       </div>
 

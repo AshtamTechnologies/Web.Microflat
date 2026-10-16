@@ -22,19 +22,19 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  UserPlus,
-  Mail,
-  Phone,
-  Smartphone,
-  MapPin,
-  ShieldCheck,
-  Hash,
-  Clock,
-  Eye,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
-import { IconUsers } from '../../constants/icons';
+  IconClock,
+  IconDelete,
+  IconEdit,
+  IconLocation,
+  IconMail,
+  IconPhone,
+  IconSeriesSetup,
+  IconShieldCheck,
+  IconSmartphone,
+  IconUserPlus,
+  IconUsers,
+  IconView,
+} from '../../constants/icons';
 
 import {
   Button,
@@ -49,7 +49,7 @@ import {
 } from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
 import { useUserSessions } from '../../context/UserSessionsContext';
-import { formatDateTime, formatRelative } from '../../utils/dateTime';
+import { formatDateTime, formatRelative } from '../../utils/dateUtils';
 import { ROLE_OPTIONS } from '../../mocks/users';
 import UserFormModal from './UserFormModal';
 
@@ -343,7 +343,7 @@ export default function UsersPage() {
             onClick={handleOpenAdd}
             className="shadow-xs"
           >
-            <UserPlus size={16} className="mr-1.5" aria-hidden="true" />
+            <IconUserPlus size={16} className="mr-1.5" aria-hidden="true" />
             Add User
           </Button>
         }
@@ -414,7 +414,7 @@ export default function UsersPage() {
               onClick={handleOpenAdd}
               className="text-xs"
             >
-              <UserPlus size={14} className="mr-1.5" />
+              <IconUserPlus size={14} className="mr-1.5" />
               Add User
             </Button>
           )
@@ -457,27 +457,27 @@ export default function UsersPage() {
               {/* Contact details */}
               <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
                 <div className="flex items-center gap-2">
-                  <Mail size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <IconMail size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
                   <span className="truncate">{user.email}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Phone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <IconPhone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
                   <span className="font-mono tabular-nums">{user.mobile || '—'}</span>
                 </div>
                 {user.secondaryPhone && (
                   <div className="flex items-center gap-2">
-                    <Smartphone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                    <IconSmartphone size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
                     <span className="font-mono tabular-nums">Sec: {user.secondaryPhone}</span>
                   </div>
                 )}
                 {user.address && (
                   <div className="flex items-start gap-2">
-                    <MapPin size={13} className="shrink-0 text-text-muted/70 mt-0.5" aria-hidden="true" />
+                    <IconLocation size={13} className="shrink-0 text-text-muted/70 mt-0.5" aria-hidden="true" />
                     <span className="line-clamp-2">{user.address}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 pt-1 border-t border-border/40 text-xs">
-                  <Clock size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
+                  <IconClock size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
                   <span className="font-mono tabular-nums">
                     Last login:{' '}
                     {lastLoginMap[user.id] ? (
@@ -499,7 +499,7 @@ export default function UsersPage() {
                   onClick={() => navigate(`/users/${user.id}`)}
                   className="flex-1 text-xs"
                 >
-                  <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconView size={13} className="mr-1.5" aria-hidden="true" />
                   View
                 </Button>
                 <Button
@@ -508,7 +508,7 @@ export default function UsersPage() {
                   onClick={() => handleOpenEdit(user)}
                   className="flex-1 text-xs"
                 >
-                  <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconEdit size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
                 </Button>
               </div>
@@ -553,12 +553,12 @@ export default function UsersPage() {
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm text-text-muted mt-0.5 flex items-center gap-1.5">
-                  <Mail size={13} className="shrink-0 text-text-muted/70" />
+                  <IconMail size={13} className="shrink-0 text-text-muted/70" />
                   <span className="truncate">{userToView.email || '—'}</span>
                 </p>
                 {userToView.id && (
                   <div className="mt-2 flex items-center gap-1 text-2xs font-mono text-text-muted bg-bg/80 border border-border px-2 py-0.5 rounded-md w-fit">
-                    <Hash size={11} className="shrink-0 text-text-muted/60" />
+                    <IconSeriesSetup size={11} className="shrink-0 text-text-muted/60" />
                     <span>ID: {userToView.id}</span>
                   </div>
                 )}
@@ -568,21 +568,21 @@ export default function UsersPage() {
             {/* Contact Details */}
             <div className="space-y-2">
               <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-                <Phone size={13} className="text-primary" />
+                <IconPhone size={13} className="text-primary" />
                 Contact Details
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="p-3 bg-bg border border-border rounded-lg space-y-1">
                   <span className="text-2xs font-medium text-text-muted block">Primary Mobile</span>
                   <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
-                    <Phone size={14} className="text-text-muted/70 shrink-0" />
+                    <IconPhone size={14} className="text-text-muted/70 shrink-0" />
                     <span>{userToView.mobile || '—'}</span>
                   </div>
                 </div>
                 <div className="p-3 bg-bg border border-border rounded-lg space-y-1">
                   <span className="text-2xs font-medium text-text-muted block">Secondary Phone</span>
                   <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
-                    <Smartphone size={14} className="text-text-muted/70 shrink-0" />
+                    <IconSmartphone size={14} className="text-text-muted/70 shrink-0" />
                     <span>{userToView.secondaryPhone || 'Not provided'}</span>
                   </div>
                 </div>
@@ -592,7 +592,7 @@ export default function UsersPage() {
             {/* Assigned Roles */}
             <div className="space-y-2">
               <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-                <ShieldCheck size={13} className="text-primary" />
+                <IconShieldCheck size={13} className="text-primary" />
                 Assigned Roles ({viewUserRoles.length})
               </h4>
               <div className="p-3 bg-bg border border-border rounded-lg flex flex-wrap gap-1.5">
@@ -601,7 +601,7 @@ export default function UsersPage() {
                     key={i}
                     className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium bg-primary/10 text-primary border border-primary/20"
                   >
-                    <ShieldCheck size={12} className="shrink-0" />
+                    <IconShieldCheck size={12} className="shrink-0" />
                     {r}
                   </span>
                 ))}
@@ -611,11 +611,11 @@ export default function UsersPage() {
             {/* Address */}
             <div className="space-y-2">
               <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-                <MapPin size={13} className="text-primary" />
+                <IconLocation size={13} className="text-primary" />
                 Address
               </h4>
               <div className="p-3 bg-bg border border-border rounded-lg flex items-start gap-2.5">
-                <MapPin size={15} className="text-text-muted/80 shrink-0 mt-0.5" />
+                <IconLocation size={15} className="text-text-muted/80 shrink-0 mt-0.5" />
                 <p className="text-sm text-heading leading-relaxed">
                   {userToView.address || <span className="text-text-muted italic">No address provided</span>}
                 </p>
@@ -643,7 +643,7 @@ export default function UsersPage() {
                 }}
                 className="flex items-center gap-1.5"
               >
-                <Pencil size={15} />
+                <IconEdit size={15} />
                 Edit User
               </Button>
             </div>

@@ -11,8 +11,12 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import {
+  IconClose,
+  IconMenu,
+  IconPanelLeftOpen,
+} from '../../constants/icons';
 import { Outlet, useLocation, Link } from 'react-router-dom';
-import { Menu, X, PanelLeftOpen } from 'lucide-react';
 import Sidebar from './Sidebar';
 import navigation from '../../config/navigation';
 
@@ -161,9 +165,9 @@ export default function AppLayout() {
               ].join(' ')}
             >
               {mobileOpen ? (
-                <X size={20} aria-hidden="true" />
+                <IconClose size={20} aria-hidden="true" />
               ) : (
-                <Menu size={20} aria-hidden="true" />
+                <IconMenu size={20} aria-hidden="true" />
               )}
             </button>
 
@@ -176,7 +180,7 @@ export default function AppLayout() {
                 title="Expand sidebar"
                 className="hidden lg:flex p-1.5 rounded-lg text-text-muted hover:bg-surface hover:text-heading transition-colors cursor-pointer shrink-0"
               >
-                <PanelLeftOpen size={18} aria-hidden="true" />
+                <IconPanelLeftOpen size={18} aria-hidden="true" />
               </button>
             )}
 

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { INITIAL_UOM_LIST } from '../mocks/uom';
+import { getTodayISO } from '../utils/dateUtils';
 
 const UomContext = createContext(null);
 const STORAGE_KEY = 'microflat_uom_list_simple';
@@ -39,7 +40,7 @@ export function UomProvider({ children }) {
     await new Promise((r) => setTimeout(r, 400));
 
     const newId = `uom_${Date.now()}`;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayISO();
 
     const newUom = {
       uomId: newId,

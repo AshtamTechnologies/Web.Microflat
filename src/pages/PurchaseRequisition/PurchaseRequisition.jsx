@@ -19,8 +19,12 @@ import {
   getPaginationRowModel,
   createColumnHelper,
 } from '@tanstack/react-table';
-import { Plus, Eye, Pencil } from 'lucide-react';
-import { IconPR } from '../../constants/icons';
+import {
+  IconAdd,
+  IconEdit,
+  IconPR,
+  IconView,
+} from '../../constants/icons';
 
 import {
   Button,
@@ -307,11 +311,11 @@ export default function PurchaseRequisition() {
         actions={
           <Button
             variant="primary"
+            icon={IconAdd}
             onClick={() => navigate('/purchase-requisition/create')}
             className="shadow-sm font-semibold text-xs"
           >
-            <Plus size={16} className="mr-1.5" />
-            Create Purchase Requisition
+            Create Requisition
           </Button>
         }
       />
@@ -390,7 +394,7 @@ export default function PurchaseRequisition() {
               onClick={() => navigate('/purchase-requisition/create')}
               className="text-xs"
             >
-              <Plus size={14} className="mr-1" />
+              <IconAdd size={14} className="mr-1" />
               Create Purchase Requisition
             </Button>
           )
@@ -463,7 +467,7 @@ export default function PurchaseRequisition() {
                   }
                   className="flex-1 text-xs"
                 >
-                  <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconView size={13} className="mr-1.5" aria-hidden="true" />
                   View
                 </Button>
                 <Button
@@ -474,7 +478,7 @@ export default function PurchaseRequisition() {
                   }
                   className="flex-1 text-xs"
                 >
-                  <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconEdit size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
                 </Button>
               </div>

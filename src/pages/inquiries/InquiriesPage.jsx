@@ -5,6 +5,13 @@
  */
 
 import { useMemo, useState, useEffect } from 'react';
+import {
+  IconAdd,
+  IconEdit,
+  IconInquiry,
+  IconUserPlus,
+  IconView,
+} from '../../constants/icons';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   useReactTable,
@@ -13,13 +20,6 @@ import {
   getPaginationRowModel,
   createColumnHelper,
 } from '@tanstack/react-table';
-import {
-  Plus,
-  UserPlus,
-  Inbox,
-  Eye,
-  Pencil,
-} from 'lucide-react';
 
 import {
   Button,
@@ -288,7 +288,7 @@ export default function InquiriesPage() {
                   title={row.AssignedTo ? 'Reassign Inquiry' : 'Assign Inquiry'}
                   className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface transition-colors"
                 >
-                  <UserPlus size={15} aria-hidden="true" />
+                  <IconUserPlus size={15} aria-hidden="true" />
                 </Button>
               }
             />
@@ -332,14 +332,14 @@ export default function InquiriesPage() {
       <PageHeader
         title="Inquiry Management"
         subtitle="Track customer RFQs, precision manufacturing enquiries, assignments & conversion status."
-        icon={<Inbox className="h-6 w-6 text-primary" aria-hidden="true" />}
+        icon={<IconInquiry className="h-6 w-6 text-primary" aria-hidden="true" />}
         actions={
           <Button
             variant="primary"
             onClick={() => navigate('/inquiries/new')}
             className="shadow-sm text-xs font-semibold"
           >
-            <Plus size={16} className="mr-1.5" aria-hidden="true" />
+            <IconAdd size={16} className="mr-1.5" aria-hidden="true" />
             New Inquiry
           </Button>
         }
@@ -408,7 +408,7 @@ export default function InquiriesPage() {
               onClick={() => navigate('/inquiries/new')}
               className="text-xs"
             >
-              <Plus size={14} className="mr-1.5" />
+              <IconAdd size={14} className="mr-1.5" />
               New Inquiry
             </Button>
           )
@@ -481,7 +481,7 @@ export default function InquiriesPage() {
                   onClick={() => setAssignModalInquiry(inq)}
                   className="flex-1 text-xs"
                 >
-                  <UserPlus size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconUserPlus size={13} className="mr-1.5" aria-hidden="true" />
                   {inq.AssignedTo ? 'Reassign' : 'Assign'}
                 </Button>
                 <Button
@@ -490,7 +490,7 @@ export default function InquiriesPage() {
                   onClick={() => navigate(`/inquiries/${inq.id || inq.InquiryId}`)}
                   className="flex-1 text-xs"
                 >
-                  <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconView size={13} className="mr-1.5" aria-hidden="true" />
                   View
                 </Button>
                 <Button
@@ -499,7 +499,7 @@ export default function InquiriesPage() {
                   onClick={() => navigate(`/inquiries/${inq.id || inq.InquiryId}/edit`)}
                   className="flex-1 text-xs"
                 >
-                  <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconEdit size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
                 </Button>
               </div>

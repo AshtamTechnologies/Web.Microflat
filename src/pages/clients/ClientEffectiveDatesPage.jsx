@@ -35,28 +35,28 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  ArrowLeft,
-  Calendar,
-  Plus,
-  Eye,
-  Pencil,
-  Save,
-  X,
-  Building2,
-  FileText,
-  MapPin,
-  Users,
-  Clock,
-  ChevronUp,
-  ChevronDown,
-  Mail,
-  Phone,
-  AlertCircle,
-  ExternalLink,
-  ShieldCheck,
-  CheckCircle2,
-} from 'lucide-react';
-import { IconClient } from '../../constants/icons';
+  IconAdd,
+  IconBack,
+  IconBuilding2,
+  IconCalendar,
+  IconChevronDown,
+  IconChevronUp,
+  IconClient,
+  IconClock,
+  IconClose,
+  IconEdit,
+  IconError,
+  IconExternalLink,
+  IconFileText,
+  IconLocation,
+  IconMail,
+  IconPhone,
+  IconSave,
+  IconShieldCheck,
+  IconSuccess,
+  IconUsers,
+  IconView,
+} from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -651,7 +651,7 @@ export default function ClientEffectiveDatesPage() {
                     : 'text-text-muted hover:text-primary hover:bg-surface'
                 }
               >
-                <Eye size={15} />
+                <IconView size={15} />
               </Button>
 
               {!isReadOnly && (
@@ -666,7 +666,7 @@ export default function ClientEffectiveDatesPage() {
                       : 'text-text-muted hover:text-primary hover:bg-surface'
                   }
                 >
-                  <Pencil size={15} />
+                  <IconEdit size={15} />
                 </Button>
               )}
             </div>
@@ -697,13 +697,13 @@ export default function ClientEffectiveDatesPage() {
     return (
       <div className="w-full py-12 px-4 sm:px-6">
         <div className="bg-surface border border-border rounded-2xl p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs">
-          <AlertCircle size={40} className="text-warning mx-auto" />
+          <IconError size={40} className="text-warning mx-auto" />
           <h2 className="text-xl font-bold text-heading">Client Not Found</h2>
           <p className="text-sm text-text-muted">
             The client record you are trying to view does not exist or has been removed.
           </p>
           <Button variant="primary" onClick={() => navigate('/clients')}>
-            <ArrowLeft size={16} className="mr-2" />
+            <IconBack size={16} className="mr-2" />
             Back to Clients List
           </Button>
         </div>
@@ -760,7 +760,7 @@ export default function ClientEffectiveDatesPage() {
                 onClick={() => handleStartEdit(selectedVersion)}
                 className="text-xs font-semibold shadow-2xs"
               >
-                <Pencil size={13} className="mr-1.5" />
+                <IconEdit size={13} className="mr-1.5" />
                 Edit Client
               </Button>
             )}
@@ -773,7 +773,7 @@ export default function ClientEffectiveDatesPage() {
         <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm sm:text-base font-bold text-heading flex items-center gap-2">
-              <Calendar size={17} className="text-primary shrink-0" />
+              <IconCalendar size={17} className="text-primary shrink-0" />
               Effective Dates
             </h2>
             <p className="text-xs text-text-muted mt-0.5">
@@ -788,7 +788,7 @@ export default function ClientEffectiveDatesPage() {
               onClick={handleStartAdd}
               className="text-xs shrink-0 w-full sm:w-auto justify-center"
             >
-              <Plus size={14} className="mr-1.5" />
+              <IconAdd size={14} className="mr-1.5" />
               Add New Effective Date
             </Button>
           )}
@@ -852,7 +852,7 @@ export default function ClientEffectiveDatesPage() {
                             : 'text-text-muted hover:text-primary hover:bg-surface'
                         }`}
                       >
-                        <Eye size={14} />
+                        <IconView size={14} />
                       </Button>
 
                       {!isReadOnly && (
@@ -867,7 +867,7 @@ export default function ClientEffectiveDatesPage() {
                               : 'text-text-muted hover:text-primary hover:bg-surface'
                           }`}
                         >
-                          <Pencil size={14} />
+                          <IconEdit size={14} />
                         </Button>
                       )}
                     </div>
@@ -928,21 +928,21 @@ export default function ClientEffectiveDatesPage() {
 
                             <span className="shrink-0 ml-1 inline-flex items-center">
                               {sorted === 'asc' ? (
-                                <ChevronUp
+                                <IconChevronUp
                                   size={14}
-                                  className="text-primary stroke-[2.5]"
+                                  className="text-primary"
                                   aria-hidden="true"
                                 />
                               ) : sorted === 'desc' ? (
-                                <ChevronDown
+                                <IconChevronDown
                                   size={14}
-                                  className="text-primary stroke-[2.5]"
+                                  className="text-primary"
                                   aria-hidden="true"
                                 />
                               ) : (
                                 <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <ChevronUp size={11} strokeWidth={2.5} />
-                                  <ChevronDown size={11} strokeWidth={2.5} />
+                                  <IconChevronUp size={11} />
+                                  <IconChevronDown size={11} />
                                 </span>
                               )}
                             </span>
@@ -1057,7 +1057,7 @@ export default function ClientEffectiveDatesPage() {
                 onClick={() => handleStartEdit(selectedVersion)}
                 className="text-xs w-full sm:w-auto justify-center"
               >
-                <Pencil size={13} className="mr-1.5" />
+                <IconEdit size={13} className="mr-1.5" />
                 Edit this version
               </Button>
             )}
@@ -1092,7 +1092,7 @@ export default function ClientEffectiveDatesPage() {
             {/* Section 1: Company & Contact Information */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <Building2 size={15} className="text-primary" />
+                <IconBuilding2 size={15} className="text-primary" />
                 Company Details
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-1">
@@ -1134,7 +1134,7 @@ export default function ClientEffectiveDatesPage() {
             {/* Section 2: Terms & Commercial Notes */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <FileText size={15} className="text-primary" />
+                <IconFileText size={15} className="text-primary" />
                 Terms & Operational Notes
               </div>
 
@@ -1231,7 +1231,7 @@ export default function ClientEffectiveDatesPage() {
             <div className="space-y-3 pt-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                  <MapPin size={15} className="text-primary" />
+                  <IconLocation size={15} className="text-primary" />
                   Client Addresses
                   <span className="text-2xs font-normal text-text-muted ml-1">
                     ({(selectedVersion.addresses || []).length})
@@ -1309,7 +1309,7 @@ export default function ClientEffectiveDatesPage() {
             <div className="space-y-3 pt-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                  <Users size={15} className="text-primary" />
+                  <IconUsers size={15} className="text-primary" />
                   Contact Persons
                   <span className="text-2xs font-normal text-text-muted ml-1">
                     ({(selectedVersion.contacts || []).length})
@@ -1358,7 +1358,7 @@ export default function ClientEffectiveDatesPage() {
                         <div className="text-2xs text-text space-y-1.5 pt-2 border-t border-border/60">
                           {con.mobile1 && (
                             <div className="flex items-center gap-2">
-                              <Phone size={12} className="text-text-muted shrink-0" />
+                              <IconPhone size={12} className="text-text-muted shrink-0" />
                               <a href={`tel:${con.mobile1}`} className="font-mono text-heading hover:text-primary">
                                 {con.mobile1}
                               </a>
@@ -1369,7 +1369,7 @@ export default function ClientEffectiveDatesPage() {
                           )}
                           {con.email && (
                             <div className="flex items-center gap-2">
-                              <Mail size={12} className="text-text-muted shrink-0" />
+                              <IconMail size={12} className="text-text-muted shrink-0" />
                               <a href={`mailto:${con.email}`} className="text-primary truncate hover:underline">
                                 {con.email}
                               </a>
@@ -1386,7 +1386,7 @@ export default function ClientEffectiveDatesPage() {
             {/* Section 5: Version Audit */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <Clock size={15} className="text-primary" />
+                <IconClock size={15} className="text-primary" />
                 Version Audit & Timeline
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
@@ -1413,22 +1413,11 @@ export default function ClientEffectiveDatesPage() {
           <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
             {/* Common Effective Date Field */}
             <div className="p-3.5 sm:p-4 rounded-xl bg-surface/60 border border-border shadow-2xs space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
-                <label htmlFor="effectiveDate" className="text-xs font-semibold text-heading flex items-center gap-1.5">
-                  <Calendar size={15} className="text-primary shrink-0" />
-                  <span>Effective Date</span>
-                  <span className="text-danger">*</span>
-                </label>
-                {mode === 'EDIT' && (
-                  <span className="text-2xs text-text-muted font-medium">
-                    Effective date cannot be altered for an existing revision.
-                  </span>
-                )}
-              </div>
-
               <div className="w-full sm:max-w-md">
                 <DatePicker
                   id="effectiveDate"
+                  label="Effective Date"
+                  required
                   name="effectiveDate"
                   min={minAllowedEffectiveDate || undefined}
                   value={formData.effectiveDate}
@@ -1454,18 +1443,18 @@ export default function ClientEffectiveDatesPage() {
                 {
                   id: 'company_terms',
                   label: 'Client Details & Terms',
-                  icon: Building2,
+                  icon: IconBuilding2,
                 },
                 {
                   id: 'addresses',
                   label: 'Client Addresses',
-                  icon: MapPin,
+                  icon: IconLocation,
                   badge: formData.addresses.length,
                 },
                 {
                   id: 'contacts',
                   label: 'Contact Persons',
-                  icon: Users,
+                  icon: IconUsers,
                   badge: formData.contacts.length,
                 },
               ]}
@@ -1490,9 +1479,7 @@ export default function ClientEffectiveDatesPage() {
                   {/* Billing Name with Same as company name toggle */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label htmlFor="billingName" className="text-xs font-semibold text-heading cursor-pointer">
-                        Billing Name
-                      </label>
+                      <span className="mf-label text-xs">Billing Name</span>
                       <Checkbox
                         id="same-as-company"
                         checked={sameAsCompany}
@@ -1548,9 +1535,7 @@ export default function ClientEffectiveDatesPage() {
 
                   {/* Status Switch */}
                   <div className="flex flex-col justify-between pt-1">
-                    <label className="text-xs font-semibold text-heading block mb-2">
-                      Account Status
-                    </label>
+                    <span className="mf-label block mb-2">Account Status</span>
                     <div className="flex items-center gap-3 h-10">
                       <StatusSwitch
                         checked={formData.isActive}
@@ -1566,7 +1551,7 @@ export default function ClientEffectiveDatesPage() {
                 {/* Terms & Notes Section */}
                 <div className="space-y-4 pt-4 border-t border-border">
                   <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                    <FileText size={15} className="text-primary" />
+                    <IconFileText size={15} className="text-primary" />
                     Commercial Terms & Notes
                   </div>
 
@@ -1619,7 +1604,7 @@ export default function ClientEffectiveDatesPage() {
                                     title={`Remove ${term.termCode}`}
                                     aria-label={`Remove ${term.termCode}`}
                                   >
-                                    <X size={14} />
+                                    <IconClose size={14} />
                                   </button>
                                 </div>
                                 {desc ? (
@@ -1646,9 +1631,7 @@ export default function ClientEffectiveDatesPage() {
 
                   {/* Delivery Terms Rich Text */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-heading block">
-                      Delivery Terms
-                    </label>
+                    <span className="mf-label block">Delivery Terms</span>
                     <RichTextEditor
                       id="deliveryTerms"
                       name="deliveryTerms"
@@ -1661,9 +1644,7 @@ export default function ClientEffectiveDatesPage() {
 
                   {/* Internal Comments Rich Text */}
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-heading block">
-                      Internal Comments
-                    </label>
+                    <span className="mf-label block">Internal Comments</span>
                     <RichTextEditor
                       id="comments"
                       name="comments"

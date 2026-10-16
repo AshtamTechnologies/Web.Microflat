@@ -6,7 +6,7 @@ import { useState, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { mockInquiries, STATUS_OPTIONS } from '../../mocks/inquiries';
 import { mockUsers } from '../../mocks/users';
-import { formatDateTime } from '../../utils/dateUtils';
+import { formatDateTime, getTodayISO } from '../../utils/dateUtils';
 
 let nextSeqNumber = mockInquiries.length + 101 + 1;
 let nextIdNumber = mockInquiries.length + 1;
@@ -125,7 +125,7 @@ export function useInquiries(usersList = mockUsers) {
         id: genId,
         InquiryId: genId,
         InquiryNo: generatedNo,
-        InquiryDate: formData.InquiryDate || new Date().toISOString().slice(0, 10),
+        InquiryDate: formData.InquiryDate || getTodayISO(),
         CustomerName: formData.CustomerName?.trim() || '',
         ContactPerson: formData.ContactPerson?.trim() || '',
         Email: formData.Email?.trim() || '',

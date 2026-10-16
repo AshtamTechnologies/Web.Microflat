@@ -1,23 +1,22 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Hash,
-  Plus,
-  RotateCcw,
-  Sparkles,
-  Calendar,
-  Layers,
-  History,
-  AlertCircle,
-  HelpCircle,
-  Edit3,
-  Save,
-  CheckCircle2,
-  XCircle,
-  Pencil,
-  X,
-  Eye,
-} from 'lucide-react';
+  IconAdd,
+  IconCalendar,
+  IconClose,
+  IconEdit,
+  IconError,
+  IconHelp,
+  IconHistory,
+  IconLayers,
+  IconReset,
+  IconSave,
+  IconSeriesSetup,
+  IconSparkles,
+  IconSuccess,
+  IconView,
+  IconXCircle,
+} from '../../constants/icons';
+import { useParams, useNavigate } from 'react-router-dom';
 
 import {
   Card,
@@ -423,7 +422,7 @@ export default function SeriesSetupPage() {
             <div className="border-b border-border pb-3.5 mb-4 sm:mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <Plus size={16} />
+                  <IconAdd size={16} />
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-heading">New Series Version</h2>
@@ -442,7 +441,7 @@ export default function SeriesSetupPage() {
                   <span className="text-text-muted/60 hidden sm:inline">•</span>
                   <span className="whitespace-nowrap flex items-center gap-1">
                     <span>Effective Since:</span>
-                    <strong className="font-mono font-medium text-heading tabular-nums">{activeVersion.effectiveDate}</strong>
+                    <strong className="font-mono font-medium text-heading tabular-nums">{formatDate(activeVersion.effectiveDate)}</strong>
                   </span>
                 </div>
               )}
@@ -580,7 +579,7 @@ export default function SeriesSetupPage() {
               <div className="p-3.5 sm:p-4 rounded-xl bg-surface/60 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <Sparkles size={16} />
+                    <IconSparkles size={16} />
                   </div>
                   <div className="min-w-0">
                     <span className="text-2xs sm:text-2xs font-semibold uppercase tracking-wider text-text-muted block">
@@ -603,11 +602,8 @@ export default function SeriesSetupPage() {
                   type="button"
                   variant="secondary"
                   size="md"
-                  onClick={handleReset}
-                  disabled={isSubmitting}
-                  className="justify-center"
+                  icon={IconReset} onClick={handleReset} disabled={isSubmitting} className="justify-center"
                 >
-                  <RotateCcw size={15} className="mr-1.5" />
                   Reset
                 </Button>
 
@@ -616,11 +612,9 @@ export default function SeriesSetupPage() {
                   variant="primary"
                   size="md"
                   loading={isSubmitting}
-                  disabled={isSubmitting}
-                  className="font-semibold shadow-2xs justify-center"
+                  disabled={isSubmitting} icon={IconAdd} className="font-semibold shadow-2xs justify-center"
                 >
-                  <Plus size={15} className="mr-1.5 shrink-0" />
-                  {isSubmitting ? 'Adding Series Version...' : 'Add Series Version'}
+                  {isSubmitting ? 'Adding Series...' : 'Add Series'}
                 </Button>
               </div>
             </form>
@@ -631,7 +625,7 @@ export default function SeriesSetupPage() {
             <div className="border-b border-border pb-3.5 mb-4 sm:mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-surface text-text-muted flex items-center justify-center border border-border shrink-0">
-                  <History size={16} />
+                  <IconHistory size={16} />
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-heading">Series Version History</h2>
@@ -649,7 +643,7 @@ export default function SeriesSetupPage() {
             {/* Empty State */}
             {versions.length === 0 ? (
               <div className="py-12 text-center text-xs text-text-muted border border-dashed border-border rounded-xl bg-surface/20 space-y-2">
-                <Layers size={24} className="mx-auto text-text-muted/60" />
+                <IconLayers size={24} className="mx-auto text-text-muted/60" />
                 <p className="font-semibold text-heading text-sm">No series configured yet</p>
                 <p>Add the initial series version for {currentType.label} using the form above.</p>
               </div>
@@ -742,7 +736,7 @@ export default function SeriesSetupPage() {
                               onClick={() => setViewingVersion(ver)}
                               className="text-xs"
                             >
-                              <Eye size={13} className="mr-1.5" />
+                              <IconView size={13} className="mr-1.5" />
                               View
                             </Button>
                             <Button
@@ -752,7 +746,7 @@ export default function SeriesSetupPage() {
                               onClick={() => handleOpenEditModal(ver)}
                               className="text-xs"
                             >
-                              <Pencil size={13} className="mr-1.5" />
+                              <IconEdit size={13} className="mr-1.5" />
                               Edit
                             </Button>
                           </div>
@@ -1009,7 +1003,7 @@ export default function SeriesSetupPage() {
             <div className="p-3.5 rounded-xl bg-surface/60 border border-border flex items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-center gap-2.5">
                 <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <Sparkles size={14} />
+                  <IconSparkles size={14} />
                 </div>
                 <div>
                   <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
@@ -1069,7 +1063,7 @@ export default function SeriesSetupPage() {
               <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                    <Hash size={20} />
+                    <IconSeriesSetup size={20} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-base font-bold text-heading break-words leading-snug">
@@ -1158,7 +1152,7 @@ export default function SeriesSetupPage() {
                   }}
                   className="justify-center font-semibold shadow-2xs"
                 >
-                  <Pencil size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                  <IconEdit size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
                   Edit
                 </Button>
               </div>

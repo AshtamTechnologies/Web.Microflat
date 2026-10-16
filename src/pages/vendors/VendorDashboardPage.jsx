@@ -13,23 +13,22 @@
  */
 
 import { useMemo, useState } from 'react';
+import {  IconAdd,
+  IconBuilding2,
+  IconCalendar,
+  IconCheck,
+  IconChevronRight,
+  IconClock,
+  IconClose,
+  IconError,
+  IconLocation,
+  IconSparkles,
+  IconSuccess,
+  IconVendor,
+  IconView,
+  IconXCircle,
+} from '../../constants/icons';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  Truck,
-  Plus,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Check,
-  X,
-  ChevronRight,
-  MapPin,
-  Building2,
-  Calendar,
-  AlertCircle,
-  Sparkles,
-  Eye,
-} from 'lucide-react';
 import {
   ResponsiveContainer,
   PieChart,
@@ -51,11 +50,13 @@ import {
   Badge,
   Modal,
   PageHeader,
+  Textarea,
+  IconButton,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { chartColors } from '../../config/chartColors';
 import { getStateName } from '../../mocks/vendors';
-import { formatDate } from '../../utils/dateUtils';
+import { formatDate, getTodayISO } from '../../utils/dateUtils';
 
 /* ── Custom Pie Tooltip ─────────────────────────────────────────────────────── */
 function CustomPieTooltip({ active, payload }) {
@@ -123,7 +124,7 @@ function MetricCard({ label, value, subtext, icon: Icon, iconColor, iconBg, tren
               {label}
             </span>
             {onClick && (
-              <ChevronRight
+              <IconChevronRight
                 size={14}
                 className="text-text-muted opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 transition-all"
                 aria-hidden="true"
@@ -141,7 +142,7 @@ function MetricCard({ label, value, subtext, icon: Icon, iconColor, iconBg, tren
           )}
         </div>
         <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconBg} ${iconColor} transition-transform duration-200 group-hover:scale-105`}>
-          <Icon size={20} strokeWidth={2} aria-hidden="true" />
+          <Icon size={20} aria-hidden="true" />
         </div>
       </div>
     </Card>
@@ -253,7 +254,7 @@ export default function VendorDashboardPage() {
       await updateVendor(vendor.id, {
         approvalStatus: 'Approved',
         approvedBy: 'Ian Chesnut',
-        approvedOn: new Date().toISOString().slice(0, 10),
+        approvedOn: getTodayISO(),
       });
       toast.success('Vendor approved');
     } catch {
@@ -276,7 +277,7 @@ export default function VendorDashboardPage() {
         approvalStatus: 'Rejected',
         approvedBy: 'Ian Chesnut',
         approvedByComments: rejectComments.trim() || 'Vendor compliance audit was not cleared.',
-        approvedOn: new Date().toISOString().slice(0, 10),
+        approvedOn: getTodayISO(),
       });
       toast.success('Vendor rejected');
       setRejectingVendor(null);
@@ -294,11 +295,11 @@ export default function VendorDashboardPage() {
       <PageHeader
         title="Vendor Dashboard"
         subtitle="Overview of vendor onboarding and approvals"
-        icon={<Truck className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" aria-hidden="true" />}
+        icon={<IconVendor className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" aria-hidden="true" />}
         actions={
           <Link to="/vendors/new" className="w-full sm:w-auto">
             <Button variant="primary" size="md" className="w-full sm:w-auto shadow-xs justify-center">
-              <Plus size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
+              <IconAdd size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
               <span>Add Vendor</span>
             </Button>
           </Link>
@@ -312,7 +313,7 @@ export default function VendorDashboardPage() {
           label="Total Vendors"
           value={kpis.total}
           subtext="Registered in directory"
-          icon={Building2}
+          icon={IconBuilding2}
           iconBg="bg-primary/10"
           iconColor="text-primary"
           title="Click to view all vendors"
@@ -324,7 +325,7 @@ export default function VendorDashboardPage() {
           label="Active"
           value={kpis.active}
           subtext={`${kpis.activePct}% of total suppliers`}
-          icon={CheckCircle2}
+          icon={IconSuccess}
           iconBg="bg-success/10"
           iconColor="text-success"
           title="Click to view active vendors"
@@ -336,7 +337,7 @@ export default function VendorDashboardPage() {
           label="Pending Approval"
           value={kpis.pending}
           subtext={kpis.pending > 0 ? 'Requires QA verification' : 'All reviews cleared'}
-          icon={Clock}
+          icon={IconClock}
           iconBg="bg-warning/10"
           iconColor="text-warning"
           title="Click to view pending approval vendors"
@@ -348,7 +349,7 @@ export default function VendorDashboardPage() {
           label="Inactive"
           value={kpis.inactive}
           subtext="Temporarily suspended"
-          icon={XCircle}
+          icon={IconXCircle}
           iconBg="bg-danger/10"
           iconColor="text-danger"
           title="Click to view inactive vendors"
@@ -478,7 +479,7 @@ export default function VendorDashboardPage() {
           <div>
             <div className="border-b border-border pb-3 mb-3 sm:mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0 pr-2">
-                <Clock size={16} className="text-warning shrink-0" />
+                <IconClock size={16} className="text-warning shrink-0" />
                 <h2 className="text-sm font-semibold text-heading truncate">Pending Approvals</h2>
               </div>
               <Badge variant={pendingApprovals.length > 0 ? 'warning' : 'neutral'} className="shrink-0">
@@ -489,7 +490,7 @@ export default function VendorDashboardPage() {
             {pendingApprovals.length === 0 ? (
               <div className="py-10 sm:py-12 text-center text-text-muted space-y-2">
                 <div className="w-10 h-10 rounded-full bg-success/10 text-success flex items-center justify-center mx-auto mb-2">
-                  <CheckCircle2 size={20} />
+                  <IconSuccess size={20} />
                 </div>
                 <p className="text-xs font-semibold text-heading">No vendors awaiting approval</p>
                 <p className="text-2xs text-text-muted">All supplier compliance reviews are up to date.</p>
@@ -516,7 +517,7 @@ export default function VendorDashboardPage() {
                         </span>
                       </div>
                       <p className="text-2xs text-text-muted flex items-center gap-1.5 font-mono flex-wrap">
-                        <Calendar size={11} className="shrink-0" />
+                        <IconCalendar size={11} className="shrink-0" />
                         <span>Submitted: {formatDate(vendor.createdOn || vendor.effectiveDate)}</span>
                         {vendor.city && (
                           <>
@@ -529,19 +530,18 @@ export default function VendorDashboardPage() {
 
                     {/* Action button (View vendor approval) */}
                     <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                      <button
-                        type="button"
+                      <IconButton
+                        icon={IconView}
+                        size="sm"
+                        variant="ghost"
+                        title="View Vendor Approval"
+                        aria-label={`View ${vendor.vendorName}`}
                         onClick={() =>
                           navigate(`/vendors/${vendor.id}/effective-dates`, {
                             state: { from: '/vendors/dashboard', backLabel: 'Vendor Dashboard', readOnly: true, isApprovalView: true },
                           })
                         }
-                        title="View Vendor Approval"
-                        className="p-1.5 sm:p-2 rounded-lg text-text-muted hover:text-primary hover:bg-surface border border-border transition-colors cursor-pointer active:scale-95"
-                        aria-label={`View ${vendor.vendorName}`}
-                      >
-                        <Eye size={14} />
-                      </button>
+                      />
                     </div>
                   </div>
                 ))}
@@ -556,7 +556,7 @@ export default function VendorDashboardPage() {
               className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 group/link"
             >
               <span>View all in directory</span>
-              <ChevronRight size={13} className="group-hover/link:translate-x-0.5 transition-transform" />
+              <IconChevronRight size={13} className="group-hover/link:translate-x-0.5 transition-transform" />
             </Link>
           </div>
         </Card>
@@ -566,7 +566,7 @@ export default function VendorDashboardPage() {
           <div>
             <div className="border-b border-border pb-3 mb-3 sm:mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0 pr-2">
-                <Sparkles size={16} className="text-primary shrink-0" />
+                <IconSparkles size={16} className="text-primary shrink-0" />
                 <h2 className="text-sm font-semibold text-heading truncate">Recently Added Vendors</h2>
               </div>
               <span className="text-xs text-text-muted font-normal shrink-0">Latest Onboarding</span>
@@ -598,10 +598,10 @@ export default function VendorDashboardPage() {
                         </span>
                       </div>
                       <p className="text-2xs text-text-muted flex items-center gap-1.5 flex-wrap">
-                        <MapPin size={11} className="shrink-0" />
+                        <IconLocation size={11} className="shrink-0" />
                         <span className="truncate">{vendor.city || 'Unknown Location'}</span>
                         <span>•</span>
-                        <span className="font-mono text-text-muted">{vendor.effectiveDate || '—'}</span>
+                        <span className="font-mono text-text-muted">{formatDate(vendor.effectiveDate || vendor.createdOn)}</span>
                       </p>
                     </div>
 
@@ -609,7 +609,7 @@ export default function VendorDashboardPage() {
                       <Badge variant={vendor.isActive ? 'active' : 'inactive'} className="text-2xs sm:text-xs">
                         {vendor.isActive ? 'Active' : 'Inactive'}
                       </Badge>
-                      <ChevronRight size={14} className="text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-transform" />
+                      <IconChevronRight size={14} className="text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-transform" />
                     </div>
                   </div>
                 ))}
@@ -624,7 +624,7 @@ export default function VendorDashboardPage() {
               className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 group/link"
             >
               <span>View all vendors</span>
-              <ChevronRight size={13} className="group-hover/link:translate-x-0.5 transition-transform" />
+              <IconChevronRight size={13} className="group-hover/link:translate-x-0.5 transition-transform" />
             </Link>
           </div>
         </Card>
@@ -640,26 +640,21 @@ export default function VendorDashboardPage() {
         >
           <div className="space-y-4">
             <div className="p-3 bg-danger/10 border border-danger/20 rounded-lg text-xs text-danger flex items-start gap-2.5">
-              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <IconError size={16} className="shrink-0 mt-0.5" />
               <div>
                 You are marking <strong className="font-semibold">{rejectingVendor.vendorName}</strong> ({rejectingVendor.vendorCode}) as <strong>Rejected</strong>.
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="rejectionComments" className="text-xs font-semibold text-heading block">
-                Rejection Reason / QA Audit Comments <span className="text-danger">*</span>
-              </label>
-              <textarea
+            <Textarea
                 id="rejectionComments"
-                rows={3}
+                label="Rejection Reason / QA Audit Comments"
                 required
+                rows={3}
                 value={rejectComments}
                 onChange={(e) => setRejectComments(e.target.value)}
                 placeholder="Specify reasons for rejection (e.g., GST registration mismatch, surface tolerance failed quality inspection)..."
-                className="w-full text-xs p-3 rounded-lg border border-border bg-bg text-text outline-none focus:ring-2 focus:ring-danger/20 focus:border-danger transition-colors placeholder:text-text-muted"
               />
-            </div>
 
             <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-2 border-t border-border">
               <CancelButton

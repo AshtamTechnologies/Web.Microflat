@@ -1,72 +1,67 @@
-import React from 'react';
-import { Eye, Pencil, Trash2 } from 'lucide-react';
-import Button from './Button';
+import IconButton from './IconButton';
+import { IconView, IconEdit, IconDelete } from '../../constants/icons';
 
 /**
- * TableActions — Standardized row action buttons for grid tables & mobile cards.
+ * TableActions — Standardized action buttons for data table rows.
  *
- * Props:
- *   onView?: () => void
- *   onEdit?: () => void
- *   onDelete?: () => void
- *   viewTitle?: string
- *   editTitle?: string
- *   deleteTitle?: string
- *   extraActions?: React.ReactNode
- *   className?: string
+ * Uses IconButton size="sm" (32px) everywhere:
+ * - View / Edit hover primary
+ * - Delete hover danger
  */
 export default function TableActions({
   onView,
   onEdit,
   onDelete,
-  viewTitle = 'View details',
-  editTitle = 'Edit record',
-  deleteTitle = 'Delete record',
-  extraActions,
+  viewTooltip = 'View',
+  editTooltip = 'Edit',
+  deleteTooltip = 'Delete',
+  viewAriaLabel = 'View details',
+  editAriaLabel = 'Edit item',
+  deleteAriaLabel = 'Delete item',
   className = '',
+  disabled = false,
+  extraActions,
 }) {
   return (
-    <div className={`flex items-center justify-end gap-1 ${className}`}>
+    <div className={`flex items-center gap-1 ${className}`}>
       {extraActions}
-
       {onView && (
-        <Button
-          type="button"
+        <IconButton
+          icon={IconView}
+          size="sm"
           variant="ghost"
-          size="icon"
           onClick={onView}
-          title={viewTitle}
-          className="h-8 w-8 text-text-muted hover:text-info hover:bg-surface transition-colors"
-        >
-          <Eye size={15} aria-hidden="true" />
-        </Button>
+          title={viewTooltip}
+          aria-label={viewAriaLabel}
+          disabled={disabled}
+          className="hover:text-primary hover:bg-surface"
+        />
       )}
-
       {onEdit && (
-        <Button
-          type="button"
+        <IconButton
+          icon={IconEdit}
+          size="sm"
           variant="ghost"
-          size="icon"
           onClick={onEdit}
-          title={editTitle}
-          className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface transition-colors"
-        >
-          <Pencil size={15} aria-hidden="true" />
-        </Button>
+          title={editTooltip}
+          aria-label={editAriaLabel}
+          disabled={disabled}
+          className="hover:text-primary hover:bg-surface"
+        />
       )}
-
       {onDelete && (
-        <Button
-          type="button"
+        <IconButton
+          icon={IconDelete}
+          size="sm"
           variant="ghost"
-          size="icon"
           onClick={onDelete}
-          title={deleteTitle}
-          className="h-8 w-8 text-text-muted hover:text-danger hover:bg-surface transition-colors"
-        >
-          <Trash2 size={15} aria-hidden="true" />
-        </Button>
+          title={deleteTooltip}
+          aria-label={deleteAriaLabel}
+          disabled={disabled}
+          className="hover:text-danger hover:bg-danger/10"
+        />
       )}
     </div>
   );
 }
+

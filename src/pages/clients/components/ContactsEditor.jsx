@@ -7,18 +7,19 @@
 
 import { useMemo, useCallback, useState } from 'react';
 import {
-  Users,
-  Plus,
-  Pencil,
-  Trash2,
-  X,
-  Check,
-  Phone,
-  Mail,
-  User,
-} from 'lucide-react';
+  IconAdd,
+  IconCheck,
+  IconClose,
+  IconDelete,
+  IconEdit,
+  IconMail,
+  IconPhone,
+  IconUser,
+  IconUsers,
+} from '../../../constants/icons';
 import {
   Button,
+  IconButton,
   CancelButton,
   Card,
   Input,
@@ -132,7 +133,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Users size={17} />
+            <IconUsers size={17} />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -246,9 +247,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
 
           {/* Contact Status Switch */}
           <div className="flex flex-col justify-end pb-1.5">
-            <label className="text-xs font-medium text-heading block mb-1">
-              Contact Status
-            </label>
+            <span className="mf-label block mb-1">Contact Status</span>
             <div className="flex items-center gap-2.5">
               <StatusSwitch
                 id="con-active-switch"
@@ -280,12 +279,12 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
           >
             {isEditing ? (
               <>
-                <Check size={14} className="mr-1.5" />
+                <IconCheck size={14} className="mr-1.5" />
                 Update Contact
               </>
             ) : (
               <>
-                <Plus size={14} className="mr-1.5" />
+                <IconAdd size={14} className="mr-1.5" />
                 Add Contact
               </>
             )}
@@ -297,7 +296,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
       <div className="space-y-2.5">
         {effectiveRows.length === 0 ? (
           <div className="text-center py-8 px-4 border border-dashed border-border rounded-xl bg-surface/20 space-y-1.5">
-            <User size={22} className="mx-auto text-text-muted/60" />
+            <IconUser size={22} className="mx-auto text-text-muted/60" />
             <p className="text-xs font-medium text-heading">No contact persons added</p>
             <p className="text-2xs text-text-muted">
               Use the form above to add primary coordinators or executives for this client.
@@ -351,7 +350,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                               href={`tel:${row.mobile1}`}
                               className="hover:text-primary transition-colors inline-flex items-center gap-1"
                             >
-                              <Phone size={12} className="text-text-muted shrink-0" />
+                              <IconPhone size={12} className="text-text-muted shrink-0" />
                               <span>{row.mobile1}</span>
                             </a>
                           ) : (
@@ -366,7 +365,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                               href={`tel:${row.mobile2}`}
                               className="hover:text-primary transition-colors inline-flex items-center gap-1"
                             >
-                              <Phone size={12} className="text-text-muted/60 shrink-0" />
+                              <IconPhone size={12} className="text-text-muted/60 shrink-0" />
                               <span>{row.mobile2}</span>
                             </a>
                           ) : (
@@ -381,7 +380,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                               href={`mailto:${row.email}`}
                               className="text-text hover:text-primary transition-colors inline-flex items-center gap-1"
                             >
-                              <Mail size={12} className="text-text-muted shrink-0" />
+                              <IconMail size={12} className="text-text-muted shrink-0" />
                               <span className="truncate max-w-[200px]">{row.email}</span>
                             </a>
                           ) : (
@@ -412,24 +411,24 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                         {/* Actions */}
                         <Td className="py-2.5 px-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
+                            <IconButton
+                              icon={IconEdit}
+                              size="sm"
+                              variant="ghost"
                               onClick={() => onEdit(row)}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all shadow-2xs cursor-pointer"
                               title="Edit Contact"
                               aria-label="Edit Contact"
-                            >
-                              <Pencil size={14} className="shrink-0" />
-                            </button>
-                            <button
-                              type="button"
+                              className="hover:text-primary hover:bg-surface"
+                            />
+                            <IconButton
+                              icon={IconDelete}
+                              size="sm"
+                              variant="ghost"
                               onClick={() => setContactToDelete(row)}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-surface border border-border text-text-muted hover:text-danger hover:border-danger/40 hover:bg-danger/5 transition-all shadow-2xs cursor-pointer"
                               title="Remove Contact"
                               aria-label="Remove Contact"
-                            >
-                              <Trash2 size={14} className="shrink-0" />
-                            </button>
+                              className="hover:text-danger hover:bg-danger/10"
+                            />
                           </div>
                         </Td>
                       </tr>
@@ -482,7 +481,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                     <div className="text-2xs text-text space-y-1.5 pt-1 border-t border-border/50">
                       {row.mobile1 && (
                         <div className="flex items-center gap-1.5">
-                          <Phone size={12} className="text-text-muted shrink-0" />
+                          <IconPhone size={12} className="text-text-muted shrink-0" />
                           <a href={`tel:${row.mobile1}`} className="font-mono text-heading hover:text-primary">
                             {row.mobile1}
                           </a>
@@ -490,7 +489,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                       )}
                       {row.mobile2 && (
                         <div className="flex items-center gap-1.5">
-                          <Phone size={12} className="text-text-muted/60 shrink-0" />
+                          <IconPhone size={12} className="text-text-muted/60 shrink-0" />
                           <a href={`tel:${row.mobile2}`} className="font-mono text-text-muted hover:text-primary">
                             {row.mobile2} (alt)
                           </a>
@@ -498,7 +497,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                       )}
                       {row.email && (
                         <div className="flex items-center gap-1.5">
-                          <Mail size={12} className="text-text-muted shrink-0" />
+                          <IconMail size={12} className="text-text-muted shrink-0" />
                           <a href={`mailto:${row.email}`} className="text-primary truncate hover:underline">
                             {row.email}
                           </a>
@@ -514,7 +513,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                         onClick={() => onEdit(row)}
                         className="text-xs"
                       >
-                        <Pencil size={13} className="mr-1" />
+                        <IconEdit size={13} className="mr-1" />
                         Edit
                       </Button>
                       <Button
@@ -524,7 +523,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                         onClick={() => setContactToDelete(row)}
                         className="text-xs text-danger"
                       >
-                        <Trash2 size={13} className="mr-1" />
+                        <IconDelete size={13} className="mr-1" />
                         Remove
                       </Button>
                     </div>

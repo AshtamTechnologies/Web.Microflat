@@ -1,5 +1,4 @@
-import React from 'react';
-import { Search, RotateCcw } from 'lucide-react';
+import { IconSearch, IconReset } from '../../constants/icons';
 import Input from './Input';
 import Button from './Button';
 
@@ -37,10 +36,11 @@ export default function TableToolbar({
           <div className="w-full sm:w-64 md:w-72 shrink-0">
             <Input
               type="search"
+              size="sm"
               placeholder={searchPlaceholder}
               value={searchValue || ''}
               onChange={(e) => onSearchChange(e.target.value)}
-              leftIcon={<Search size={16} aria-hidden="true" />}
+              leftIcon={<IconSearch aria-hidden="true" />}
               className="w-full text-xs"
             />
           </div>
@@ -61,12 +61,12 @@ export default function TableToolbar({
             type="button"
             variant="ghost"
             size="sm"
+            icon={IconReset}
             onClick={onReset}
-            className="text-xs text-text-muted hover:text-danger h-9 px-3 gap-1.5 border border-dashed border-border hover:border-danger/40 transition-colors"
+            className="text-xs text-text-muted hover:text-danger px-3 border border-dashed border-border hover:border-danger/40 transition-colors"
             title="Clear all search criteria and filters"
           >
-            <RotateCcw size={13} aria-hidden="true" />
-            <span>{resetLabel}</span>
+            {resetLabel}
           </Button>
         </div>
       )}

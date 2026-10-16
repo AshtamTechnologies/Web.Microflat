@@ -6,15 +6,15 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  UploadCloud,
-  FileText,
-  Layers,
-  AlertCircle,
-  FileCode,
-  X,
-  Plus,
-  FileCheck,
-} from 'lucide-react';
+  IconAdd,
+  IconClose,
+  IconDocumentTypes,
+  IconError,
+  IconFileCode,
+  IconFileText,
+  IconLayers,
+  IconUpload,
+} from '../../../constants/icons';
 import { Modal, Button, CancelButton, Input, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiryDocumentsContext } from '../../../context/InquiryDocumentsContext';
 import { useDocumentTypesContext } from '../../../context/DocumentTypesContext';
@@ -316,10 +316,9 @@ export default function UploadDocumentModal({
 
         {/* File Picker Drag & Drop Area */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-heading leading-none">
-            Attachment File <span className="text-danger" aria-hidden="true">*</span>
-          </label>
+          <span className="mf-label block">Attachment File <span className="mf-required" aria-hidden="true">*</span></span>
 
+          {/* Native file input hidden for custom drag-drop styling */}
           <input
             ref={fileInputRef}
             type="file"
@@ -349,7 +348,7 @@ export default function UploadDocumentModal({
               <div className="flex items-center justify-between gap-3 text-left">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <FileCheck size={22} />
+                    <IconDocumentTypes size={22} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-heading font-mono truncate">
@@ -373,13 +372,13 @@ export default function UploadDocumentModal({
                   }}
                   className="text-text-muted hover:text-danger hover:bg-surface text-xs h-8 px-2"
                 >
-                  <X size={15} className="mr-1" />
+                  <IconClose size={15} className="mr-1" />
                   Change
                 </Button>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-2">
-                <UploadCloud size={32} className="text-primary/70 mb-2" />
+                <IconUpload size={32} className="text-primary/70 mb-2" />
                 <p className="text-sm font-semibold text-heading">
                   Click to select file or drag & drop here
                 </p>
@@ -395,7 +394,7 @@ export default function UploadDocumentModal({
           {/* Inline File Validation Error */}
           {fileError && (
             <p className="text-xs text-danger flex items-center gap-1 mt-0.5">
-              <AlertCircle size={13} className="shrink-0" />
+              <IconError size={13} className="shrink-0" />
               <span>{fileError}</span>
             </p>
           )}
@@ -431,12 +430,12 @@ export default function UploadDocumentModal({
           >
             {isNewVersion ? (
               <>
-                <UploadCloud size={16} className="mr-1.5" />
+                <IconUpload size={16} className="mr-1.5" />
                 Upload Revision
               </>
             ) : (
               <>
-                <Plus size={16} className="mr-1.5" />
+                <IconAdd size={16} className="mr-1.5" />
                 Upload Document
               </>
             )}

@@ -4,6 +4,11 @@
    All values reference design tokens from tokens.css.
 ───────────────────────────────────────────────────────────────────────────── */
 
+/* ── 0. Global Lucide SVG styling ─────────────────────────────────────────── */
+svg.lucide {
+  stroke-width: var(--icon-stroke);
+}
+
 /* ── 1. Buttons (.mf-btn) ─────────────────────────────────────────────────── */
 .mf-btn {
   display: inline-flex;
@@ -21,6 +26,10 @@
   white-space: nowrap;
   line-height: var(--leading-tight);
   text-decoration: none;
+}
+
+.mf-btn svg {
+  flex-shrink: 0;
 }
 
 .mf-btn:disabled {
@@ -44,6 +53,11 @@
   border-radius: var(--radius-control);
 }
 
+.mf-btn--sm svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
 .mf-btn--md {
   height: var(--control-height-md);
   padding: 0 1rem;
@@ -51,11 +65,22 @@
   border-radius: var(--radius-control);
 }
 
+.mf-btn--md svg,
+.mf-btn:not(.mf-btn--sm):not(.mf-btn--lg) svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
 .mf-btn--lg {
   height: var(--control-height-lg);
   padding: 0 1.25rem;
   font-size: var(--text-base);
   border-radius: var(--radius-control);
+}
+
+.mf-btn--lg svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 
 .mf-btn--icon {
@@ -343,6 +368,31 @@
 .mf-input.\!pr-10,
 .mf-input.pr-10 {
   padding-right: 2.5rem !important;
+}
+
+/* Input adornments & select chevrons follow control size */
+.relative:has(.mf-input) svg,
+.relative:has(.mf-select) svg,
+.mf-field:has(.mf-input) .relative > span svg,
+.mf-field:has(.mf-select) .relative > span svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+.relative:has(.mf-input--sm) svg,
+.relative:has(.mf-select--sm) svg,
+.mf-field:has(.mf-input--sm) .relative > span svg,
+.mf-field:has(.mf-select--sm) .relative > span svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.relative:has(.mf-input--lg) svg,
+.relative:has(.mf-select--lg) svg,
+.mf-field:has(.mf-input--lg) .relative > span svg,
+.mf-field:has(.mf-select--lg) .relative > span svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 
 .mf-input--err,

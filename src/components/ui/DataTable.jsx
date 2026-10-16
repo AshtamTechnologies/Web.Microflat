@@ -87,19 +87,19 @@ export default function DataTable({
                               {sorted === 'asc' ? (
                                 <ChevronUp
                                   size={14}
-                                  className="text-primary stroke-[2.5]"
+                                  className="text-primary"
                                   aria-hidden="true"
                                 />
                               ) : sorted === 'desc' ? (
                                 <ChevronDown
                                   size={14}
-                                  className="text-primary stroke-[2.5]"
+                                  className="text-primary"
                                   aria-hidden="true"
                                 />
                               ) : (
                                 <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <ChevronUp size={11} strokeWidth={2.5} />
-                                  <ChevronDown size={11} strokeWidth={2.5} />
+                                  <ChevronUp size={11} />
+                                  <ChevronDown size={11} />
                                 </span>
                               )}
                             </span>

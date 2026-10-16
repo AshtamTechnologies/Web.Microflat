@@ -8,25 +8,25 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft,
-  Pencil,
-  FileSpreadsheet,
-  Package,
-  Clock,
-  UserCheck,
-  Building2,
-  Calendar,
-  AlertCircle,
-  FileText,
-  CheckCircle2,
-  Check,
-  X,
-  Paperclip,
-  Download,
-  Eye,
-  File,
-} from 'lucide-react';
-import { IconPR } from '../../constants/icons';
+  IconAttachment,
+  IconBack,
+  IconBuilding2,
+  IconCalendar,
+  IconCheck,
+  IconClock,
+  IconClose,
+  IconDownload,
+  IconEdit,
+  IconError,
+  IconFile,
+  IconFileSpreadsheet,
+  IconFileText,
+  IconPR,
+  IconPackage,
+  IconSuccess,
+  IconUserCheck,
+  IconView,
+} from '../../constants/icons';
 
 import {
   Button,
@@ -39,6 +39,7 @@ import {
   Td,
   Modal,
   PageHeader,
+  Textarea,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -48,6 +49,8 @@ import {
   getPRPriorityBadgeVariant,
   getProjectName,
 } from '../../mocks/purchaseRequisitions';
+import { formatDateTime } from '../../utils/dateUtils';
+import { formatNumber } from '../../utils/format';
 
 export default function PurchaseRequisitionView() {
   const { id } = useParams();
@@ -172,9 +175,9 @@ export default function PurchaseRequisitionView() {
           `Requested By     : ${pr?.requestedBy || 'N/A'}`,
           `Department       : ${pr?.department || 'N/A'}`,
           `Uploaded By      : ${att.uploadedBy || pr?.requestedBy || 'Ian Chesnut'}`,
-          `Uploaded Date    : ${att.uploadedDate || 'N/A'}`,
+          `Uploaded Date    : ${att.uploadedDate ? formatDateTime(att.uploadedDate) : 'N/A'}`,
           `================================================================`,
-          `Exported On      : ${new Date().toLocaleString()}`,
+          `Exported On      : ${formatDateTime(new Date())}`,
           `Status           : Verified Requisition Document`,
           `================================================================\n`,
         ].join('\n');
@@ -210,7 +213,7 @@ export default function PurchaseRequisitionView() {
       <div className="max-w-3xl mx-auto py-12 px-4 text-center">
         <Card padding="lg" className="space-y-4">
           <div className="w-12 h-12 rounded-full bg-danger/10 text-danger flex items-center justify-center mx-auto">
-            <AlertCircle size={24} />
+            <IconError size={24} />
           </div>
           <h2 className="text-lg font-bold text-heading">
             Purchase Requisition Not Found
@@ -264,7 +267,7 @@ export default function PurchaseRequisitionView() {
                   className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
                   title={`Approve ${pr.prNumber}`}
                 >
-                  <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
+                  <IconCheck size={14} className="" aria-hidden="true" />
                   Approve
                 </Button>
 
@@ -276,7 +279,7 @@ export default function PurchaseRequisitionView() {
                   className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
                   title={`Reject ${pr.prNumber}`}
                 >
-                  <X size={14} className="stroke-[2.5]" aria-hidden="true" />
+                  <IconClose size={14} className="" aria-hidden="true" />
                   Reject
                 </Button>
               </>
@@ -291,7 +294,7 @@ export default function PurchaseRequisitionView() {
                 }
                 className="font-semibold shadow-sm"
               >
-                <Pencil size={15} className="mr-1.5" />
+                <IconEdit size={15} className="mr-1.5" />
                 Edit Requisition
               </Button>
             )}
@@ -302,7 +305,7 @@ export default function PurchaseRequisitionView() {
       {/* ── Section 1: PR Information Card ── */}
       <Card padding="md" className="space-y-4 shadow-xs border-border">
         <div className="flex items-center gap-2 pb-3 border-b border-border">
-          <FileSpreadsheet size={18} className="text-primary" />
+          <IconFileSpreadsheet size={18} className="text-primary" />
           <h2 className="text-base font-bold text-heading">
             Purchase Requisition Information
           </h2>
@@ -390,7 +393,7 @@ export default function PurchaseRequisitionView() {
       <Card padding="none" className="overflow-hidden border border-border shadow-xs">
         <div className="p-4 border-b border-border flex items-center justify-between bg-surface">
           <div className="flex items-center gap-2">
-            <Package size={18} className="text-primary" />
+            <IconPackage size={18} className="text-primary" />
             <h2 className="text-base font-bold text-heading">
               Purchase Requisition Items
             </h2>
@@ -448,7 +451,7 @@ export default function PurchaseRequisitionView() {
 
                   {/* Quantity */}
                   <Td className="text-right font-bold text-heading font-mono tabular-nums">
-                    {Number(item.quantity).toLocaleString()}
+                    {formatNumber(item.quantity)}
                   </Td>
 
                   {/* UOM */}
@@ -466,7 +469,7 @@ export default function PurchaseRequisitionView() {
       <Card padding="md" className="space-y-4 shadow-xs border-border bg-surface">
         <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <Paperclip size={18} className="text-primary" />
+            <IconAttachment size={18} className="text-primary" />
             <h2 className="text-base font-bold text-heading">
               Document Attachments
             </h2>
@@ -485,14 +488,14 @@ export default function PurchaseRequisitionView() {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <FileText size={16} />
+                    <IconFileText size={16} />
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-heading truncate">
                       {att.fileName}
                     </p>
                     <p className="text-2xs text-text-muted font-mono mt-0.5">
-                      {att.fileSizeKB ? `${att.fileSizeKB} KB` : '150 KB'} • Uploaded by {att.uploadedBy || pr.requestedBy} {att.uploadedDate ? `• ${formatPRDate(att.uploadedDate)}` : ''}
+                      {att.fileSizeKB ? `${att.fileSizeKB} KB` : '150 KB'} • Uploaded by {att.uploadedBy || pr.requestedBy} {att.uploadedDate ? `• ${formatDateTime(att.uploadedDate)}` : ''}
                     </p>
                   </div>
                 </div>
@@ -504,7 +507,7 @@ export default function PurchaseRequisitionView() {
                     onClick={() => handleDownloadAttachment(att)}
                     className="h-8 px-2.5 text-xs text-text hover:text-primary flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Download size={13} />
+                    <IconDownload size={13} />
                     <span>Download</span>
                   </Button>
                 </div>
@@ -521,7 +524,7 @@ export default function PurchaseRequisitionView() {
       {/* ── Section 4: Audit Information Card ── */}
       <Card padding="md" className="space-y-4 shadow-xs border-border bg-surface">
         <div className="flex items-center gap-2 pb-3 border-b border-border">
-          <Clock size={18} className="text-text-muted" />
+          <IconClock size={18} className="text-text-muted" />
           <h2 className="text-base font-bold text-heading">
             Audit Information
           </h2>
@@ -565,7 +568,7 @@ export default function PurchaseRequisitionView() {
             className="space-y-4"
           >
             <div className="p-3.5 rounded-xl bg-success/10 border border-success/20 flex items-start gap-3">
-              <CheckCircle2 size={18} className="text-success shrink-0 mt-0.5" aria-hidden="true" />
+              <IconSuccess size={18} className="text-success shrink-0 mt-0.5" aria-hidden="true" />
               <div className="text-xs">
                 <p className="font-semibold text-success">
                   Approving {pr.prNumber}
@@ -582,23 +585,15 @@ export default function PurchaseRequisitionView() {
             </p>
 
             {/* Approval Comments / Remarks Field */}
-            <div className="space-y-1.5">
-              <label
-                htmlFor="view-pr-approval-remarks"
-                className="text-xs font-semibold text-heading block"
-              >
-                Approval Remarks / Comments (Optional)
-              </label>
-              <textarea
+            <Textarea
                 id="view-pr-approval-remarks"
                 name="view-pr-approval-remarks"
+                label="Approval Remarks / Comments (Optional)"
                 rows={3}
                 value={approveRemarks}
                 onChange={(e) => setApproveRemarks(e.target.value)}
                 placeholder="Enter approval remarks or authorization notes..."
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-heading placeholder:text-text-muted focus:border-success focus:outline-hidden focus:ring-2 focus:ring-success/20 transition-all resize-y"
               />
-            </div>
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
@@ -611,11 +606,11 @@ export default function PurchaseRequisitionView() {
                 type="submit"
                 variant="primary"
                 size="md"
+                icon={IconCheck}
                 disabled={isSubmittingApprove}
                 loading={isSubmittingApprove}
                 className="bg-success hover:bg-success/90 text-white border-transparent"
               >
-                <Check size={14} className="mr-1.5 stroke-[2.5]" />
                 Confirm Approval
               </Button>
             </div>
@@ -633,7 +628,7 @@ export default function PurchaseRequisitionView() {
         >
           <form onSubmit={handleConfirmReject} className="space-y-4">
             <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/20 flex items-start gap-3">
-              <AlertCircle size={18} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
+              <IconError size={18} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
               <div className="text-xs">
                 <p className="font-semibold text-danger">
                   Rejecting {pr.prNumber}
@@ -645,21 +640,16 @@ export default function PurchaseRequisitionView() {
             </div>
 
             {/* Reason Textarea */}
-            <div>
-              <label htmlFor="view-rejection-reason" className="block text-xs font-semibold text-heading mb-1.5">
-                Reason for Rejection <span className="text-danger">*</span>
-              </label>
-              <textarea
+            <Textarea
                 id="view-rejection-reason"
                 name="view-rejection-reason"
-                rows={3}
+                label="Reason for Rejection"
                 required
+                rows={3}
                 value={rejectComments}
                 onChange={(e) => setRejectComments(e.target.value)}
                 placeholder="Explain clearly why this purchase requisition is rejected..."
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-heading placeholder:text-text-muted focus:border-danger focus:outline-hidden focus:ring-2 focus:ring-danger/20 transition-all resize-y"
               />
-            </div>
 
             {/* Action Buttons */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
@@ -675,7 +665,7 @@ export default function PurchaseRequisitionView() {
                 disabled={isSubmittingReject || !rejectComments.trim()}
                 loading={isSubmittingReject}
               >
-                <X size={14} className="mr-1.5 stroke-[2.5]" />
+                <IconClose size={14} className="mr-1.5" />
                 Confirm Rejection
               </Button>
             </div>

@@ -6,14 +6,14 @@
 
 import { useState, useRef } from 'react';
 import {
-  Package,
-  Plus,
-  Pencil,
-  Trash2,
-  Check,
-  X,
-  AlertCircle,
-} from 'lucide-react';
+  IconAdd,
+  IconCheck,
+  IconClose,
+  IconDelete,
+  IconEdit,
+  IconError,
+  IconPackage,
+} from '../../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -33,6 +33,7 @@ import {
   MOCK_MATERIALS,
   UOM_OPTIONS,
 } from '../../../mocks/purchaseRequisitions';
+import { formatNumber } from '../../../utils/format';
 
 const MATERIAL_SELECT_OPTIONS = [
   { value: '', label: '-- Select Material from Catalog --' },
@@ -315,7 +316,7 @@ export default function ItemsEditor({
                   : 'bg-primary/10 text-primary'
               }`}
             >
-              {isEditing ? <Pencil size={17} /> : <Package size={18} />}
+              {isEditing ? <IconEdit size={17} /> : <IconPackage size={18} />}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -452,12 +453,12 @@ export default function ItemsEditor({
             >
               {isEditing ? (
                 <>
-                  <Check size={15} className="mr-1.5" />
+                  <IconCheck size={15} className="mr-1.5" />
                   Update Item
                 </>
               ) : (
                 <>
-                  <Plus size={15} className="mr-1.5" />
+                  <IconAdd size={15} className="mr-1.5" />
                   Add Item
                 </>
               )}
@@ -475,7 +476,7 @@ export default function ItemsEditor({
         <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-surface">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Package size={18} />
+              <IconPackage size={18} />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -501,7 +502,7 @@ export default function ItemsEditor({
                 onClick={() => setIsBulkDeleteOpen(true)}
                 className="font-semibold text-xs shadow-2xs cursor-pointer inline-flex items-center gap-1.5"
               >
-                <Trash2 size={13} />
+                <IconDelete size={13} />
                 <span>Delete Selected ({selectedIds.length})</span>
               </Button>
             )}
@@ -510,7 +511,7 @@ export default function ItemsEditor({
               <div className="flex items-center gap-3 text-xs bg-bg px-3 py-1.5 rounded-lg border border-border">
                 <span className="text-text-muted font-medium">Total Quantity:</span>
                 <span className="font-bold font-mono text-heading">
-                  {totalQuantity.toLocaleString()}
+                  {formatNumber(totalQuantity)}
                 </span>
               </div>
             )}
@@ -520,7 +521,7 @@ export default function ItemsEditor({
         {/* Section Error Banner if provided */}
         {error && (
           <div className="m-4 p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs flex items-center gap-2">
-            <AlertCircle size={16} className="shrink-0" />
+            <IconError size={16} className="shrink-0" />
             <span>{error}</span>
           </div>
         )}
@@ -529,7 +530,7 @@ export default function ItemsEditor({
         {items.length === 0 ? (
           <div className="py-14 px-4 text-center">
             <div className="w-12 h-12 rounded-full bg-border/40 text-text-muted flex items-center justify-center mx-auto mb-3">
-              <Package size={22} className="opacity-60" />
+              <IconPackage size={22} className="opacity-60" />
             </div>
             <p className="text-sm font-semibold text-heading">No items added</p>
             <p className="text-xs text-text-muted mt-1 max-w-sm mx-auto">
@@ -612,7 +613,7 @@ export default function ItemsEditor({
 
                     {/* Quantity */}
                     <Td className="text-right font-bold text-heading font-mono tabular-nums">
-                      {Number(item.quantity).toLocaleString()}
+                      {formatNumber(item.quantity)}
                     </Td>
 
                     {/* UOM */}
@@ -636,7 +637,7 @@ export default function ItemsEditor({
                               : 'text-text-muted hover:text-primary hover:bg-surface'
                           }
                         >
-                          <Pencil size={14} aria-hidden="true" />
+                          <IconEdit size={14} aria-hidden="true" />
                         </Button>
 
                         {/* Remove Ghost Button */}
@@ -648,7 +649,7 @@ export default function ItemsEditor({
                           title="Remove this item"
                           className="text-text-muted hover:text-danger hover:bg-danger/10 cursor-pointer"
                         >
-                          <Trash2 size={14} aria-hidden="true" />
+                          <IconDelete size={14} aria-hidden="true" />
                         </Button>
                       </div>
                     </Td>
@@ -663,7 +664,7 @@ export default function ItemsEditor({
                     Total {items.length} {items.length === 1 ? 'item' : 'items'}
                   </td>
                   <td className="px-5 py-3 text-right font-mono tabular-nums text-heading font-bold">
-                    {totalQuantity.toLocaleString()}
+                    {formatNumber(totalQuantity)}
                   </td>
                   <td colSpan={2} className="px-5 py-3 text-text-muted">
                     Total Quantity

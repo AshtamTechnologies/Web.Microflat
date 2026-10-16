@@ -23,6 +23,7 @@ import {
   Type,
   Palette,
   ChevronDown,
+  X,
 } from 'lucide-react';
 
 const TextColor = Mark.create({
@@ -381,13 +382,14 @@ export default function RichTextEditor({
                         }
                         setIsColorMenuOpen(false);
                       }}
+                      aria-label={col.title || 'Reset color'}
                       className="w-6 h-6 rounded-md border border-border/70 flex items-center justify-center hover:scale-110 transition-transform cursor-pointer shadow-2xs"
                       style={{
                         backgroundColor: col.value || 'var(--text)',
                       }}
                     >
                       {!col.value && (
-                        <span className="text-2xs text-bg font-bold">×</span>
+                        <X size={12} className="text-bg" aria-hidden="true" />
                       )}
                     </button>
                   ))}

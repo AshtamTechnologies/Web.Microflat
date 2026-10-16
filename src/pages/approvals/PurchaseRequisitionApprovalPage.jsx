@@ -22,24 +22,24 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  Check,
-  X,
-  FileSpreadsheet,
-  CheckCircle2,
-  Clock,
-  Building2,
-  AlertCircle,
-  FileText,
-  User,
-  Package,
-  Calendar,
-  Layers,
-  Flame,
-  Eye,
-  Paperclip,
-  Download,
-} from 'lucide-react';
-import { IconPRApproval } from '../../constants/icons';
+  IconAttachment,
+  IconBuilding2,
+  IconCalendar,
+  IconCheck,
+  IconClock,
+  IconClose,
+  IconDownload,
+  IconError,
+  IconFileSpreadsheet,
+  IconFileText,
+  IconFlame,
+  IconLayers,
+  IconPRApproval,
+  IconPackage,
+  IconSuccess,
+  IconUser,
+  IconView,
+} from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -50,6 +50,7 @@ import {
   PageHeader,
   DataTable,
   TableToolbar,
+  Textarea,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -57,6 +58,7 @@ import {
   formatPRDateTime,
   getPRPriorityBadgeVariant,
 } from '../../mocks/purchaseRequisitions';
+import { formatDateTime } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
@@ -234,9 +236,9 @@ export default function PurchaseRequisitionApprovalPage() {
           `Requested By     : ${pr?.requestedBy || 'N/A'}`,
           `Department       : ${pr?.department || 'N/A'}`,
           `Uploaded By      : ${file.uploadedBy || pr?.requestedBy || 'Ian Chesnut'}`,
-          `Uploaded Date    : ${file.uploadedDate || 'N/A'}`,
+          `Uploaded Date    : ${file.uploadedDate ? formatDateTime(file.uploadedDate) : 'N/A'}`,
           `================================================================`,
-          `Exported On      : ${new Date().toLocaleString()}`,
+          `Exported On      : ${formatDateTime(new Date())}`,
           `Status           : Verified Requisition Document`,
           `================================================================\n`,
         ].join('\n');
@@ -290,7 +292,7 @@ export default function PurchaseRequisitionApprovalPage() {
                     : 'bg-primary/10 text-primary border-primary/20'
                 }`}
               >
-                {isUrgent && <Flame size={10} className="stroke-[2.5]" />}
+                {isUrgent && <IconFlame size={10} className="" />}
                 {row.priority || 'Normal'}
               </span>
             </div>
@@ -311,7 +313,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 {row.requestedBy || 'Unknown'}
               </span>
               <span className="text-text-muted text-2xs sm:text-xs leading-normal flex items-center gap-1 mt-0.5">
-                <Building2 size={12} className="text-text-muted/70 shrink-0" />
+                <IconBuilding2 size={12} className="text-text-muted/70 shrink-0" />
                 {row.department || 'General'}
               </span>
             </div>
@@ -368,7 +370,7 @@ export default function PurchaseRequisitionApprovalPage() {
               className="text-xs font-semibold text-primary hover:text-primary bg-primary/5 hover:bg-primary/10 border border-primary/30 hover:border-primary/50 transition-all h-7 px-2.5 shadow-2xs flex items-center gap-1.5 cursor-pointer rounded-md"
               title={`View ${count} attachment${count > 1 ? 's' : ''} for ${row.prNumber}`}
             >
-              <Paperclip size={12} className="shrink-0" />
+              <IconAttachment size={12} className="shrink-0" />
               <span>{count} {count === 1 ? 'file' : 'files'}</span>
             </Button>
           );
@@ -385,7 +387,7 @@ export default function PurchaseRequisitionApprovalPage() {
           return (
             <div className="flex flex-col text-xs text-text-muted font-mono tabular-nums py-0.5">
               <div className="flex items-center gap-1.5 text-heading font-medium">
-                <Calendar size={12} className="text-primary shrink-0" />
+                <IconCalendar size={12} className="text-primary shrink-0" />
                 <span>{formatPRDate(row.prDate) || '—'}</span>
               </div>
               {row.requiredDate && (
@@ -427,7 +429,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`View ${row.prNumber}`}
               >
-                <Eye size={14} className="stroke-[2.2]" aria-hidden="true" />
+                <IconView size={14} className="" aria-hidden="true" />
                 View
               </Button>
 
@@ -440,7 +442,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`Approve ${row.prNumber}`}
               >
-                <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
+                <IconCheck size={14} className="" aria-hidden="true" />
                 Approve
               </Button>
 
@@ -453,7 +455,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`Reject ${row.prNumber}`}
               >
-                <X size={14} className="stroke-[2.5]" aria-hidden="true" />
+                <IconClose size={14} className="" aria-hidden="true" />
                 Reject
               </Button>
             </div>
@@ -489,7 +491,7 @@ export default function PurchaseRequisitionApprovalPage() {
         icon={<IconPRApproval className="h-6 w-6 text-primary" aria-hidden="true" />}
         badge={
           <Badge variant="warning">
-            <Clock size={12} className="shrink-0 mr-1" />
+            <IconClock size={12} className="shrink-0 mr-1" />
             {totalPendingCount} pending
           </Badge>
         }
@@ -503,7 +505,7 @@ export default function PurchaseRequisitionApprovalPage() {
               Pending PRs
             </span>
             <div className="p-1.5 rounded-lg bg-warning/10 text-warning">
-              <Clock size={16} />
+              <IconClock size={16} />
             </div>
           </div>
           <p className="text-2xl font-bold text-heading mt-2 font-mono">{totalPendingCount}</p>
@@ -516,7 +518,7 @@ export default function PurchaseRequisitionApprovalPage() {
               Urgent Priority
             </span>
             <div className="p-1.5 rounded-lg bg-danger/10 text-danger">
-              <Flame size={16} />
+              <IconFlame size={16} />
             </div>
           </div>
           <p className="text-2xl font-bold text-heading mt-2 font-mono">{urgentCount}</p>
@@ -529,7 +531,7 @@ export default function PurchaseRequisitionApprovalPage() {
               Line Items
             </span>
             <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-              <Package size={16} />
+              <IconPackage size={16} />
             </div>
           </div>
           <p className="text-2xl font-bold text-heading mt-2 font-mono">{totalLineItems}</p>
@@ -542,7 +544,7 @@ export default function PurchaseRequisitionApprovalPage() {
               Departments
             </span>
             <div className="p-1.5 rounded-lg bg-success/10 text-success">
-              <Building2 size={16} />
+              <IconBuilding2 size={16} />
             </div>
           </div>
           <p className="text-2xl font-bold text-heading mt-2 font-mono">{distinctDeptsCount}</p>
@@ -636,7 +638,7 @@ export default function PurchaseRequisitionApprovalPage() {
                     </span>
                     {isUrgent && (
                       <Badge variant="danger" size="sm" className="gap-1 font-semibold">
-                        <Flame size={11} className="shrink-0" />
+                        <IconFlame size={11} className="shrink-0" />
                         Urgent
                       </Badge>
                     )}
@@ -690,7 +692,7 @@ export default function PurchaseRequisitionApprovalPage() {
                   onClick={() => navigate(`/purchase-requisition/${pr.prNumber || pr.prId}`)}
                   className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                 >
-                  <Eye size={13} />
+                  <IconView size={13} />
                   View
                 </Button>
 
@@ -701,7 +703,7 @@ export default function PurchaseRequisitionApprovalPage() {
                   onClick={() => handleOpenApprove(pr)}
                   className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                 >
-                  <Check size={13} className="stroke-[2.5]" />
+                  <IconCheck size={13} className="" />
                   Approve
                 </Button>
 
@@ -712,7 +714,7 @@ export default function PurchaseRequisitionApprovalPage() {
                   onClick={() => handleOpenReject(pr)}
                   className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                 >
-                  <X size={13} className="stroke-[2.5]" />
+                  <IconClose size={13} className="" />
                   Reject
                 </Button>
               </div>
@@ -737,7 +739,7 @@ export default function PurchaseRequisitionApprovalPage() {
             className="space-y-4"
           >
             <div className="p-3.5 rounded-xl bg-success/10 border border-success/20 flex items-start gap-3">
-              <CheckCircle2 size={18} className="text-success shrink-0 mt-0.5" aria-hidden="true" />
+              <IconSuccess size={18} className="text-success shrink-0 mt-0.5" aria-hidden="true" />
               <div className="text-xs">
                 <p className="font-semibold text-success">
                   Approving {prToApprove.prNumber}
@@ -754,23 +756,15 @@ export default function PurchaseRequisitionApprovalPage() {
             </p>
 
             {/* Approval Comments / Remarks Field */}
-            <div className="space-y-1.5">
-              <label
-                htmlFor="pr-approval-remarks"
-                className="text-xs font-semibold text-heading block"
-              >
-                Approval Remarks / Comments (Optional)
-              </label>
-              <textarea
+            <Textarea
                 id="pr-approval-remarks"
                 name="pr-approval-remarks"
+                label="Approval Remarks / Comments (Optional)"
                 rows={3}
                 value={approveRemarks}
                 onChange={(e) => setApproveRemarks(e.target.value)}
                 placeholder="Enter approval remarks or authorization notes..."
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-heading placeholder:text-text-muted focus:border-success focus:outline-hidden focus:ring-2 focus:ring-success/20 transition-all resize-y"
               />
-            </div>
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
@@ -789,10 +783,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 size="md"
                 disabled={isSubmittingApprove}
                 loading={isSubmittingApprove}
-                className="bg-success hover:bg-success/90 text-white border-transparent"
-              >
-                <Check size={14} className="mr-1.5 stroke-[2.5]" />
-                Confirm Approval
+                icon={IconCheck} className="bg-success hover:bg-success/90 text-white border-transparent">Confirm Approval
               </Button>
             </div>
           </form>
@@ -809,7 +800,7 @@ export default function PurchaseRequisitionApprovalPage() {
         >
           <form onSubmit={handleConfirmReject} className="space-y-4">
             <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/20 flex items-start gap-3">
-              <AlertCircle size={18} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
+              <IconError size={18} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
               <div className="text-xs">
                 <p className="font-semibold text-danger">
                   Rejecting {prToReject.prNumber}
@@ -821,21 +812,16 @@ export default function PurchaseRequisitionApprovalPage() {
             </div>
 
             {/* Reason Textarea */}
-            <div>
-              <label htmlFor="rejection-reason" className="block text-xs font-semibold text-heading mb-1.5">
-                Reason for Rejection <span className="text-danger">*</span>
-              </label>
-              <textarea
+            <Textarea
                 id="rejection-reason"
                 name="rejection-reason"
-                rows={3}
+                label="Reason for Rejection"
                 required
+                rows={3}
                 value={rejectComments}
                 onChange={(e) => setRejectComments(e.target.value)}
                 placeholder="Explain clearly why this purchase requisition is rejected..."
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-heading placeholder:text-text-muted focus:border-danger focus:outline-hidden focus:ring-2 focus:ring-danger/20 transition-all resize-y"
               />
-            </div>
 
             {/* Action Buttons */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
@@ -855,7 +841,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 disabled={isSubmittingReject || !rejectComments.trim()}
                 loading={isSubmittingReject}
               >
-                <X size={14} className="mr-1.5 stroke-[2.5]" />
+                <IconClose size={14} className="mr-1.5" />
                 Confirm Rejection
               </Button>
             </div>
@@ -888,7 +874,7 @@ export default function PurchaseRequisitionApprovalPage() {
 
             {(!prToViewAttachments.attachments || prToViewAttachments.attachments.length === 0) ? (
               <div className="p-6 text-center text-text-muted text-xs border border-dashed border-border rounded-xl">
-                <Paperclip size={24} className="mx-auto mb-2 opacity-40" />
+                <IconAttachment size={24} className="mx-auto mb-2 opacity-40" />
                 <p>No documents attached to this requisition.</p>
               </div>
             ) : (
@@ -900,7 +886,7 @@ export default function PurchaseRequisitionApprovalPage() {
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                        <FileText size={16} />
+                        <IconFileText size={16} />
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-heading truncate" title={file.fileName || file.name}>
@@ -908,7 +894,7 @@ export default function PurchaseRequisitionApprovalPage() {
                         </p>
                         <p className="text-2xs text-text-muted mt-0.5 font-mono">
                           {file.fileSizeKB ? `${file.fileSizeKB} KB` : (file.size || '120 KB')}
-                          {file.uploadedDate ? ` • ${file.uploadedDate}` : ''}
+                          {file.uploadedDate ? ` • ${formatDateTime(file.uploadedDate)}` : ''}
                         </p>
                       </div>
                     </div>
@@ -921,7 +907,7 @@ export default function PurchaseRequisitionApprovalPage() {
                         onClick={() => handleDownloadAttachment(file, prToViewAttachments)}
                         className="text-xs text-primary hover:text-primary-hover h-7 px-2.5 flex items-center gap-1 border-primary/30 cursor-pointer"
                       >
-                        <Download size={12} />
+                        <IconDownload size={12} />
                         Download
                       </Button>
                     </div>
@@ -944,7 +930,7 @@ export default function PurchaseRequisitionApprovalPage() {
                 }}
                 className="text-xs font-medium text-heading hover:text-primary"
               >
-                <Eye size={13} className="mr-1.5" />
+                <IconView size={13} className="mr-1.5" />
                 Open Full View
               </Button>
               <Button

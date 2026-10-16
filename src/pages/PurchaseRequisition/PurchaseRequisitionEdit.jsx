@@ -7,19 +7,19 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
-  FileSpreadsheet,
-  Send,
-  X,
-  AlertCircle,
-  User,
-  Paperclip,
-  Upload,
-  Trash2,
-  FileText,
-  Save,
-} from 'lucide-react';
-import { IconPR } from '../../constants/icons';
+  IconAttachment,
+  IconBack,
+  IconClose,
+  IconDelete,
+  IconError,
+  IconFileSpreadsheet,
+  IconFileText,
+  IconPR,
+  IconSave,
+  IconSend,
+  IconUpload,
+  IconUser,
+} from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -34,6 +34,8 @@ import {
   SearchableSelect,
   Badge,
   PageHeader,
+  IconButton,
+  FormActionsBar,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -103,7 +105,7 @@ export default function PurchaseRequisitionEdit() {
       <div className="max-w-3xl mx-auto py-12 px-4 text-center">
         <Card padding="lg" className="space-y-4">
           <div className="w-12 h-12 rounded-full bg-danger/10 text-danger flex items-center justify-center mx-auto">
-            <AlertCircle size={24} />
+            <IconError size={24} />
           </div>
           <h2 className="text-lg font-bold text-heading">
             Purchase Requisition Not Found
@@ -179,7 +181,7 @@ export default function PurchaseRequisitionEdit() {
       fileSizeKB: Math.round(file.size / 1024) || 1,
       fileType: file.type || 'application/octet-stream',
       uploadedBy: 'Ian Chesnut',
-      uploadedDate: new Date().toLocaleString(),
+      uploadedDate: new Date().toISOString(),
       url: URL.createObjectURL(file),
       file: file,
     }));
@@ -221,21 +223,15 @@ export default function PurchaseRequisitionEdit() {
         subtitle="Modify requisition details, items, or status."
         icon={<IconPR className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
-          <button
+          <Button
             type="button"
-            onClick={() =>
-              navigate(
-                `/purchase-requisition/${originalPR.prNumber || originalPR.prId}`
-              )
-            }
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-bg hover:bg-surface text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
+            variant="secondary"
+            size="sm"
+            icon={IconBack}
+            onClick={() => navigate(`/purchase-requisition/${originalPR.prNumber || originalPR.prId}`)}
           >
-            <ArrowLeft
-              size={14}
-              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
-            />
-            <span>Back to View Requisition</span>
-          </button>
+            Back to View Requisition
+          </Button>
         }
         badge={
           <Badge variant={currentStatusVariant} className="px-3 py-1 text-xs">
@@ -243,22 +239,15 @@ export default function PurchaseRequisitionEdit() {
           </Badge>
         }
         actions={
-          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
+          <div className="flex items-center gap-2">
             <CancelButton
-              size="md"
-              onClick={() =>
-                navigate(
-                  `/purchase-requisition/${originalPR.prNumber || originalPR.prId}`
-                )
-              }
-              className="flex-1 sm:flex-initial"
+              onClick={() => navigate(`/purchase-requisition/${originalPR.prNumber || originalPR.prId}`)}
+              size="sm"
             />
-
             <SaveButton
               type="button"
-              size="md"
               onClick={handleSubmitForApproval}
-              className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
+              size="sm"
             >
               Save Changes
             </SaveButton>
@@ -266,10 +255,9 @@ export default function PurchaseRequisitionEdit() {
         }
       />
 
-      {/* Error Summary Banner */}
       {errors.items && (
         <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm flex items-center gap-2">
-          <AlertCircle size={18} className="shrink-0" />
+          <IconError size={18} className="shrink-0" />
           <span>{errors.items}</span>
         </div>
       )}
@@ -279,7 +267,7 @@ export default function PurchaseRequisitionEdit() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <FileSpreadsheet size={18} />
+              <IconFileSpreadsheet size={18} />
             </div>
             <div>
               <h2 className="text-base font-bold text-heading">
@@ -323,7 +311,7 @@ export default function PurchaseRequisitionEdit() {
               label="Requested By"
               value={formData.requestedBy}
               disabled
-              leftIcon={<User size={15} />}
+              leftIcon={<IconUser size={15} />}
               hint="Current logged-in user"
               className="bg-border/30 font-medium text-text cursor-not-allowed"
             />
@@ -408,7 +396,7 @@ export default function PurchaseRequisitionEdit() {
         <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Paperclip size={18} />
+              <IconAttachment size={18} />
             </div>
             <div>
               <h2 className="text-base font-bold text-heading">
@@ -426,6 +414,7 @@ export default function PurchaseRequisitionEdit() {
 
         {/* Upload Drop Zone / Button */}
         <div>
+          {/* Native file input hidden for custom drag-drop styling */}
           <input
             ref={fileInputRef}
             type="file"
@@ -438,7 +427,7 @@ export default function PurchaseRequisitionEdit() {
             className="border-2 border-dashed border-border hover:border-primary/60 hover:bg-surface/50 rounded-xl p-5 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 group"
           >
             <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Upload size={20} />
+              <IconUpload size={20} />
             </div>
             <div>
               <p className="text-sm font-semibold text-heading">
@@ -460,7 +449,7 @@ export default function PurchaseRequisitionEdit() {
                 className="p-3 flex items-center justify-between gap-3 text-xs"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <FileText size={16} className="text-primary shrink-0" />
+                  <IconFileText size={16} className="text-primary shrink-0" />
                   <div className="min-w-0">
                     <p className="font-semibold text-heading truncate">
                       {file.fileName || file.name}
@@ -470,14 +459,15 @@ export default function PurchaseRequisitionEdit() {
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(idx)}
-                  className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer shrink-0"
+                <IconButton
+                  icon={IconDelete}
+                  size="sm"
+                  variant="ghost"
                   title="Remove attachment"
-                >
-                  <Trash2 size={15} />
-                </button>
+                  aria-label="Remove attachment"
+                  onClick={() => removeAttachment(idx)}
+                  className="hover:text-danger hover:bg-danger/10 shrink-0"
+                />
               </div>
             ))}
           </div>

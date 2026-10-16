@@ -22,19 +22,19 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Save,
-  Building2,
-  FileText,
-  MapPin,
-  Users,
-  Calendar,
-  Clock,
-  X,
-  Check,
-  AlertCircle,
-} from 'lucide-react';
-import { IconClient } from '../../constants/icons';
+  IconBack,
+  IconBuilding2,
+  IconCalendar,
+  IconCheck,
+  IconClient,
+  IconClock,
+  IconClose,
+  IconError,
+  IconFileText,
+  IconLocation,
+  IconSave,
+  IconUsers,
+} from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -52,6 +52,7 @@ import {
   SearchableMultiSelect,
   Badge,
   ScrollableTabs,
+  FormActionsBar,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
@@ -379,35 +380,30 @@ export default function ClientFormPage() {
             : 'Register a new customer, distributor, dealer, or agency account'
         }
         backButton={
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            icon={IconBack}
             onClick={handleCancel}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
-            <ArrowLeft
-              size={14}
-              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
-            />
-            <span>Back to Clients</span>
-          </button>
+            Back to Clients
+          </Button>
         }
         actions={
-          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
             <CancelButton
-              size="md"
               onClick={handleCancel}
               disabled={isSubmitting}
-              className="flex-1 sm:flex-initial"
+              size="sm"
             />
             <SaveButton
               type="submit"
-              size="md"
-              disabled={isSubmitting}
               loading={isSubmitting}
-              loadingText="Saving Client..."
-              className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
+              disabled={isSubmitting}
+              size="sm"
             >
-              {isEdit ? 'Save Changes' : 'Save Client'}
+              {isEdit ? 'Save Changes' : 'Save'}
             </SaveButton>
           </div>
         }
@@ -419,7 +415,7 @@ export default function ClientFormPage() {
           {/* Left: Compact Entity Identity */}
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Building2 size={16} />
+              <IconBuilding2 size={16} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -439,10 +435,8 @@ export default function ClientFormPage() {
           {/* Right: Clean Effective Date Control */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto shrink-0">
             <div className="flex items-center gap-1.5 shrink-0">
-              <Calendar size={13} className="text-primary shrink-0" />
-              <label htmlFor="effectiveDate" className="text-xs font-semibold text-heading whitespace-nowrap cursor-pointer">
-                Effective Date <span className="text-danger">*</span>
-              </label>
+              <IconCalendar size={13} className="text-primary shrink-0" />
+              <span className="mf-label whitespace-nowrap">Effective Date <span className="mf-required" aria-hidden="true">*</span></span>
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -464,7 +458,7 @@ export default function ClientFormPage() {
                   className="text-text-muted hover:text-primary transition-colors p-1.5 rounded-md cursor-pointer shrink-0 border border-border sm:border-0"
                   title="View past and scheduled revisions"
                 >
-                  <Clock size={14} />
+                  <IconClock size={14} />
                 </button>
               )}
             </div>
@@ -481,19 +475,19 @@ export default function ClientFormPage() {
           {
             id: 'company_terms',
             label: 'Client Details & Terms',
-            icon: Building2,
+            icon: IconBuilding2,
             hasError: hasCompanyTermsErrors,
           },
           {
             id: 'addresses',
             label: 'Client Addresses',
-            icon: MapPin,
+            icon: IconLocation,
             badge: form.addresses.length,
           },
           {
             id: 'contacts',
             label: 'Contact Persons',
-            icon: Users,
+            icon: IconUsers,
             badge: form.contacts.length,
           },
         ]}
@@ -506,7 +500,7 @@ export default function ClientFormPage() {
           <Card padding="md" className="space-y-4">
             <div className="flex items-center gap-2.5 border-b border-border pb-3">
               <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <Building2 size={17} />
+                <IconBuilding2 size={17} />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-heading">Company Details</h3>
@@ -534,9 +528,7 @@ export default function ClientFormPage() {
               {/* Billing Name */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="billingName" className="form-label text-xs font-medium text-heading">
-                    Billing Name
-                  </label>
+                  <span className="mf-label text-xs">Billing Name</span>
                   <Checkbox
                     id="same-as-company"
                     checked={sameAsCompany}
@@ -598,9 +590,7 @@ export default function ClientFormPage() {
 
               {/* Account Status Switch */}
               <div className="flex flex-col justify-end pb-1.5">
-                <label className="text-xs font-medium text-heading block mb-1">
-                  Account Status
-                </label>
+                <span className="mf-label block mb-1">Account Status</span>
                 <div className="flex items-center gap-2.5">
                   <StatusSwitch
                     checked={form.isActive}
@@ -620,7 +610,7 @@ export default function ClientFormPage() {
           <Card padding="md" className="space-y-4">
             <div className="flex items-center gap-2.5 border-b border-border pb-3">
               <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <FileText size={17} />
+                <IconFileText size={17} />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-heading">Terms & Notes</h3>
@@ -680,7 +670,7 @@ export default function ClientFormPage() {
                                 title={`Remove ${term.termCode}`}
                                 aria-label={`Remove ${term.termCode}`}
                               >
-                                <X size={14} />
+                                <IconClose size={14} />
                               </button>
                             </div>
                             {desc ? (
@@ -748,7 +738,7 @@ export default function ClientFormPage() {
           />
 
           {/* Save Button for Tab 2 */}
-          {renderTabSaveBar('Client Addresses')}
+          
         </div>
       )}
 
@@ -763,9 +753,10 @@ export default function ClientFormPage() {
           />
 
           {/* Save Button for Tab 3 */}
-          {renderTabSaveBar('Contact Persons')}
+          
         </div>
       )}
+
 
     </form>
   );

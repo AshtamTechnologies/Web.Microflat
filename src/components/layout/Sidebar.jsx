@@ -15,17 +15,18 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  IconChevronDown,
+  IconChevronRight,
+  IconLogout,
+  IconPanelLeftClose,
+  IconPanelLeftOpen,
+  IconSearch,
+} from '../../constants/icons';
 import { createPortal } from 'react-dom';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import {
-  ChevronDown,
-  ChevronRight,
-  LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Search,
-} from 'lucide-react';
 import navigation from '../../config/navigation';
+import { Input } from '../ui';
 import { useUserSessions } from '../../context/UserSessionsContext';
 import { mockUsers } from '../../mocks/users';
 
@@ -120,7 +121,7 @@ function NavItem({ item, collapsed, onClick }) {
             ) : Icon ? (
               <Icon
                 size={18}
-                strokeWidth={isActive ? 2.2 : 1.75}
+
                 className={`shrink-0 transition-transform duration-150 ${isActive ? 'text-primary' : 'text-text-muted group-hover/nav-item:text-heading'
                   }`}
                 aria-hidden="true"
@@ -144,7 +145,7 @@ function NavItem({ item, collapsed, onClick }) {
                       title={item.quickAction.title}
                       className="opacity-0 group-hover/nav-item:opacity-100 transition-opacity p-0.5 hover:bg-primary hover:text-white rounded-md text-text-muted cursor-pointer"
                     >
-                      <item.quickAction.icon size={13} strokeWidth={2.5} />
+                      <item.quickAction.icon size={13} />
                     </button>
                   </div>
                 )}
@@ -239,7 +240,7 @@ function SubNavItem({ item, onClick }) {
               title={item.quickAction.title}
               className="opacity-0 group-hover/subnav-item:opacity-100 transition-opacity p-0.5 hover:bg-primary hover:text-white rounded text-text-muted cursor-pointer"
             >
-              <item.quickAction.icon size={11} strokeWidth={2.5} />
+              <item.quickAction.icon size={11} />
             </button>
           </div>
         )}
@@ -343,7 +344,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
           ) : Icon ? (
             <Icon
               size={18}
-              strokeWidth={isChildActive ? 2.2 : 1.75}
+
               className="shrink-0"
               aria-hidden="true"
             />
@@ -430,7 +431,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
           ) : Icon ? (
             <Icon
               size={18}
-              strokeWidth={isChildActive ? 2.2 : 1.75}
+
               className={`shrink-0 ${isChildActive ? 'text-primary' : 'text-text-muted'}`}
               aria-hidden="true"
             />
@@ -438,16 +439,16 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
           <span className="truncate">{item.label}</span>
         </span>
         {isAccordionOpen ? (
-          <ChevronDown
+          <IconChevronDown
             size={14}
-            strokeWidth={2}
+
             className="shrink-0 text-heading transition-colors"
             aria-hidden="true"
           />
         ) : (
-          <ChevronRight
+          <IconChevronRight
             size={14}
-            strokeWidth={2}
+
             className="shrink-0 text-text-muted transition-colors"
             aria-hidden="true"
           />
@@ -611,7 +612,7 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
                 title="Collapse sidebar"
                 className="p-1.5 rounded-lg text-text-muted hover:bg-surface hover:text-heading transition-colors cursor-pointer"
               >
-                <PanelLeftClose size={16} aria-hidden="true" />
+                <IconPanelLeftClose size={16} aria-hidden="true" />
               </button>
             )}
           </div>
@@ -639,23 +640,20 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
       {/* ── Quick Module Search (Expanded mode) ── */}
       {!collapsed && (
         <div className="px-3 pt-3 pb-1 shrink-0">
-          <div className="relative flex items-center">
-            <Search
-              size={13}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-            />
-            <input
+          <Input
               ref={searchInputRef}
               type="search"
+              size="sm"
               placeholder="Quick jump..."
               value={navSearch}
               onChange={(e) => setNavSearch(e.target.value)}
-              className="w-full pl-8 pr-14 py-1.5 text-xs rounded-lg bg-surface/80 border border-border text-heading placeholder:text-text-muted focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
+              leftIcon={<IconSearch size={13} />}
+              rightElement={
+                <kbd className="px-1.5 py-0.5 text-2xs font-mono font-medium text-text-muted/80 bg-bg border border-border/80 rounded shadow-2xs pointer-events-none">
+                  Ctrl K
+                </kbd>
+              }
             />
-            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-2xs font-mono font-medium text-text-muted/80 bg-bg border border-border/80 rounded shadow-2xs pointer-events-none">
-              Ctrl K
-            </kbd>
-          </div>
         </div>
       )}
 
@@ -745,7 +743,7 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
             title="Sign out"
             className="p-1.5 rounded-lg text-text-muted hover:bg-danger/10 hover:text-danger transition-colors cursor-pointer shrink-0"
           >
-            <LogOut size={15} aria-hidden="true" />
+            <IconLogout size={15} aria-hidden="true" />
           </button>
         </div>
       </div>

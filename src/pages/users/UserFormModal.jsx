@@ -273,9 +273,7 @@ export default function UserFormModal({
 
           {/* Status Switch Button */}
           <div className="sm:col-span-2 flex flex-col justify-between pt-1">
-            <label className="form-label block mb-1.5">
-              Account Status <span className="form-label-required" aria-hidden="true">*</span>
-            </label>
+            <span className="mf-label block mb-1.5">Account Status <span className="mf-required" aria-hidden="true">*</span></span>
             <div className="flex items-center h-control">
               <StatusSwitch
                 id="user-status-switch"

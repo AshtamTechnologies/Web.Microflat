@@ -168,7 +168,7 @@ export const mockPurchaseRequisitions = [
         fileSizeKB: 412,
         fileType: 'application/pdf',
         uploadedBy: 'John Patel',
-        uploadedDate: '2026-09-11 10:30 AM',
+        uploadedDate: '2026-09-11T10:30:00',
       },
       {
         id: 'att_pr_2',
@@ -176,7 +176,7 @@ export const mockPurchaseRequisitions = [
         fileSizeKB: 185,
         fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         uploadedBy: 'John Patel',
-        uploadedDate: '2026-09-11 10:32 AM',
+        uploadedDate: '2026-09-11T10:32:00',
       },
     ],
   },

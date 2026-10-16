@@ -15,35 +15,35 @@
  */
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  IconAdd,
+  IconArrowRight,
+  IconAttachment,
+  IconBack,
+  IconCheck,
+  IconClock,
+  IconClose,
+  IconDelete,
+  IconDocumentTypes,
+  IconEdit,
+  IconError,
+  IconExternalLink,
+  IconFile,
+  IconFileText,
+  IconInquiry,
+  IconLayers,
+  IconMessageSquare,
+  IconPackage,
+  IconSave,
+  IconSuccess,
+  IconTags,
+  IconUpload,
+  IconUser,
+  IconUserCheck,
+  IconView,
+} from '../../constants/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Save,
-  X,
-  Inbox,
-  FileText,
-  User,
-  Tags,
-  UserCheck,
-  AlertCircle,
-  Clock,
-  Paperclip,
-  UploadCloud,
-  Trash2,
-  FileCheck,
-  Layers,
-  File,
-  Plus,
-  Pencil,
-  Check,
-  Package,
-  Eye,
-  ExternalLink,
-  MessageSquare,
-  CheckCircle2,
-} from 'lucide-react';
 
 import {
   Button,
@@ -63,6 +63,9 @@ import {
   Td,
   PageHeader,
   ScrollableTabs,
+  Textarea,
+  IconButton,
+  FormActionsBar,
 } from '../../components/ui';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useUsersContext } from '../../context/UsersContext';
@@ -71,6 +74,7 @@ import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
 import { useRegions } from '../../context/RegionsContext';
 import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/treeUtils';
+import { getTodayISO } from '../../utils/dateUtils';
 import {
   SOURCE_OPTIONS,
   PRIORITY_OPTIONS,
@@ -117,7 +121,7 @@ const INITIAL_ITEM_ENTRY = {
 
 const INITIAL_FORM = {
   InquiryNo: '',
-  InquiryDate: new Date().toISOString().slice(0, 10),
+  InquiryDate: getTodayISO(),
   parentRegionId: '',
   RegionId: '',
   Subject: '',
@@ -715,7 +719,7 @@ export default function InquiryFormPage() {
 
         const data = {
           InquiryNo: existingInquiry.InquiryNo || '',
-          InquiryDate: existingInquiry.InquiryDate || new Date().toISOString().slice(0, 10),
+          InquiryDate: existingInquiry.InquiryDate || getTodayISO(),
           Subject: existingInquiry.Subject || '',
           Description: existingInquiry.Description || '',
           Source: existingInquiry.Source || 'Website',
@@ -906,10 +910,10 @@ export default function InquiryFormPage() {
 
   const renderFileExtIcon = (fileName = '') => {
     const lower = fileName.toLowerCase();
-    if (lower.endsWith('.pdf')) return <FileText size={16} className="text-danger shrink-0" />;
-    if (lower.endsWith('.docx') || lower.endsWith('.doc')) return <FileText size={16} className="text-primary shrink-0" />;
-    if (lower.endsWith('.dwg') || lower.endsWith('.dxf')) return <Layers size={16} className="text-primary shrink-0" />;
-    return <File size={16} className="text-text-muted shrink-0" />;
+    if (lower.endsWith('.pdf')) return <IconFileText size={16} className="text-danger shrink-0" />;
+    if (lower.endsWith('.docx') || lower.endsWith('.doc')) return <IconFileText size={16} className="text-primary shrink-0" />;
+    if (lower.endsWith('.dwg') || lower.endsWith('.dxf')) return <IconLayers size={16} className="text-primary shrink-0" />;
+    return <IconFile size={16} className="text-text-muted shrink-0" />;
   };
 
   async function handleSubmit(e) {
@@ -1005,14 +1009,14 @@ export default function InquiryFormPage() {
       <div className="max-w-4xl mx-auto py-12 px-4 text-center">
         <Card padding="lg" className="space-y-4">
           <div className="w-12 h-12 rounded-full bg-danger/10 text-danger flex items-center justify-center mx-auto">
-            <AlertCircle size={24} />
+            <IconError size={24} />
           </div>
           <h2 className="text-lg font-bold text-heading">Inquiry Not Found</h2>
           <p className="text-sm text-text-muted">
             The requested inquiry with ID "{id}" could not be located in the records.
           </p>
           <Button variant="primary" onClick={() => navigate('/inquiries')}>
-            Return to Inquiries
+            Back to Inquiries
           </Button>
         </Card>
       </div>
@@ -1023,39 +1027,33 @@ export default function InquiryFormPage() {
     <form onSubmit={handleSubmit} noValidate className="space-y-6 pb-20">
       {/* ── Top Page Header & Navigation ── */}
       <PageHeader
-        title={isEdit ? `Edit Inquiry: ${existingInquiry?.InquiryNo}` : 'New Inquiry / RFQ Registration'}
-        icon={<Inbox className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" aria-hidden="true" />}
+        title={isEdit ? `Edit Inquiry: ${existingInquiry?.InquiryNo}` : 'Create Inquiry'}
+        icon={<IconInquiry className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" aria-hidden="true" />}
         backButton={
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            icon={IconBack}
             onClick={handleCancel}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
-            <ArrowLeft
-              size={14}
-              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform duration-150 shrink-0"
-              aria-hidden="true"
-            />
-            <span>Back to Inquiries</span>
-          </button>
+            Back to Inquiries
+          </Button>
         }
         actions={
-          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
             <CancelButton
-              size="md"
               onClick={handleCancel}
               disabled={loading}
-              className="flex-1 sm:flex-initial"
+              size="sm"
             />
-
             <SaveButton
               type="submit"
-              size="md"
               loading={loading}
               disabled={loading}
-              className="flex-1 sm:flex-initial justify-center shadow-xs font-semibold"
+              size="sm"
             >
-              {isEdit ? 'Save Changes' : 'Save Inquiry'}
+              {isEdit ? 'Save Changes' : 'Create Inquiry'}
             </SaveButton>
           </div>
         }
@@ -1070,14 +1068,14 @@ export default function InquiryFormPage() {
           {
             id: 'inquiry_customer',
             label: 'Inquiry & Customer Details',
-            icon: Inbox,
+            icon: IconInquiry,
             badge: form.items?.length > 0 ? form.items.length : undefined,
             hasError: hasTab1Errors,
           },
           {
             id: 'assignment_documents',
             label: 'Assignment & Documents',
-            icon: UserCheck,
+            icon: IconUserCheck,
             badge: (form.attachments?.length || 0) > 0 ? form.attachments.length : undefined,
             hasError: hasTab2Errors,
           },
@@ -1094,7 +1092,7 @@ export default function InquiryFormPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-5 border-b border-border">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <FileText size={18} />
+                  <IconFileText size={18} />
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-heading">
@@ -1235,7 +1233,7 @@ export default function InquiryFormPage() {
           <Card padding="md" className="bg-bg">
             <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-base">
-                <User size={18} className="text-primary shrink-0" aria-hidden="true" />
+                <IconUser size={18} className="text-primary shrink-0" aria-hidden="true" />
                 <span>2. Customer Information</span>
               </div>
               <span className="text-xs text-text-muted font-normal">
@@ -1390,7 +1388,7 @@ export default function InquiryFormPage() {
           <Card padding="md" className="bg-bg space-y-6">
             <div className="border-b border-border pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-base">
-                <Package size={18} className="text-primary shrink-0" aria-hidden="true" />
+                <IconPackage size={18} className="text-primary shrink-0" aria-hidden="true" />
                 <span>3. Product Selection</span>
                 <span className="text-2xs font-medium text-text-muted bg-surface border border-border px-2 py-0.5 rounded-full">
                   Optional
@@ -1416,7 +1414,7 @@ export default function InquiryFormPage() {
                         : 'bg-primary/10 text-primary'
                       }`}
                   >
-                    {editingItemId ? <Pencil size={15} /> : <Package size={16} />}
+                    {editingItemId ? <IconEdit size={15} /> : <IconPackage size={16} />}
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-heading">
@@ -1436,7 +1434,7 @@ export default function InquiryFormPage() {
                     onClick={resetItemForm}
                     className="text-xs self-start sm:self-auto h-7 px-2"
                   >
-                    <X size={13} className="mr-1" />
+                    <IconClose size={13} className="mr-1" />
                     Cancel
                   </Button>
                 )}
@@ -1558,7 +1556,7 @@ export default function InquiryFormPage() {
                       onClick={resetItemForm}
                       className="cursor-pointer text-xs"
                     >
-                      <X size={14} className="mr-1" />
+                      <IconClose size={14} className="mr-1" />
                       Cancel
                     </Button>
                   )}
@@ -1572,12 +1570,12 @@ export default function InquiryFormPage() {
                   >
                     {editingItemId ? (
                       <>
-                        <Check size={14} className="mr-1.5" />
+                        <IconCheck size={14} className="mr-1.5" />
                         Update Item
                       </>
                     ) : (
                       <>
-                        <Plus size={14} className="mr-1.5" />
+                        <IconAdd size={14} className="mr-1.5" />
                         Add Item
                       </>
                     )}
@@ -1607,7 +1605,7 @@ export default function InquiryFormPage() {
                       onClick={() => setShowBulkDeleteConfirm(true)}
                       className="text-xs h-7 px-2.5 shadow-xs cursor-pointer"
                     >
-                      <Trash2 size={13} className="mr-1.5" />
+                      <IconDelete size={13} className="mr-1.5" />
                       Delete Selected ({selectedItemIds.size})
                     </Button>
                   )}
@@ -1689,22 +1687,23 @@ export default function InquiryFormPage() {
                               </Td>
                               <Td className="text-right">
                                 <div className="flex items-center justify-end gap-1.5">
-                                  <button
-                                    type="button"
+                                  <IconButton
+                                    icon={IconEdit}
+                                    size="sm"
+                                    variant="ghost"
+                                    title="Edit Item"
+                                    aria-label="Edit Item"
                                     onClick={() => handleStartEditItem(item, idx)}
-                                    className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
-                                    title="Edit item"
-                                  >
-                                    <Pencil size={13} />
-                                  </button>
-                                  <button
-                                    type="button"
+                                  />
+                                  <IconButton
+                                    icon={IconDelete}
+                                    size="sm"
+                                    variant="ghost"
+                                    title="Remove Item"
+                                    aria-label="Remove Item"
                                     onClick={() => setItemToDelete({ item, index: idx })}
-                                    className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 transition-all cursor-pointer shadow-2xs"
-                                    title="Remove item"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
+                                    className="hover:text-danger hover:bg-danger/10"
+                                  />
                                 </div>
                               </Td>
                             </tr>
@@ -1739,22 +1738,23 @@ export default function InquiryFormPage() {
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditItem(item, idx)}
-                                className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-primary hover:border-primary/50 transition-all cursor-pointer shadow-2xs"
-                                title="Edit item"
-                              >
-                                <Pencil size={13} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setItemToDelete({ item, index: idx })}
-                                className="p-1.5 rounded-lg border border-border bg-surface text-text hover:text-danger hover:border-danger/50 transition-all cursor-pointer shadow-2xs"
-                                title="Remove item"
-                              >
-                                <Trash2 size={13} />
-                              </button>
+                              <IconButton
+                                    icon={IconEdit}
+                                    size="sm"
+                                    variant="ghost"
+                                    title="Edit Item"
+                                    aria-label="Edit Item"
+                                    onClick={() => handleStartEditItem(item, idx)}
+                                  />
+                              <IconButton
+                                    icon={IconDelete}
+                                    size="sm"
+                                    variant="ghost"
+                                    title="Remove Item"
+                                    aria-label="Remove Item"
+                                    onClick={() => setItemToDelete({ item, index: idx })}
+                                    className="hover:text-danger hover:bg-danger/10"
+                                  />
                             </div>
                           </div>
 
@@ -1782,7 +1782,7 @@ export default function InquiryFormPage() {
                 </>
               ) : (
                 <div className="py-8 text-center text-text-muted text-xs space-y-1">
-                  <Package size={24} className="mx-auto text-text-muted/40 mb-1" />
+                  <IconPackage size={24} className="mx-auto text-text-muted/40 mb-1" />
                   <p className="font-medium text-heading">No items added to inquiry yet</p>
                   <p>Fill in the item details above and click &quot;+ Add Item&quot; to include products.</p>
                 </div>
@@ -1800,7 +1800,7 @@ export default function InquiryFormPage() {
               disabled={loading}
               className="w-full sm:w-auto justify-center"
             >
-              <X size={16} className="mr-1.5" aria-hidden="true" />
+              <IconClose size={16} className="mr-1.5" aria-hidden="true" />
               Cancel
             </Button>
 
@@ -1813,7 +1813,7 @@ export default function InquiryFormPage() {
                 className="w-full sm:w-auto justify-center"
               >
                 <span>Next: Assignment & Documents</span>
-                <ArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
+                <IconArrowRight size={16} className="ml-1.5 shrink-0" aria-hidden="true" />
               </Button>
 
               <SaveButton
@@ -1839,7 +1839,7 @@ export default function InquiryFormPage() {
           <Card padding="md" className="bg-bg">
             <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-base">
-                <UserCheck size={18} className="text-primary shrink-0" aria-hidden="true" />
+                <IconUserCheck size={18} className="text-primary shrink-0" aria-hidden="true" />
                 <span>4. Assignment & Initial Status</span>
               </div>
               <span className="text-xs text-text-muted font-normal">
@@ -1881,7 +1881,7 @@ export default function InquiryFormPage() {
                       Initial Pipeline Stage
                     </span>
                     <div className="p-2.5 rounded-lg border border-border bg-surface flex items-center gap-2 text-xs text-text">
-                      <Clock size={15} className="text-primary shrink-0" />
+                      <IconClock size={15} className="text-primary shrink-0" />
                       <span>New inquiry will start at stage <strong className="text-heading">"New"</strong> and progress through Quoting and Won/Lost.</span>
                     </div>
                   </div>
@@ -1889,28 +1889,16 @@ export default function InquiryFormPage() {
               </div>
 
               {/* Initial Handover Note / Comment Area */}
-              <div className="mt-4 pt-4 border-t border-border/70 space-y-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                  <label
-                    htmlFor="initialComment"
-                    className="text-xs font-semibold text-heading flex items-center gap-1.5"
-                  >
-                    <MessageSquare size={14} className="text-primary shrink-0" />
-                    <span>Initial Comment / Handover Note (Optional)</span>
-                  </label>
-                  <span className="text-2xs text-text-muted font-normal">
-                    Automatically logged into inquiry activity upon saving
-                  </span>
-                </div>
-
-                <textarea
+              <div className="mt-4 pt-4 border-t border-border/70">
+                <Textarea
                   id="initialComment"
                   name="initialComment"
+                  label="Initial Comment / Handover Note (Optional)"
                   rows={3}
                   value={form.initialComment}
                   onChange={handleChange}
                   placeholder="Add internal notes, customer communication summary, or handover instructions for the assigned team member..."
-                  className="w-full rounded-lg border border-border bg-bg text-text text-sm p-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-text-muted/60"
+                  hint="Automatically logged into inquiry activity upon saving"
                 />
               </div>
             </div>
@@ -1920,7 +1908,7 @@ export default function InquiryFormPage() {
           <Card padding="md" className="bg-bg">
             <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-base">
-                <Paperclip size={18} className="text-primary shrink-0" aria-hidden="true" />
+                <IconAttachment size={18} className="text-primary shrink-0" aria-hidden="true" />
                 <span>5. Documents & Attachments</span>
               </div>
               <span className="text-xs text-text-muted font-normal">
@@ -1977,10 +1965,9 @@ export default function InquiryFormPage() {
 
                 {/* File Drag & Drop Box */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-heading block">
-                    Select File
-                  </label>
+                  <span className="mf-label block">Select File</span>
 
+                  {/* Native file input hidden for custom drag-drop styling */}
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -2027,7 +2014,7 @@ export default function InquiryFormPage() {
                       <div className="flex items-center justify-between gap-3 text-left">
                         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                            <FileCheck size={18} />
+                            <IconDocumentTypes size={18} />
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-heading font-mono truncate">
@@ -2051,13 +2038,13 @@ export default function InquiryFormPage() {
                           }}
                           className="text-xs text-danger hover:bg-danger/10 h-7 px-2 shrink-0"
                         >
-                          <X size={13} className="mr-1" />
+                          <IconClose size={13} className="mr-1" />
                           Remove
                         </Button>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-1">
-                        <UploadCloud size={24} className="text-primary/70 mb-1" />
+                        <IconUpload size={24} className="text-primary/70 mb-1" />
                         <p className="text-xs font-semibold text-heading">
                           Click to choose file or drag & drop here
                         </p>
@@ -2072,7 +2059,7 @@ export default function InquiryFormPage() {
 
                   {stageFileError && (
                     <p className="text-xs text-danger flex items-center gap-1 mt-0.5">
-                      <AlertCircle size={13} />
+                      <IconError size={13} />
                       <span>{stageFileError}</span>
                     </p>
                   )}
@@ -2081,19 +2068,13 @@ export default function InquiryFormPage() {
                 {/* Remarks and Add Button */}
                 <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-2">
                   <div className="flex-1">
-                    <label
-                      htmlFor="stageDocRemarks"
-                      className="text-xs font-medium text-heading block mb-1"
-                    >
-                      Document Remarks (Optional)
-                    </label>
-                    <input
+                    <Input
                       id="stageDocRemarks"
-                      type="text"
+                      name="stageDocRemarks"
+                      label="Remarks / Description (Optional)"
                       value={stageDocRemarks}
                       onChange={(e) => setStageDocRemarks(e.target.value)}
-                      placeholder="e.g. Initial customer specification copy..."
-                      className="w-full rounded-lg border border-border bg-bg text-text text-xs px-3 py-2 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                      placeholder="e.g. Revised tolerance drawings per client call, stamped QA report..."
                     />
                   </div>
 
@@ -2104,7 +2085,7 @@ export default function InquiryFormPage() {
                     onClick={handleAddAttachment}
                     className="text-xs font-semibold shrink-0 h-9 w-full sm:w-auto justify-center"
                   >
-                    <Plus size={15} className="mr-1.5 text-primary shrink-0" />
+                    <IconAdd size={15} className="mr-1.5 text-primary shrink-0" />
                     Add to Attachments List
                   </Button>
                 </div>
@@ -2162,22 +2143,23 @@ export default function InquiryFormPage() {
                             </td>
                             <td className="py-2.5 px-4 text-center">
                               <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  type="button"
+                                <IconButton
+                                  icon={IconView}
+                                  size="sm"
+                                  variant="ghost"
+                                  title="Preview attachment"
+                                  aria-label="Preview attachment"
                                   onClick={() => setPreviewAttachment(att)}
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 border border-border/50 hover:border-primary/30 transition-all cursor-pointer"
-                                  title="View attachment details"
-                                >
-                                  <Eye size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveAttachment(att.id)}
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 border border-border/50 hover:border-danger/30 transition-all cursor-pointer"
+                                />
+                                <IconButton
+                                  icon={IconDelete}
+                                  size="sm"
+                                  variant="ghost"
                                   title="Remove attachment"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                                  aria-label="Remove attachment"
+                                  onClick={() => handleRemoveAttachment(att.id)}
+                                  className="hover:text-danger hover:bg-danger/10"
+                                />
                               </div>
                             </td>
                           </tr>
@@ -2205,7 +2187,7 @@ export default function InquiryFormPage() {
                 disabled={loading}
                 className="w-full sm:w-auto justify-center"
               >
-                <ArrowLeft size={16} className="mr-1.5 shrink-0" />
+                <IconBack size={16} className="mr-1.5 shrink-0" />
                 <span>Back to Inquiry Details</span>
               </Button>
 
@@ -2217,7 +2199,7 @@ export default function InquiryFormPage() {
                 disabled={loading}
                 className="w-full sm:w-auto justify-center"
               >
-                <X size={16} className="mr-1.5" aria-hidden="true" />
+                <IconClose size={16} className="mr-1.5" aria-hidden="true" />
                 Cancel
               </Button>
             </div>
@@ -2284,7 +2266,7 @@ export default function InquiryFormPage() {
                   }}
                   className="text-xs"
                 >
-                  <ExternalLink size={14} className="mr-1.5" />
+                  <IconExternalLink size={14} className="mr-1.5" />
                   Open in New Tab
                 </Button>
               )}
@@ -2325,6 +2307,7 @@ export default function InquiryFormPage() {
         cancelText="Cancel"
         variant="danger"
       />
+
     </form>
   );
 }

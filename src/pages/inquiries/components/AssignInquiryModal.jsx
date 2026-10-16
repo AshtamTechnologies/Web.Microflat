@@ -5,7 +5,12 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { UserPlus, UserCheck, MessageSquare, AlertCircle } from 'lucide-react';
+import {
+  IconError,
+  IconMessageSquare,
+  IconUserCheck,
+  IconUserPlus,
+} from '../../../constants/icons';
 import { Modal, Button, CancelButton, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiriesContext } from '../../../context/InquiriesContext';
 import { useUsersContext } from '../../../context/UsersContext';
@@ -149,12 +154,12 @@ export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
           >
             {isReassignment ? (
               <>
-                <UserCheck size={16} className="mr-1.5" />
+                <IconUserCheck size={16} className="mr-1.5" />
                 Confirm Reassignment
               </>
             ) : (
               <>
-                <UserPlus size={16} className="mr-1.5" />
+                <IconUserPlus size={16} className="mr-1.5" />
                 Assign Inquiry
               </>
             )}

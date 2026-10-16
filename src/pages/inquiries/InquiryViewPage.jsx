@@ -8,42 +8,41 @@ import { useState, useMemo, Fragment } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft,
-  Pencil,
-  UserPlus,
-  UserCheck,
-  RefreshCw,
-  Inbox,
-  FileText,
-  User,
-  Tags,
-  Clock,
-  Building2,
-  Phone,
-  Mail,
-  Calendar,
-  IndianRupee,
-  Activity as ActivityIcon,
-  AlertCircle,
-  CheckCircle2,
-  Paperclip,
-  UploadCloud,
-  Download,
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  FileCode,
-  Layers,
-  File,
-  Send,
-  MessageSquare,
-  Eye,
-  ShieldCheck,
-  FileCheck,
-  MapPin,
-  Package,
-} from 'lucide-react';
-import { IconInquiry } from '../../constants/icons';
+  IconActivity,
+  IconAdd,
+  IconAttachment,
+  IconBack,
+  IconBuilding2,
+  IconCalendar,
+  IconChevronDown,
+  IconChevronRight,
+  IconClock,
+  IconDocumentTypes,
+  IconDownload,
+  IconEdit,
+  IconError,
+  IconFile,
+  IconFileCode,
+  IconFileText,
+  IconIndianRupee,
+  IconInquiry,
+  IconLayers,
+  IconLocation,
+  IconMail,
+  IconMessageSquare,
+  IconPackage,
+  IconPhone,
+  IconRefresh,
+  IconSend,
+  IconShieldCheck,
+  IconSuccess,
+  IconTags,
+  IconUpload,
+  IconUser,
+  IconUserCheck,
+  IconUserPlus,
+  IconView,
+} from '../../constants/icons';
 
 import {
   Button,
@@ -57,6 +56,8 @@ import {
   Td,
   Modal,
   PageHeader,
+  Textarea,
+  IconButton,
 } from '../../components/ui';
 import ActivityTimeline from '../../components/ActivityTimeline';
 import { useInquiriesContext } from '../../context/InquiriesContext';
@@ -223,7 +224,7 @@ export default function InquiryViewPage() {
           `Uploaded Date    : ${formatDate(item.uploadedOn)}`,
           `Revision Remarks : ${item.changeRemarks || 'N/A'}`,
           `================================================================`,
-          `Exported On      : ${new Date().toLocaleString()}`,
+          `Exported On      : ${formatDateTime(new Date())}`,
           `Status           : Verified ERP Record Attachment`,
           `================================================================\n`,
         ].join('\n');
@@ -256,10 +257,10 @@ export default function InquiryViewPage() {
 
   const renderFileExtIcon = (ext = '') => {
     const lower = ext.toLowerCase();
-    if (lower === '.pdf') return <FileText size={15} className="text-danger shrink-0" />;
-    if (lower === '.docx' || lower === '.doc') return <FileText size={15} className="text-primary shrink-0" />;
-    if (lower === '.dwg' || lower === '.dxf') return <Layers size={15} className="text-primary shrink-0" />;
-    return <File size={15} className="text-text-muted shrink-0" />;
+    if (lower === '.pdf') return <IconFileText size={15} className="text-danger shrink-0" />;
+    if (lower === '.docx' || lower === '.doc') return <IconFileText size={15} className="text-primary shrink-0" />;
+    if (lower === '.dwg' || lower === '.dxf') return <IconLayers size={15} className="text-primary shrink-0" />;
+    return <IconFile size={15} className="text-text-muted shrink-0" />;
   };
 
   if (!inquiry) {
@@ -267,14 +268,14 @@ export default function InquiryViewPage() {
       <div className="max-w-4xl mx-auto py-16 px-4 text-center">
         <Card padding="lg" className="space-y-4">
           <div className="w-12 h-12 rounded-full bg-danger/10 text-danger flex items-center justify-center mx-auto">
-            <AlertCircle size={24} />
+            <IconError size={24} />
           </div>
           <h2 className="text-lg font-bold text-heading">Inquiry Not Found</h2>
           <p className="text-sm text-text-muted">
             The requested inquiry record with ID "{id}" does not exist or has been removed.
           </p>
           <Button variant="primary" onClick={() => navigate('/inquiries')}>
-            Return to Inquiries
+            Back to Inquiries
           </Button>
         </Card>
       </div>
@@ -292,18 +293,15 @@ export default function InquiryViewPage() {
         title={inquiry.InquiryNo}
         icon={<IconInquiry className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            icon={IconBack}
             onClick={() => navigate('/inquiries')}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
-            <ArrowLeft
-              size={14}
-              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform duration-150"
-              aria-hidden="true"
-            />
-            <span>Back to Inquiries</span>
-          </button>
+            Back to Inquiries
+          </Button>
         }
         badge={
           <div className="flex items-center gap-2">
@@ -332,7 +330,7 @@ export default function InquiryViewPage() {
               onClick={() => setIsStatusModalOpen(true)}
               className="text-xs"
             >
-              <RefreshCw size={14} className="mr-1.5" />
+              <IconRefresh size={14} className="mr-1.5" />
               Change Status
             </Button>
 
@@ -346,12 +344,12 @@ export default function InquiryViewPage() {
             >
               {isAssigned ? (
                 <>
-                  <UserCheck size={14} className="mr-1.5 text-primary" />
+                  <IconUserCheck size={14} className="mr-1.5 text-primary" />
                   Reassign
                 </>
               ) : (
                 <>
-                  <UserPlus size={14} className="mr-1.5" />
+                  <IconUserPlus size={14} className="mr-1.5" />
                   Assign
                 </>
               )}
@@ -365,7 +363,7 @@ export default function InquiryViewPage() {
               onClick={() => navigate(`/inquiries/${inquiry.id || inquiry.InquiryId}/edit`)}
               className="text-xs"
             >
-              <Pencil size={14} className="mr-1.5" />
+              <IconEdit size={14} className="mr-1.5" />
               Edit Inquiry
             </Button>
           </div>
@@ -378,7 +376,7 @@ export default function InquiryViewPage() {
         <Card padding="md" className="bg-bg">
           <div className="border-b border-border pb-3 mb-4 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-              <FileText size={17} className="text-primary shrink-0" />
+              <IconFileText size={17} className="text-primary shrink-0" />
               <span>1. Inquiry Master Details</span>
             </div>
             {inquiry.InquiryNo && (
@@ -403,7 +401,7 @@ export default function InquiryViewPage() {
             <DetailField
               label="Estimate Date"
               value={inquiry.RequiredByDate || inquiry.EstimateDate ? formatDate(inquiry.RequiredByDate || inquiry.EstimateDate) : 'Not specified'}
-              icon={Calendar}
+              icon={IconCalendar}
               mono
             />
 
@@ -447,7 +445,7 @@ export default function InquiryViewPage() {
         <Card padding="md" className="bg-bg">
           <div className="border-b border-border pb-3 mb-4 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-              <Building2 size={17} className="text-primary shrink-0" />
+              <IconBuilding2 size={17} className="text-primary shrink-0" />
               <span>2. Customer Information</span>
             </div>
             <span className="text-xs text-text-muted">Client Profile</span>
@@ -464,20 +462,20 @@ export default function InquiryViewPage() {
             <DetailField
               label="Contact Person"
               value={inquiry.ContactPerson}
-              icon={User}
+              icon={IconUser}
             />
 
             <DetailField
               label="Email Address"
               value={inquiry.Email}
-              icon={Mail}
+              icon={IconMail}
               isEmail
             />
 
             <DetailField
               label="Phone / Contact No"
               value={inquiry.Phone}
-              icon={Phone}
+              icon={IconPhone}
               isPhone
               mono
             />
@@ -486,7 +484,7 @@ export default function InquiryViewPage() {
               <DetailField
                 label="Alternative Phone"
                 value={inquiry.AlternativePhone}
-                icon={Phone}
+                icon={IconPhone}
                 isPhone
                 mono
               />
@@ -501,7 +499,7 @@ export default function InquiryViewPage() {
               <div className="sm:col-span-2 pt-2 border-t border-border/60">
                 <span className="view-field-label">Customer Address</span>
                 <div className="flex items-start gap-1.5 text-heading text-xs">
-                  <MapPin size={14} className="text-primary mt-0.5 shrink-0" />
+                  <IconLocation size={14} className="text-primary mt-0.5 shrink-0" />
                   <span>
                     {[
                       inquiry.AddressLine1,
@@ -523,7 +521,7 @@ export default function InquiryViewPage() {
         <Card padding="md" className="lg:col-span-2 bg-bg space-y-4">
           <div className="border-b border-border pb-3 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-              <Package size={17} className="text-primary shrink-0" />
+              <IconPackage size={17} className="text-primary shrink-0" />
               <span>3. Product Selection</span>
             </div>
             <span className="text-xs text-text-muted">Scope & Line Items</span>
@@ -659,7 +657,7 @@ export default function InquiryViewPage() {
         <Card padding="md" className="lg:col-span-2 bg-bg">
           <div className="border-b border-border pb-3 mb-4 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-              <UserCheck size={17} className="text-primary shrink-0" />
+              <IconUserCheck size={17} className="text-primary shrink-0" />
               <span>4. Assignment & Audit History</span>
             </div>
             <button
@@ -718,7 +716,7 @@ export default function InquiryViewPage() {
       <Card padding="md" className="bg-bg">
         <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <ActivityIcon size={18} className="text-primary" />
+            <IconActivity size={18} className="text-primary" />
             <h3 className="text-heading font-semibold text-base">Activity & Audit Trail</h3>
             <Badge variant="neutral" className="text-xs font-mono px-2 py-0.5">
               {(inquiry.activity || []).length}
@@ -731,26 +729,13 @@ export default function InquiryViewPage() {
 
         {/* ── Add Comment Section ── */}
         <div className="mb-6 p-4 rounded-xl bg-surface/50 border border-border space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <label
-              htmlFor="inquiry-comment-input"
-              className="text-xs font-semibold text-heading flex items-center gap-1.5"
-            >
-              <MessageSquare size={14} className="text-primary" />
-              <span>Add Comment / Internal Note</span>
-            </label>
-            <span className="text-2xs text-text-muted">
-              Posting as <strong className="text-heading font-medium">Ian Chesnut</strong>
-            </span>
-          </div>
-
-          <textarea
+          <Textarea
             id="inquiry-comment-input"
+            label="Add Comment / Internal Note"
             rows={3}
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
             placeholder="Write a note, client communication summary, or internal remark..."
-            className="w-full text-xs bg-bg border border-border rounded-lg p-3 text-heading placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all resize-none shadow-2xs"
           />
 
           <div className="flex items-center justify-between gap-3 pt-0.5">
@@ -774,7 +759,7 @@ export default function InquiryViewPage() {
               disabled={!commentText.trim() || isSubmittingComment}
               className="text-xs font-semibold shadow-2xs"
             >
-              <Send size={13} className="mr-1.5" />
+              <IconSend size={13} className="mr-1.5" />
               {isSubmittingComment ? 'Posting...' : 'Post Comment'}
             </Button>
           </div>
@@ -803,7 +788,7 @@ export default function InquiryViewPage() {
         <Card padding="md" className="bg-bg">
           <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <Paperclip size={18} className="text-primary" />
+              <IconAttachment size={18} className="text-primary" />
               <h3 className="text-heading font-semibold text-base">Documents & Attachments</h3>
               <Badge variant="neutral" className="text-xs font-mono px-2 py-0.5">
                 {inquiryDocuments.length}
@@ -821,7 +806,7 @@ export default function InquiryViewPage() {
               }}
               className="text-xs font-semibold self-start sm:self-auto shadow-2xs"
             >
-              <Plus size={15} className="mr-1.5" />
+              <IconAdd size={15} className="mr-1.5" />
               Upload Document
             </Button>
           </div>
@@ -829,7 +814,7 @@ export default function InquiryViewPage() {
           {/* Document list or empty state */}
           {inquiryDocuments.length === 0 ? (
             <div className="py-12 text-center text-xs text-text-muted border border-dashed border-border rounded-xl bg-surface/20 space-y-3">
-              <Paperclip size={24} className="mx-auto text-text-muted/60" />
+              <IconAttachment size={24} className="mx-auto text-text-muted/60" />
               <div>
                 <p className="font-semibold text-heading text-sm">No documents attached yet</p>
                 <p className="mt-0.5">Upload customer RFQs, engineering drawings, or technical specifications.</p>
@@ -845,7 +830,7 @@ export default function InquiryViewPage() {
                 }}
                 className="text-xs mt-2"
               >
-                <Plus size={14} className="mr-1.5" />
+                <IconAdd size={14} className="mr-1.5" />
                 Upload First Attachment
               </Button>
             </div>
@@ -885,9 +870,9 @@ export default function InquiryViewPage() {
                               title={isExpanded ? 'Collapse version history' : 'Expand version history'}
                             >
                               {isExpanded ? (
-                                <ChevronDown size={16} className="text-primary" />
+                                <IconChevronDown size={16} className="text-primary" />
                               ) : (
-                                <ChevronRight size={16} />
+                                <IconChevronRight size={16} />
                               )}
                             </button>
                           </Td>
@@ -932,7 +917,7 @@ export default function InquiryViewPage() {
                               >
                                 {currentVersion.fileName}
                               </span>
-                              <Eye size={13} className="text-text-muted/50 group-hover/file:text-primary shrink-0 opacity-0 group-hover/file:opacity-100 transition-opacity" />
+                              <IconView size={13} className="text-text-muted/50 group-hover/file:text-primary shrink-0 opacity-0 group-hover/file:opacity-100 transition-opacity" />
                             </button>
                           </Td>
 
@@ -965,7 +950,7 @@ export default function InquiryViewPage() {
                               title="Upload new version"
                               className="text-xs font-semibold text-primary border-primary/30 hover:border-primary hover:bg-primary/10 bg-surface shadow-2xs h-7 px-2.5 inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
                             >
-                              <UploadCloud size={13} className="shrink-0 text-primary" />
+                              <IconUpload size={13} className="shrink-0 text-primary" />
                               <span>New Rev</span>
                             </Button>
                           </Td>
@@ -978,7 +963,7 @@ export default function InquiryViewPage() {
                               <div className="p-3 sm:p-4 sm:pl-12 space-y-2.5 animate-in fade-in duration-100">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
                                   <span className="text-xs font-bold text-heading flex items-center gap-1.5 min-w-0">
-                                    <Clock size={14} className="text-text-muted shrink-0" />
+                                    <IconClock size={14} className="text-text-muted shrink-0" />
                                     <span className="truncate">Version History for "{doc.documentTitle}"</span>
                                   </span>
                                   <span className="text-2xs text-text-muted shrink-0">
@@ -1034,7 +1019,7 @@ export default function InquiryViewPage() {
                                               >
                                                 {ver.fileName}
                                               </span>
-                                              <Eye size={12} className="text-text-muted/50 group-hover/verfile:text-primary shrink-0 opacity-0 group-hover/verfile:opacity-100 transition-opacity" />
+                                              <IconView size={12} className="text-text-muted/50 group-hover/verfile:text-primary shrink-0 opacity-0 group-hover/verfile:opacity-100 transition-opacity" />
                                             </button>
                                           </td>
 
@@ -1067,7 +1052,7 @@ export default function InquiryViewPage() {
                                                 title="View / Preview attachment"
                                                 className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2.5 inline-flex items-center gap-1 cursor-pointer"
                                               >
-                                                <Eye size={13} className="text-text-muted shrink-0" />
+                                                <IconView size={13} className="text-text-muted shrink-0" />
                                                 <span>View</span>
                                               </Button>
                                               <Button
@@ -1084,7 +1069,7 @@ export default function InquiryViewPage() {
                                                 title="Download attachment"
                                                 className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2.5 inline-flex items-center gap-1 cursor-pointer"
                                               >
-                                                <Download size={13} className="text-text-muted shrink-0" />
+                                                <IconDownload size={13} className="text-text-muted shrink-0" />
                                                 <span>Download</span>
                                               </Button>
                                             </div>
@@ -1156,18 +1141,18 @@ export default function InquiryViewPage() {
             <div className="bg-bg rounded-2xl border border-border p-6 flex flex-col items-center justify-center min-h-[320px] shadow-inner text-center space-y-4 relative overflow-hidden">
               <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto border border-primary/20 shadow-xs">
                 {previewItem.fileExtension?.toLowerCase() === '.pdf' ? (
-                  <FileText size={32} className="text-danger" />
+                  <IconFileText size={32} className="text-danger" />
                 ) : previewItem.fileExtension?.toLowerCase() === '.dwg' ||
                   previewItem.fileExtension?.toLowerCase() === '.dxf' ? (
-                  <Layers size={32} className="text-primary" />
+                  <IconLayers size={32} className="text-primary" />
                 ) : (
-                  <FileCheck size={32} className="text-primary" />
+                  <IconDocumentTypes size={32} className="text-primary" />
                 )}
               </div>
 
               <div className="space-y-1 max-w-md">
                 <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-success/10 text-success border border-success/20">
-                  <ShieldCheck size={14} /> Verified Document File
+                  <IconShieldCheck size={14} /> Verified Document File
                 </span>
                 <h4 className="text-base font-bold text-heading mt-2">
                   {previewItem.documentTitle || previewItem.fileName}
@@ -1229,7 +1214,7 @@ export default function InquiryViewPage() {
                 onClick={() => handleDownloadAttachment(previewItem)}
                 className="text-xs font-semibold"
               >
-                <Download size={14} className="mr-1.5" />
+                <IconDownload size={14} className="mr-1.5" />
                 Download Attachment
               </Button>
             </div>

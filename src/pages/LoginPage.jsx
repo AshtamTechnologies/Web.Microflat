@@ -11,29 +11,29 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Eye,
-  EyeOff,
-  Ruler,
-  Activity,
-  Target,
-  ArrowLeft,
-  Mail,
-  Lock,
-  KeyRound,
-  CheckCircle2,
-  ShieldAlert,
-  ShieldCheck,
-  Check,
-} from 'lucide-react';
+  IconActivity,
+  IconBack,
+  IconCheck,
+  IconEyeOff,
+  IconKeyRound,
+  IconLock,
+  IconMail,
+  IconRuler,
+  IconShieldAlert,
+  IconShieldCheck,
+  IconSuccess,
+  IconTarget,
+  IconView,
+} from '../constants/icons';
+import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import { Button, Input, Checkbox, ErrorBanner } from '../components/ui';
 import { login, forgotPassword, forceResetPassword } from '../services/authService';
 import { useUserSessions } from '../context/UserSessionsContext';
 import { mockUsers } from '../mocks/users';
-import { parseUserAgent } from '../utils/dateTime';
+import { parseUserAgent } from '../utils/dateUtils';
 
 const LOGO = '/micro-flat-logo.png';
 
@@ -153,9 +153,9 @@ function BrandPanel() {
         {/* Stats row */}
         <div className="flex gap-8 pt-10 border-t mt-10" style={{ borderColor: 'var(--brand-800)' }}>
           {[
-            { icon: <Ruler size={14} strokeWidth={1.5} />, value: '45+', label: 'Years of precision' },
-            { icon: <Activity size={14} strokeWidth={1.5} />, value: 'NABL', label: 'Accredited lab' },
-            { icon: <Target size={14} strokeWidth={1.5} />, value: '0.001mm', label: 'Tolerance grade' },
+            { icon: <IconRuler size={14} />, value: '45+', label: 'Years of precision' },
+            { icon: <IconActivity size={14} />, value: 'NABL', label: 'Accredited lab' },
+            { icon: <IconTarget size={14} />, value: '0.001mm', label: 'Tolerance grade' },
           ].map(({ icon, value, label }) => (
             <div key={label} className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5" style={{ color: 'var(--brand-300)' }}>
@@ -435,6 +435,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                 <Input
                   id="login-identifier"
                   name="identifier"
+                  size="lg"
                   type="text"
                   label="Email or Username"
                   placeholder="admin@microflat.in"
@@ -449,6 +450,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                 <Input
                   id="login-password"
                   name="password"
+                  size="lg"
                   type={showLoginPassword ? 'text' : 'password'}
                   label="Password"
                   placeholder="••••••••"
@@ -465,9 +467,9 @@ export default function LoginPage({ initialMode = 'login' }) {
                       className="p-1 rounded text-text-muted hover:text-text transition-colors duration-150"
                     >
                       {showLoginPassword ? (
-                        <EyeOff size={16} aria-hidden="true" />
+                        <IconEyeOff size={16} aria-hidden="true" />
                       ) : (
-                        <Eye size={16} aria-hidden="true" />
+                        <IconView size={16} aria-hidden="true" />
                       )}
                     </button>
                   }
@@ -553,14 +555,14 @@ export default function LoginPage({ initialMode = 'login' }) {
                     onClick={() => switchMode('login')}
                     className="inline-flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-primary transition-colors duration-150 mb-6 cursor-pointer"
                   >
-                    <ArrowLeft size={14} aria-hidden="true" />
+                    <IconBack size={14} aria-hidden="true" />
                     Back to sign in
                   </button>
 
                   {/* Header */}
                   <div className="mb-8">
                     <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-3.5">
-                      <KeyRound size={20} aria-hidden="true" />
+                      <IconKeyRound size={20} aria-hidden="true" />
                     </div>
                     <h2 className="text-2xl font-semibold text-heading leading-tight">
                       Forgot your password?
@@ -585,6 +587,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                     <Input
                       id="forgot-email"
                       name="email"
+                      size="lg"
                       type="email"
                       label="Registered Email Address"
                       placeholder="e.g. ian.chesnut@gmail.com"
@@ -592,7 +595,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                       value={forgotForm.email}
                       onChange={handleForgotChange}
                       error={errors.email}
-                      leftIcon={<Mail size={16} aria-hidden="true" />}
+                      leftIcon={<IconMail size={16} aria-hidden="true" />}
                     />
 
                     <Button
@@ -612,7 +615,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                 /* Success Confirmation */
                 <div className="text-center py-4">
                   <div className="w-14 h-14 rounded-full bg-success/15 text-success flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle2 size={30} aria-hidden="true" />
+                    <IconSuccess size={30} aria-hidden="true" />
                   </div>
 
                   <h3 className="text-xl font-bold text-heading">
@@ -661,7 +664,7 @@ export default function LoginPage({ initialMode = 'login' }) {
               {/* Header */}
               <div className="mb-6">
                 <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-warning/10 text-warning border border-warning/20 text-xs font-semibold mb-3">
-                  <ShieldAlert size={14} aria-hidden="true" />
+                  <IconShieldAlert size={14} aria-hidden="true" />
                   First-Time Sign In Security
                 </div>
 
@@ -709,6 +712,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                 <Input
                   id="reset-new-password"
                   name="newPassword"
+                  size="lg"
                   type={showNewPassword ? 'text' : 'password'}
                   label="New Password"
                   placeholder="At least 6 characters"
@@ -716,7 +720,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                   value={resetForm.newPassword}
                   onChange={handleResetChange}
                   error={errors.newPassword}
-                  leftIcon={<Lock size={16} aria-hidden="true" />}
+                  leftIcon={<IconLock size={16} aria-hidden="true" />}
                   rightElement={
                     <button
                       type="button"
@@ -726,9 +730,9 @@ export default function LoginPage({ initialMode = 'login' }) {
                       className="p-1 rounded text-text-muted hover:text-text transition-colors duration-150"
                     >
                       {showNewPassword ? (
-                        <EyeOff size={16} aria-hidden="true" />
+                        <IconEyeOff size={16} aria-hidden="true" />
                       ) : (
-                        <Eye size={16} aria-hidden="true" />
+                        <IconView size={16} aria-hidden="true" />
                       )}
                     </button>
                   }
@@ -738,13 +742,14 @@ export default function LoginPage({ initialMode = 'login' }) {
                 <Input
                   id="reset-confirm-password"
                   name="confirmPassword"
+                  size="lg"
                   type={showConfirmPassword ? 'text' : 'password'}
                   label="Confirm New Password"
                   placeholder="Re-enter your new password"
                   value={resetForm.confirmPassword}
                   onChange={handleResetChange}
                   error={errors.confirmPassword}
-                  leftIcon={<ShieldCheck size={16} aria-hidden="true" />}
+                  leftIcon={<IconShieldCheck size={16} aria-hidden="true" />}
                   rightElement={
                     <button
                       type="button"
@@ -754,9 +759,9 @@ export default function LoginPage({ initialMode = 'login' }) {
                       className="p-1 rounded text-text-muted hover:text-text transition-colors duration-150"
                     >
                       {showConfirmPassword ? (
-                        <EyeOff size={16} aria-hidden="true" />
+                        <IconEyeOff size={16} aria-hidden="true" />
                       ) : (
-                        <Eye size={16} aria-hidden="true" />
+                        <IconView size={16} aria-hidden="true" />
                       )}
                     </button>
                   }
@@ -772,7 +777,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                           : 'bg-border text-transparent'
                       }`}
                     >
-                      <Check size={10} strokeWidth={3} />
+                      <IconCheck size={10} strokeWidth={3} />
                     </div>
                     <span>Minimum 6 characters</span>
                   </div>
@@ -785,7 +790,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                           : 'bg-border text-transparent'
                       }`}
                     >
-                      <Check size={10} strokeWidth={3} />
+                      <IconCheck size={10} strokeWidth={3} />
                     </div>
                     <span>Passwords match</span>
                   </div>

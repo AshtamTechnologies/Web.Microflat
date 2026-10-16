@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { INITIAL_PAYMENT_TERMS } from '../mocks/paymentTerms';
+import { getTodayISO } from '../utils/dateUtils';
 
 const PaymentTermsContext = createContext(null);
 
@@ -23,7 +24,7 @@ export function PaymentTermsProvider({ children }) {
     await new Promise((r) => setTimeout(r, 500));
 
     const newId = `pt_${Date.now()}`;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayISO();
 
     const newTerm = {
       paymentTermId: newId,

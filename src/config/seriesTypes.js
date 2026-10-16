@@ -4,20 +4,20 @@
  */
 
 import {
-  ShoppingCart,
-  ClipboardList,
-  Inbox,
-  Receipt,
-  FileText,
-  PackageCheck,
-} from 'lucide-react';
+  IconShoppingCart,
+  IconPR,
+  IconInquiry,
+  IconReceipt,
+  IconDocument,
+  IconPackageCheck,
+} from '../constants/icons';
 
 export const SERIES_TYPES = [
   {
     key: 'po',
     label: 'Purchase Order (PO)',
     shortLabel: 'PO',
-    icon: ShoppingCart,
+    icon: IconShoppingCart,
     path: '/configuration/series/po',
     description: 'Purchase order numbering and revision rules',
     defaultPrefix: 'PO',
@@ -26,7 +26,7 @@ export const SERIES_TYPES = [
     key: 'pr',
     label: 'Purchase Requisition (PR)',
     shortLabel: 'PR',
-    icon: ClipboardList,
+    icon: IconPR,
     path: '/configuration/series/pr',
     description: 'Internal purchase requisition numbering rules',
     defaultPrefix: 'PR',
@@ -35,7 +35,7 @@ export const SERIES_TYPES = [
     key: 'inquiry',
     label: 'Inquiry',
     shortLabel: 'INQ',
-    icon: Inbox,
+    icon: IconInquiry,
     path: '/configuration/series/inquiry',
     description: 'Customer inquiry and lead sequence numbering',
     defaultPrefix: 'INQ',
@@ -44,7 +44,7 @@ export const SERIES_TYPES = [
     key: 'quotation',
     label: 'Quotation',
     shortLabel: 'QTN',
-    icon: FileText,
+    icon: IconDocument,
     path: '/configuration/series/quotation',
     description: 'Sales quotation and estimate numbering',
     defaultPrefix: 'QTN',
@@ -53,7 +53,7 @@ export const SERIES_TYPES = [
     key: 'order',
     label: 'Order',
     shortLabel: 'ORD',
-    icon: PackageCheck,
+    icon: IconPackageCheck,
     path: '/configuration/series/order',
     description: 'Sales order and production job numbering',
     defaultPrefix: 'ORD',
@@ -62,7 +62,7 @@ export const SERIES_TYPES = [
     key: 'invoice',
     label: 'Invoice',
     shortLabel: 'INV',
-    icon: Receipt,
+    icon: IconReceipt,
     path: '/configuration/series/invoice',
     description: 'Commercial invoice and billing sequence numbering',
     defaultPrefix: 'INV',

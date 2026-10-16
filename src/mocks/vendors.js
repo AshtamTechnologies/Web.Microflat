@@ -102,9 +102,9 @@ export const mockVendors = [
     approvedByComments: 'Facility audit cleared and GST compliance verified.',
     approvedOn: '2024-01-20',
     createdBy: 'Ian Chesnut',
-    createdOn: '2024-01-15 10:30 AM',
+    createdOn: '2024-01-15T10:30:00',
     lastUpdatedBy: 'Arjun Sharma',
-    lastUpdatedOn: '2024-06-10 03:45 PM',
+    lastUpdatedOn: '2024-06-10T15:45:00',
     attachments: [
       {
         id: 'att_v1_1',
@@ -174,7 +174,7 @@ export const mockVendors = [
             uploadedAt: '2025-03-20',
           },
         ],
-        createdOn: '2025-03-20 02:15 PM',
+        createdOn: '2025-03-20T14:15:00',
         createdBy: 'Arjun Sharma',
       },
       {
@@ -203,7 +203,7 @@ export const mockVendors = [
             uploadedAt: '2024-01-15',
           },
         ],
-        createdOn: '2024-01-15 10:30 AM',
+        createdOn: '2024-01-15T10:30:00',
         createdBy: 'Ian Chesnut',
       },
     ],
@@ -218,9 +218,9 @@ export const mockVendors = [
     approvedByComments: 'OEM calibration certificate accepted by QA.',
     approvedOn: '2024-02-05',
     createdBy: 'Ian Chesnut',
-    createdOn: '2024-02-01 11:15 AM',
+    createdOn: '2024-02-01T11:15:00',
     lastUpdatedBy: 'Ian Chesnut',
-    lastUpdatedOn: '2024-02-05 04:00 PM',
+    lastUpdatedOn: '2024-02-05T16:00:00',
     attachments: [
       {
         id: 'att_v2_1',
@@ -248,7 +248,7 @@ export const mockVendors = [
         address1: 'Carl-Zeiss-Promenade 10',
         address2: 'Building B, Metrology Division',
         notes: 'High-precision coordinate measuring machine (CMM) probes and laser interferometry sensors.',
-        createdOn: '2024-02-01 11:15 AM',
+        createdOn: '2024-02-01T11:15:00',
         createdBy: 'Ian Chesnut',
       },
     ],
@@ -263,9 +263,9 @@ export const mockVendors = [
     approvedByComments: 'Material test certificates verified.',
     approvedOn: '2024-03-14',
     createdBy: 'Arjun Sharma',
-    createdOn: '2024-03-10 09:00 AM',
+    createdOn: '2024-03-10T09:00:00',
     lastUpdatedBy: 'Priya Mehta',
-    lastUpdatedOn: '2024-05-12 01:20 PM',
+    lastUpdatedOn: '2024-05-12T13:20:00',
     attachments: [
       {
         id: 'att_v3_1',
@@ -301,7 +301,7 @@ export const mockVendors = [
         address1: 'Mundhwa Industrial Area',
         address2: 'Plot 72, Sector 4',
         notes: 'Special alloy steels and forged guideways for heavy flat datum bases.',
-        createdOn: '2024-12-15 11:30 AM',
+        createdOn: '2024-12-15T11:30:00',
         createdBy: 'Priya Mehta',
       },
       {
@@ -320,7 +320,7 @@ export const mockVendors = [
         address1: 'Mundhwa Industrial Area Phase 1',
         address2: '',
         notes: 'Master alloy supplier onboarding.',
-        createdOn: '2024-03-10 09:00 AM',
+        createdOn: '2024-03-10T09:00:00',
         createdBy: 'Arjun Sharma',
       },
     ],
@@ -337,9 +337,9 @@ export const mockVendors = [
     approvedByComments: 'Standard vendor agreement signed.',
     approvedOn: '2024-04-20',
     createdBy: 'Ian Chesnut',
-    createdOn: '2024-04-18 02:40 PM',
+    createdOn: '2024-04-18T14:40:00',
     lastUpdatedBy: 'Ian Chesnut',
-    lastUpdatedOn: '2024-07-01 10:00 AM',
+    lastUpdatedOn: '2024-07-01T10:00:00',
     attachments: [],
     effectiveVersions: [
       {
@@ -358,7 +358,7 @@ export const mockVendors = [
         address1: 'DLF Cyber City, Tower 8C',
         address2: 'Ground Floor Tech Center',
         notes: 'Dial gauges, electronic height masters, and standard gauge blocks.',
-        createdOn: '2024-04-18 02:40 PM',
+        createdOn: '2024-04-18T14:40:00',
         createdBy: 'Ian Chesnut',
       },
     ],
@@ -373,9 +373,9 @@ export const mockVendors = [
     approvedByComments: '',
     approvedOn: '',
     createdBy: 'Priya Mehta',
-    createdOn: '2024-05-01 11:00 AM',
+    createdOn: '2024-05-01T11:00:00',
     lastUpdatedBy: 'Priya Mehta',
-    lastUpdatedOn: '2024-05-01 11:00 AM',
+    lastUpdatedOn: '2024-05-01T11:00:00',
     attachments: [],
     effectiveVersions: [
       {
@@ -394,7 +394,7 @@ export const mockVendors = [
         address1: '800 W Fulton Market',
         address2: 'Suite 400',
         notes: 'Sub-micron linear guide rails and ground ball screw assemblies.',
-        createdOn: '2024-05-01 11:00 AM',
+        createdOn: '2024-05-01T11:00:00',
         createdBy: 'Priya Mehta',
       },
     ],
@@ -409,9 +409,9 @@ export const mockVendors = [
     approvedByComments: 'Surface flatness tolerance failed Grade 00 quality check on sample batch #4.',
     approvedOn: '2024-05-22',
     createdBy: 'Arjun Sharma',
-    createdOn: '2024-05-15 03:15 PM',
+    createdOn: '2024-05-15T15:15:00',
     lastUpdatedBy: 'Arjun Sharma',
-    lastUpdatedOn: '2024-05-22 04:30 PM',
+    lastUpdatedOn: '2024-05-22T16:30:00',
     attachments: [
       {
         id: 'att_v6_1',
@@ -439,7 +439,7 @@ export const mockVendors = [
         address1: 'Sipcot Industrial Complex Phase 1',
         address2: 'Plot 18/B',
         notes: 'Black granite inspection plates, squares, and straight edges Grade 00.',
-        createdOn: '2024-05-15 03:15 PM',
+        createdOn: '2024-05-15T15:15:00',
         createdBy: 'Arjun Sharma',
       },
     ],

@@ -7,32 +7,32 @@
  *   - className?: string
  */
 
-import {
-  PlusCircle,
-  RefreshCw,
-  UserCheck,
-  UserPlus,
-  Clock,
-  ArrowRight,
-  MessageSquare,
-  FileCheck,
-  Activity as ActivityIcon,
-} from 'lucide-react';
 import Badge from './ui/Badge';
+import {
+  IconActivity,
+  IconAdd,
+  IconArrowRight,
+  IconClock,
+  IconDocumentTypes,
+  IconMessageSquare,
+  IconRefresh,
+  IconUserCheck,
+  IconUserPlus,
+} from '../constants/icons';
 import { formatDateTime } from '../utils/dateUtils';
 
 function getActivityConfig(type = '') {
   switch (type.toLowerCase()) {
     case 'created':
       return {
-        icon: <PlusCircle size={15} className="text-primary" />,
+        icon: <IconAdd size={15} className="text-primary" />,
         badgeVariant: 'role',
         bgDot: 'bg-primary/10 border-primary/30',
         defaultTitle: 'Inquiry Created',
       };
     case 'status':
       return {
-        icon: <RefreshCw size={14} className="text-warning" />,
+        icon: <IconRefresh size={14} className="text-warning" />,
         badgeVariant: 'warning',
         bgDot: 'bg-warning/10 border-warning/30',
         defaultTitle: 'Status Updated',
@@ -40,7 +40,7 @@ function getActivityConfig(type = '') {
     case 'assignment':
     case 'reassignment':
       return {
-        icon: <UserCheck size={14} className="text-primary" />,
+        icon: <IconUserCheck size={14} className="text-primary" />,
         badgeVariant: 'role',
         bgDot: 'bg-primary/10 border-primary/30',
         defaultTitle: 'Assigned / Reassigned',
@@ -48,14 +48,14 @@ function getActivityConfig(type = '') {
     case 'comment':
     case 'note':
       return {
-        icon: <MessageSquare size={14} className="text-primary" />,
+        icon: <IconMessageSquare size={14} className="text-primary" />,
         badgeVariant: 'info',
         bgDot: 'bg-primary/10 border-primary/30',
         defaultTitle: 'Comment Added',
       };
     default:
       return {
-        icon: <Clock size={14} className="text-text-muted" />,
+        icon: <IconClock size={14} className="text-text-muted" />,
         badgeVariant: 'neutral',
         bgDot: 'bg-surface border-border',
         defaultTitle: 'Activity Event',
@@ -71,7 +71,7 @@ export default function ActivityTimeline({
   if (!activities || activities.length === 0) {
     return (
       <div className="py-8 text-center text-xs text-text-muted border border-dashed border-border rounded-xl bg-surface/20">
-        <Clock size={20} className="mx-auto text-text-muted/60 mb-2" />
+        <IconClock size={20} className="mx-auto text-text-muted/60 mb-2" />
         <p>{emptyMessage}</p>
       </div>
     );
@@ -137,7 +137,7 @@ export default function ActivityTimeline({
                     </span>
                   )}
                   {item.fromValue && item.toValue && (
-                    <ArrowRight size={13} className="text-text-muted shrink-0" />
+                    <IconArrowRight size={13} className="text-text-muted shrink-0" />
                   )}
                   {item.toValue && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-primary font-semibold">
@@ -150,7 +150,7 @@ export default function ActivityTimeline({
               {/* Remarks / Comments */}
               {item.remarks && (
                 <div className="pt-1.5 border-t border-border/60 flex items-start gap-1.5 text-xs text-text-muted bg-surface/30 p-2 rounded-lg">
-                  <MessageSquare size={13} className="text-text-muted shrink-0 mt-0.5" />
+                  <IconMessageSquare size={13} className="text-text-muted shrink-0 mt-0.5" />
                   <p className="italic text-text break-words leading-relaxed">
                     "{item.remarks}"
                   </p>

@@ -30,7 +30,7 @@ export const mockSeries = [
     resetCounter: 'Yearly',
     effectiveDate: '2026-04-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2026-03-28 10:15 AM',
+    createdOn: '2026-03-28T10:15:00',
   },
   {
     id: 'ser_po_1',
@@ -43,7 +43,7 @@ export const mockSeries = [
     resetCounter: 'Yearly',
     effectiveDate: '2025-01-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2024-12-20 02:30 PM',
+    createdOn: '2024-12-20T14:30:00',
   },
 
   /* ── 2. Purchase Requisition (PR) ── (Has Current v1 + Scheduled v2) */
@@ -58,7 +58,7 @@ export const mockSeries = [
     resetCounter: 'Yearly',
     effectiveDate: '2026-12-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2026-09-15 04:45 PM',
+    createdOn: '2026-09-15T16:45:00',
   },
   {
     id: 'ser_pr_1',
@@ -71,7 +71,7 @@ export const mockSeries = [
     resetCounter: 'Never',
     effectiveDate: '2026-01-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2025-12-28 11:20 AM',
+    createdOn: '2025-12-28T11:20:00',
   },
 
   /* ── 3. Inquiry ── (Has Current v1) */
@@ -86,7 +86,7 @@ export const mockSeries = [
     resetCounter: 'Yearly',
     effectiveDate: '2026-01-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2025-12-30 09:00 AM',
+    createdOn: '2025-12-30T09:00:00',
   },
 
   /* ── 4. Quotation ── (Has Expired v1 + Current v2 + Scheduled v3) */
@@ -101,7 +101,7 @@ export const mockSeries = [
     resetCounter: 'Yearly',
     effectiveDate: '2027-01-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2026-10-01 11:30 AM',
+    createdOn: '2026-10-01T11:30:00',
   },
   {
     id: 'ser_qtn_2',
@@ -114,7 +114,7 @@ export const mockSeries = [
     resetCounter: 'Yearly',
     effectiveDate: '2026-01-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2025-12-29 03:15 PM',
+    createdOn: '2025-12-29T15:15:00',
   },
   {
     id: 'ser_qtn_1',
@@ -127,7 +127,7 @@ export const mockSeries = [
     resetCounter: 'Never',
     effectiveDate: '2025-01-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2024-12-15 10:00 AM',
+    createdOn: '2024-12-15T10:00:00',
   },
 
   /* ── 5. Order ── (Has Current v1) */
@@ -142,7 +142,7 @@ export const mockSeries = [
     resetCounter: 'Yearly',
     effectiveDate: '2026-01-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2025-12-31 01:00 PM',
+    createdOn: '2025-12-31T13:00:00',
   },
 
   /* ── 6. Invoice ── (Has Expired v1 + Current v2) */
@@ -157,7 +157,7 @@ export const mockSeries = [
     resetCounter: 'Yearly',
     effectiveDate: '2026-04-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2026-03-25 09:40 AM',
+    createdOn: '2026-03-25T09:40:00',
   },
   {
     id: 'ser_inv_1',
@@ -170,7 +170,7 @@ export const mockSeries = [
     resetCounter: 'Yearly',
     effectiveDate: '2025-04-01',
     createdBy: 'Ian Chesnut',
-    createdOn: '2025-03-20 02:15 PM',
+    createdOn: '2025-03-20T14:15:00',
   },
 ];
 

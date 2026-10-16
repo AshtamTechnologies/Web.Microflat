@@ -2,24 +2,23 @@
  * seriesUtils.js — Utilities for document sequence numbering, versioning & status resolution.
  */
 
+import { getTodayISO, toISODate } from './dateUtils';
+
 /**
  * Normalizes a date input to a YYYY-MM-DD string.
  * @param {Date|string} d
  * @returns {string}
  */
 export function normalizeDateString(d = new Date()) {
-  if (!d) return new Date().toISOString().slice(0, 10);
+  if (!d) return getTodayISO();
   if (typeof d === 'string') {
     // If it's already YYYY-MM-DD, return first 10 chars
     return d.slice(0, 10);
   }
   if (d instanceof Date && !isNaN(d.getTime())) {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+    return toISODate(d);
   }
-  return new Date().toISOString().slice(0, 10);
+  return getTodayISO();
 }
 
 /**

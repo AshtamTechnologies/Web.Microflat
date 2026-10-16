@@ -160,14 +160,14 @@ export const mockInquiries = [
     StatusId: 'In Progress',
     AssignedTo: 'u11', // Arjun Sharma
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-01 09:30 AM',
+    CreatedOn: '2026-10-01T09:30:00',
     ModifiedBy: 'Ian Chesnut',
-    ModifiedOn: '2026-10-02 11:15 AM',
+    ModifiedOn: '2026-10-02T11:15:00',
     activity: [
       {
         id: 'act_101_1',
         type: 'created',
-        timestamp: '2026-10-01 09:30 AM',
+        timestamp: '2026-10-01T09:30:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Arjun Sharma',
         remarks: 'Inquiry received via website enquiry form and assigned directly to Regional Lead.',
@@ -175,7 +175,7 @@ export const mockInquiries = [
       {
         id: 'act_101_2',
         type: 'status',
-        timestamp: '2026-10-02 11:15 AM',
+        timestamp: '2026-10-02T11:15:00',
         changedBy: 'Arjun Sharma',
         fromValue: 'New',
         toValue: 'In Progress',
@@ -205,14 +205,14 @@ export const mockInquiries = [
     StatusId: 'Quoted',
     AssignedTo: 'u4', // Scott Walter
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-01 10:45 AM',
+    CreatedOn: '2026-10-01T10:45:00',
     ModifiedBy: 'Scott Walter',
-    ModifiedOn: '2026-10-04 03:20 PM',
+    ModifiedOn: '2026-10-04T15:20:00',
     activity: [
       {
         id: 'act_102_1',
         type: 'created',
-        timestamp: '2026-10-01 10:45 AM',
+        timestamp: '2026-10-01T10:45:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Unassigned',
         remarks: 'Received via procurement email gateway.',
@@ -220,7 +220,7 @@ export const mockInquiries = [
       {
         id: 'act_102_2',
         type: 'assignment',
-        timestamp: '2026-10-01 02:30 PM',
+        timestamp: '2026-10-01T14:30:00',
         changedBy: 'Ian Chesnut',
         fromValue: 'Unassigned',
         toValue: 'Scott Walter',
@@ -229,7 +229,7 @@ export const mockInquiries = [
       {
         id: 'act_102_3',
         type: 'status',
-        timestamp: '2026-10-04 03:20 PM',
+        timestamp: '2026-10-04T15:20:00',
         changedBy: 'Scott Walter',
         fromValue: 'In Progress',
         toValue: 'Quoted',
@@ -259,14 +259,14 @@ export const mockInquiries = [
     StatusId: 'Won',
     AssignedTo: 'u1', // Ian Chesnut
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-02 11:00 AM',
+    CreatedOn: '2026-10-02T11:00:00',
     ModifiedBy: 'Ian Chesnut',
-    ModifiedOn: '2026-10-06 05:10 PM',
+    ModifiedOn: '2026-10-06T17:10:00',
     activity: [
       {
         id: 'act_103_1',
         type: 'created',
-        timestamp: '2026-10-02 11:00 AM',
+        timestamp: '2026-10-02T11:00:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Ian Chesnut',
         remarks: 'Phone discussion with Plant Head Vikram Joshi.',
@@ -274,7 +274,7 @@ export const mockInquiries = [
       {
         id: 'act_103_2',
         type: 'status',
-        timestamp: '2026-10-03 04:00 PM',
+        timestamp: '2026-10-03T16:00:00',
         changedBy: 'Ian Chesnut',
         fromValue: 'New',
         toValue: 'Quoted',
@@ -283,7 +283,7 @@ export const mockInquiries = [
       {
         id: 'act_103_3',
         type: 'status',
-        timestamp: '2026-10-06 05:10 PM',
+        timestamp: '2026-10-06T17:10:00',
         changedBy: 'Ian Chesnut',
         fromValue: 'Quoted',
         toValue: 'Won',
@@ -313,14 +313,14 @@ export const mockInquiries = [
     StatusId: 'New',
     AssignedTo: null,
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-02 02:40 PM',
+    CreatedOn: '2026-10-02T14:40:00',
     ModifiedBy: 'Ian Chesnut',
-    ModifiedOn: '2026-10-02 02:40 PM',
+    ModifiedOn: '2026-10-02T14:40:00',
     activity: [
       {
         id: 'act_104_1',
         type: 'created',
-        timestamp: '2026-10-02 02:40 PM',
+        timestamp: '2026-10-02T14:40:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Unassigned',
         remarks: 'Inquiry logged into system pending assignee selection.',
@@ -349,14 +349,14 @@ export const mockInquiries = [
     StatusId: 'In Progress',
     AssignedTo: 'u12', // Priya Mehta
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-03 10:15 AM',
+    CreatedOn: '2026-10-03T10:15:00',
     ModifiedBy: 'Priya Mehta',
-    ModifiedOn: '2026-10-04 11:30 AM',
+    ModifiedOn: '2026-10-04T11:30:00',
     activity: [
       {
         id: 'act_105_1',
         type: 'created',
-        timestamp: '2026-10-03 10:15 AM',
+        timestamp: '2026-10-03T10:15:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Priya Mehta',
         remarks: 'Inquiry referred through eastern region distributor M/s Allied Industrial Tools.',
@@ -364,7 +364,7 @@ export const mockInquiries = [
       {
         id: 'act_105_2',
         type: 'status',
-        timestamp: '2026-10-04 11:30 AM',
+        timestamp: '2026-10-04T11:30:00',
         changedBy: 'Priya Mehta',
         fromValue: 'New',
         toValue: 'In Progress',
@@ -394,14 +394,14 @@ export const mockInquiries = [
     StatusId: 'Quoted',
     AssignedTo: 'u7', // Natali Emanuel (Country Manager)
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-03 03:00 PM',
+    CreatedOn: '2026-10-03T15:00:00',
     ModifiedBy: 'Natali Emanuel',
-    ModifiedOn: '2026-10-05 04:30 PM',
+    ModifiedOn: '2026-10-05T16:30:00',
     activity: [
       {
         id: 'act_106_1',
         type: 'created',
-        timestamp: '2026-10-03 03:00 PM',
+        timestamp: '2026-10-03T15:00:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Natali Emanuel',
         remarks: 'Export inquiry routed to International Sales desk.',
@@ -409,7 +409,7 @@ export const mockInquiries = [
       {
         id: 'act_106_2',
         type: 'status',
-        timestamp: '2026-10-05 04:30 PM',
+        timestamp: '2026-10-05T16:30:00',
         changedBy: 'Natali Emanuel',
         fromValue: 'New',
         toValue: 'Quoted',
@@ -439,14 +439,14 @@ export const mockInquiries = [
     StatusId: 'Lost',
     AssignedTo: 'u3', // Faith Robinson
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-04 11:45 AM',
+    CreatedOn: '2026-10-04T11:45:00',
     ModifiedBy: 'Faith Robinson',
-    ModifiedOn: '2026-10-06 01:20 PM',
+    ModifiedOn: '2026-10-06T13:20:00',
     activity: [
       {
         id: 'act_107_1',
         type: 'created',
-        timestamp: '2026-10-04 11:45 AM',
+        timestamp: '2026-10-04T11:45:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Faith Robinson',
         remarks: 'Inquiry logged from phone inquiry.',
@@ -454,7 +454,7 @@ export const mockInquiries = [
       {
         id: 'act_107_2',
         type: 'status',
-        timestamp: '2026-10-05 02:00 PM',
+        timestamp: '2026-10-05T14:00:00',
         changedBy: 'Faith Robinson',
         fromValue: 'New',
         toValue: 'Quoted',
@@ -463,7 +463,7 @@ export const mockInquiries = [
       {
         id: 'act_107_3',
         type: 'status',
-        timestamp: '2026-10-06 01:20 PM',
+        timestamp: '2026-10-06T13:20:00',
         changedBy: 'Faith Robinson',
         fromValue: 'Quoted',
         toValue: 'Lost',
@@ -493,14 +493,14 @@ export const mockInquiries = [
     StatusId: 'Closed',
     AssignedTo: 'u9', // Tonye Gabril
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-04 04:10 PM',
+    CreatedOn: '2026-10-04T16:10:00',
     ModifiedBy: 'Tonye Gabril',
-    ModifiedOn: '2026-10-06 10:00 AM',
+    ModifiedOn: '2026-10-06T10:00:00',
     activity: [
       {
         id: 'act_108_1',
         type: 'created',
-        timestamp: '2026-10-04 04:10 PM',
+        timestamp: '2026-10-04T16:10:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Tonye Gabril',
         remarks: 'Inquiry received via direct email inquiry.',
@@ -508,7 +508,7 @@ export const mockInquiries = [
       {
         id: 'act_108_2',
         type: 'status',
-        timestamp: '2026-10-06 10:00 AM',
+        timestamp: '2026-10-06T10:00:00',
         changedBy: 'Tonye Gabril',
         fromValue: 'New',
         toValue: 'Closed',
@@ -538,14 +538,14 @@ export const mockInquiries = [
     StatusId: 'New',
     AssignedTo: 'u11', // Arjun Sharma
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-05 09:15 AM',
+    CreatedOn: '2026-10-05T09:15:00',
     ModifiedBy: 'Ian Chesnut',
-    ModifiedOn: '2026-10-05 09:15 AM',
+    ModifiedOn: '2026-10-05T09:15:00',
     activity: [
       {
         id: 'act_109_1',
         type: 'created',
-        timestamp: '2026-10-05 09:15 AM',
+        timestamp: '2026-10-05T09:15:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Arjun Sharma',
         remarks: 'Inquiry received via government defense tender vendor partner.',
@@ -574,14 +574,14 @@ export const mockInquiries = [
     StatusId: 'In Progress',
     AssignedTo: 'u4', // Scott Walter
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-05 11:30 AM',
+    CreatedOn: '2026-10-05T11:30:00',
     ModifiedBy: 'Scott Walter',
-    ModifiedOn: '2026-10-05 03:00 PM',
+    ModifiedOn: '2026-10-05T15:00:00',
     activity: [
       {
         id: 'act_110_1',
         type: 'created',
-        timestamp: '2026-10-05 11:30 AM',
+        timestamp: '2026-10-05T11:30:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Scott Walter',
         remarks: 'Assigned to Scott Walter for manufacturing time-study.',
@@ -589,7 +589,7 @@ export const mockInquiries = [
       {
         id: 'act_110_2',
         type: 'status',
-        timestamp: '2026-10-05 03:00 PM',
+        timestamp: '2026-10-05T15:00:00',
         changedBy: 'Scott Walter',
         fromValue: 'New',
         toValue: 'In Progress',
@@ -619,14 +619,14 @@ export const mockInquiries = [
     StatusId: 'Quoted',
     AssignedTo: 'u1', // Ian Chesnut
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-05 02:20 PM',
+    CreatedOn: '2026-10-05T14:20:00',
     ModifiedBy: 'Ian Chesnut',
-    ModifiedOn: '2026-10-06 04:00 PM',
+    ModifiedOn: '2026-10-06T16:00:00',
     activity: [
       {
         id: 'act_111_1',
         type: 'created',
-        timestamp: '2026-10-05 02:20 PM',
+        timestamp: '2026-10-05T14:20:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Ian Chesnut',
         remarks: 'Inquiry received with complete NDA and 3D CAD step files.',
@@ -634,7 +634,7 @@ export const mockInquiries = [
       {
         id: 'act_111_2',
         type: 'status',
-        timestamp: '2026-10-06 04:00 PM',
+        timestamp: '2026-10-06T16:00:00',
         changedBy: 'Ian Chesnut',
         fromValue: 'New',
         toValue: 'Quoted',
@@ -664,14 +664,14 @@ export const mockInquiries = [
     StatusId: 'In Progress',
     AssignedTo: 'u7', // Natali Emanuel
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-06 10:00 AM',
+    CreatedOn: '2026-10-06T10:00:00',
     ModifiedBy: 'Natali Emanuel',
-    ModifiedOn: '2026-10-06 01:45 PM',
+    ModifiedOn: '2026-10-06T13:45:00',
     activity: [
       {
         id: 'act_112_1',
         type: 'created',
-        timestamp: '2026-10-06 10:00 AM',
+        timestamp: '2026-10-06T10:00:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Natali Emanuel',
         remarks: 'Export inquiry from Middle East client.',
@@ -679,7 +679,7 @@ export const mockInquiries = [
       {
         id: 'act_112_2',
         type: 'status',
-        timestamp: '2026-10-06 01:45 PM',
+        timestamp: '2026-10-06T13:45:00',
         changedBy: 'Natali Emanuel',
         fromValue: 'New',
         toValue: 'In Progress',
@@ -709,14 +709,14 @@ export const mockInquiries = [
     StatusId: 'New',
     AssignedTo: null,
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-06 03:30 PM',
+    CreatedOn: '2026-10-06T15:30:00',
     ModifiedBy: 'Ian Chesnut',
-    ModifiedOn: '2026-10-06 03:30 PM',
+    ModifiedOn: '2026-10-06T15:30:00',
     activity: [
       {
         id: 'act_113_1',
         type: 'created',
-        timestamp: '2026-10-06 03:30 PM',
+        timestamp: '2026-10-06T15:30:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Unassigned',
         remarks: 'Phone enquiry recorded by front-desk team.',
@@ -745,14 +745,14 @@ export const mockInquiries = [
     StatusId: 'Won',
     AssignedTo: 'u11', // Arjun Sharma
     CreatedBy: 'Ian Chesnut',
-    CreatedOn: '2026-10-07 09:00 AM',
+    CreatedOn: '2026-10-07T09:00:00',
     ModifiedBy: 'Arjun Sharma',
-    ModifiedOn: '2026-10-07 02:00 PM',
+    ModifiedOn: '2026-10-07T14:00:00',
     activity: [
       {
         id: 'act_114_1',
         type: 'created',
-        timestamp: '2026-10-07 09:00 AM',
+        timestamp: '2026-10-07T09:00:00',
         changedBy: 'Ian Chesnut',
         toValue: 'Arjun Sharma',
         remarks: 'Priority inquiry from key OEM account.',
@@ -760,7 +760,7 @@ export const mockInquiries = [
       {
         id: 'act_114_2',
         type: 'assignment',
-        timestamp: '2026-10-07 10:30 AM',
+        timestamp: '2026-10-07T10:30:00',
         changedBy: 'Ian Chesnut',
         fromValue: 'Arjun Sharma',
         toValue: 'Arjun Sharma',
@@ -769,7 +769,7 @@ export const mockInquiries = [
       {
         id: 'act_114_3',
         type: 'status',
-        timestamp: '2026-10-07 02:00 PM',
+        timestamp: '2026-10-07T14:00:00',
         changedBy: 'Arjun Sharma',
         fromValue: 'New',
         toValue: 'Won',

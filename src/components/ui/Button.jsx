@@ -10,6 +10,7 @@
  *   type, onClick, children … (standard button attrs)
  */
 
+import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 const variantClasses = {
@@ -37,9 +38,21 @@ export default function Button({
   disabled = false,
   type = 'button',
   className = '',
+  icon,
+  iconRight,
   children,
   ...rest
 }) {
+  const renderIcon = (iconItem) => {
+    if (!iconItem) return null;
+    if (React.isValidElement(iconItem)) return iconItem;
+    if (typeof iconItem === 'function' || typeof iconItem === 'object') {
+      const IconComp = iconItem;
+      return <IconComp aria-hidden="true" />;
+    }
+    return null;
+  };
+
   return (
     <button
       type={type}
@@ -55,14 +68,17 @@ export default function Button({
         .join(' ')}
       {...rest}
     >
-      {loading && (
+      {loading ? (
         <Loader2
           size={16}
           className="animate-spin shrink-0"
           aria-hidden="true"
         />
+      ) : (
+        renderIcon(icon)
       )}
       {children}
+      {renderIcon(iconRight)}
     </button>
   );
 }

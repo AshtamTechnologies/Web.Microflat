@@ -95,7 +95,7 @@ export default function StatusSwitch({
       >
         {checked ? (
           <Check
-            size={isSmall ? 11 : 13}
+            size={isSmall ? 11 : 12}
             strokeWidth={3}
             className="text-primary animate-in zoom-in-75 duration-150"
             aria-hidden="true"
@@ -103,7 +103,6 @@ export default function StatusSwitch({
         ) : (
           <Ban
             size={isSmall ? 10 : 12}
-            strokeWidth={2.5}
             className="text-text-muted animate-in zoom-in-75 duration-150"
             aria-hidden="true"
           />

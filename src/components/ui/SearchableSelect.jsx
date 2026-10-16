@@ -29,6 +29,7 @@ export default function SearchableSelect({
   error = null,
   hint = null,
   disabled = false,
+  size = 'md',
   className = '',
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -201,7 +202,7 @@ export default function SearchableSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={[
-          'w-full h-10 rounded-control border bg-bg text-left text-sm',
+          'w-full rounded-control border bg-bg text-left', size === 'sm' ? 'h-[var(--control-height-sm)] text-xs' : size === 'lg' ? 'h-[var(--control-height-lg)] text-base' : 'h-[var(--control-height-md)] text-sm',
           'px-3 flex items-center justify-between',
           'transition-all duration-150 ease-in-out cursor-pointer',
           'outline-none select-none',
@@ -319,8 +320,8 @@ export default function SearchableSelect({
                       <span className="truncate">{option.label}</span>
                       {isSelected && (
                         <Check
-                          size={15}
-                          strokeWidth={2.5}
+                          size={12}
+                          strokeWidth={3}
                           className="text-primary shrink-0 ml-2"
                           aria-hidden="true"
                         />

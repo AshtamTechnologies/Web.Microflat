@@ -1,5 +1,4 @@
-import React from 'react';
-import { Save,SavePlus } from 'lucide-react';
+import { IconSave } from '../../constants/icons';
 import Button from './Button';
 
 /**
@@ -12,8 +11,9 @@ import Button from './Button';
  * Props:
  *   label?: string
  *   icon?: React.ComponentType | null
- *   iconSize?: number (default: 16)
- *   iconClassName?: string (default: 'mr-1.5 shrink-0')
+ *   iconSize?: number (accepted but ignored for backward compatibility)
+ *   iconClassName?: string (accepted but ignored for backward compatibility)
+ *   iconRight?: React.ComponentType | React.ReactNode
  *   showIcon?: boolean (default: true)
  *   loading?: boolean (default: false)
  *   loadingText?: string
@@ -26,9 +26,10 @@ import Button from './Button';
 export default function SaveButton({
   children,
   label,
-  icon: Icon = SavePlus,
-  iconSize = 16,
-  iconClassName = 'mr-1.5 shrink-0',
+  icon: Icon = IconSave,
+  iconSize: _iconSize, // accepted but ignored for backward compatibility
+  iconClassName: _iconClassName, // accepted but ignored for backward compatibility
+  iconRight,
   showIcon = true,
   loading = false,
   loadingText,
@@ -39,6 +40,7 @@ export default function SaveButton({
   disabled = false,
   ...rest
 }) {
+  void _iconSize; void _iconClassName;
   const content = children ?? label ?? 'Save';
   const displayedText = loading && loadingText ? loadingText : content;
 
@@ -50,11 +52,10 @@ export default function SaveButton({
       loading={loading}
       disabled={disabled}
       className={className}
+      icon={showIcon ? Icon : undefined}
+      iconRight={iconRight}
       {...rest}
     >
-      {!loading && showIcon && Icon && (
-        <Icon size={iconSize} className={iconClassName} aria-hidden="true" />
-      )}
       {displayedText}
     </Button>
   );

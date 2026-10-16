@@ -15,25 +15,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  FileSpreadsheet,
-  Plus,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Check,
-  X,
-  ChevronRight,
-  Calendar,
-  AlertCircle,
-  Sparkles,
-  Layers,
-  Building2,
-  FileText,
-  User,
-  Package,
-  Eye,
-} from 'lucide-react';
-import {
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -54,6 +35,8 @@ import {
   Badge,
   Modal,
   PageHeader,
+  Textarea,
+  IconButton,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import { chartColors } from '../../config/chartColors';
@@ -62,7 +45,26 @@ import {
   getPRStatusBadgeVariant,
   getProjectName,
 } from '../../mocks/purchaseRequisitions';
-import { IconPR } from '../../constants/icons';
+import {
+  IconAdd,
+  IconBuilding2,
+  IconCalendar,
+  IconCheck,
+  IconChevronRight,
+  IconClock,
+  IconClose,
+  IconError,
+  IconFileSpreadsheet,
+  IconFileText,
+  IconLayers,
+  IconPR,
+  IconPackage,
+  IconSparkles,
+  IconSuccess,
+  IconUser,
+  IconView,
+  IconXCircle,
+} from '../../constants/icons';
 
 /* ── Custom Pie Tooltip ─────────────────────────────────────────────────────── */
 function CustomPieTooltip({ active, payload }) {
@@ -130,7 +132,7 @@ function MetricCard({ label, value, subtext, icon: Icon, iconColor, iconBg, tren
               {label}
             </span>
             {onClick && (
-              <ChevronRight
+              <IconChevronRight
                 size={14}
                 className="text-text-muted opacity-0 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 transition-all"
                 aria-hidden="true"
@@ -148,7 +150,7 @@ function MetricCard({ label, value, subtext, icon: Icon, iconColor, iconBg, tren
           )}
         </div>
         <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconBg} ${iconColor} transition-transform duration-200 group-hover:scale-105`}>
-          <Icon size={20} strokeWidth={2} aria-hidden="true" />
+          <Icon size={20} aria-hidden="true" />
         </div>
       </div>
     </Card>
@@ -301,9 +303,8 @@ export default function PurchaseRequisitionDashboardPage() {
         icon={<IconPR className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" aria-hidden="true" />}
         actions={
           <Link to="/purchase-requisition/create" className="w-full sm:w-auto">
-            <Button variant="primary" size="md" className="w-full sm:w-auto shadow-xs justify-center">
-              <Plus size={16} className="mr-1.5 shrink-0" aria-hidden="true" />
-              <span>Create PR</span>
+            <Button variant="primary" size="md" icon={IconAdd} className="w-full sm:w-auto shadow-xs justify-center">
+              <span>Create Requisition</span>
             </Button>
           </Link>
         }
@@ -316,7 +317,7 @@ export default function PurchaseRequisitionDashboardPage() {
           label="Total Requisitions"
           value={kpis.total}
           subtext="Created across departments"
-          icon={Layers}
+          icon={IconLayers}
           iconBg="bg-primary/10"
           iconColor="text-primary"
           title="Click to view all purchase requisitions"
@@ -328,7 +329,7 @@ export default function PurchaseRequisitionDashboardPage() {
           label="Pending Approval"
           value={kpis.pending}
           subtext={kpis.pending > 0 ? 'Requires manager review' : 'All reviews cleared'}
-          icon={Clock}
+          icon={IconClock}
           iconBg="bg-warning/10"
           iconColor="text-warning"
           title="Click to view pending requisitions"
@@ -340,7 +341,7 @@ export default function PurchaseRequisitionDashboardPage() {
           label="Approved"
           value={kpis.approved}
           subtext={`${kpis.approvedPct}% approval rate`}
-          icon={CheckCircle2}
+          icon={IconSuccess}
           iconBg="bg-success/10"
           iconColor="text-success"
           title="Click to view approved requisitions"
@@ -352,7 +353,7 @@ export default function PurchaseRequisitionDashboardPage() {
           label="Rejected"
           value={kpis.rejected}
           subtext="Requires revision"
-          icon={XCircle}
+          icon={IconXCircle}
           iconBg="bg-danger/10"
           iconColor="text-danger"
           title="Click to view rejected requisitions"
@@ -482,7 +483,7 @@ export default function PurchaseRequisitionDashboardPage() {
           <div>
             <div className="border-b border-border pb-3 mb-3 sm:mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0 pr-2">
-                <Clock size={16} className="text-warning shrink-0" />
+                <IconClock size={16} className="text-warning shrink-0" />
                 <h2 className="text-sm font-semibold text-heading truncate">Pending Approvals</h2>
               </div>
               <Badge variant={pendingApprovals.length > 0 ? 'warning' : 'neutral'} className="shrink-0">
@@ -493,7 +494,7 @@ export default function PurchaseRequisitionDashboardPage() {
             {pendingApprovals.length === 0 ? (
               <div className="py-10 sm:py-12 text-center text-text-muted space-y-2">
                 <div className="w-10 h-10 rounded-full bg-success/10 text-success flex items-center justify-center mx-auto mb-2">
-                  <CheckCircle2 size={20} />
+                  <IconSuccess size={20} />
                 </div>
                 <p className="text-xs font-semibold text-heading">No requisitions awaiting approval</p>
                 <p className="text-2xs text-text-muted">All purchase requisitions are up to date.</p>
@@ -528,15 +529,15 @@ export default function PurchaseRequisitionDashboardPage() {
                         </span>
                       </div>
                       <p className="text-2xs text-text-muted flex items-center gap-1.5 font-mono flex-wrap">
-                        <Calendar size={11} className="shrink-0" />
+                        <IconCalendar size={11} className="shrink-0" />
                         <span>Date: {formatPRDate(pr.prDate)}</span>
                         <span>•</span>
-                        <User size={11} className="shrink-0" />
+                        <IconUser size={11} className="shrink-0" />
                         <span className="truncate">{pr.requestedBy}</span>
                         {pr.items && (
                           <>
                             <span>•</span>
-                            <Package size={11} className="shrink-0" />
+                            <IconPackage size={11} className="shrink-0" />
                             <span>{pr.items.length} {pr.items.length === 1 ? 'item' : 'items'}</span>
                           </>
                         )}
@@ -556,7 +557,7 @@ export default function PurchaseRequisitionDashboardPage() {
                         className="p-1.5 sm:p-2 rounded-lg text-text-muted hover:text-primary hover:bg-surface border border-border transition-colors cursor-pointer active:scale-95"
                         aria-label={`View ${pr.prNumber}`}
                       >
-                        <Eye size={14} />
+                        <IconView size={14} />
                       </button>
                     </div>
                   </div>
@@ -572,7 +573,7 @@ export default function PurchaseRequisitionDashboardPage() {
               className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 group/link"
             >
               <span>View all pending in list</span>
-              <ChevronRight size={13} className="group-hover/link:translate-x-0.5 transition-transform" />
+              <IconChevronRight size={13} className="group-hover/link:translate-x-0.5 transition-transform" />
             </Link>
           </div>
         </Card>
@@ -582,7 +583,7 @@ export default function PurchaseRequisitionDashboardPage() {
           <div>
             <div className="border-b border-border pb-3 mb-3 sm:mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0 pr-2">
-                <Sparkles size={16} className="text-primary shrink-0" />
+                <IconSparkles size={16} className="text-primary shrink-0" />
                 <h2 className="text-sm font-semibold text-heading truncate">Recent Requisitions</h2>
               </div>
               <span className="text-xs text-text-muted font-normal shrink-0">Latest Activity</span>
@@ -625,7 +626,7 @@ export default function PurchaseRequisitionDashboardPage() {
                           </span>
                         </div>
                         <p className="text-2xs text-text-muted flex items-center gap-1.5 font-mono flex-wrap">
-                          <Calendar size={11} className="shrink-0" />
+                          <IconCalendar size={11} className="shrink-0" />
                           <span>{formatPRDate(pr.prDate)}</span>
                           <span>•</span>
                           <span className="truncate">{pr.requestedBy}</span>
@@ -642,7 +643,7 @@ export default function PurchaseRequisitionDashboardPage() {
                         <Badge variant={statusVariant} className="text-2xs font-medium">
                           {pr.status}
                         </Badge>
-                        <ChevronRight
+                        <IconChevronRight
                           size={15}
                           className="text-text-muted opacity-40 group-hover:opacity-100 group-hover:text-primary group-hover:translate-x-0.5 transition-all"
                         />
@@ -661,7 +662,7 @@ export default function PurchaseRequisitionDashboardPage() {
               className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 group/link"
             >
               <span>View full directory</span>
-              <ChevronRight size={13} className="group-hover/link:translate-x-0.5 transition-transform" />
+              <IconChevronRight size={13} className="group-hover/link:translate-x-0.5 transition-transform" />
             </Link>
           </div>
         </Card>
@@ -682,7 +683,7 @@ export default function PurchaseRequisitionDashboardPage() {
         >
           <div className="space-y-4">
             <div className="p-3 bg-danger/10 border border-danger/20 rounded-xl flex items-start gap-3">
-              <AlertCircle size={18} className="text-danger shrink-0 mt-0.5" />
+              <IconError size={18} className="text-danger shrink-0 mt-0.5" />
               <div className="text-xs text-danger space-y-0.5">
                 <p className="font-semibold">
                   You are rejecting {rejectingPR.prNumber}
@@ -693,22 +694,15 @@ export default function PurchaseRequisitionDashboardPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label
-                htmlFor="reject-comments"
-                className="text-xs font-semibold text-heading block"
-              >
-                Rejection Reason <span className="text-danger">*</span>
-              </label>
-              <textarea
+            <Textarea
                 id="reject-comments"
+                label="Reason for Rejection"
+                required
                 rows={3}
                 value={rejectComments}
                 onChange={(e) => setRejectComments(e.target.value)}
-                placeholder="e.g. Budget exceeded, missing vendor quotation, duplicate request..."
-                className="w-full text-xs p-2.5 rounded-xl bg-surface border border-border text-text placeholder:text-text-muted/60 focus:outline-hidden focus:ring-1 focus:ring-danger focus:border-danger transition-colors resize-none"
+                placeholder="Specify rejection reasons (e.g., budget exceeded, alternative vendor preferred)..."
               />
-            </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
               <CancelButton

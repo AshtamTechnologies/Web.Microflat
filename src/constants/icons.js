@@ -3,9 +3,9 @@
  *
  * Single Source of Truth for:
  *   - Entity & Module Icons (Sidebar, PageHeaders, Cards, Badges)
- *   - Global Action Icons (Add, Edit, Delete, Search, Reset, Cancel, Back)
+ *   - Global Action Icons (Add, Edit, Delete, Search, Reset, Cancel, Back, Save)
  *   - Contact & Detail Field Icons (Phone, Mail, MapPin, User)
- *   - Status & Indicator Icons (Active, Inactive, Calendar, Clock)
+ *   - Status & Indicator Icons (Active, Inactive, Calendar, Clock, Success, Warning, Error)
  *
  * To change any icon across the whole application, update it here.
  */
@@ -41,31 +41,81 @@ import {
   RotateCcw,
   X,
   Check,
+  Save,
   Ban,
   ArrowLeft,
   ArrowRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   Calendar,
   Eye,
+  EyeOff,
   Download,
-  Upload,
+  UploadCloud,
+  RefreshCw,
   ChevronDown,
   ChevronUp,
   ChevronLeft,
   ChevronRight,
   Paperclip,
   FileText,
+  FileSpreadsheet,
+  FileCode,
+  File,
+  Layers,
+  Package,
+  Tags,
+  Send,
+  ExternalLink,
+  MessageSquare,
+  Sparkles,
+  Flame,
+  Copy,
+  CreditCard,
+  Maximize2,
+  Ruler,
+  Target,
+  KeyRound,
+  History,
+  Image,
+  HelpCircle,
+  FolderLock,
+  Tag,
+  Folder,
+  Compass,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Menu,
+  ShoppingCart,
+  Receipt,
+  PackageCheck,
 
   // ── Field & Contact Icons ──
   Phone,
   Mail,
   User,
+  UserPlus,
+  UserCheck,
+  Contact,
   Building,
   Globe,
   Clock,
   AlertCircle,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
+  XCircle,
   Lock,
+  Shield,
   ShieldCheck,
+  ShieldAlert,
   LogOut,
+  IndianRupee,
+  Activity,
+  Smartphone,
+  Laptop,
+  Tablet,
 } from 'lucide-react';
 
 // Custom image assets from assets folder
@@ -73,12 +123,27 @@ import DashboardIconImg from '../assets/menuicon/Dashboardicon.png';
 import UserIconImg from '../assets/menuicon/UserIcon.png';
 
 /**
+ * Standard Icon Sizes (in pixels)
+ * RULE: an icon follows the size of the control it sits in:
+ * - small control: 14
+ * - medium control: 16
+ * - large control: 18
+ * - badges/chips: 12
+ * - sidebar nav: 18
+ * - page-header and section-title icons: 20
+ * - empty states: 32-40
+ */
+export const ICON_SIZE = {
+  xs: 12, // keep in sync with tokens.css (--icon-xs: 0.75rem)
+  sm: 14, // keep in sync with tokens.css (--icon-sm: 0.875rem)
+  md: 16, // keep in sync with tokens.css (--icon-md: 1rem)
+  lg: 18, // keep in sync with tokens.css (--icon-lg: 1.125rem)
+  xl: 24, // keep in sync with tokens.css (--icon-xl: 1.5rem)
+};
+
+/**
  * Helper to turn any PNG, SVG, or WEBP image into a standard React icon component.
  * This allows using custom images anywhere Lucide icons are used with uniform size & styling.
- *
- * Example to use a custom image for Vendor:
- *   import VendorImg from '../assets/menuicon/VendorIcon.png';
- *   export const IconVendor = createImageIcon(VendorImg, 'Vendor');
  */
 export function createImageIcon(src, alt = '') {
   return function CustomImageIcon({ size = 20, className = '', ...props }) {
@@ -94,7 +159,6 @@ export function createImageIcon(src, alt = '') {
 }
 
 /* ── 1. MODULE & ENTITY ICONS ── */
-// Tip: To switch any icon below to a custom image, simply wrap the image in createImageIcon(MyImage, 'Label')
 export const IconVendor = Truck;
 export const IconClient = Handshake;
 export const IconBankDetails = Landmark;
@@ -109,7 +173,7 @@ export const IconConfig = Settings;
 
 // Approvals
 export const IconApproval = CheckSquare;
-export const IconVendorApproval = Truck; // Consistent with Vendor module branding
+export const IconVendorApproval = Truck;
 export const IconPRApproval = ClipboardCheck;
 
 // Configuration Sub-Modules
@@ -121,37 +185,55 @@ export const IconRegions = MapPin;
 export const IconPaymentTerms = HandCoins;
 export const IconList = ListTree;
 
-/* ── 2. GLOBAL ACTION ICONS ── */
+/* ── 2. GLOBAL ACTION ICONS (Canonical semantic registry) ── */
 export const IconAdd = Plus;
 export const IconEdit = Pencil;
 export const IconDelete = Trash2;
+export const IconView = Eye;
+export const IconClose = X;
+export const IconCancel = X; // Alias for IconClose
+export const IconBack = ArrowLeft;
+export const IconSave = Save;
+export const IconCheck = Check;
+export const IconSuccess = CheckCircle2;
+export const IconError = AlertCircle;
+export const IconWarning = AlertTriangle;
+export const IconInfo = Info;
 export const IconSearch = Search;
 export const IconSearchEmpty = SearchX;
 export const IconReset = RotateCcw;
-export const IconCancel = X;
-export const IconClose = X;
-export const IconSave = Check;
-export const IconBack = ArrowLeft;
-export const IconView = Eye;
-export const IconCalendar = Calendar;
+export const IconUpload = UploadCloud; // Outliers merged to UploadCloud
+export const IconUploadCloud = UploadCloud;
 export const IconDownload = Download;
-export const IconUpload = Upload;
-export const IconAttachment = Paperclip;
-export const IconDocument = FileText;
+export const IconCalendar = Calendar;
+export const IconRefresh = RefreshCw; // Change status / refresh
 
-/* ── 3. PAGINATION & SORTING ICONS ── */
+/* ── 3. PAGINATION, CAROUSEL & SORTING ICONS ── */
 export const IconSortUp = ChevronUp;
 export const IconSortDown = ChevronDown;
 export const IconPrev = ChevronLeft;
 export const IconNext = ChevronRight;
+export const IconChevronDown = ChevronDown;
+export const IconChevronUp = ChevronUp;
+export const IconChevronLeft = ChevronLeft;
+export const IconChevronRight = ChevronRight;
+export const IconArrowRight = ArrowRight;
+export const IconArrowUpDown = ArrowUpDown;
+export const IconArrowUp = ArrowUp;
+export const IconArrowDown = ArrowDown;
 
 /* ── 4. FIELD & CONTACT ICONS ── */
 export const IconPhone = Phone;
 export const IconMail = Mail;
 export const IconLocation = MapPin;
 export const IconUser = User;
+export const IconUserPlus = UserPlus;
+export const IconUserCheck = UserCheck;
+export const IconContact = Contact;
 export const IconBuilding = Building;
+export const IconBuilding2 = Building2;
 export const IconWebsite = Globe;
+export const IconGlobe = Globe;
 
 /* ── 5. STATUS & INDICATOR ICONS ── */
 export const IconActive = Check;
@@ -160,24 +242,71 @@ export const IconClock = Clock;
 export const IconAlert = AlertCircle;
 export const IconLock = Lock;
 export const IconSecurity = ShieldCheck;
+export const IconShield = Shield;
+export const IconShieldCheck = ShieldCheck;
+export const IconShieldAlert = ShieldAlert;
 export const IconLogout = LogOut;
+export const IconXCircle = XCircle;
+export const IconSparkles = Sparkles;
+export const IconFlame = Flame;
+export const IconActivity = Activity;
 
-/* ── 6. STANDARD ICON COLOR & SIZE CLASSES ── */
+/* ── 6. DOCUMENT & FILE ATTACHMENTS ── */
+export const IconAttachment = Paperclip;
+export const IconPaperclip = Paperclip;
+export const IconDocument = FileText;
+export const IconFileText = FileText;
+export const IconFile = File;
+export const IconFileSpreadsheet = FileSpreadsheet;
+export const IconFileCode = FileCode;
+export const IconFileCheck = FileCheck;
+export const IconLayers = Layers;
+export const IconPackage = Package;
+export const IconTags = Tags;
+export const IconImage = Image;
+
+/* ── 7. OTHER COMMON GLYPHS ── */
+export const IconSend = Send;
+export const IconExternalLink = ExternalLink;
+export const IconMessageSquare = MessageSquare;
+export const IconCopy = Copy;
+export const IconCreditCard = CreditCard;
+export const IconMaximize = Maximize2;
+export const IconMaximize2 = Maximize2;
+export const IconIndianRupee = IndianRupee;
+export const IconEyeOff = EyeOff;
+export const IconRuler = Ruler;
+export const IconTarget = Target;
+export const IconKeyRound = KeyRound;
+export const IconSmartphone = Smartphone;
+export const IconLaptop = Laptop;
+export const IconTablet = Tablet;
+export const IconHistory = History;
+export const IconHash = Hash;
+export const IconHelp = HelpCircle;
+export const IconFolderLock = FolderLock;
+export const IconTag = Tag;
+export const IconFolder = Folder;
+export const IconCompass = Compass;
+export const IconPanelLeftClose = PanelLeftClose;
+export const IconPanelLeftOpen = PanelLeftOpen;
+export const IconMenu = Menu;
+export const IconShoppingCart = ShoppingCart;
+export const IconReceipt = Receipt;
+export const IconPackageCheck = PackageCheck;
+
+/* ── 8. STANDARD ICON COLOR & SIZE CLASSES ── */
 export const ICON_STYLES = {
-  // PageHeader primary branding icon
   pageHeader: 'text-primary shrink-0',
-  // Card meta details (Phone, Email, MapPin, Calendar)
   metaField: 'text-text-muted/70 shrink-0',
-  // Table action buttons
   actionEdit: 'text-text-muted hover:text-primary transition-colors',
   actionDelete: 'text-text-muted hover:text-danger transition-colors',
-  // Status dot indicators
   statusActive: 'text-success',
   statusInactive: 'text-danger',
   statusWarning: 'text-warning',
 };
 
-/* ── 7. ENTITY DICTIONARY (For navigation.js and programmatic lookup) ── */
+/* ── 9. ENTITY DICTIONARY (For navigation.js and programmatic lookup) ── */
 export const MODULE_ICONS = {
   vendor: IconVendor,
   client: IconClient,

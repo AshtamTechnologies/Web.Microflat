@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { INITIAL_REGIONS } from '../mocks/regions';
+import { getTodayISO } from '../utils/dateUtils';
 import { getPathLabel, getDropdownOptions } from '../utils/treeUtils';
 
 const RegionsContext = createContext(null);
@@ -48,7 +49,7 @@ export function RegionsProvider({ children }) {
     await new Promise((r) => setTimeout(r, 500));
 
     const newId = `reg_${Date.now()}`;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayISO();
 
     const newRegion = {
       regionId: newId,

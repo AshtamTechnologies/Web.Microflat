@@ -12,25 +12,24 @@ import {
   flexRender,
 } from '@tanstack/react-table';
 import {
-  Search,
-  Plus,
-  ChevronUp,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  SearchX,
-  Landmark,
-  Pencil,
-  Trash2,
-  Paperclip,
-  FileText,
-  Image as ImageIcon,
-  Eye,
-  Download,
-  X,
-  RotateCcw,
-} from 'lucide-react';
-import { IconBankDetails } from '../../constants/icons';
+  IconAdd,
+  IconAttachment,
+  IconBankDetails,
+  IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
+  IconChevronUp,
+  IconClose,
+  IconDelete,
+  IconDownload,
+  IconEdit,
+  IconFileText,
+  IconImage,
+  IconReset,
+  IconSearch,
+  IconSearchEmpty,
+  IconView,
+} from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -47,6 +46,7 @@ import {
   TableToolbar,
   TableActions,
   StatusBadge,
+  IconButton,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { useVendorBankDetails } from '../../context/VendorBankDetailsContext';
@@ -57,7 +57,7 @@ import { formatDate } from '../../utils/dateUtils';
 function getFileIcon(fileName = '', fileType = '') {
   const lower = fileName.toLowerCase();
   if (lower.endsWith('.pdf') || fileType.includes('pdf')) {
-    return <FileText size={18} className="text-danger" />;
+    return <IconFileText size={18} className="text-danger" />;
   }
   if (
     lower.endsWith('.png') ||
@@ -66,9 +66,9 @@ function getFileIcon(fileName = '', fileType = '') {
     lower.endsWith('.webp') ||
     fileType.includes('image')
   ) {
-    return <ImageIcon size={18} className="text-info" />;
+    return <IconImage size={18} className="text-info" />;
   }
-  return <Paperclip size={18} className="text-primary" />;
+  return <IconAttachment size={18} className="text-primary" />;
 }
 
 export default function VendorBankDetailsPage() {
@@ -214,13 +214,13 @@ export default function VendorBankDetailsPage() {
             onClick={() => navigate('/vendor-bank-details/new')}
             className="shadow-2xs text-xs font-semibold"
           >
-            <Plus size={16} className="mr-1.5" aria-hidden="true" />
+            <IconAdd size={16} className="mr-1.5" aria-hidden="true" />
             <span>Add Bank Details</span>
           </Button>
         }
       />
 
-      {/* ── Toolbar: Search, Vendor Filter, Status Filter & Reset Filters ── */}
+      {/* ── Toolbar: IconSearch, Vendor Filter, Status Filter & Reset Filters ── */}
       <TableToolbar
         searchValue={search}
         onSearchChange={setSearch}
@@ -336,7 +336,7 @@ export default function VendorBankDetailsPage() {
                   onClick={() => navigate(`/vendor-bank-details/${bank.vendorId}/view?bank=${bankId}`)}
                   className="flex-1 text-xs"
                 >
-                  <Eye size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconView size={13} className="mr-1.5" aria-hidden="true" />
                   View
                 </Button>
                 <Button
@@ -345,7 +345,7 @@ export default function VendorBankDetailsPage() {
                   onClick={() => navigate(`/vendor-bank-details/${bank.vendorId}/edit?bank=${bankId}`)}
                   className="flex-1 text-xs"
                 >
-                  <Pencil size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconEdit size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
                 </Button>
                 <Button
@@ -354,7 +354,7 @@ export default function VendorBankDetailsPage() {
                   onClick={() => handleDeleteRequest(bank)}
                   className="flex-1 text-xs"
                 >
-                  <Trash2 size={13} className="mr-1.5" aria-hidden="true" />
+                  <IconDelete size={13} className="mr-1.5" aria-hidden="true" />
                   Delete
                 </Button>
               </div>
@@ -378,7 +378,7 @@ export default function VendorBankDetailsPage() {
               ).slice(-4)}`
             : ''
         }
-        icon={Paperclip}
+        icon={IconAttachment}
         size="lg"
       >
         <div className="space-y-4">
@@ -431,7 +431,7 @@ export default function VendorBankDetailsPage() {
                         }}
                         className="text-xs font-medium"
                       >
-                        <Eye size={13} className="mr-1.5" />
+                        <IconView size={13} className="mr-1.5" />
                         Preview
                       </Button>
                       <Button
@@ -444,7 +444,7 @@ export default function VendorBankDetailsPage() {
                         className="text-xs text-text-muted hover:text-primary"
                         title="Download file"
                       >
-                        <Download size={13} className="mr-1.5" />
+                        <IconDownload size={13} className="mr-1.5" />
                         Download
                       </Button>
                     </div>
@@ -457,18 +457,19 @@ export default function VendorBankDetailsPage() {
                 <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3 mt-3 animate-fadeIn">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Eye size={14} className="text-primary" />
+                      <IconView size={14} className="text-primary" />
                       <span className="text-xs font-semibold text-heading">
                         Document Preview: {previewingFile.fileName}
                       </span>
                     </div>
-                    <button
-                      type="button"
+                    <IconButton
+                      icon={IconClose}
+                      size="sm"
+                      variant="ghost"
+                      title="Close preview"
+                      aria-label="Close preview"
                       onClick={() => setPreviewingFile(null)}
-                      className="p-1 text-text-muted hover:text-heading rounded cursor-pointer"
-                    >
-                      <X size={14} />
-                    </button>
+                    />
                   </div>
                   <div className="p-6 rounded-lg bg-bg border border-border text-center space-y-2">
                     <div className="w-12 h-12 mx-auto rounded-xl bg-primary/10 text-primary flex items-center justify-center">
@@ -491,7 +492,7 @@ export default function VendorBankDetailsPage() {
             </div>
           ) : (
             <div className="py-8 text-center space-y-2 border border-dashed border-border rounded-xl bg-surface/30">
-              <Paperclip size={24} className="mx-auto text-text-muted/60" />
+              <IconAttachment size={24} className="mx-auto text-text-muted/60" />
               <p className="text-xs font-semibold text-heading">No attachments found</p>
               <p className="text-2xs text-text-muted max-w-sm mx-auto">
                 No bank proof documents have been attached to this bank account yet.

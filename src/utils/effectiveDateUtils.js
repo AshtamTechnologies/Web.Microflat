@@ -7,11 +7,13 @@
  * - Gone (Past / Expired): Older effective dates superseded by a newer active date
  */
 
+import { getTodayISO } from './dateUtils';
+
 /**
- * Returns today's ISO date string (YYYY-MM-DD)
+ * Returns today's ISO date string (YYYY-MM-DD) in local time
  */
 export function getTodayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
+  return getTodayISO();
 }
 
 /**

@@ -14,16 +14,16 @@
 import { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Pencil,
-  Building2,
-  FileText,
-  MapPin,
-  Users,
-  AlertCircle,
-  Clock,
-} from 'lucide-react';
-import { IconClient } from '../../constants/icons';
+  IconBack,
+  IconBuilding2,
+  IconClient,
+  IconClock,
+  IconEdit,
+  IconError,
+  IconFileText,
+  IconLocation,
+  IconUsers,
+} from '../../constants/icons';
 
 import {
   Button,
@@ -88,14 +88,14 @@ export default function ClientViewPage() {
       <div className="max-w-3xl mx-auto py-16 px-4 text-center">
         <Card padding="lg" className="space-y-4">
           <div className="w-12 h-12 rounded-full bg-danger/10 text-danger flex items-center justify-center mx-auto">
-            <AlertCircle size={24} />
+            <IconError size={24} />
           </div>
           <h2 className="text-lg font-bold text-heading">Client Not Found</h2>
           <p className="text-sm text-text-muted">
             The requested client record with ID "{id}" does not exist or has been removed.
           </p>
           <Button variant="primary" onClick={() => navigate('/clients')}>
-            Return to Clients List
+            Back to Clients
           </Button>
         </Card>
       </div>
@@ -114,17 +114,15 @@ export default function ClientViewPage() {
         subtitle={`Client ID: ${clientId}`}
         icon={<IconClient className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            icon={IconBack}
             onClick={() => navigate('/clients')}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border shadow-2xs transition-all duration-150 group cursor-pointer"
           >
-            <ArrowLeft
-              size={14}
-              className="text-text-muted group-hover:text-primary group-hover:-translate-x-0.5 transition-transform"
-            />
-            <span>Back to Clients</span>
-          </button>
+            Back to Clients
+          </Button>
         }
         badge={
           <div className="flex items-center gap-2">
@@ -148,7 +146,7 @@ export default function ClientViewPage() {
               onClick={() => navigate(`/clients/${clientId}/effective-dates`)}
               className="text-xs font-semibold shadow-2xs"
             >
-              <Clock size={14} className="mr-1.5" />
+              <IconClock size={14} className="mr-1.5" />
               Effective Date History
             </Button>
             <Button
@@ -157,7 +155,7 @@ export default function ClientViewPage() {
               onClick={() => navigate(`/clients/${clientId}/edit`)}
               className="text-xs font-semibold shadow-2xs"
             >
-              <Pencil size={14} className="mr-1.5" />
+              <IconEdit size={14} className="mr-1.5" />
               Edit Client
             </Button>
           </div>
@@ -168,7 +166,7 @@ export default function ClientViewPage() {
       <Card padding="md" className="space-y-4">
         <div className="flex items-center gap-2.5 border-b border-border pb-3">
           <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <Building2 size={17} />
+            <IconBuilding2 size={17} />
           </div>
           <h3 className="text-sm font-semibold text-heading">Company Details</h3>
         </div>
@@ -237,7 +235,7 @@ export default function ClientViewPage() {
         <Card padding="md" className="space-y-4">
           <div className="flex items-center gap-2.5 border-b border-border pb-3">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <FileText size={17} />
+              <IconFileText size={17} />
             </div>
             <h3 className="text-sm font-semibold text-heading">Terms & Notes</h3>
           </div>
@@ -331,7 +329,7 @@ export default function ClientViewPage() {
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <MapPin size={17} />
+              <IconLocation size={17} />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-heading">Client Addresses</h3>
@@ -408,7 +406,7 @@ export default function ClientViewPage() {
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Users size={17} />
+              <IconUsers size={17} />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-heading">Contact Persons</h3>

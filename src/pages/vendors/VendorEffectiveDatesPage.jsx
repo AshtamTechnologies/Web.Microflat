@@ -5,46 +5,45 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import {
-  useReactTable,
+import {  useReactTable,
   getCoreRowModel,
   getSortedRowModel,
   flexRender,
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  ArrowLeft,
-  Calendar,
-  Plus,
-  Eye,
-  Pencil,
-  Save,
-  Check,
-  X,
-  User,
-  Building2,
-  Contact,
-  MapPin,
-  FileText,
-  Clock,
-  Globe,
-  Mail,
-  Phone,
-  Paperclip,
-  UploadCloud,
-  Trash2,
-  Download,
-  Image as ImageIcon,
-  CheckCircle2,
-  AlertCircle,
-  ExternalLink,
-  FileCheck,
-  ShieldCheck,
-  Maximize2,
-  ChevronUp,
-  ChevronDown,
-} from 'lucide-react';
-import { IconVendor } from '../../constants/icons';
+  IconAdd,
+  IconAttachment,
+  IconBack,
+  IconBuilding2,
+  IconCalendar,
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconClock,
+  IconClose,
+  IconContact,
+  IconDelete,
+  IconDocumentTypes,
+  IconDownload,
+  IconEdit,
+  IconError,
+  IconExternalLink,
+  IconFileText,
+  IconGlobe,
+  IconImage,
+  IconLocation,
+  IconMail,
+  IconMaximize2,
+  IconPhone,
+  IconSave,
+  IconShieldCheck,
+  IconSuccess,
+  IconUpload,
+  IconUser,
+  IconVendor,
+  IconView,
+} from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -62,6 +61,7 @@ import {
   Td,
   Modal,
   PageHeader,
+  Textarea,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import {
@@ -72,6 +72,7 @@ import {
 } from '../../mocks/vendors';
 import { getActiveVendorVersion } from '../../utils/vendorVersions';
 import { formatDateDisplay, getTodayIsoDate } from '../../utils/effectiveDateUtils';
+import { formatDate, getTodayISO } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
@@ -111,9 +112,9 @@ function getFileIcon(fileName = '', fileType = '') {
   const type = (fileType || '').toLowerCase();
 
   if (name.endsWith('.pdf') || type.includes('pdf')) {
-    return <FileText size={18} className="text-danger shrink-0" />;
+    return <IconFileText size={18} className="text-danger shrink-0" />;
   }
-  return <ImageIcon size={18} className="text-primary shrink-0" />;
+  return <IconImage size={18} className="text-primary shrink-0" />;
 }
 
 function formatAuditTimestamp(date = new Date()) {
@@ -529,7 +530,7 @@ export default function VendorEffectiveDatesPage() {
         fileSizeBytes: file.size,
         fileType: file.type || 'application/octet-stream',
         fileUrl,
-        uploadedAt: new Date().toISOString().slice(0, 10),
+        uploadedAt: getTodayISO(),
       };
     });
 
@@ -825,7 +826,7 @@ export default function VendorEffectiveDatesPage() {
                     : 'text-text-muted hover:text-primary hover:bg-surface'
                 }
               >
-                <Eye size={15} />
+                <IconView size={15} />
               </Button>
 
               {!isReadOnly && (
@@ -843,7 +844,7 @@ export default function VendorEffectiveDatesPage() {
                       : 'text-text-muted hover:text-primary hover:bg-surface'
                   }
                 >
-                  <Pencil size={15} />
+                  <IconEdit size={15} />
                 </Button>
               )}
             </div>
@@ -875,13 +876,13 @@ export default function VendorEffectiveDatesPage() {
     return (
       <div className="w-full py-12 px-4 sm:px-6">
         <div className="bg-surface border border-border rounded-2xl p-8 text-center space-y-4 max-w-xl mx-auto">
-          <AlertCircle size={40} className="text-warning mx-auto" />
+          <IconError size={40} className="text-warning mx-auto" />
           <h2 className="text-xl font-bold text-heading">Vendor Not Found</h2>
           <p className="text-sm text-text-muted">
             The vendor you are trying to edit does not exist or has been removed.
           </p>
           <Button variant="primary" onClick={() => navigate('/vendors')}>
-            <ArrowLeft size={16} className="mr-2" />
+            <IconBack size={16} className="mr-2" />
             Back to Vendors
           </Button>
         </div>
@@ -935,12 +936,9 @@ export default function VendorEffectiveDatesPage() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => handleStartEdit(selectedVersion)}
-                disabled={!vendor.isActive}
-                className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                onClick={() => handleStartEdit(selectedVersion)} disabled={!vendor.isActive} icon={IconEdit} className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
                 title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : `Edit ${vendor.vendorName} effective date details`}
               >
-                <Pencil size={13} aria-hidden="true" />
                 Edit Vendor
               </Button>
             )}
@@ -951,11 +949,9 @@ export default function VendorEffectiveDatesPage() {
                   type="button"
                   variant="danger-soft"
                   size="sm"
-                  onClick={handleOpenDeactivate}
-                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  onClick={handleOpenDeactivate} icon={IconClose} className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
                   title="Mark vendor inactive"
                 >
-                  <X size={13} className="stroke-[2.5]" aria-hidden="true" />
                   Deactivate
                 </Button>
               ) : (
@@ -963,11 +959,9 @@ export default function VendorEffectiveDatesPage() {
                   type="button"
                   variant="primary"
                   size="sm"
-                  onClick={handleOpenActivate}
-                  className="text-xs font-semibold transition-all h-8 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer bg-success hover:bg-success/90 text-white border-transparent"
+                  onClick={handleOpenActivate} icon={IconCheck} className="text-xs font-semibold transition-all h-8 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer bg-success hover:bg-success/90 text-white border-transparent"
                   title="Re-activate vendor"
                 >
-                  <Check size={13} className="stroke-[2.5]" aria-hidden="true" />
                   Activate
                 </Button>
               )
@@ -983,7 +977,7 @@ export default function VendorEffectiveDatesPage() {
                   className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
                   title={`Approve ${vendor.vendorName}`}
                 >
-                  <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
+                  <IconCheck size={14} className="" aria-hidden="true" />
                   Approve
                 </Button>
 
@@ -995,7 +989,7 @@ export default function VendorEffectiveDatesPage() {
                   className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
                   title={`Reject ${vendor.vendorName}`}
                 >
-                  <X size={14} className="stroke-[2.5]" aria-hidden="true" />
+                  <IconClose size={14} className="" aria-hidden="true" />
                   Reject
                 </Button>
               </div>
@@ -1009,7 +1003,7 @@ export default function VendorEffectiveDatesPage() {
         <div className="rounded-xl border border-danger/30 bg-danger/[0.04] p-3.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-start sm:items-center gap-2.5 min-w-0">
             <div className="p-1.5 rounded-lg bg-danger/10 text-danger shrink-0 mt-0.5 sm:mt-0">
-              <AlertCircle size={16} className="stroke-[2.2]" />
+              <IconError size={16} className="" />
             </div>
             <div className="text-xs text-heading flex items-center gap-1.5 flex-wrap">
               <span className="font-bold text-danger">Inactive Reason:</span>
@@ -1018,7 +1012,7 @@ export default function VendorEffectiveDatesPage() {
               </span>
               {vendor.inactiveDate && (
                 <span className="text-2xs font-mono text-text-muted ml-1">
-                  ({vendor.inactiveDate})
+                  ({formatDate(vendor.inactiveDate)})
                 </span>
               )}
             </div>
@@ -1031,7 +1025,7 @@ export default function VendorEffectiveDatesPage() {
         <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm sm:text-base font-bold text-heading flex items-center gap-2">
-              <Calendar size={17} className="text-primary shrink-0" />
+              <IconCalendar size={17} className="text-primary shrink-0" />
               Effective Dates
             </h2>
             <p className="text-xs text-text-muted mt-0.5">
@@ -1048,7 +1042,7 @@ export default function VendorEffectiveDatesPage() {
               className="text-xs shrink-0 w-full sm:w-auto justify-center"
               title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to add new effective dates.' : 'Add new effective date'}
             >
-              <Plus size={14} className="mr-1.5" />
+              <IconAdd size={14} className="mr-1.5" />
               Add New Effective Date
             </Button>
           )}
@@ -1112,7 +1106,7 @@ export default function VendorEffectiveDatesPage() {
                             : 'text-text-muted hover:text-primary hover:bg-surface'
                         }`}
                       >
-                        <Eye size={14} />
+                        <IconView size={14} />
                       </Button>
 
                       {!isReadOnly && (
@@ -1130,7 +1124,7 @@ export default function VendorEffectiveDatesPage() {
                               : 'text-text-muted hover:text-primary hover:bg-surface'
                           }`}
                         >
-                          <Pencil size={13} />
+                          <IconEdit size={13} />
                         </Button>
                       )}
                     </div>
@@ -1139,7 +1133,7 @@ export default function VendorEffectiveDatesPage() {
                   {/* Middle / Bottom line: Context info */}
                   <div className="mt-2 pt-2 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-2xs text-text-muted">
                     <div className="flex items-center gap-1.5 truncate">
-                      <MapPin size={12} className="shrink-0 text-text-muted/70" />
+                      <IconLocation size={12} className="shrink-0 text-text-muted/70" />
                       <span className="truncate">
                         {ver.city ? `${ver.city}, ` : ''}
                         {getStateName(ver.countryId, ver.stateId) || '—'}
@@ -1148,13 +1142,13 @@ export default function VendorEffectiveDatesPage() {
 
                     <div className="flex items-center justify-between sm:justify-end gap-2">
                       <div className="flex items-center gap-1.5 font-mono text-2xs">
-                        <Clock size={11} className="shrink-0 text-text-muted/70" />
+                        <IconClock size={11} className="shrink-0 text-text-muted/70" />
                         <span>{formatDateDisplay(ver.createdOn)}</span>
                       </div>
 
                       {verAtts.length > 0 && (
                         <span className="inline-flex items-center gap-1 text-2xs text-primary font-medium">
-                          <Paperclip size={10} />
+                          <IconAttachment size={10} />
                           {verAtts.length} doc{verAtts.length > 1 ? 's' : ''}
                         </span>
                       )}
@@ -1205,21 +1199,21 @@ export default function VendorEffectiveDatesPage() {
 
                             <span className="shrink-0 ml-1 inline-flex items-center">
                               {sorted === 'asc' ? (
-                                <ChevronUp
+                                <IconChevronUp
                                   size={14}
-                                  className="text-primary stroke-[2.5]"
+                                  className="text-primary"
                                   aria-hidden="true"
                                 />
                               ) : sorted === 'desc' ? (
-                                <ChevronDown
+                                <IconChevronDown
                                   size={14}
-                                  className="text-primary stroke-[2.5]"
+                                  className="text-primary"
                                   aria-hidden="true"
                                 />
                               ) : (
                                 <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <ChevronUp size={11} strokeWidth={2.5} />
-                                  <ChevronDown size={11} strokeWidth={2.5} />
+                                  <IconChevronUp size={11} />
+                                  <IconChevronDown size={11} />
                                 </span>
                               )}
                             </span>
@@ -1331,7 +1325,7 @@ export default function VendorEffectiveDatesPage() {
                 className="text-xs w-full sm:w-auto justify-center"
                 title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : 'Edit this version'}
               >
-                <Pencil size={13} className="mr-1.5" />
+                <IconEdit size={13} className="mr-1.5" />
                 Edit this version
               </Button>
             )}
@@ -1366,7 +1360,7 @@ export default function VendorEffectiveDatesPage() {
             {/* 1. Contact Information */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <Contact size={15} className="text-primary" />
+                <IconContact size={15} className="text-primary" />
                 Contact Information
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-1">
@@ -1410,7 +1404,7 @@ export default function VendorEffectiveDatesPage() {
             {/* 2. Address Details */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <MapPin size={15} className="text-primary" />
+                <IconLocation size={15} className="text-primary" />
                 Address Details
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-1">
@@ -1445,7 +1439,7 @@ export default function VendorEffectiveDatesPage() {
             {/* 3. Procurement Notes & Version Audit */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <FileText size={15} className="text-primary" />
+                <IconFileText size={15} className="text-primary" />
                 Procurement & Quality Notes
               </div>
               <div className="space-y-3 pt-1">
@@ -1476,7 +1470,7 @@ export default function VendorEffectiveDatesPage() {
             <div className="space-y-3 pt-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                  <Paperclip size={15} className="text-primary" />
+                  <IconAttachment size={15} className="text-primary" />
                   Attachments & Supporting Documents
                   <span className="text-2xs font-normal text-text-muted ml-1">
                     ({currentViewAttachments.length})
@@ -1525,7 +1519,7 @@ export default function VendorEffectiveDatesPage() {
                           title="View preview"
                           className="h-8 w-8 text-text-muted group-hover:text-primary hover:bg-primary/10"
                         >
-                          <Maximize2 size={13} />
+                          <IconMaximize2 size={13} />
                         </Button>
                         <Button
                           variant="ghost"
@@ -1534,7 +1528,7 @@ export default function VendorEffectiveDatesPage() {
                           title="Download document"
                           className="h-8 w-8 text-text-muted hover:text-primary hover:bg-primary/10"
                         >
-                          <Download size={13} />
+                          <IconDownload size={13} />
                         </Button>
                       </div>
                     </div>
@@ -1551,7 +1545,7 @@ export default function VendorEffectiveDatesPage() {
             {/* Section 1: Effective Date & Contact Information */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <Contact size={15} className="text-primary" />
+                <IconContact size={15} className="text-primary" />
                 Contact Information
               </div>
 
@@ -1668,7 +1662,7 @@ export default function VendorEffectiveDatesPage() {
             {/* Section 2: Address Details */}
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <MapPin size={15} className="text-primary" />
+                <IconLocation size={15} className="text-primary" />
                 Address Details
               </div>
 
@@ -1770,25 +1764,19 @@ export default function VendorEffectiveDatesPage() {
             {/* Section 3: Notes & Instructions */}
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <FileText size={15} className="text-primary" />
+                <IconFileText size={15} className="text-primary" />
                 Procurement & Quality Notes
               </div>
 
               <div>
-                <label
-                  htmlFor="notes"
-                  className="block text-xs font-semibold text-heading mb-1.5"
-                >
-                  Notes & Special Terms
-                </label>
-                <textarea
+                <Textarea
                   id="notes"
                   name="notes"
+                  label="Revision Notes / ISO References"
                   rows={3}
-                  placeholder="Enter vendor terms, quality certificates, delivery notes, or special handling instructions..."
                   value={formData.notes}
                   onChange={handleInputChange}
-                  className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-heading placeholder:text-text-muted/60 focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20 transition-all resize-y"
+                  placeholder="Summarize reasons for this effective date update or revision..."
                 />
               </div>
             </div>
@@ -1796,7 +1784,7 @@ export default function VendorEffectiveDatesPage() {
             {/* Section 4: Attachments & Supporting Documents (EDIT/ADD MODE — Version-Scoped) */}
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <Paperclip size={15} className="text-primary" />
+                <IconAttachment size={15} className="text-primary" />
                 Attachments & Supporting Documents for this Version
                 <span className="text-2xs font-normal text-text-muted ml-1">
                   ({attachments.length})
@@ -1823,7 +1811,7 @@ export default function VendorEffectiveDatesPage() {
                     onClick={() => fileInputRef.current?.click()}
                     className="w-full h-10 text-xs"
                   >
-                    <UploadCloud size={15} className="mr-1.5" />
+                    <IconUpload size={15} className="mr-1.5" />
                     Browse Files
                   </Button>
                 </div>
@@ -1841,6 +1829,7 @@ export default function VendorEffectiveDatesPage() {
                     : 'border-border hover:border-primary/40 hover:bg-surface/50'
                 }`}
               >
+                {/* Native file input hidden for custom drag-drop styling */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1849,7 +1838,7 @@ export default function VendorEffectiveDatesPage() {
                   onChange={handleFileInputChange}
                   className="hidden"
                 />
-                <UploadCloud
+                <IconUpload
                   size={28}
                   className={`mx-auto mb-2 ${
                     isDragging ? 'text-primary' : 'text-text-muted'
@@ -1865,7 +1854,7 @@ export default function VendorEffectiveDatesPage() {
 
               {attachmentError && (
                 <div className="p-2.5 rounded-lg bg-danger/10 border border-danger/20 text-xs text-danger flex items-center gap-2">
-                  <AlertCircle size={14} className="shrink-0" />
+                  <IconError size={14} className="shrink-0" />
                   <span>{attachmentError}</span>
                 </div>
               )}
@@ -1903,7 +1892,7 @@ export default function VendorEffectiveDatesPage() {
                           title="Preview file"
                           className="h-7 w-7 text-text-muted hover:text-primary"
                         >
-                          <Maximize2 size={13} />
+                          <IconMaximize2 size={13} />
                         </Button>
                         <Button
                           type="button"
@@ -1913,7 +1902,7 @@ export default function VendorEffectiveDatesPage() {
                           title="Download file"
                           className="h-7 w-7 text-text-muted hover:text-primary"
                         >
-                          <Download size={13} />
+                          <IconDownload size={13} />
                         </Button>
                         <Button
                           type="button"
@@ -1923,7 +1912,7 @@ export default function VendorEffectiveDatesPage() {
                           title="Remove attachment"
                           className="h-7 w-7 text-text-muted hover:text-danger"
                         >
-                          <Trash2 size={13} />
+                          <IconDelete size={13} />
                         </Button>
                       </div>
                     </div>
@@ -1978,7 +1967,7 @@ export default function VendorEffectiveDatesPage() {
                   <span>Size: <strong className="text-heading">{previewItem.fileSize}</strong></span>
                 )}
                 {previewItem.uploadedAt && (
-                  <span>Uploaded: <strong className="text-heading font-mono">{previewItem.uploadedAt}</strong></span>
+                  <span>Uploaded: <strong className="text-heading font-mono">{formatDate(previewItem.uploadedAt)}</strong></span>
                 )}
               </div>
             </div>
@@ -2003,20 +1992,20 @@ export default function VendorEffectiveDatesPage() {
                 /* Enhanced visual certificate / document card presentation for mock documents */
                 <div className="w-full max-w-lg bg-surface border-2 border-border/80 rounded-2xl p-6 shadow-sm text-center space-y-4 relative overflow-hidden">
                   <div className="absolute top-0 right-0 transform translate-x-4 -translate-y-4 opacity-5 pointer-events-none">
-                    <ShieldCheck size={180} />
+                    <IconShieldCheck size={180} />
                   </div>
 
                   <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto border border-primary/20 shadow-xs">
                     {previewItem.fileName?.toLowerCase().endsWith('.pdf') ? (
-                      <FileText size={28} className="text-danger" />
+                      <IconFileText size={28} className="text-danger" />
                     ) : (
-                      <FileCheck size={28} className="text-primary" />
+                      <IconDocumentTypes size={28} className="text-primary" />
                     )}
                   </div>
 
                   <div className="space-y-1">
                     <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-2xs font-bold bg-success/10 text-success border border-success/20">
-                      <ShieldCheck size={12} /> Verified Document
+                      <IconShieldCheck size={12} /> Verified Document
                     </span>
                     <h4 className="text-base font-bold text-heading mt-2">
                       {previewItem.documentName || previewItem.fileName}
@@ -2063,7 +2052,7 @@ export default function VendorEffectiveDatesPage() {
                 size="sm"
                 onClick={(e) => handleDownloadAttachment(previewItem, e)}
               >
-                <Download size={14} className="mr-1.5" />
+                <IconDownload size={14} className="mr-1.5" />
                 Download Document
               </Button>
             </div>
@@ -2082,7 +2071,7 @@ export default function VendorEffectiveDatesPage() {
           <form onSubmit={handleConfirmApprove} className="space-y-4">
             <div className="flex items-start gap-3.5 p-4 rounded-xl bg-success/5 border border-success/20">
               <div className="w-11 h-11 rounded-xl bg-success/15 border border-success/30 text-success flex items-center justify-center shrink-0">
-                <CheckCircle2 size={22} aria-hidden="true" />
+                <IconSuccess size={22} aria-hidden="true" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -2096,13 +2085,13 @@ export default function VendorEffectiveDatesPage() {
                 <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
                   {vendor.contactPersonName && (
                     <span className="flex items-center gap-1">
-                      <User size={12} className="text-text-muted/70" />
+                      <IconUser size={12} className="text-text-muted/70" />
                       {vendor.contactPersonName}
                     </span>
                   )}
                   {vendor.city && (
                     <span className="flex items-center gap-1">
-                      <MapPin size={12} className="text-text-muted/70" />
+                      <IconLocation size={12} className="text-text-muted/70" />
                       {vendor.city}, {getStateName(vendor.countryId, vendor.stateId)}
                     </span>
                   )}
@@ -2116,19 +2105,13 @@ export default function VendorEffectiveDatesPage() {
 
             {/* Approval Comments Field */}
             <div className="space-y-1.5">
-              <label
-                htmlFor="page-approve-comments"
-                className="text-xs font-semibold text-heading block"
-              >
-                Approval Comments / Remarks (Optional)
-              </label>
-              <textarea
+              <Textarea
                 id="page-approve-comments"
+                label="Approval Remarks / Notes (Optional)"
                 rows={3}
                 value={approveComments}
                 onChange={(e) => setApproveComments(e.target.value)}
-                placeholder="Enter approval remarks or internal audit notes..."
-                className="w-full rounded-xl border border-border bg-bg text-heading text-xs p-3 placeholder:text-text-muted focus:border-success focus:ring-2 focus:ring-success/20 outline-none resize-none leading-relaxed transition-all"
+                placeholder="Add optional notes or compliance remarks..."
               />
             </div>
 
@@ -2146,7 +2129,7 @@ export default function VendorEffectiveDatesPage() {
                 loading={isSubmittingApprove}
                 className="flex items-center gap-1.5 bg-success hover:bg-success/90 text-white border-transparent"
               >
-                <Check size={15} strokeWidth={2.5} />
+                <IconCheck size={15} />
                 Confirm Approval
               </Button>
             </div>
@@ -2165,7 +2148,7 @@ export default function VendorEffectiveDatesPage() {
           <form onSubmit={handleConfirmReject} className="space-y-4">
             <div className="flex items-start gap-3.5 p-4 rounded-xl bg-surface/70 border border-border">
               <div className="w-11 h-11 rounded-xl bg-danger/10 border border-danger/20 text-danger flex items-center justify-center shrink-0">
-                <Building2 size={20} aria-hidden="true" />
+                <IconBuilding2 size={20} aria-hidden="true" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -2179,13 +2162,13 @@ export default function VendorEffectiveDatesPage() {
                 <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
                   {vendor.contactPersonName && (
                     <span className="flex items-center gap-1">
-                      <User size={12} className="text-text-muted/70" />
+                      <IconUser size={12} className="text-text-muted/70" />
                       {vendor.contactPersonName}
                     </span>
                   )}
                   {vendor.city && (
                     <span className="flex items-center gap-1">
-                      <MapPin size={12} className="text-text-muted/70" />
+                      <IconLocation size={12} className="text-text-muted/70" />
                       {vendor.city}, {getStateName(vendor.countryId, vendor.stateId)}
                     </span>
                   )}
@@ -2195,25 +2178,19 @@ export default function VendorEffectiveDatesPage() {
 
             {/* Rejection Comments Field */}
             <div className="space-y-1.5">
-              <label
-                htmlFor="page-reject-comments"
-                className="text-xs font-semibold text-heading block"
-              >
-                Reason for Rejection <span className="text-danger">*</span>
-              </label>
-              <textarea
+              <Textarea
                 id="page-reject-comments"
-                rows={3}
+                label="Rejection Reason"
                 required
+                rows={3}
                 value={rejectComments}
                 onChange={(e) => setRejectComments(e.target.value)}
-                placeholder="Explain why this vendor application is being rejected (required)..."
-                className="w-full rounded-xl border border-border bg-bg text-heading text-xs p-3 placeholder:text-text-muted focus:border-danger focus:ring-2 focus:ring-danger/20 outline-none resize-none leading-relaxed transition-all"
+                placeholder="Please state reasons for rejection..."
               />
             </div>
 
             <div className="flex items-start gap-2.5 p-3 rounded-lg bg-danger/5 border border-danger/15 text-xs text-text-muted">
-              <AlertCircle size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
+              <IconError size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
               <span>
                 Rejecting will mark this vendor as <strong>Rejected</strong>.
               </span>
@@ -2234,7 +2211,7 @@ export default function VendorEffectiveDatesPage() {
                 loading={isSubmittingReject}
                 className="flex items-center gap-1.5"
               >
-                <X size={15} strokeWidth={2.5} />
+                <IconClose size={15} />
                 Reject Vendor
               </Button>
             </div>
@@ -2253,7 +2230,7 @@ export default function VendorEffectiveDatesPage() {
           <form onSubmit={handleConfirmDeactivate} className="space-y-4">
             <div className="flex items-start gap-3.5 p-4 rounded-xl bg-surface/70 border border-border">
               <div className="w-11 h-11 rounded-xl bg-danger/10 border border-danger/20 text-danger flex items-center justify-center shrink-0">
-                <Building2 size={20} aria-hidden="true" />
+                <IconBuilding2 size={20} aria-hidden="true" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -2272,27 +2249,14 @@ export default function VendorEffectiveDatesPage() {
 
             {/* Inactive Comment Field */}
             <div className="space-y-1.5">
-              <label
-                htmlFor="page-deactivate-comment"
-                className="text-xs font-semibold text-heading block"
-              >
-                Reason for Inactivating <span className="text-danger">*</span>
-              </label>
-              <textarea
+              <Textarea
                 id="page-deactivate-comment"
-                rows={3}
+                label="Reason for Inactivating"
                 required
+                rows={3}
                 value={deactivateComment}
-                onChange={(e) => {
-                  setDeactivateComment(e.target.value);
-                  if (deactivateError) setDeactivateError('');
-                }}
-                placeholder="Enter compulsory reason (e.g. Quality dispute, vendor requested suspension, contract expired)..."
-                className={`w-full rounded-xl border bg-bg text-heading text-xs p-3 placeholder:text-text-muted focus:ring-2 outline-none resize-none leading-relaxed transition-all ${
-                  deactivateError
-                    ? 'border-danger focus:border-danger focus:ring-danger/20'
-                    : 'border-border focus:border-danger focus:ring-danger/20'
-                }`}
+                onChange={(e) => setDeactivateComment(e.target.value)}
+                placeholder="Explain why this vendor is being marked inactive..."
               />
               {deactivateError && (
                 <span className="text-xs font-medium text-danger block">
@@ -2302,7 +2266,7 @@ export default function VendorEffectiveDatesPage() {
             </div>
 
             <div className="flex items-start gap-2.5 p-3 rounded-lg bg-danger/5 border border-danger/15 text-xs text-text-muted">
-              <AlertCircle size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
+              <IconError size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
               <span>
                 An Inactive reason is <strong>compulsory</strong>. It will be recorded and prominently shown on the vendor profile.
               </span>
@@ -2323,7 +2287,7 @@ export default function VendorEffectiveDatesPage() {
                 loading={isSubmittingDeactivate}
                 className="flex items-center gap-1.5"
               >
-                <X size={15} strokeWidth={2.5} />
+                <IconClose size={15} />
                 Confirm Deactivation
               </Button>
             </div>
@@ -2342,7 +2306,7 @@ export default function VendorEffectiveDatesPage() {
           <div className="space-y-4">
             <div className="flex items-start gap-3.5 p-4 rounded-xl bg-surface/70 border border-border">
               <div className="w-11 h-11 rounded-xl bg-success/10 border border-success/20 text-success flex items-center justify-center shrink-0">
-                <CheckCircle2 size={22} className="stroke-[2.2]" aria-hidden="true" />
+                <IconSuccess size={22} className="" aria-hidden="true" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -2374,7 +2338,7 @@ export default function VendorEffectiveDatesPage() {
                 loading={isSubmittingActivate}
                 className="flex items-center gap-1.5 bg-success hover:bg-success/90 text-white border-transparent"
               >
-                <Check size={15} strokeWidth={2.5} />
+                <IconCheck size={15} />
                 Confirm Activation
               </Button>
             </div>

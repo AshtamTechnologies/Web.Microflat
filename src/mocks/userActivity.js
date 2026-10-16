@@ -5,7 +5,7 @@
  * from the user's session history so timelines and session logs never disagree.
  */
 
-import { formatDateTime } from '../utils/dateTime';
+import { formatDateTime } from '../utils/dateUtils';
 
 export const USER_ACTION_TEMPLATES = [
   {

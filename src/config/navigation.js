@@ -12,8 +12,6 @@
  *   - children?: Array<item> (nested submenu links)
  */
 
-import DashboardIconImg from '../assets/menuicon/Dashboardicon.png';
-import UserIconImg from '../assets/menuicon/UserIcon.png';
 import {
   IconVendor,
   IconClient,
@@ -21,6 +19,7 @@ import {
   IconPR,
   IconInquiry,
   IconDashboard,
+  IconUsers,
   IconApproval,
   IconVendorApproval,
   IconPRApproval,
@@ -41,7 +40,7 @@ export const navigation = [
     items: [
       {
         label: 'Dashboard',
-        image: DashboardIconImg,
+        icon: IconDashboard,
         path: '/dashboard',
         roles: ['ADMIN', 'MANAGER', 'USER'],
       },
@@ -74,7 +73,7 @@ export const navigation = [
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
             quickAction: {
               icon: IconAdd,
-              title: 'Create PR',
+              title: 'Create Requisition',
               path: '/purchase-requisition/create',
             },
           },
@@ -147,7 +146,7 @@ export const navigation = [
     items: [
       {
         label: 'Users & Roles',
-        image: UserIconImg,
+        icon: IconUsers,
         path: '/users',
         roles: ['ADMIN'],
       },

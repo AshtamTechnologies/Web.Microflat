@@ -21,16 +21,18 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  Check,
-  X,
-  CheckCircle2,
-  Clock,
-  MapPin,
-  FileText,
-  User,
-  Eye,
-} from 'lucide-react';
-import { IconVendorApproval } from '../../constants/icons';
+  IconCheck,
+  IconClock,
+  IconClose,
+  IconFileText,
+  IconLocation,
+  IconSuccess,
+  IconBuilding,
+  IconError,
+  IconUser,
+  IconVendorApproval,
+  IconView,
+} from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
@@ -223,7 +225,7 @@ export default function VendorApprovalPage() {
           const state = getStateName(row.countryId, row.stateId);
           return (
             <div className="flex items-center gap-1.5 text-xs text-heading">
-              <MapPin size={13} className="text-text-muted shrink-0" aria-hidden="true" />
+              <IconLocation size={13} className="text-text-muted shrink-0" aria-hidden="true" />
               <span className="truncate">
                 {row.city ? `${row.city}, ${state}` : state || '—'}
               </span>
@@ -242,7 +244,7 @@ export default function VendorApprovalPage() {
           const val = info.getValue();
           return (
             <div className="flex items-center gap-1.5 text-xs text-text-muted font-mono tabular-nums">
-              <Clock size={13} className="text-text-muted/70 shrink-0" aria-hidden="true" />
+              <IconClock size={13} className="text-text-muted/70 shrink-0" aria-hidden="true" />
               <span>{formatDate(val)}</span>
             </div>
           );
@@ -278,7 +280,7 @@ export default function VendorApprovalPage() {
                 className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`View ${row.vendorName}`}
               >
-                <Eye size={14} className="stroke-[2.2]" aria-hidden="true" />
+                <IconView size={14} className="" aria-hidden="true" />
                 View
               </Button>
 
@@ -291,7 +293,7 @@ export default function VendorApprovalPage() {
                 className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`Approve ${row.vendorName}`}
               >
-                <Check size={14} className="stroke-[2.5]" aria-hidden="true" />
+                <IconCheck size={14} className="" aria-hidden="true" />
                 Approve
               </Button>
 
@@ -304,7 +306,7 @@ export default function VendorApprovalPage() {
                 className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`Reject ${row.vendorName}`}
               >
-                <X size={14} className="stroke-[2.5]" aria-hidden="true" />
+                <IconClose size={14} className="" aria-hidden="true" />
                 Reject
               </Button>
             </div>
@@ -340,7 +342,7 @@ export default function VendorApprovalPage() {
         icon={<IconVendorApproval className="h-6 w-6 text-primary" aria-hidden="true" />}
         badge={
           <Badge variant="pending" size="sm" className="ml-2 gap-1">
-            <Clock size={12} className="shrink-0" />
+            <IconClock size={12} className="shrink-0" />
             {totalPendingCount} pending
           </Badge>
         }
@@ -355,7 +357,7 @@ export default function VendorApprovalPage() {
         onReset={() => setSearch('')}
       >
         <div className="text-xs text-text-muted flex items-center gap-1.5 self-end sm:self-center">
-          <FileText size={13} className="text-primary" />
+          <IconFileText size={13} className="text-primary" />
           <span>Showing queue of pending submissions</span>
         </div>
       </TableToolbar>
@@ -441,7 +443,7 @@ export default function VendorApprovalPage() {
                   onClick={() => navigate(`/vendors/${vendor.id}`)}
                   className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                 >
-                  <Eye size={13} />
+                  <IconView size={13} />
                   View
                 </Button>
 
@@ -452,7 +454,7 @@ export default function VendorApprovalPage() {
                   onClick={() => handleOpenApprove(vendor)}
                   className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                 >
-                  <Check size={13} className="stroke-[2.5]" />
+                  <IconCheck size={13} className="" />
                   Approve
                 </Button>
 
@@ -463,7 +465,7 @@ export default function VendorApprovalPage() {
                   onClick={() => handleOpenReject(vendor)}
                   className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                 >
-                  <X size={13} className="stroke-[2.5]" />
+                  <IconClose size={13} className="" />
                   Reject
                 </Button>
               </div>
@@ -484,7 +486,7 @@ export default function VendorApprovalPage() {
             {/* Vendor Profile Highlight Card */}
             <div className="flex items-start gap-3.5 p-4 rounded-xl bg-success/5 border border-success/20">
               <div className="w-11 h-11 rounded-xl bg-success/15 border border-success/30 text-success flex items-center justify-center shrink-0">
-                <CheckCircle2 size={22} aria-hidden="true" />
+                <IconSuccess size={22} aria-hidden="true" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -498,13 +500,13 @@ export default function VendorApprovalPage() {
                 <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
                   {vendorToApprove.contactPersonName && (
                     <span className="flex items-center gap-1">
-                      <User size={12} className="text-text-muted/70" />
+                      <IconUser size={12} className="text-text-muted/70" />
                       {vendorToApprove.contactPersonName}
                     </span>
                   )}
                   {vendorToApprove.city && (
                     <span className="flex items-center gap-1">
-                      <MapPin size={12} className="text-text-muted/70" />
+                      <IconLocation size={12} className="text-text-muted/70" />
                       {vendorToApprove.city}, {getStateName(vendorToApprove.countryId, vendorToApprove.stateId)}
                     </span>
                   )}
@@ -517,22 +519,14 @@ export default function VendorApprovalPage() {
             </p>
 
             {/* Approval Comments Field */}
-            <div className="space-y-1.5">
-              <label
-                htmlFor="approve-comments"
-                className="text-xs font-semibold text-heading block"
-              >
-                Approval Comments / Remarks (Optional)
-              </label>
-              <textarea
+            <Textarea
                 id="approve-comments"
+                label="Approval Comments / Remarks (Optional)"
                 rows={3}
                 value={approveComments}
                 onChange={(e) => setApproveComments(e.target.value)}
                 placeholder="Enter approval remarks or internal audit notes..."
-                className="w-full rounded-xl border border-border bg-bg text-heading text-xs p-3 placeholder:text-text-muted focus:border-success focus:ring-2 focus:ring-success/20 outline-none resize-none leading-relaxed transition-all"
               />
-            </div>
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
@@ -552,7 +546,7 @@ export default function VendorApprovalPage() {
                 loading={isSubmittingApprove}
                 className="flex items-center gap-1.5 bg-success hover:bg-success/90 text-white border-transparent"
               >
-                <Check size={15} strokeWidth={2.5} />
+                <IconCheck size={15} />
                 Confirm Approval
               </Button>
             </div>
@@ -572,7 +566,7 @@ export default function VendorApprovalPage() {
             {/* Vendor Profile Highlight Card */}
             <div className="flex items-start gap-3.5 p-4 rounded-xl bg-surface/70 border border-border">
               <div className="w-11 h-11 rounded-xl bg-danger/10 border border-danger/20 text-danger flex items-center justify-center shrink-0">
-                <Building2 size={20} aria-hidden="true" />
+                <IconBuilding size={20} aria-hidden="true" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -586,13 +580,13 @@ export default function VendorApprovalPage() {
                 <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
                   {vendorToReject.contactPersonName && (
                     <span className="flex items-center gap-1">
-                      <User size={12} className="text-text-muted/70" />
+                      <IconUser size={12} className="text-text-muted/70" />
                       {vendorToReject.contactPersonName}
                     </span>
                   )}
                   {vendorToReject.city && (
                     <span className="flex items-center gap-1">
-                      <MapPin size={12} className="text-text-muted/70" />
+                      <IconLocation size={12} className="text-text-muted/70" />
                       {vendorToReject.city}, {getStateName(vendorToReject.countryId, vendorToReject.stateId)}
                     </span>
                   )}
@@ -613,7 +607,7 @@ export default function VendorApprovalPage() {
 
             {/* Alert Notice */}
             <div className="flex items-start gap-2.5 p-3 rounded-lg bg-danger/5 border border-danger/15 text-xs text-text-muted">
-              <AlertCircle size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
+              <IconError size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
               <span>
                 Rejecting will mark this vendor as <strong>Rejected</strong> and remove it from the pending approval queue. Your remarks will be saved to the vendor&apos;s audit trail.
               </span>
@@ -638,8 +632,8 @@ export default function VendorApprovalPage() {
                 loading={isSubmittingReject}
                 className="flex items-center gap-1.5"
               >
-                <X size={15} strokeWidth={2.5} />
-                Reject Vendor
+                <IconClose size={15} />
+                Confirm Rejection
               </Button>
             </div>
           </form>
