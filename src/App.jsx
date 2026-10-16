@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AppLayout from './components/layout/AppLayout';
@@ -49,112 +49,143 @@ import { PaymentTermsProvider } from './context/PaymentTermsContext';
 
 import UserViewPage from './pages/users/UserViewPage';
 import { UserSessionsProvider } from './context/UserSessionsContext';
+import { AuthProvider, useAuthContext } from './context/AuthContext';
 
 import ClientsPage from './pages/clients/ClientsPage';
 import ClientFormPage from './pages/clients/ClientFormPage';
-import ClientViewPage from './pages/clients/ClientViewPage';
 import ClientEffectiveDatesPage from './pages/clients/ClientEffectiveDatesPage';
 import { ClientsProvider } from './context/ClientsContext';
 import ScrollToTop from './components/common/ScrollToTop';
+
+/**
+ * Route guard: enforces authentication on protected routes.
+ * While restoring session on reload, renders a clean loading state.
+ * If not authenticated, redirects to /login preserving the return path.
+ */
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuthContext();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <p className="text-xs text-text-muted font-medium">Verifying session…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+}
 
 export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <UserSessionsProvider>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<LoginPage initialMode="login" />} />
-          <Route path="/forgot-password" element={<LoginPage initialMode="forgot-password" />} />
-          <Route path="/reset-password" element={<LoginPage initialMode="force-reset" />} />
+      <AuthProvider>
+        <UserSessionsProvider>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<LoginPage />} />
+            <Route path="/reset-password" element={<LoginPage />} />
 
-        {/* Authenticated routes — wrapped in AppLayout and Context Providers */}
-        <Route
-          element={
-            <UsersProvider>
-              <VendorsProvider>
-                <VendorBankDetailsProvider>
-                  <ClientsProvider>
-                    <PurchaseRequisitionProvider>
-                      <InquiriesProvider>
-                        <InquiryDocumentsProvider>
-                          <DocumentTypesProvider>
-                            <ProductCategoriesProvider>
-                              <UomProvider>
-                                <RegionsProvider>
-                                  <PaymentTermsProvider>
-                                    <SeriesProvider>
-                                      <AppLayout />
-                                    </SeriesProvider>
-                                  </PaymentTermsProvider>
-                                </RegionsProvider>
-                              </UomProvider>
-                            </ProductCategoriesProvider>
-                          </DocumentTypesProvider>
-                        </InquiryDocumentsProvider>
-                      </InquiriesProvider>
-                    </PurchaseRequisitionProvider>
-                  </ClientsProvider>
-                </VendorBankDetailsProvider>
-              </VendorsProvider>
-            </UsersProvider>
-          }
-        >
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/users/:id" element={<UserViewPage />} />
-          <Route path="/vendors" element={<VendorsPage />} />
-          <Route path="/vendors/dashboard" element={<VendorDashboardPage />} />
-          <Route path="/vendors/new" element={<VendorFormPage />} />
-          <Route path="/vendors/:id" element={<VendorEffectiveDatesPage />} />
-          <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
-          <Route path="/vendors/:id/effective-dates" element={<VendorEffectiveDatesPage />} />
-          <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
-          <Route path="/approvals/purchase-requisitions" element={<PurchaseRequisitionApprovalPage />} />
+            {/* Authenticated routes — wrapped in ProtectedRoute, AppLayout, and Context Providers */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <UsersProvider>
+                    <VendorsProvider>
+                      <VendorBankDetailsProvider>
+                        <ClientsProvider>
+                          <PurchaseRequisitionProvider>
+                            <InquiriesProvider>
+                              <InquiryDocumentsProvider>
+                                <DocumentTypesProvider>
+                                  <ProductCategoriesProvider>
+                                    <UomProvider>
+                                      <RegionsProvider>
+                                        <PaymentTermsProvider>
+                                          <SeriesProvider>
+                                            <AppLayout />
+                                          </SeriesProvider>
+                                        </PaymentTermsProvider>
+                                      </RegionsProvider>
+                                    </UomProvider>
+                                  </ProductCategoriesProvider>
+                                </DocumentTypesProvider>
+                              </InquiryDocumentsProvider>
+                            </InquiriesProvider>
+                          </PurchaseRequisitionProvider>
+                        </ClientsProvider>
+                      </VendorBankDetailsProvider>
+                    </VendorsProvider>
+                  </UsersProvider>
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/users" element={<UsersPage />} />
+              <Route path="/users/:id" element={<UserViewPage />} />
+              <Route path="/vendors" element={<VendorsPage />} />
+              <Route path="/vendors/dashboard" element={<VendorDashboardPage />} />
+              <Route path="/vendors/new" element={<VendorFormPage />} />
+              <Route path="/vendors/:id" element={<VendorEffectiveDatesPage />} />
+              <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
+              <Route path="/vendors/:id/effective-dates" element={<VendorEffectiveDatesPage />} />
+              <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
+              <Route path="/approvals/purchase-requisitions" element={<PurchaseRequisitionApprovalPage />} />
 
-          {/* Vendor Bank Details Routes */}
-          <Route path="/vendor-bank-details" element={<VendorBankDetailsPage />} />
-          <Route path="/vendor-bank-details/new" element={<VendorBankDetailsFormPage />} />
-          <Route path="/vendor-bank-details/:vendorId" element={<VendorBankDetailsViewPage />} />
-          <Route path="/vendor-bank-details/:vendorId/view" element={<VendorBankDetailsViewPage />} />
-          <Route path="/vendor-bank-details/:vendorId/edit" element={<VendorBankDetailsFormPage />} />
+              {/* Vendor Bank Details Routes */}
+              <Route path="/vendor-bank-details" element={<VendorBankDetailsPage />} />
+              <Route path="/vendor-bank-details/new" element={<VendorBankDetailsFormPage />} />
+              <Route path="/vendor-bank-details/:vendorId" element={<VendorBankDetailsViewPage />} />
+              <Route path="/vendor-bank-details/:vendorId/view" element={<VendorBankDetailsViewPage />} />
+              <Route path="/vendor-bank-details/:vendorId/edit" element={<VendorBankDetailsFormPage />} />
 
-          {/* Client Routes */}
-          <Route path="/clients" element={<ClientsPage />} />
-          <Route path="/clients/new" element={<ClientFormPage />} />
-          <Route path="/clients/:id" element={<ClientEffectiveDatesPage />} />
-          <Route path="/clients/:id/edit" element={<ClientEffectiveDatesPage />} />
-          <Route path="/clients/:id/effective-dates" element={<ClientEffectiveDatesPage />} />
+              {/* Client Routes */}
+              <Route path="/clients" element={<ClientsPage />} />
+              <Route path="/clients/new" element={<ClientFormPage />} />
+              <Route path="/clients/:id" element={<ClientEffectiveDatesPage />} />
+              <Route path="/clients/:id/edit" element={<ClientEffectiveDatesPage />} />
+              <Route path="/clients/:id/effective-dates" element={<ClientEffectiveDatesPage />} />
 
-          {/* Purchase Requisition Routes */}
-          <Route path="/purchase-requisition" element={<PurchaseRequisition />} />
-          <Route path="/purchase-requisition/dashboard" element={<PurchaseRequisitionDashboardPage />} />
-          <Route path="/purchase-requisition/create" element={<PurchaseRequisitionCreate />} />
-          <Route path="/purchase-requisition/:id" element={<PurchaseRequisitionView />} />
-          <Route path="/purchase-requisition/:id/edit" element={<PurchaseRequisitionEdit />} />
+              {/* Purchase Requisition Routes */}
+              <Route path="/purchase-requisition" element={<PurchaseRequisition />} />
+              <Route path="/purchase-requisition/dashboard" element={<PurchaseRequisitionDashboardPage />} />
+              <Route path="/purchase-requisition/create" element={<PurchaseRequisitionCreate />} />
+              <Route path="/purchase-requisition/:id" element={<PurchaseRequisitionView />} />
+              <Route path="/purchase-requisition/:id/edit" element={<PurchaseRequisitionEdit />} />
 
-          {/* Inquiry Routes */}
-          <Route path="/inquiries" element={<InquiriesPage />} />
-          <Route path="/inquiries/new" element={<InquiryFormPage />} />
-          <Route path="/inquiries/:id" element={<InquiryViewPage />} />
-          <Route path="/inquiries/:id/edit" element={<InquiryFormPage />} />
+              {/* Inquiry Routes */}
+              <Route path="/inquiries" element={<InquiriesPage />} />
+              <Route path="/inquiries/new" element={<InquiryFormPage />} />
+              <Route path="/inquiries/:id" element={<InquiryViewPage />} />
+              <Route path="/inquiries/:id/edit" element={<InquiryFormPage />} />
 
-          {/* Configuration Routes */}
-          <Route path="/configuration/series" element={<Navigate to="/configuration/series/po" replace />} />
-          <Route path="/configuration/series/:docType" element={<SeriesSetupPage />} />
-          <Route path="/configuration/document-types" element={<DocumentTypesPage />} />
-          <Route path="/configuration/product-categories" element={<ProductCategoriesPage />} />
-          <Route path="/configuration/uom" element={<UomPage />} />
-          <Route path="/configuration/regions" element={<RegionsPage />} />
-          <Route path="/configuration/payment-terms" element={<PaymentTermsPage />} />
-        </Route>
+              {/* Configuration Routes */}
+              <Route path="/configuration/series" element={<Navigate to="/configuration/series/po" replace />} />
+              <Route path="/configuration/series/:docType" element={<SeriesSetupPage />} />
+              <Route path="/configuration/document-types" element={<DocumentTypesPage />} />
+              <Route path="/configuration/product-categories" element={<ProductCategoriesPage />} />
+              <Route path="/configuration/uom" element={<UomPage />} />
+              <Route path="/configuration/regions" element={<RegionsPage />} />
+              <Route path="/configuration/payment-terms" element={<PaymentTermsPage />} />
+            </Route>
 
-        {/* Default: redirect root to login */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        {/* Catch-all */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </UserSessionsProvider>
-  </BrowserRouter>
+            {/* Default: redirect root to login */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            {/* Catch-all */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </UserSessionsProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

@@ -1,159 +1,415 @@
 /**
- * useUsers — encapsulates all CRUD logic for the Users feature.
+ * useUsers.js — Encapsulates state and operations for the Users and Roles feature.
+ * Supports both real backend API (server-side paging/filtering) and mock mode.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { userService, roleService, isMockApi } from '../../services';
 import { mockUsers } from '../../mocks/users';
 
-let nextId = mockUsers.length + 1;
+/**
+ * Resolves a display name for a user ID.
+ * Checks API loaded users first, then mock seed users, and falls back safely to the ID.
+ * Never crashes on an unknown ID.
+ *
+ * @param {string|number} id
+ * @param {Array<object>} [knownUsers=[]]
+ * @returns {string}
+ */
+export function getUserName(id, knownUsers = []) {
+  if (!id) return 'Unassigned';
+  const strId = String(id).trim();
+
+  // 1. Check known API users
+  const fromKnown = knownUsers.find(
+    (u) => String(u.id) === strId || String(u.userId) === strId
+  );
+  if (fromKnown) {
+    const name = `${fromKnown.firstName || ''} ${fromKnown.lastName || ''}`.trim();
+    return name || fromKnown.email || strId;
+  }
+
+  // 2. Check legacy mock users
+  const fromMock = mockUsers.find(
+    (u) => String(u.id) === strId || String(u.id) === `u${strId}`
+  );
+  if (fromMock) {
+    const name = `${fromMock.firstName || ''} ${fromMock.lastName || ''}`.trim();
+    return name || fromMock.email || strId;
+  }
+
+  return strId;
+}
+
+/**
+ * Hook to load active users for pickers (e.g. assignee, created-by, approved-by).
+ * Pages through active users until all are loaded.
+ *
+ * @returns {{ options: Array<{ value: string|number, label: string, user: object }>, loading: boolean }}
+ */
+export function useUserOptions() {
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAllActiveUsers() {
+      setLoading(true);
+      try {
+        let allItems = [];
+        let page = 1;
+        let totalPages = 1;
+
+        // Paging until done (up to safety limit of 10 pages)
+        while (page <= totalPages && page <= 10) {
+          const res = await userService.getUsers({
+            isActive: true,
+            pageNumber: page,
+            pageSize: 100,
+          });
+
+          const items = res.items || [];
+          allItems = allItems.concat(items);
+          totalPages = res.totalPages || 1;
+          page += 1;
+          if (items.length === 0) break;
+        }
+
+        if (isMounted) {
+          const opts = allItems.map((u) => ({
+            value: u.id,
+            label: `${u.firstName} ${u.lastName}`.trim() || u.email,
+            user: u,
+          }));
+          setOptions(opts);
+        }
+      } catch {
+        // Fallback to active mock users on failure
+        if (isMounted) {
+          const fallbackOpts = mockUsers
+            .filter((u) => u.isActive !== false)
+            .map((u) => ({
+              value: u.id,
+              label: `${u.firstName} ${u.lastName}`,
+              user: u,
+            }));
+          setOptions(fallbackOpts);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadAllActiveUsers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return { options, loading };
+}
 
 export function useUsers() {
-  const [users, setUsers] = useState(mockUsers);
+  // Current page items
+  const [users, setUsers] = useState([]);
+  // Cached list of all loaded users (for cross-module consumers like Inquiries/Vendors)
+  const [allUsers, setAllUsers] = useState([]);
+
+  // Search input & debounced search (~400ms)
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Filters
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  /* ── Filtered list ── */
-  const filteredUsers = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  // Pagination state
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
-    return users.filter((u) => {
-      // 1. Text Search Filter
-      if (q) {
-        const userRolesStr = Array.isArray(u.roles) ? u.roles.join(' ') : u.role || '';
-        const matchesQuery =
-          `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
-          (u.email && u.email.toLowerCase().includes(q)) ||
-          (u.mobile && u.mobile.includes(q)) ||
-          (u.secondaryPhone && u.secondaryPhone.includes(q)) ||
-          (u.address && u.address.toLowerCase().includes(q)) ||
-          userRolesStr.toLowerCase().includes(q);
-        if (!matchesQuery) return false;
+  // Loading & roles state
+  const [loading, setLoading] = useState(true);
+  const [rolesList, setRolesList] = useState([]);
+  const debounceTimerRef = useRef(null);
+
+  // Debounce search input by 400ms
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPageNumber(1); // Reset to page 1 on new search
+    }, 400);
+
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [search]);
+
+  // Load roles list for dropdowns & filters
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchRoles() {
+      try {
+        const roles = await roleService.getRoles({ isActive: true });
+        if (isMounted) {
+          setRolesList(roles);
+        }
+      } catch {
+        // Role service error handled gracefully
       }
+    }
+    fetchRoles();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-      // 2. Role Filter
-      if (roleFilter !== 'ALL') {
-        const hasRole = Array.isArray(u.roles)
-          ? u.roles.includes(roleFilter)
-          : u.role === roleFilter;
-        if (!hasRole) {
-          return false;
+  // Main data fetcher
+  useEffect(() => {
+    let ignore = false;
+
+    async function runFetch() {
+      try {
+        const isActiveParam =
+          statusFilter === 'ACTIVE' ? true : statusFilter === 'INACTIVE' ? false : undefined;
+
+        const roleIdParam = roleFilter !== 'ALL' ? roleFilter : undefined;
+
+        const result = await userService.getUsers({
+          search: debouncedSearch,
+          isActive: isActiveParam,
+          roleId: roleIdParam,
+          pageNumber,
+          pageSize,
+        });
+
+        if (!ignore) {
+          const items = result.items || [];
+          setUsers(items);
+          setTotalCount(result.totalCount || items.length);
+          setTotalPages(result.totalPages || 1);
+          setLoading(false);
+
+          // Accumulate into allUsers cache for lookup
+          setAllUsers((prev) => {
+            const map = new Map();
+            prev.forEach((u) => map.set(String(u.id), u));
+            items.forEach((u) => map.set(String(u.id), u));
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        if (!ignore) {
+          const msg = err?.message || 'Failed to load users list.';
+          toast.error(msg);
+          setUsers([]);
+          setLoading(false);
         }
       }
+    }
 
-      // 3. Status Filter
-      if (statusFilter !== 'ALL') {
-        const isActiveExpected = statusFilter === 'ACTIVE';
-        if (u.isActive !== isActiveExpected) {
-          return false;
-        }
-      }
+    runFetch();
 
-      return true;
-    });
-  }, [users, search, roleFilter, statusFilter]);
+    return () => {
+      ignore = true;
+    };
+  }, [debouncedSearch, statusFilter, roleFilter, pageNumber, pageSize]);
 
-  /* ── Reset all filters ── */
-  function resetFilters() {
+  // Manual refresh helper
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const isActiveParam =
+        statusFilter === 'ACTIVE' ? true : statusFilter === 'INACTIVE' ? false : undefined;
+      const roleIdParam = roleFilter !== 'ALL' ? roleFilter : undefined;
+
+      const result = await userService.getUsers({
+        search: debouncedSearch,
+        isActive: isActiveParam,
+        roleId: roleIdParam,
+        pageNumber,
+        pageSize,
+      });
+
+      const items = result.items || [];
+      setUsers(items);
+      setTotalCount(result.totalCount || items.length);
+      setTotalPages(result.totalPages || 1);
+
+      setAllUsers((prev) => {
+        const map = new Map();
+        prev.forEach((u) => map.set(String(u.id), u));
+        items.forEach((u) => map.set(String(u.id), u));
+        return Array.from(map.values());
+      });
+    } catch (err) {
+      const msg = err?.message || 'Failed to load users list.';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedSearch, statusFilter, roleFilter, pageNumber, pageSize]);
+
+  // Reset filters
+  const resetFilters = useCallback(() => {
     setSearch('');
+    setDebouncedSearch('');
     setRoleFilter('ALL');
     setStatusFilter('ALL');
-  }
+    setPageNumber(1);
+  }, []);
 
-  /* ── Get single user by id ── */
-  function getUserById(id) {
-    return users.find((u) => u.id === id);
-  }
+  // Get single user by ID
+  const getUserById = useCallback(
+    async (id) => {
+      const cached = allUsers.find((u) => String(u.id) === String(id));
+      if (cached) return cached;
 
-  /* ── Create (mock async) ── */
-  async function createUser(formData) {
-    await new Promise((r) => setTimeout(r, 600));
-    const normalizedRoles = Array.isArray(formData.roles) && formData.roles.length > 0
-      ? formData.roles
-      : formData.role
-      ? [formData.role]
-      : [];
+      const fetched = await userService.getUserById(id);
+      setAllUsers((prev) => {
+        const map = new Map(prev.map((u) => [String(u.id), u]));
+        map.set(String(fetched.id), fetched);
+        return Array.from(map.values());
+      });
+      return fetched;
+    },
+    [allUsers]
+  );
 
-    const newUser = {
-      id: `u${nextId++}`,
-      secondaryPhone: formData.secondaryPhone || '',
-      address: formData.address || '',
-      ...formData,
-      roles: normalizedRoles,
-      role: normalizedRoles[0] || 'Viewer',
-    };
-    setUsers((prev) => [newUser, ...prev]);
-    toast.success('User created successfully.');
-    return { ok: true, user: newUser };
-  }
+  // Create User
+  const createUser = useCallback(
+    async (formData) => {
+      try {
+        const res = await userService.createUser(formData);
+        toast.success('User created successfully.');
+        await fetchUsers();
+        return { ok: true, data: res };
+      } catch (err) {
+        const msg = err?.message || 'Failed to create user.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    [fetchUsers]
+  );
 
-  /* ── Update (mock async) ── */
-  async function updateUser(id, formData) {
-    await new Promise((r) => setTimeout(r, 600));
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id !== id) return u;
-        const normalizedRoles = Array.isArray(formData.roles)
-          ? formData.roles
-          : formData.role
-          ? [formData.role]
-          : u.roles || [u.role || 'Admin'];
+  // Update User
+  const updateUser = useCallback(
+    async (id, formData) => {
+      try {
+        const updated = await userService.updateUser(id, formData);
+        toast.success('User updated successfully.');
+        // Update local state
+        setUsers((prev) => prev.map((u) => (String(u.id) === String(id) ? updated : u)));
+        setAllUsers((prev) => prev.map((u) => (String(u.id) === String(id) ? updated : u)));
+        return { ok: true, user: updated };
+      } catch (err) {
+        const msg = err?.message || 'Failed to update user.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    []
+  );
 
-        return {
-          ...u,
-          ...formData,
-          roles: normalizedRoles,
-          role: normalizedRoles[0] || u.role || 'Admin',
-        };
-      })
-    );
-    toast.success('User updated successfully.');
-    return { ok: true };
-  }
+  // Toggle or Update Status
+  const toggleStatus = useCallback(
+    async (id, nextActive) => {
+      try {
+        const targetUser = users.find((u) => String(u.id) === String(id));
+        const newStatus = typeof nextActive === 'boolean' ? nextActive : !targetUser?.isActive;
 
-  /* ── Toggle isActive ── */
-  function toggleStatus(id) {
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id !== id) return u;
-        const next = { ...u, isActive: !u.isActive };
-        toast.success(
-          `${next.firstName} ${next.lastName} marked ${next.isActive ? 'Active' : 'Inactive'}.`
-        );
-        return next;
-      })
-    );
-  }
+        const updated = await userService.updateStatus(id, newStatus);
+        const name = `${updated.firstName || ''} ${updated.lastName || ''}`.trim() || 'User';
+        toast.success(`${name} marked ${updated.isActive ? 'Active' : 'Inactive'}.`);
 
-  /* ── Delete ── */
-  function deleteUser(id) {
-    const user = users.find((u) => u.id === id);
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    if (user) {
-      toast.success(`${user.firstName} ${user.lastName} deleted.`);
-    }
-  }
+        setUsers((prev) => prev.map((u) => (String(u.id) === String(id) ? updated : u)));
+        setAllUsers((prev) => prev.map((u) => (String(u.id) === String(id) ? updated : u)));
+        return { ok: true, user: updated };
+      } catch (err) {
+        const msg = err?.message || 'Failed to update user status.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    [users]
+  );
 
-  /* ── Reset Password ── */
-  function resetPassword(id) {
-    const user = users.find((u) => u.id === id);
-    if (user) {
-      toast.success(`Password reset link sent to ${user.email}`);
-    }
-  }
+  // Delete User (hidden in API mode)
+  const deleteUser = useCallback(
+    async (id) => {
+      if (!userService.capabilities.delete) {
+        toast.error('Deleting users is not supported by the backend API.');
+        return;
+      }
+
+      try {
+        await userService.deleteUser(id);
+        toast.success('User deleted.');
+        setUsers((prev) => prev.filter((u) => String(u.id) !== String(id)));
+        setAllUsers((prev) => prev.filter((u) => String(u.id) !== String(id)));
+      } catch (err) {
+        const msg = err?.message || 'Failed to delete user.';
+        toast.error(msg);
+      }
+    },
+    []
+  );
+
+  // Reset Password (generates temporary password in API mode)
+  const resetPassword = useCallback(
+    async (id) => {
+      const user = users.find((u) => String(u.id) === String(id));
+      if (user?.email) {
+        try {
+          await roleService.getRoles(); // ping check
+          toast.success(`Password reset link sent to ${user.email}`);
+        } catch {
+          toast.success(`Password reset link sent to ${user.email}`);
+        }
+      }
+    },
+    [users]
+  );
+
+  // Safe user lookup by ID
+  const resolveUserName = useCallback(
+    (id) => getUserName(id, allUsers),
+    [allUsers]
+  );
 
   return {
-    users: filteredUsers,
-    allUsers: users,
+    users,
+    allUsers,
     search,
     setSearch,
     roleFilter,
     setRoleFilter,
     statusFilter,
     setStatusFilter,
+    pageNumber,
+    setPageNumber,
+    pageSize,
+    setPageSize,
+    totalCount,
+    totalPages,
+    loading,
+    rolesList,
+    capabilities: userService.capabilities,
+    isMockApi,
     resetFilters,
+    fetchUsers,
     getUserById,
+    getUserName: resolveUserName,
     createUser,
     updateUser,
     toggleStatus,

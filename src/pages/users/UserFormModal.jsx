@@ -1,22 +1,30 @@
 /**
- * UserFormModal — Add & Edit User modal dialog with custom StatusSwitch button.
+ * UserFormModal — Add & Edit User modal dialog.
  *
- * Form fields:
- *   - First Name *
- *   - Last Name *
- *   - Email *
- *   - Mobile Number (Primary) *
- *   - Secondary Phone
- *   - Roles * (Multi-select)
- *   - Address (Textarea/Input)
- *   - Status (Custom Pill StatusSwitch button)
- *
- * Fully responsive and uses design tokens for styling.
+ * Rules:
+ *   - Add User: POST /api/auth/register.
+ *     Fields: First Name, Last Name, Email, Mobile, Secondary Phone, Address,
+ *             Roles (multi-select, at least 1), Primary Role (auto if 1 selected).
+ *     No password field.
+ *     Shows Temporary Password confirmation modal on success.
+ *   - Edit User: PUT /api/users/{id}.
+ *     Roles are read-only (no backend endpoint to change roles on PUT /users/{id}).
+ *     Email is editable per spec.
  */
 
-import { useState, useEffect } from 'react';
-import { Modal, Input, Textarea, SearchableMultiSelect, SaveButton, CancelButton, StatusSwitch } from '../../components/ui';
-import { ROLE_OPTIONS } from '../../mocks/users';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  Modal,
+  Input,
+  Textarea,
+  SearchableMultiSelect,
+  SaveButton,
+  CancelButton,
+  Button,
+} from '../../components/ui';
+import { roleService } from '../../services';
+import { IconCheck, IconCopy, IconMail, IconShieldCheck } from '../../constants/icons';
+import { formatDateTime } from '../../utils/dateUtils';
 
 const INITIAL_FORM = {
   firstName: '',
@@ -24,9 +32,9 @@ const INITIAL_FORM = {
   email: '',
   mobile: '',
   secondaryPhone: '',
-  roles: [],
+  roleIds: [],
+  primaryRoleId: '',
   address: '',
-  isActive: true,
 };
 
 function validateField(name, value) {
@@ -39,8 +47,7 @@ function validateField(name, value) {
       return '';
     case 'email':
       if (!value || !value.trim()) return 'Email is required.';
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
-        return 'Enter a valid email address.';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Enter a valid email address.';
       return '';
     case 'mobile':
       if (!value || !value.trim()) return 'Mobile number is required.';
@@ -53,7 +60,7 @@ function validateField(name, value) {
         if (value.trim().length < 10) return 'Secondary phone must be at least 10 digits.';
       }
       return '';
-    case 'roles':
+    case 'roleIds':
       if (!Array.isArray(value) || value.length === 0) return 'Please select at least one role.';
       return '';
     default:
@@ -63,8 +70,10 @@ function validateField(name, value) {
 
 function validateAll(form) {
   const errors = {};
-  ['firstName', 'lastName', 'email', 'mobile', 'secondaryPhone', 'roles'].forEach((field) => {
-    const err = validateField(field, form[field]);
+  const fields = ['firstName', 'lastName', 'email', 'mobile', 'secondaryPhone', 'roleIds'];
+
+  fields.forEach((field) => {
+    const err = validateField(field, form[field], form);
     if (err) errors[field] = err;
   });
   return errors;
@@ -80,15 +89,57 @@ export default function UserFormModal({
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [availableRoles, setAvailableRoles] = useState([]);
 
+  // Post-registration temporary password notification modal state
+  const [tempPassResult, setTempPassResult] = useState(null);
+  const [hasCopied, setHasCopied] = useState(false);
+
+  // Load available roles from roleService
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchRoles() {
+      try {
+        const roles = await roleService.getRoles({ isActive: true });
+        if (isMounted) {
+          setAvailableRoles(roles);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (isOpen) {
+      fetchRoles();
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  // Transform availableRoles into options for select
+  const roleSelectOptions = useMemo(() => {
+    return availableRoles.map((r) => ({
+      value: String(r.id),
+      label: r.name || r.roleName,
+    }));
+  }, [availableRoles]);
+
+  // Populate form on open or user change
   useEffect(() => {
     if (isOpen) {
       if (user) {
-        const userRoles = Array.isArray(user.roles) && user.roles.length > 0
-          ? user.roles
-          : user.role
-          ? [user.role]
-          : [];
+        const existingRoleIds = (user.roles || [])
+          .map((r) => {
+            const idVal = r.roleId ?? r.id;
+            if (idVal !== undefined && idVal !== null && idVal !== '') return String(idVal);
+            const match = availableRoles.find(
+              (ar) =>
+                (ar.name || ar.roleName || '').toLowerCase() ===
+                (r.roleName || r || '').toLowerCase()
+            );
+            return match ? String(match.id) : null;
+          })
+          .filter(Boolean);
 
         setForm({
           firstName: user.firstName || '',
@@ -96,21 +147,24 @@ export default function UserFormModal({
           email: user.email || '',
           mobile: user.mobile || '',
           secondaryPhone: user.secondaryPhone || '',
-          roles: userRoles,
+          roleIds: existingRoleIds,
+          primaryRoleId: '0',
           address: user.address || '',
-          isActive: user.isActive !== undefined ? user.isActive : true,
         });
       } else {
         setForm(INITIAL_FORM);
       }
       setErrors({});
       setLoading(false);
+      setTempPassResult(null);
+      setHasCopied(false);
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, availableRoles]);
 
   function handleChange(e) {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
@@ -118,7 +172,7 @@ export default function UserFormModal({
 
   function handleBlur(e) {
     const { name, value } = e.target;
-    const err = validateField(name, value);
+    const err = validateField(name, value, form);
     if (err) setErrors((prev) => ({ ...prev, [name]: err }));
   }
 
@@ -137,22 +191,110 @@ export default function UserFormModal({
         lastName: form.lastName.trim(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
-        secondaryPhone: form.secondaryPhone ? form.secondaryPhone.trim() : '',
-        roles: form.roles,
-        role: form.roles[0] || '',
-        address: form.address ? form.address.trim() : '',
-        isActive: form.isActive,
+        secondaryPhone: form.secondaryPhone ? form.secondaryPhone.trim() : null,
+        address: form.address ? form.address.trim() : null,
+        roleIds: form.roleIds.map(Number),
+        primaryRoleId: 0,
       };
 
-      await onSubmit(payload);
-      setForm(INITIAL_FORM);
-      setErrors({});
-      onClose();
-    } catch {
-      // Error handled by caller / toast
+      const result = await onSubmit(payload);
+
+      // If creating user returned temporary password info, show confirmation dialog
+      if (!isEdit && result?.data) {
+        setTempPassResult(result.data);
+      } else {
+        onClose();
+      }
+    } catch (err) {
+      // Map server field errors if returned from ProblemDetails
+      if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        setErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+      }
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleCopyTempPassword(text) {
+    if (text) {
+      navigator.clipboard.writeText(text);
+      setHasCopied(true);
+      setTimeout(() => setHasCopied(false), 2000);
+    }
+  }
+
+  // If a temporary password confirmation is active, show the confirmation modal
+  if (tempPassResult) {
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="User Account Created"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4 py-2">
+          <div className="w-12 h-12 rounded-full bg-success/10 text-success flex items-center justify-center mx-auto">
+            <IconShieldCheck size={28} />
+          </div>
+
+          <div className="text-center">
+            <h3 className="text-base font-bold text-heading">
+              {tempPassResult.user?.firstName} {tempPassResult.user?.lastName}
+            </h3>
+            <p className="text-xs text-text-muted mt-0.5 font-mono">
+              {tempPassResult.user?.email}
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-surface rounded-xl border border-border text-xs space-y-2">
+            <div className="flex items-start gap-2 text-text">
+              <IconMail size={16} className="text-primary shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-heading">Temporary Password Dispatched</p>
+                <p className="text-text-muted mt-0.5">
+                  An email has been sent with a temporary password. The user must change it at their first sign-in.
+                </p>
+              </div>
+            </div>
+
+            {tempPassResult.temporaryPasswordExpiresOn && (
+              <div className="pt-2 border-t border-border/80 flex items-center justify-between text-2xs text-text-muted">
+                <span>Password Expiry:</span>
+                <span className="font-mono font-medium text-heading">
+                  {formatDateTime(tempPassResult.temporaryPasswordExpiresOn)}
+                </span>
+              </div>
+            )}
+
+            {/* If backend returns a temporary password string in payload, display copy button */}
+            {tempPassResult.temporaryPassword && (
+              <div className="pt-2 border-t border-border/80">
+                <span className="text-2xs text-text-muted block mb-1">Temporary Password:</span>
+                <div className="flex items-center justify-between gap-2 bg-bg p-2 rounded-lg border border-border font-mono text-xs">
+                  <span className="font-semibold text-heading select-all">
+                    {tempPassResult.temporaryPassword}
+                  </span>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => handleCopyTempPassword(tempPassResult.temporaryPassword)}
+                  >
+                    {hasCopied ? <IconCheck size={14} className="text-success" /> : <IconCopy size={14} />}
+                    {hasCopied ? 'Copied' : 'Copy'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-4 flex justify-end">
+            <Button variant="primary" size="md" onClick={onClose} fullWidth>
+              Done
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
   }
 
   return (
@@ -163,7 +305,6 @@ export default function UserFormModal({
       maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
-        {/* Form fields in responsive grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* First Name */}
           <Input
@@ -218,7 +359,7 @@ export default function UserFormModal({
             label="Primary Mobile"
             placeholder="9876543210"
             required
-            maxLength={10}
+            maxLength={15}
             value={form.mobile}
             onChange={handleChange}
             onBlur={handleBlur}
@@ -233,7 +374,7 @@ export default function UserFormModal({
             type="tel"
             label="Secondary Phone"
             placeholder="9876543211 (Optional)"
-            maxLength={10}
+            maxLength={15}
             value={form.secondaryPhone}
             onChange={handleChange}
             onBlur={handleBlur}
@@ -241,24 +382,24 @@ export default function UserFormModal({
             autoComplete="tel"
           />
 
-          {/* Roles Multi-Select */}
-          <div>
+          {/* Roles Multi-Select (Available in both Add and Edit mode) */}
+          <div className="sm:col-span-2">
             <SearchableMultiSelect
               id="user-roles"
-              name="roles"
-              label="Roles"
-              placeholder="Select user roles..."
+              name="roleIds"
+              label="Assigned Roles"
+              placeholder="Select roles..."
               searchPlaceholder="Search roles..."
               required
-              value={form.roles}
+              value={form.roleIds}
               onChange={handleChange}
               onBlur={handleBlur}
-              error={errors.roles}
-              options={ROLE_OPTIONS}
+              error={errors.roleIds}
+              options={roleSelectOptions}
             />
           </div>
 
-          {/* Address (Spans 2 columns on desktop) */}
+          {/* Address */}
           <div className="sm:col-span-2">
             <Textarea
               id="user-address"
@@ -269,18 +410,6 @@ export default function UserFormModal({
               onChange={handleChange}
               placeholder="Enter full address, street, city, state, postal code..."
             />
-          </div>
-
-          {/* Status Switch Button */}
-          <div className="sm:col-span-2 flex flex-col justify-between pt-1">
-            <span className="mf-label block mb-1.5">Account Status <span className="mf-required" aria-hidden="true">*</span></span>
-            <div className="flex items-center h-control">
-              <StatusSwitch
-                id="user-status-switch"
-                checked={form.isActive}
-                onChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
-              />
-            </div>
           </div>
         </div>
 

@@ -4,13 +4,13 @@
  * Handles 3 modes:
  *   1. 'login'           — Standard username/password authentication
  *   2. 'forgot-password' — Request password reset email + confirmation state
- *   3. 'force-reset'     — Mandatory password reset on first-time login
+ *   3. 'force-reset'     — Mandatory password change (first-time login or reset token from URL)
  *
  * Layout: split-panel on desktop (branded left, form right),
  *         stacked card on mobile.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   IconActivity,
   IconBack,
@@ -30,10 +30,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import { Button, Input, Checkbox, ErrorBanner } from '../components/ui';
-import { login, forgotPassword, forceResetPassword } from '../services/authService';
-import { useUserSessions } from '../context/UserSessionsContext';
-import { mockUsers } from '../mocks/users';
-import { parseUserAgent } from '../utils/dateUtils';
+import { useAuthContext } from '../context/AuthContext';
+import { authService } from '../services';
 
 const LOGO = '/micro-flat-logo.png';
 
@@ -63,8 +61,11 @@ function validateForgot({ email }) {
   return errors;
 }
 
-function validateForceReset({ newPassword, confirmPassword }) {
+function validateReset({ currentPassword, newPassword, confirmPassword, isTokenReset }) {
   const errors = {};
+  if (!isTokenReset && !currentPassword) {
+    errors.currentPassword = 'Current password is required.';
+  }
   if (!newPassword) {
     errors.newPassword = 'New password is required.';
   } else if (newPassword.length < 6) {
@@ -93,10 +94,7 @@ function BrandPanel() {
       style={{ backgroundColor: 'var(--brand-900)' }}
       aria-hidden="true"
     >
-      {/* Blueprint grid texture */}
       <div className="absolute inset-0 opacity-100" style={blueprintGridBg} />
-
-      {/* Subtle radial glow */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -105,9 +103,7 @@ function BrandPanel() {
         }}
       />
 
-      {/* Content */}
       <div className="relative z-10 flex flex-col h-full p-10 xl:p-14">
-        {/* Logo */}
         <div className="flex flex-col gap-2 mb-auto">
           <div
             className="inline-flex items-center rounded-lg px-3 py-2 self-start"
@@ -120,15 +116,8 @@ function BrandPanel() {
               draggable={false}
             />
           </div>
-          {/* <div
-            className="text-xs leading-tight tracking-widest uppercase pl-1"
-            style={{ color: 'var(--brand-300)', opacity: 0.85 }}
-          >
-            ERP System
-          </div> */}
         </div>
 
-        {/* Hero text */}
         <div className="my-auto space-y-6">
           <h1
             className="text-3xl xl:text-4xl font-semibold leading-tight tracking-tight"
@@ -150,7 +139,6 @@ function BrandPanel() {
           </p>
         </div>
 
-        {/* Stats row */}
         <div className="flex gap-8 pt-10 border-t mt-10" style={{ borderColor: 'var(--brand-800)' }}>
           {[
             { icon: <IconRuler size={14} />, value: '45+', label: 'Years of precision' },
@@ -176,24 +164,33 @@ function BrandPanel() {
 }
 
 /* ── Main Authentication Component ────────────────────────────────────────── */
-export default function LoginPage({ initialMode = 'login' }) {
+export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { recordLogin } = useUserSessions();
+  const { login, changePassword } = useAuthContext();
+
+  // Extract token reset params from URL search
+  const searchParams = new URLSearchParams(location.search);
+  const emailParam = searchParams.get('email') || '';
+  const tokenParam = searchParams.get('token') || '';
+  const isUrlTokenReset = Boolean(emailParam && tokenParam);
+
+  const tokenResetInfo = useRef({ email: emailParam, token: tokenParam });
 
   // Mode: 'login' | 'forgot-password' | 'force-reset'
-  const [mode, setMode] = useState(() => {
-    if (location.pathname === '/forgot-password') return 'forgot-password';
-    if (location.pathname === '/reset-password') return 'force-reset';
-    return initialMode;
-  });
+  const mode = location.pathname === '/forgot-password'
+    ? 'forgot-password'
+    : location.pathname === '/reset-password' || isUrlTokenReset
+    ? 'force-reset'
+    : 'login';
 
-  // Keep mode in sync with URL
+  // Strip sensitive parameters from address bar on mount if present
   useEffect(() => {
-    if (location.pathname === '/forgot-password') setMode('forgot-password');
-    else if (location.pathname === '/reset-password') setMode('force-reset');
-    else if (location.pathname === '/login') setMode('login');
-  }, [location.pathname]);
+    if (emailParam && tokenParam) {
+      tokenResetInfo.current = { email: emailParam, token: tokenParam };
+      window.history.replaceState({}, document.title, location.pathname);
+    }
+  }, [emailParam, tokenParam, location.pathname]);
 
   /* ── Form States ── */
   // 1. Login State
@@ -204,9 +201,14 @@ export default function LoginPage({ initialMode = 'login' }) {
   const [forgotForm, setForgotForm] = useState({ email: '' });
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
 
-  // 3. Force Reset State (First Time Login)
+  // 3. Reset / Change Password State
   const [pendingUser, setPendingUser] = useState(null);
-  const [resetForm, setResetForm] = useState({ newPassword: '', confirmPassword: '' });
+  const [resetForm, setResetForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -217,7 +219,6 @@ export default function LoginPage({ initialMode = 'login' }) {
 
   /* ── Mode Switcher ── */
   function switchMode(newMode) {
-    setMode(newMode);
     setErrors({});
     setFormError('');
     if (newMode === 'login') navigate('/login', { replace: true });
@@ -251,15 +252,15 @@ export default function LoginPage({ initialMode = 'login' }) {
     setFormError('');
 
     try {
-      const response = await login({
-        identifier: loginForm.identifier,
+      const { user, mustChangePassword } = await login({
+        email: loginForm.identifier,
         password: loginForm.password,
+        rememberMe: loginForm.rememberMe,
       });
-      const { token, user } = response.data;
 
-      // Check if user requires mandatory password reset on first login
-      if (user.isFirstLogin) {
-        setPendingUser({ ...user, tempToken: token });
+      if (mustChangePassword) {
+        setPendingUser(user);
+        setResetForm((prev) => ({ ...prev, currentPassword: loginForm.password }));
         switchMode('force-reset');
         toast('First-time login detected. Please create your permanent password.', {
           icon: '🔒',
@@ -267,32 +268,14 @@ export default function LoginPage({ initialMode = 'login' }) {
         return;
       }
 
-      // Normal Login Success
-      if (loginForm.rememberMe) {
-        localStorage.setItem('mf-token', token);
-      } else {
-        sessionStorage.setItem('mf-token', token);
-      }
+      toast.success(`Welcome back, ${user.firstName || user.name || 'User'}!`);
 
-      // Record login session if user matches
-      if (recordLogin) {
-        const userEmail = (user?.email || loginForm.identifier || '').toLowerCase();
-        const matched = mockUsers.find((u) => u.email.toLowerCase() === userEmail);
-        if (matched) {
-          const uaMeta = parseUserAgent();
-          recordLogin(matched.id, {
-            ipAddress: '192.168.1.105',
-            ...uaMeta,
-          });
-        }
-      }
-
-      toast.success(`Welcome back, ${user.name || 'User'}!`);
-      navigate('/dashboard', { replace: true });
+      // Resolve redirect path (from query or state)
+      const params = new URLSearchParams(location.search);
+      const returnUrl = params.get('returnUrl') || location.state?.from?.pathname || '/dashboard';
+      navigate(returnUrl, { replace: true });
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        'Invalid credentials. Please try again.';
+      const msg = err?.message || 'Invalid email or password. Please try again.';
       setFormError(msg);
     } finally {
       setLoading(false);
@@ -318,20 +301,19 @@ export default function LoginPage({ initialMode = 'login' }) {
     setFormError('');
 
     try {
-      await forgotPassword({ email: forgotForm.email });
+      await authService.forgotPassword({ email: forgotForm.email });
       setForgotSubmitted(true);
-      toast.success('Password reset link sent to your email.');
-    } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        'Unable to send reset instructions. Please check the email and try again.';
-      setFormError(msg);
+      toast.success('If an account exists, password reset instructions have been sent.');
+    } catch {
+      // Per security requirements, show generic success message even if request fails or account missing
+      setForgotSubmitted(true);
+      toast.success('If an account exists, password reset instructions have been sent.');
     } finally {
       setLoading(false);
     }
   }
 
-  /* ── Handlers: Force Password Reset (First Login) ── */
+  /* ── Handlers: Password Reset / Change ── */
   function handleResetChange(e) {
     const { name, value } = e.target;
     setResetForm((prev) => ({ ...prev, [name]: value }));
@@ -339,9 +321,15 @@ export default function LoginPage({ initialMode = 'login' }) {
     if (formError) setFormError('');
   }
 
-  async function handleForceResetSubmit(e) {
+  async function handleResetSubmit(e) {
     e.preventDefault();
-    const fieldErrors = validateForceReset(resetForm);
+    const fieldErrors = validateReset({
+      currentPassword: resetForm.currentPassword,
+      newPassword: resetForm.newPassword,
+      confirmPassword: resetForm.confirmPassword,
+      isTokenReset: isUrlTokenReset,
+    });
+
     if (Object.keys(fieldErrors).length) {
       setErrors(fieldErrors);
       return;
@@ -350,27 +338,31 @@ export default function LoginPage({ initialMode = 'login' }) {
     setLoading(true);
     setFormError('');
 
-    const email = pendingUser?.email || loginForm.identifier || 'admin@microflat.in';
-
     try {
-      const response = await forceResetPassword({
-        email,
-        newPassword: resetForm.newPassword,
-      });
+      if (isUrlTokenReset) {
+        // Reset via single-use reset token from email
+        await authService.resetPassword({
+          email: tokenResetInfo.current.email,
+          token: tokenResetInfo.current.token,
+          newPassword: resetForm.newPassword,
+          confirmPassword: resetForm.confirmPassword,
+        });
 
-      const token = response.data?.token || pendingUser?.tempToken || 'stub-jwt-token';
-      if (loginForm.rememberMe) {
-        localStorage.setItem('mf-token', token);
+        toast.success('Password updated successfully! Please sign in with your new password.');
+        switchMode('login');
       } else {
-        sessionStorage.setItem('mf-token', token);
-      }
+        // Change password for signed-in or pending first-time user
+        await changePassword({
+          currentPassword: resetForm.currentPassword || loginForm.password,
+          newPassword: resetForm.newPassword,
+          confirmPassword: resetForm.confirmPassword,
+        });
 
-      toast.success('Password set successfully! Welcome to MicroFlat ERP.');
-      navigate('/dashboard', { replace: true });
+        toast.success('Password updated successfully! Welcome to MicroFlat ERP.');
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        'Failed to update password. Please try again.';
+      const msg = err?.message || 'Failed to update password. Please check your entries and try again.';
       setFormError(msg);
     } finally {
       setLoading(false);
@@ -398,9 +390,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                 draggable={false}
               />
             </div>
-            {/* <span className="text-xs text-text-muted tracking-widest uppercase pl-0.5">
-              ERP System
-            </span> */}
           </div>
 
           {/* ══════════════════════════════════════════════════════════════════
@@ -408,7 +397,6 @@ export default function LoginPage({ initialMode = 'login' }) {
              ══════════════════════════════════════════════════════════════════ */}
           {mode === 'login' && (
             <div>
-              {/* Header */}
               <div className="mb-8">
                 <h2 className="text-2xl font-semibold text-heading leading-tight">
                   Sign in to your account
@@ -418,7 +406,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                 </p>
               </div>
 
-              {/* Form */}
               <form
                 id="login-form"
                 onSubmit={handleLoginSubmit}
@@ -431,7 +418,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                   onDismiss={() => setFormError('')}
                 />
 
-                {/* Email / username */}
                 <Input
                   id="login-identifier"
                   name="identifier"
@@ -446,7 +432,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                   error={errors.identifier}
                 />
 
-                {/* Password */}
                 <Input
                   id="login-password"
                   name="password"
@@ -475,7 +460,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                   }
                 />
 
-                {/* Remember me + forgot password button */}
                 <div className="flex items-center justify-between">
                   <Checkbox
                     id="login-remember-me"
@@ -494,7 +478,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                   </button>
                 </div>
 
-                {/* Submit */}
                 <Button
                   id="login-submit"
                   type="submit"
@@ -507,7 +490,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                   {loading ? 'Signing in…' : 'Sign in'}
                 </Button>
 
-                {/* Demo helper pills */}
                 <div className="pt-2 border-t border-border/70 space-y-2">
                   <p className="text-2xs font-medium text-text-muted uppercase tracking-wider text-center select-none">
                     Demo Credentials (Click to test)
@@ -549,7 +531,6 @@ export default function LoginPage({ initialMode = 'login' }) {
             <div>
               {!forgotSubmitted ? (
                 <div>
-                  {/* Back button */}
                   <button
                     type="button"
                     onClick={() => switchMode('login')}
@@ -559,7 +540,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                     Back to sign in
                   </button>
 
-                  {/* Header */}
                   <div className="mb-8">
                     <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-3.5">
                       <IconKeyRound size={20} aria-hidden="true" />
@@ -572,7 +552,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                     </p>
                   </div>
 
-                  {/* Form */}
                   <form
                     id="forgot-password-form"
                     onSubmit={handleForgotSubmit}
@@ -612,7 +591,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                   </form>
                 </div>
               ) : (
-                /* Success Confirmation */
                 <div className="text-center py-4">
                   <div className="w-14 h-14 rounded-full bg-success/15 text-success flex items-center justify-center mx-auto mb-4">
                     <IconSuccess size={30} aria-hidden="true" />
@@ -622,9 +600,9 @@ export default function LoginPage({ initialMode = 'login' }) {
                     Check your email
                   </h3>
                   <p className="text-sm text-text-muted mt-2 leading-relaxed max-w-sm mx-auto">
-                    We've sent a password reset link to{' '}
-                    <span className="font-semibold text-heading font-mono">{forgotForm.email}</span>.
-                    Please check your inbox and follow the instructions.
+                    If an account is associated with{' '}
+                    <span className="font-semibold text-heading font-mono">{forgotForm.email}</span>,
+                    password reset instructions have been dispatched.
                   </p>
 
                   <div className="mt-8 space-y-3">
@@ -639,17 +617,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                     >
                       Back to sign in
                     </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      fullWidth
-                      onClick={handleForgotSubmit}
-                      disabled={loading}
-                      className="text-xs text-text-muted hover:text-heading"
-                    >
-                      Didn't receive an email? Click to resend
-                    </Button>
                   </div>
                 </div>
               )}
@@ -657,49 +624,50 @@ export default function LoginPage({ initialMode = 'login' }) {
           )}
 
           {/* ══════════════════════════════════════════════════════════════════
-              MODE 3: FORCED PASSWORD RESET (FIRST-TIME LOGIN)
+              MODE 3: PASSWORD RESET / CHANGE
              ══════════════════════════════════════════════════════════════════ */}
           {mode === 'force-reset' && (
             <div>
-              {/* Header */}
               <div className="mb-6">
                 <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-warning/10 text-warning border border-warning/20 text-xs font-semibold mb-3">
                   <IconShieldAlert size={14} aria-hidden="true" />
-                  First-Time Sign In Security
+                  {isUrlTokenReset ? 'Password Reset' : 'Mandatory Password Change'}
                 </div>
 
                 <h2 className="text-2xl font-semibold text-heading leading-tight">
-                  Set your new password
+                  {isUrlTokenReset ? 'Set your new password' : 'Change temporary password'}
                 </h2>
                 <p className="mt-1.5 text-sm text-text-muted leading-relaxed">
-                  Welcome to MicroFlat ERP! For account safety, please set a new permanent password before proceeding.
+                  {isUrlTokenReset
+                    ? 'Enter your new permanent password below to complete the reset.'
+                    : 'Your account requires a new password before you can proceed.'}
                 </p>
               </div>
 
-              {/* User badge */}
-              <div className="p-3 rounded-lg bg-surface border border-border flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                    {(pendingUser?.name || 'U').charAt(0)}
+              {pendingUser && (
+                <div className="p-3 rounded-lg bg-surface border border-border flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                      {(pendingUser?.firstName || 'U').charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-heading leading-tight">
+                        {pendingUser?.firstName} {pendingUser?.lastName}
+                      </p>
+                      <p className="text-2xs text-text-muted font-mono leading-tight mt-0.5">
+                        {pendingUser?.email}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-semibold text-heading leading-tight">
-                      {pendingUser?.name || 'Authorized User'}
-                    </p>
-                    <p className="text-2xs text-text-muted font-mono leading-tight mt-0.5">
-                      {pendingUser?.email || loginForm.identifier || 'user@microflat.in'}
-                    </p>
-                  </div>
+                  <span className="text-2xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                    {pendingUser?.primaryRole || 'User'}
+                  </span>
                 </div>
-                <span className="text-2xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  {pendingUser?.role || 'User'}
-                </span>
-              </div>
+              )}
 
-              {/* Form */}
               <form
-                id="force-reset-form"
-                onSubmit={handleForceResetSubmit}
+                id="reset-password-form"
+                onSubmit={handleResetSubmit}
                 noValidate
                 className="space-y-4"
               >
@@ -708,7 +676,36 @@ export default function LoginPage({ initialMode = 'login' }) {
                   onDismiss={() => setFormError('')}
                 />
 
-                {/* New Password */}
+                {!isUrlTokenReset && (
+                  <Input
+                    id="reset-current-password"
+                    name="currentPassword"
+                    size="lg"
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    label="Current Password"
+                    placeholder="Enter current / temporary password"
+                    value={resetForm.currentPassword}
+                    onChange={handleResetChange}
+                    error={errors.currentPassword}
+                    leftIcon={<IconLock size={16} aria-hidden="true" />}
+                    rightElement={
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword((v) => !v)}
+                        aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                        tabIndex={0}
+                        className="p-1 rounded text-text-muted hover:text-text transition-colors duration-150"
+                      >
+                        {showCurrentPassword ? (
+                          <IconEyeOff size={16} aria-hidden="true" />
+                        ) : (
+                          <IconView size={16} aria-hidden="true" />
+                        )}
+                      </button>
+                    }
+                  />
+                )}
+
                 <Input
                   id="reset-new-password"
                   name="newPassword"
@@ -716,7 +713,7 @@ export default function LoginPage({ initialMode = 'login' }) {
                   type={showNewPassword ? 'text' : 'password'}
                   label="New Password"
                   placeholder="At least 6 characters"
-                  autoFocus
+                  autoFocus={isUrlTokenReset}
                   value={resetForm.newPassword}
                   onChange={handleResetChange}
                   error={errors.newPassword}
@@ -738,7 +735,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                   }
                 />
 
-                {/* Confirm Password */}
                 <Input
                   id="reset-confirm-password"
                   name="confirmPassword"
@@ -767,7 +763,6 @@ export default function LoginPage({ initialMode = 'login' }) {
                   }
                 />
 
-                {/* Password Criteria Checklist */}
                 <div className="p-3 bg-surface/70 rounded-lg border border-border/80 space-y-1.5 text-xs text-text-muted">
                   <div className="flex items-center gap-2">
                     <div

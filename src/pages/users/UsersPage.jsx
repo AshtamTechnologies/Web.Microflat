@@ -1,15 +1,16 @@
 /**
- * UsersPage — Polished user management dashboard.
+ * UsersPage.jsx — User management dashboard for MicroFlat ERP.
  *
- * Visual Improvements:
- *   1. Container: Whole table (toolbar + table + pagination) in a single unified Card.
- *   2. Header: Contrasting bg-surface, clean hover sort indicator & solid active chevron, hover resize bar.
- *   3. Rows: 36px circular avatar with brand initials, py-4 px-6 breathing room,
- *      divide-y border-border, 120ms hover transition, proper pill status & multi-role badges.
- *   4. Actions: Icon-only ghost buttons (View, Edit & Delete) with tooltips.
- *   5. Pagination: Filled bg-primary pill for active page, ghost buttons for others, disabled Prev/Next.
- *   6. Empty & Loading States: 5 pulsing skeleton rows during load, centered empty state with "Clear search".
- *   7. Modals: Direct User View Modal, Add/Edit User Form modal, and Delete confirmation.
+ * Route: /users
+ *
+ * Rules:
+ *   - Search with ~400ms debounce, RoleId filter, IsActive status filter.
+ *   - Server-side paging using totalCount / totalPages from backend API.
+ *   - In API mode (capabilities.sort = false): disable sort headers.
+ *   - In API mode: hide Last Login column (no backend endpoint).
+ *   - Hide Delete action when capabilities.delete is false.
+ *   - Activate / Deactivate status action with ConfirmModal and toast.
+ *   - Follows unified ERP TableToolbar + DataTable layout pattern.
  */
 
 import { useMemo, useState } from 'react';
@@ -17,19 +18,13 @@ import { useNavigate } from 'react-router-dom';
 import {
   useReactTable,
   getCoreRowModel,
-  getSortedRowModel,
-  getPaginationRowModel,
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
-  IconClock,
-  IconDelete,
   IconEdit,
   IconLocation,
   IconMail,
   IconPhone,
-  IconSeriesSetup,
-  IconShieldCheck,
   IconSmartphone,
   IconUserPlus,
   IconUsers,
@@ -38,7 +33,6 @@ import {
 
 import {
   Button,
-  Modal,
   SearchableSelect,
   ConfirmModal,
   PageHeader,
@@ -50,15 +44,9 @@ import {
 import { useUsersContext } from '../../context/UsersContext';
 import { useUserSessions } from '../../context/UserSessionsContext';
 import { formatDateTime, formatRelative } from '../../utils/dateUtils';
-import { ROLE_OPTIONS } from '../../mocks/users';
 import UserFormModal from './UserFormModal';
 
 const columnHelper = createColumnHelper();
-
-const ROLE_FILTER_OPTIONS = [
-  { value: 'ALL', label: 'All Roles' },
-  ...ROLE_OPTIONS,
-];
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
@@ -76,75 +64,111 @@ export default function UsersPage() {
     setRoleFilter,
     statusFilter,
     setStatusFilter,
+    pageNumber,
+    setPageNumber,
+    pageSize,
+    setPageSize,
+    totalCount,
+    totalPages,
+    loading,
+    rolesList,
+    capabilities,
+    isMockApi,
     resetFilters,
     deleteUser,
     createUser,
     updateUser,
+    toggleStatus,
   } = useUsersContext();
 
   const { getLastLogin } = useUserSessions();
 
+  // Modal states
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userToToggleStatus, setUserToToggleStatus] = useState(null);
+  const [userToDelete, setUserToDelete] = useState(null);
+
+  // TanStack table state
+  const [sorting, setSorting] = useState([]);
+  const [columnSizing, setColumnSizing] = useState({});
+
+  // Dynamic role filter options
+  const roleFilterOptions = useMemo(() => {
+    const list = [{ value: 'ALL', label: 'All Roles' }];
+    rolesList.forEach((r) => {
+      list.push({
+        value: String(r.id),
+        label: r.name || r.roleName,
+      });
+    });
+    return list;
+  }, [rolesList]);
+
+  // Last login map for mock mode
   const lastLoginMap = useMemo(() => {
+    if (!isMockApi) return {};
     const map = {};
     users.forEach((u) => {
       map[u.id] = getLastLogin(u.id);
     });
     return map;
-  }, [users, getLastLogin]);
+  }, [users, getLastLogin, isMockApi]);
 
   const hasActiveFilters = Boolean(
     search.trim() || roleFilter !== 'ALL' || statusFilter !== 'ALL'
   );
 
-  const [sorting, setSorting] = useState([]);
-  const [columnSizing, setColumnSizing] = useState({});
-  const [pagination, setPagination] = useState({
-    pageIndex: 0,
-    pageSize: 10,
-  });
-  const [loading] = useState(false);
-
-  /* Modal state */
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [userToView, setUserToView] = useState(null);
-  const [userToDelete, setUserToDelete] = useState(null);
-
   function handleOpenAdd() {
     setSelectedUser(null);
-    setIsModalOpen(true);
+    setIsFormModalOpen(true);
   }
 
   function handleOpenEdit(user) {
     setSelectedUser(user);
-    setIsModalOpen(true);
+    setIsFormModalOpen(true);
   }
 
   function handleCloseModal() {
-    setIsModalOpen(false);
+    setIsFormModalOpen(false);
     setSelectedUser(null);
   }
 
   async function handleModalSubmit(formData) {
     if (selectedUser?.id) {
-      await updateUser(selectedUser.id, formData);
-    } else {
-      await createUser(formData);
+      return updateUser(selectedUser.id, formData);
+    }
+    return createUser(formData);
+  }
+
+  function handleConfirmToggleStatus() {
+    if (userToToggleStatus?.id) {
+      toggleStatus(userToToggleStatus.id, !userToToggleStatus.isActive);
+      setUserToToggleStatus(null);
     }
   }
 
-  /* ── Column definitions for desktop table ── */
-  const columns = useMemo(
-    () => [
+  function handleConfirmDelete() {
+    if (userToDelete?.id) {
+      deleteUser(userToDelete.id);
+      setUserToDelete(null);
+    }
+  }
+
+  /* ── Column Definitions ── */
+  const columns = useMemo(() => {
+    const cols = [
       /* 1. NAME */
       columnHelper.accessor((row) => `${row.firstName} ${row.lastName}`, {
         id: 'name',
         header: 'NAME',
         minSize: 210,
         size: 260,
+        enableSorting: Boolean(capabilities.sort),
         cell: (info) => {
           const row = info.row.original;
-          const initials = `${(row.firstName || '')[0] || ''}${(row.lastName || '')[0] || ''}`.toUpperCase() || 'U';
+          const initials =
+            `${(row.firstName || '')[0] || ''}${(row.lastName || '')[0] || ''}`.toUpperCase() || 'U';
 
           return (
             <div className="flex items-center gap-3 py-0.5">
@@ -169,6 +193,7 @@ export default function UsersPage() {
         header: 'MOBILE',
         minSize: 140,
         size: 170,
+        enableSorting: Boolean(capabilities.sort),
         cell: (info) => {
           const row = info.row.original;
           return (
@@ -186,96 +211,130 @@ export default function UsersPage() {
         },
       }),
 
-      /* 3. ROLES — Multi-role pill badges */
-      columnHelper.accessor((row) => {
-        if (Array.isArray(row.roles) && row.roles.length > 0) return row.roles.join(', ');
-        return row.role || 'Viewer';
-      }, {
-        id: 'roles',
-        header: 'ROLES',
-        minSize: 180,
-        size: 220,
-        cell: (info) => {
-          const row = info.row.original;
-          const roles = Array.isArray(row.roles) && row.roles.length > 0
-            ? row.roles
-            : row.role
-              ? [row.role]
-              : ['Viewer'];
-
-          return (
-            <div className="flex flex-wrap gap-1 items-center py-0.5">
-              {roles.slice(0, 2).map((r, idx) => (
-                <span
-                  key={idx}
-                  className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-border/60 text-text-muted border border-border truncate max-w-[130px]"
-                  title={r}
-                >
-                  {r}
-                </span>
-              ))}
-              {roles.length > 2 && (
-                <span
-                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-primary/10 text-primary border border-primary/20 cursor-default"
-                  title={roles.slice(2).join(', ')}
-                >
-                  +{roles.length - 2}
-                </span>
-              )}
-            </div>
-          );
-        },
-      }),
-
-      /* 4. LAST LOGIN */
-      columnHelper.accessor((row) => lastLoginMap[row.id] || '', {
-        id: 'lastLogin',
-        header: 'LAST LOGIN',
-        minSize: 170,
-        size: 200,
-        sortingFn: (rowA, rowB) => {
-          const dateA = lastLoginMap[rowA.original.id]
-            ? new Date(lastLoginMap[rowA.original.id]).getTime()
-            : 0;
-          const dateB = lastLoginMap[rowB.original.id]
-            ? new Date(lastLoginMap[rowB.original.id]).getTime()
-            : 0;
-          return dateA - dateB;
-        },
-        cell: (info) => {
-          const row = info.row.original;
-          const loginIso = lastLoginMap[row.id];
-
-          if (!loginIso) {
-            return (
-              <span className="text-xs text-text-muted select-none">
-                Never
-              </span>
-            );
+      /* 3. ROLES */
+      columnHelper.accessor(
+        (row) => {
+          if (Array.isArray(row.roles) && row.roles.length > 0) {
+            return row.roles
+              .map((r) => (typeof r === 'object' ? r.roleName : r))
+              .filter(Boolean)
+              .join(', ');
           }
-
-          return (
-            <div className="flex flex-col py-0.5" title={formatDateTime(loginIso)}>
-              <span className="font-mono tabular-nums text-xs font-semibold text-heading">
-                {formatDateTime(loginIso)}
-              </span>
-              <span className="text-2xs text-text-muted leading-tight">
-                {formatRelative(loginIso)}
-              </span>
-            </div>
-          );
+          return row.role || row.primaryRole || 'Viewer';
         },
-      }),
+        {
+          id: 'roles',
+          header: 'ROLES',
+          minSize: 180,
+          size: 220,
+          enableSorting: Boolean(capabilities.sort),
+          cell: (info) => {
+            const row = info.row.original;
+            const rawRoles =
+              Array.isArray(row.roles) && row.roles.length > 0
+                ? row.roles
+                : [row.role || row.primaryRole || 'Viewer'];
 
-      /* 5. STATUS — Tinted pill badge with dot */
+            const roles = rawRoles
+              .map((r) => (typeof r === 'object' ? r.roleName : r))
+              .filter(Boolean);
+
+            return (
+              <div className="flex flex-wrap gap-1 items-center py-0.5">
+                {roles.slice(0, 2).map((r, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-border/60 text-text-muted border border-border truncate max-w-[130px]"
+                    title={r}
+                  >
+                    {r}
+                  </span>
+                ))}
+                {roles.length > 2 && (
+                  <span
+                    className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold bg-primary/10 text-primary border border-primary/20 cursor-default"
+                    title={roles.slice(2).join(', ')}
+                  >
+                    +{roles.length - 2}
+                  </span>
+                )}
+              </div>
+            );
+          },
+        }
+      ),
+    ];
+
+    /* 4. LAST LOGIN (Only rendered in mock mode) */
+    if (isMockApi) {
+      cols.push(
+        columnHelper.accessor((row) => lastLoginMap[row.id] || '', {
+          id: 'lastLogin',
+          header: 'LAST LOGIN',
+          minSize: 170,
+          size: 200,
+          sortingFn: (rowA, rowB) => {
+            const dateA = lastLoginMap[rowA.original.id]
+              ? new Date(lastLoginMap[rowA.original.id]).getTime()
+              : 0;
+            const dateB = lastLoginMap[rowB.original.id]
+              ? new Date(lastLoginMap[rowB.original.id]).getTime()
+              : 0;
+            return dateA - dateB;
+          },
+          cell: (info) => {
+            const row = info.row.original;
+            const loginIso = lastLoginMap[row.id];
+
+            if (!loginIso) {
+              return (
+                <span className="text-xs text-text-muted select-none">
+                  Never
+                </span>
+              );
+            }
+
+            return (
+              <div className="flex flex-col py-0.5" title={formatDateTime(loginIso)}>
+                <span className="font-mono tabular-nums text-xs font-semibold text-heading">
+                  {formatDateTime(loginIso)}
+                </span>
+                <span className="text-2xs text-text-muted leading-tight">
+                  {formatRelative(loginIso)}
+                </span>
+              </div>
+            );
+          },
+        })
+      );
+    }
+
+    /* 5. STATUS */
+    cols.push(
       columnHelper.accessor('isActive', {
         header: 'STATUS',
         minSize: 110,
         size: 130,
-        cell: (info) => <StatusBadge status={info.getValue()} size="sm" />,
-      }),
+        enableSorting: Boolean(capabilities.sort),
+        cell: (info) => {
+          const row = info.row.original;
+          return (
+            <button
+              type="button"
+              onClick={() => setUserToToggleStatus(row)}
+              className="cursor-pointer transition-opacity hover:opacity-80 text-left"
+              title={`Click to ${row.isActive ? 'deactivate' : 'activate'} user`}
+              aria-label={`${row.isActive ? 'Deactivate' : 'Activate'} ${row.firstName} ${row.lastName}`}
+            >
+              <StatusBadge status={info.getValue()} size="sm" />
+            </button>
+          );
+        },
+      })
+    );
 
-      /* 6. ACTIONS — View, Edit & Delete Ghost buttons */
+    /* 6. ACTIONS */
+    cols.push(
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
@@ -289,48 +348,57 @@ export default function UsersPage() {
             <TableActions
               onView={() => navigate(`/users/${row.id}`)}
               onEdit={() => handleOpenEdit(row)}
-              viewTitle="View user details & login sessions"
-              editTitle="Edit user"
+              onDelete={capabilities.delete ? () => setUserToDelete(row) : undefined}
+              viewTooltip="View user details"
+              editTooltip="Edit user"
+              deleteTooltip="Delete user"
             />
           );
         },
-      }),
-    ],
-    [lastLoginMap, navigate]
+      })
+    );
+
+    return cols;
+  }, [capabilities, isMockApi, lastLoginMap, navigate]);
+
+  const pagination = useMemo(
+    () => ({
+      pageIndex: pageNumber - 1,
+      pageSize,
+    }),
+    [pageNumber, pageSize]
   );
 
   const table = useReactTable({
     data: users,
     columns,
-    state: { sorting, columnSizing, pagination },
+    pageCount: Math.max(1, totalPages),
+    state: {
+      pagination,
+      sorting: capabilities.sort ? sorting : [],
+      columnSizing,
+    },
+    manualPagination: true,
+    manualSorting: true,
+    manualFiltering: true,
+    onPaginationChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(pagination) : updater;
+      setPageNumber(next.pageIndex + 1);
+      if (next.pageSize !== pageSize) {
+        setPageSize(next.pageSize);
+      }
+    },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
-    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    enableSorting: Boolean(capabilities.sort),
     columnResizeMode: 'onChange',
     enableColumnResizing: true,
   });
 
-
-
-  // Roles array for user currently viewed
-  const viewUserRoles = useMemo(() => {
-    if (!userToView) return [];
-    if (Array.isArray(userToView.roles) && userToView.roles.length > 0) return userToView.roles;
-    if (userToView.role) return [userToView.role];
-    return ['Viewer'];
-  }, [userToView]);
-
-  const viewUserInitials = useMemo(() => {
-    if (!userToView) return 'U';
-    return `${(userToView.firstName || '')[0] || ''}${(userToView.lastName || '')[0] || ''}`.toUpperCase() || 'U';
-  }, [userToView]);
-
   return (
     <div className="space-y-6">
-      {/* ── Page Header with Add User Button Outside the Card ── */}
+      {/* ── Page Header ── */}
       <PageHeader
         title="User Management"
         subtitle="Manage system users, role assignments, address details, and active account statuses."
@@ -349,7 +417,7 @@ export default function UsersPage() {
         }
       />
 
-      {/* ── Table Toolbar: Search + Role Filter + Status Filter ── */}
+      {/* ── Table Toolbar with Role & Status Dropdowns ── */}
       <TableToolbar
         searchValue={search}
         onSearchChange={setSearch}
@@ -363,9 +431,12 @@ export default function UsersPage() {
             id="filter-role"
             placeholder="All Roles"
             searchPlaceholder="Search roles..."
-            options={ROLE_FILTER_OPTIONS}
+            options={roleFilterOptions}
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
+            onChange={(e) => {
+              setRoleFilter(e.target.value);
+              setPageNumber(1);
+            }}
           />
         </div>
 
@@ -377,22 +448,25 @@ export default function UsersPage() {
             searchPlaceholder="Search statuses..."
             options={STATUS_FILTER_OPTIONS}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPageNumber(1);
+            }}
           />
         </div>
       </TableToolbar>
 
-      {/* ── Standard TanStack DataTable & Mobile Responsive Cards ── */}
+      {/* ── Standard TanStack DataTable & Responsive Mobile Cards ── */}
       <DataTable
         table={table}
         columns={columns}
         isLoading={loading}
-        totalCount={users.length}
+        totalCount={totalCount}
         entityName="users"
         emptyTitle="No users found"
         emptyDescription={
           hasActiveFilters
-            ? 'No users match your current filter criteria.'
+            ? 'No users match your active search and filter criteria.'
             : 'No users have been added to the system yet.'
         }
         emptyAction={
@@ -421,18 +495,20 @@ export default function UsersPage() {
         }
         renderMobileCard={(row) => {
           const user = row.original;
-          const roles = Array.isArray(user.roles) && user.roles.length > 0
-            ? user.roles
-            : user.role
-              ? [user.role]
-              : ['Viewer'];
+          const rawRoles =
+            Array.isArray(user.roles) && user.roles.length > 0
+              ? user.roles
+              : [user.role || user.primaryRole || 'Viewer'];
+
+          const roles = rawRoles
+            .map((r) => (typeof r === 'object' ? r.roleName : r))
+            .filter(Boolean);
 
           return (
             <div
               key={user.id}
               className="bg-surface rounded-xl border border-border p-4 shadow-2xs space-y-3"
             >
-              {/* Header: Name, Roles, Status */}
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold text-heading leading-tight">
@@ -450,11 +526,16 @@ export default function UsersPage() {
                   </div>
                 </div>
 
-                {/* Status Badge */}
-                <StatusBadge status={user.isActive} size="sm" />
+                <button
+                  type="button"
+                  onClick={() => setUserToToggleStatus(user)}
+                  className="cursor-pointer"
+                  title={`Click to ${user.isActive ? 'deactivate' : 'activate'} user`}
+                >
+                  <StatusBadge status={user.isActive} size="sm" />
+                </button>
               </div>
 
-              {/* Contact details */}
               <div className="space-y-1.5 text-xs text-text-muted pt-2 border-t border-border/50">
                 <div className="flex items-center gap-2">
                   <IconMail size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
@@ -476,23 +557,9 @@ export default function UsersPage() {
                     <span className="line-clamp-2">{user.address}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 pt-1 border-t border-border/40 text-xs">
-                  <IconClock size={13} className="shrink-0 text-text-muted/70" aria-hidden="true" />
-                  <span className="font-mono tabular-nums">
-                    Last login:{' '}
-                    {lastLoginMap[user.id] ? (
-                      <strong className="text-heading font-semibold">
-                        {formatDateTime(lastLoginMap[user.id])}
-                      </strong>
-                    ) : (
-                      <span className="text-text-muted">Never</span>
-                    )}
-                  </span>
-                </div>
               </div>
 
-              {/* Action buttons footer */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+              <div className="flex items-center gap-2 pt-2 border-t border-border/50">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -517,173 +584,67 @@ export default function UsersPage() {
         }}
       />
 
-      {/* ── View User Details Modal using generic Modal component ── */}
-      <Modal
-        isOpen={Boolean(userToView)}
-        onClose={() => setUserToView(null)}
-        title="User Details"
-        maxWidth="max-w-xl"
-      >
-        {userToView && (
-          <div className="space-y-5">
-            {/* Header Profile Card */}
-            <div className="flex items-start gap-4 p-4 rounded-xl bg-surface/60 border border-border">
-              <div className="w-13 h-13 rounded-full bg-primary/15 border-2 border-primary/20 text-primary font-bold text-base flex items-center justify-center shrink-0 shadow-2xs">
-                {viewUserInitials}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <h3 className="text-base font-bold text-heading truncate">
-                    {userToView.firstName} {userToView.lastName}
-                  </h3>
-                  <span
-                    className={[
-                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none shrink-0',
-                      userToView.isActive
-                        ? 'bg-success/10 text-success border border-success/20'
-                        : 'bg-danger/10 text-danger border border-danger/20',
-                    ].join(' ')}
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${userToView.isActive ? 'bg-success' : 'bg-danger'
-                        }`}
-                      aria-hidden="true"
-                    />
-                    {userToView.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <p className="text-xs sm:text-sm text-text-muted mt-0.5 flex items-center gap-1.5">
-                  <IconMail size={13} className="shrink-0 text-text-muted/70" />
-                  <span className="truncate">{userToView.email || '—'}</span>
-                </p>
-                {userToView.id && (
-                  <div className="mt-2 flex items-center gap-1 text-2xs font-mono text-text-muted bg-bg/80 border border-border px-2 py-0.5 rounded-md w-fit">
-                    <IconSeriesSetup size={11} className="shrink-0 text-text-muted/60" />
-                    <span>ID: {userToView.id}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Contact Details */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-                <IconPhone size={13} className="text-primary" />
-                Contact Details
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="p-3 bg-bg border border-border rounded-lg space-y-1">
-                  <span className="text-2xs font-medium text-text-muted block">Primary Mobile</span>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
-                    <IconPhone size={14} className="text-text-muted/70 shrink-0" />
-                    <span>{userToView.mobile || '—'}</span>
-                  </div>
-                </div>
-                <div className="p-3 bg-bg border border-border rounded-lg space-y-1">
-                  <span className="text-2xs font-medium text-text-muted block">Secondary Phone</span>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-heading font-mono">
-                    <IconSmartphone size={14} className="text-text-muted/70 shrink-0" />
-                    <span>{userToView.secondaryPhone || 'Not provided'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Assigned Roles */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-                <IconShieldCheck size={13} className="text-primary" />
-                Assigned Roles ({viewUserRoles.length})
-              </h4>
-              <div className="p-3 bg-bg border border-border rounded-lg flex flex-wrap gap-1.5">
-                {viewUserRoles.map((r, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium bg-primary/10 text-primary border border-primary/20"
-                  >
-                    <IconShieldCheck size={12} className="shrink-0" />
-                    {r}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Address */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-                <IconLocation size={13} className="text-primary" />
-                Address
-              </h4>
-              <div className="p-3 bg-bg border border-border rounded-lg flex items-start gap-2.5">
-                <IconLocation size={15} className="text-text-muted/80 shrink-0 mt-0.5" />
-                <p className="text-sm text-heading leading-relaxed">
-                  {userToView.address || <span className="text-text-muted italic">No address provided</span>}
-                </p>
-              </div>
-            </div>
-
-            {/* Footer Actions */}
-            <div className="flex items-center justify-between pt-4 border-t border-border">
-              <Button
-                type="button"
-                variant="ghost"
-                size="md"
-                onClick={() => setUserToView(null)}
-              >
-                Close
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={() => {
-                  const target = userToView;
-                  setUserToView(null);
-                  handleOpenEdit(target);
-                }}
-                className="flex items-center gap-1.5"
-              >
-                <IconEdit size={15} />
-                Edit User
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* ── Add / Edit User Modal ── */}
+      {/* ── Add / Edit Modal ── */}
       <UserFormModal
-        isOpen={isModalOpen}
+        isOpen={isFormModalOpen}
         onClose={handleCloseModal}
         user={selectedUser}
         onSubmit={handleModalSubmit}
       />
 
-      {/* ── Delete User Confirmation Modal ── */}
+      {/* ── Status Toggle Confirmation Modal ── */}
       <ConfirmModal
-        isOpen={Boolean(userToDelete)}
-        onClose={() => setUserToDelete(null)}
-        title="Delete User"
-        confirmText="Delete User"
-        variant="danger"
+        isOpen={Boolean(userToToggleStatus)}
+        onClose={() => setUserToToggleStatus(null)}
+        title={
+          userToToggleStatus?.isActive
+            ? 'Deactivate User Account'
+            : 'Activate User Account'
+        }
+        confirmText={
+          userToToggleStatus?.isActive ? 'Deactivate User' : 'Activate User'
+        }
+        variant={userToToggleStatus?.isActive ? 'warning' : 'primary'}
         message={
-          userToDelete ? (
+          <p>
+            Are you sure you want to{' '}
+            <strong>
+              {userToToggleStatus?.isActive ? 'deactivate' : 'activate'}
+            </strong>{' '}
+            <span className="text-heading font-semibold">
+              {userToToggleStatus?.firstName} {userToToggleStatus?.lastName}
+            </span>{' '}
+            ({userToToggleStatus?.email})?
+            {userToToggleStatus?.isActive && (
+              <span className="block mt-1 text-xs text-text-muted">
+                Deactivating this user will revoke all their active login sessions immediately.
+              </span>
+            )}
+          </p>
+        }
+        onConfirm={handleConfirmToggleStatus}
+      />
+
+      {/* ── Delete Confirmation Modal (only when capabilities.delete is true) ── */}
+      {capabilities.delete && (
+        <ConfirmModal
+          isOpen={Boolean(userToDelete)}
+          onClose={() => setUserToDelete(null)}
+          title="Delete User Account"
+          confirmText="Delete User"
+          variant="danger"
+          message={
             <p>
               Are you sure you want to permanently delete{' '}
               <strong className="text-heading font-semibold">
-                {userToDelete.firstName} {userToDelete.lastName}
+                {userToDelete?.firstName} {userToDelete?.lastName}
               </strong>{' '}
-              ({userToDelete.email})? This action cannot be undone.
+              ({userToDelete?.email})?
             </p>
-          ) : null
-        }
-        onConfirm={() => {
-          if (userToDelete) {
-            deleteUser(userToDelete.id);
-            setUserToDelete(null);
           }
-        }}
-      />
+          onConfirm={handleConfirmDelete}
+        />
+      )}
     </div>
   );
 }

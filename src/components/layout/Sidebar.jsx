@@ -20,7 +20,6 @@ import {
   IconChevronRight,
   IconLogout,
   IconPanelLeftClose,
-  IconPanelLeftOpen,
   IconSearch,
 } from '../../constants/icons';
 import { createPortal } from 'react-dom';
@@ -29,18 +28,11 @@ import navigation from '../../config/navigation';
 import { Input } from '../ui';
 import { useUserSessions } from '../../context/UserSessionsContext';
 import { mockUsers } from '../../mocks/users';
+import { useAuthContext } from '../../context/AuthContext';
+import { hasRolePermission } from '../../constants/roles';
 
 const LOGO = '/micro-flat-logo.png';
 const SIDE_LOGO = '/microsidelogo.png';
-const COLLAPSED_KEY = 'mf-sidebar-collapsed';
-
-function getInitialCollapsed() {
-  try {
-    return localStorage.getItem(COLLAPSED_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
 
 function initials(name = '') {
   return name
@@ -262,12 +254,8 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
   const triggerRef = useRef(null);
   const closeTimeoutRef = useRef(null);
 
-  useEffect(() => {
-    if (isChildActive) setOpen(true);
-  }, [isChildActive]);
-
-  // When searching, auto-expand the group so matching sub-items are immediately visible
-  const isAccordionOpen = open || isSearching;
+  // When searching or child active, auto-expand the group so matching sub-items are immediately visible
+  const isAccordionOpen = open || isSearching || isChildActive;
 
   function handleToggle() {
     if (!collapsed) setOpen((prev) => !prev);
@@ -469,7 +457,6 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
 
 /* ── Sidebar Main Inner Content ───────────────────────────────────────────── */
 function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
-  const navigate = useNavigate();
   const [navSearch, setNavSearch] = useState('');
   const searchInputRef = useRef(null);
 
@@ -493,8 +480,28 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
   }, [collapsed, onCollapsedToggle]);
 
   const { recordLogout } = useUserSessions();
+  const { user: authUser, logout } = useAuthContext();
 
-  function handleLogout() {
+  const user = useMemo(() => {
+    if (authUser) {
+      const name = `${authUser.firstName || ''} ${authUser.lastName || ''}`.trim() || authUser.email || 'User';
+      const role = authUser.primaryRole || (authUser.roles?.[0]?.roleName) || 'User';
+      return {
+        name,
+        role,
+        email: authUser.email || '',
+        roles: authUser.roles || [],
+      };
+    }
+    return {
+      name: 'User',
+      role: 'User',
+      email: '',
+      roles: [],
+    };
+  }, [authUser]);
+
+  async function handleLogout() {
     if (recordLogout) {
       const matched = mockUsers.find(
         (u) =>
@@ -506,17 +513,8 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
         recordLogout(matched.id);
       }
     }
-    localStorage.removeItem('mf-token');
-    sessionStorage.removeItem('mf-token');
-    navigate('/login', { replace: true });
+    await logout();
   }
-
-  // Active user data
-  const user = {
-    name: 'Ian Chesnut',
-    role: 'Admin',
-    email: 'admin@microflat.in',
-  };
 
   // Filter sections by Role-Based Access Control (RBAC) and inline search
   const filteredSections = useMemo(() => {
@@ -528,14 +526,14 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
         const matchingItems = (sec.items || [])
           .map((item) => {
             // RBAC Role Check for parent
-            if (item.roles && !item.roles.includes(user.role.toUpperCase())) {
+            if (item.roles && !hasRolePermission(user.roles, item.roles)) {
               return null;
             }
 
             // If item has children: filter children by RBAC and search
             if (item.children) {
               const allowedChildren = item.children.filter((child) => {
-                if (child.roles && !child.roles.includes(user.role.toUpperCase())) {
+                if (child.roles && !hasRolePermission(user.roles, child.roles)) {
                   return false;
                 }
                 return true;
@@ -576,7 +574,7 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
         };
       })
       .filter((sec) => sec.items.length > 0);
-  }, [navSearch, user.role]);
+  }, [navSearch, user.roles]);
 
   return (
     <div className="flex flex-col h-full bg-bg">

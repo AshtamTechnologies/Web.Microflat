@@ -5,8 +5,9 @@
  * Consume with useUsersContext().
  */
 
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext } from 'react';
-import { useUsers } from '../pages/users/useUsers';
+import { useUsers, getUserName, useUserOptions } from '../pages/users/useUsers';
 
 const UsersContext = createContext(null);
 
@@ -20,3 +21,5 @@ export function useUsersContext() {
   if (!ctx) throw new Error('useUsersContext must be used within <UsersProvider>');
   return ctx;
 }
+
+export { getUserName, useUserOptions };
