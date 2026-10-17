@@ -214,9 +214,8 @@ export default function UomPage() {
                 <IconUOM size={15} />
               </div>
               <span
-                className={`text-sm font-semibold truncate ${
-                  uom.isActive ? 'text-heading' : 'text-text-muted line-through'
-                }`}
+                className={`text-sm font-semibold truncate ${uom.isActive ? 'text-heading' : 'text-text-muted line-through'
+                  }`}
               >
                 {uom.uomName}
               </span>
@@ -252,9 +251,8 @@ export default function UomPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isActive ? 'bg-success' : 'bg-danger'
-                }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                 aria-hidden="true"
               />
               {isActive ? 'Active' : 'Inactive'}
@@ -361,11 +359,10 @@ export default function UomPage() {
               key={status}
               type="button"
               onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
-                statusFilter === status
-                  ? 'bg-bg text-heading shadow-2xs font-semibold'
-                  : 'text-text-muted hover:text-text'
-              }`}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${statusFilter === status
+                ? 'bg-bg text-heading shadow-2xs font-semibold'
+                : 'text-text-muted hover:text-text'
+                }`}
             >
               {status.toLowerCase()}
             </button>
@@ -398,9 +395,8 @@ export default function UomPage() {
                       }
                     >
                       <div
-                        className={`flex items-center gap-1.5 ${
-                          header.column.getCanSort() ? 'cursor-pointer select-none' : ''
-                        }`}
+                        className={`flex items-center gap-1.5 ${header.column.getCanSort() ? 'cursor-pointer select-none' : ''
+                          }`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <span className="truncate">
@@ -526,9 +522,8 @@ export default function UomPage() {
                     ].join(' ')}
                   >
                     <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        uom.isActive ? 'bg-success' : 'bg-danger'
-                      }`}
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${uom.isActive ? 'bg-success' : 'bg-danger'
+                        }`}
                       aria-hidden="true"
                     />
                     {uom.isActive ? 'Active' : 'Inactive'}
@@ -648,7 +643,7 @@ export default function UomPage() {
               disabled={isSubmitting}
               className="justify-center font-semibold shadow-2xs"
             >
-              {editingUom ? 'Save Changes' : 'Create UOM'}
+              {editingUom ? 'Save Changes' : 'Save UOM'}
             </SaveButton>
           </div>
         </form>
@@ -685,9 +680,8 @@ export default function UomPage() {
                 ].join(' ')}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    viewingUom.isActive ? 'bg-success' : 'bg-danger'
-                  }`}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${viewingUom.isActive ? 'bg-success' : 'bg-danger'
+                    }`}
                   aria-hidden="true"
                 />
                 {viewingUom.isActive ? 'Active' : 'Inactive'}
@@ -697,7 +691,8 @@ export default function UomPage() {
             {/* Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   UOM Name
                 </span>
                 <span className="font-semibold text-sm text-heading">
@@ -706,7 +701,8 @@ export default function UomPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Created Date
                 </span>
                 <span className="font-mono text-xs text-text-muted">
@@ -715,7 +711,8 @@ export default function UomPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Description
                 </span>
                 <p className="text-xs text-heading leading-relaxed">

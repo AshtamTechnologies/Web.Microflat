@@ -91,9 +91,9 @@ export default function PurchaseRequisitionEdit() {
       setItems(
         Array.isArray(originalPR.items) && originalPR.items.length > 0
           ? originalPR.items.map((it) => ({
-              ...it,
-              requiredDate: it.requiredDate ? it.requiredDate.split('T')[0] : '',
-            }))
+            ...it,
+            requiredDate: it.requiredDate ? it.requiredDate.split('T')[0] : '',
+          }))
           : []
       );
       setAttachments(Array.isArray(originalPR.attachments) ? originalPR.attachments : []);
@@ -220,7 +220,7 @@ export default function PurchaseRequisitionEdit() {
       {/* ── Page Header ── */}
       <PageHeader
         title="Edit Purchase Requisition"
-        subtitle="Modify requisition details, items, or status."
+        subtitle="Modify requisition details, items."
         icon={<IconPR className="h-6 w-6 text-primary" aria-hidden="true" />}
         backButton={
           <Button

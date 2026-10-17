@@ -5,7 +5,7 @@
  * Manages adding, editing, and toggling contact persons with field validation and responsive design.
  */
 
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState, useRef } from 'react';
 import {
   IconAdd,
   IconCheck,
@@ -39,6 +39,7 @@ const INITIAL_CONTACT_FORM = {
   mobile1: '',
   mobile2: '',
   email: '',
+  isPrimary: false,
   isActive: true,
 };
 
@@ -90,6 +91,48 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
     return errors;
   }, []);
 
+  const formStateRef = useRef(null);
+  const editingRef = useRef({});
+
+  // Intercept changes to ensure only one contact is marked as primary
+  const handleEditorChange = useCallback(
+    (nextRows) => {
+      if (!onChange) return;
+
+      const isPrimary = Boolean(formStateRef.current?.isPrimary);
+      const isEditingNow = Boolean(editingRef.current?.isEditing);
+      const currentEditIndex = editingRef.current?.editingIndex;
+
+      if (isPrimary) {
+        if (isEditingNow && currentEditIndex !== undefined && currentEditIndex >= 0) {
+          const sanitized = nextRows.map((r, idx) => ({
+            ...r,
+            isPrimary: idx === currentEditIndex,
+          }));
+          onChange(sanitized);
+          return;
+        } else {
+          const lastIdx = nextRows.length - 1;
+          const sanitized = nextRows.map((r, idx) => ({
+            ...r,
+            isPrimary: idx === lastIdx,
+          }));
+          onChange(sanitized);
+          return;
+        }
+      }
+
+      // If this is the only contact and none was set, auto-set as primary
+      if (nextRows.length === 1 && !nextRows[0].isPrimary && effectiveRows.length === 0) {
+        onChange([{ ...nextRows[0], isPrimary: true }]);
+        return;
+      }
+
+      onChange(nextRows);
+    },
+    [onChange, effectiveRows.length]
+  );
+
   const {
     formState,
     handleFieldChange,
@@ -104,12 +147,28 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
     handleToggleRowActive,
   } = useRowsEditor({
     rows: effectiveRows,
-    onChange,
+    onChange: handleEditorChange,
     initialFormValues: INITIAL_CONTACT_FORM,
     idField: 'clientContactPersonId',
     rowName: 'Contact Person',
     validateRow: validateContact,
   });
+
+  // Keep refs synchronized with latest values on each render
+  formStateRef.current = formState;
+  editingRef.current = { isEditing, editingIndex };
+
+  const handleSetPrimary = (targetRowId) => {
+    const nextRows = effectiveRows.map((r, idx) => {
+      const key = r.clientContactPersonId || r.id || `clientContactPersonId_${idx}`;
+      return {
+        ...r,
+        isPrimary: key === targetRowId || r.clientContactPersonId === targetRowId || r.id === targetRowId,
+      };
+    });
+    onChange?.(nextRows);
+    toast.success('Primary contact updated');
+  };
 
   const handleConfirmSingleDelete = () => {
     if (!contactToDelete) return;
@@ -123,6 +182,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
       ...row,
       mobile1: row.mobile1 ? String(row.mobile1).replace(/\D/g, '').slice(-10) : '',
       mobile2: row.mobile2 ? String(row.mobile2).replace(/\D/g, '').slice(-10) : '',
+      isPrimary: Boolean(row.isPrimary),
       isActive: row.isActive !== false,
     });
   };
@@ -245,50 +305,65 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
             />
           </div>
 
-          {/* Contact Status Switch */}
-          <div className="flex flex-col justify-end pb-1.5">
-            <span className="mf-label block mb-1">Contact Status</span>
-            <div className="flex items-center gap-2.5">
+          {/* Primary Contact */}
+          <div>
+            <label className="mf-label" htmlFor="con-primary-switch">
+              Primary Contact
+            </label>
+            <div className="flex items-center gap-3 h-[42px]">
               <StatusSwitch
-                id="con-active-switch"
-                checked={formState.isActive !== false}
-                onChange={(checked) => handleFieldChange('isActive', checked)}
+                id="con-primary-switch"
+                checked={Boolean(formState.isPrimary)}
+                onChange={(checked) => handleFieldChange('isPrimary', checked)}
               />
               <span className="text-xs text-text-muted">
-                {formState.isActive !== false ? 'Active contact' : 'Inactive contact'}
+                {formState.isPrimary ? 'Primary contact person' : 'Secondary contact'}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
-          {isEditing && (
-            <CancelButton
-              size="sm"
-              onClick={handleCancelEdit}
-              className="text-xs shadow-2xs"
+        {/* Status Switch & Submit Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border/60">
+          <div className="flex items-center gap-3">
+            <StatusSwitch
+              id="con-active-switch"
+              checked={formState.isActive !== false}
+              onChange={(checked) => handleFieldChange('isActive', checked)}
             />
-          )}
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={handleAddOrUpdate}
-            className="text-xs font-semibold"
-          >
-            {isEditing ? (
-              <>
-                <IconCheck size={14} className="mr-1.5" />
-                Update Contact
-              </>
-            ) : (
-              <>
-                <IconAdd size={14} className="mr-1.5" />
-                Add Contact
-              </>
+            <span className="text-xs text-text-muted">
+              {formState.isActive !== false ? 'Active contact person' : 'Inactive contact record'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isEditing && (
+              <CancelButton
+                size="sm"
+                onClick={handleCancelEdit}
+                className="text-xs shadow-2xs"
+              />
             )}
-          </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleAddOrUpdate}
+              className="text-xs font-semibold cursor-pointer"
+            >
+              {isEditing ? (
+                <>
+                  <IconCheck size={14} className="mr-1.5" />
+                  Update Contact
+                </>
+              ) : (
+                <>
+                  <IconAdd size={14} className="mr-1.5" />
+                  Add Contact
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -339,7 +414,23 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                             <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-2xs font-bold">
                               {row.firstName ? row.firstName[0].toUpperCase() : 'U'}
                             </div>
-                            <span className="font-semibold text-heading text-xs">{fullName}</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-heading text-xs">{fullName}</span>
+                              {row.isPrimary ? (
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold bg-primary/15 text-primary border border-primary/30">
+                                  Primary
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetPrimary(rowId)}
+                                  title="Set this contact as primary"
+                                  className="text-2xs text-text-muted hover:text-primary transition-colors cursor-pointer hover:underline"
+                                >
+                                  Make Primary
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </Td>
 
@@ -459,7 +550,23 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                         <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-2xs font-bold">
                           {row.firstName ? row.firstName[0].toUpperCase() : 'U'}
                         </div>
-                        <span className="font-semibold text-heading text-xs">{fullName}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-heading text-xs">{fullName}</span>
+                          {row.isPrimary ? (
+                            <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-bold bg-primary/15 text-primary border border-primary/30">
+                              Primary
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimary(rowId)}
+                              title="Set this contact as primary"
+                              className="text-2xs text-text-muted hover:text-primary transition-colors cursor-pointer hover:underline"
+                            >
+                              Make Primary
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <span
                         className={[

@@ -138,12 +138,11 @@ export default function ClientEffectiveDatesPage() {
   // Latest previous effective date that new revisions cannot precede (same as VendorEffectiveDatesPage)
   const minAllowedEffectiveDate = useMemo(() => {
     const dates = versions
-      .filter((v) => (mode === 'EDIT' ? v.id !== selectedVersionId : true))
       .map((v) => (v.effectiveDate || '').slice(0, 10))
       .filter(Boolean);
     if (dates.length === 0) return null;
     return [...dates].sort().reverse()[0];
-  }, [versions, mode, selectedVersionId]);
+  }, [versions]);
 
   // Form State for EDIT or ADD
   const [formData, setFormData] = useState({
@@ -190,8 +189,8 @@ export default function ClientEffectiveDatesPage() {
     const items = Array.isArray(raw)
       ? raw
       : typeof raw === 'string' && raw.trim()
-      ? raw.split(',').map((s) => s.trim()).filter(Boolean)
-      : [];
+        ? raw.split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
 
     return items.map((val) => {
       const match = paymentTerms.find(
@@ -233,8 +232,8 @@ export default function ClientEffectiveDatesPage() {
     const selected = Array.isArray(formData.paymentTerms)
       ? formData.paymentTerms
       : formData.paymentTerms
-      ? [formData.paymentTerms]
-      : [];
+        ? [formData.paymentTerms]
+        : [];
 
     return selected.map((val) => {
       const match = paymentTerms.find(
@@ -394,7 +393,7 @@ export default function ClientEffectiveDatesPage() {
       });
       if (collision) {
         errors.effectiveDate = `A revision with effective date ${formatDateDisplay(enteredDate)} already exists.`;
-      } else if (minAllowedEffectiveDate && enteredDate < minAllowedEffectiveDate) {
+      } else if (mode === 'ADD' && minAllowedEffectiveDate && enteredDate < minAllowedEffectiveDate) {
         errors.effectiveDate = `Effective date cannot be earlier than previous effective date (${formatDateDisplay(minAllowedEffectiveDate)}).`;
       }
     }
@@ -431,22 +430,22 @@ export default function ClientEffectiveDatesPage() {
       const existingVersions = (Array.isArray(client.effectiveVersions) && client.effectiveVersions.length > 0)
         ? client.effectiveVersions
         : versions.map((v) => ({
-            id: v.id,
-            effectiveDate: v.effectiveDate,
-            companyName: v.companyName,
-            billingName: v.billingName,
-            contactTypeId: v.contactTypeId,
-            email: v.email,
-            gstNo: v.gstNo,
-            isActive: v.isActive,
-            paymentTerms: v.paymentTerms,
-            deliveryTerms: v.deliveryTerms,
-            comments: v.comments,
-            addresses: Array.isArray(v.addresses) ? [...v.addresses] : [],
-            contacts: Array.isArray(v.contacts) ? [...v.contacts] : [],
-            createdOn: v.createdOn || v.createdAt,
-            createdBy: v.createdBy || 'System',
-          }));
+          id: v.id,
+          effectiveDate: v.effectiveDate,
+          companyName: v.companyName,
+          billingName: v.billingName,
+          contactTypeId: v.contactTypeId,
+          email: v.email,
+          gstNo: v.gstNo,
+          isActive: v.isActive,
+          paymentTerms: v.paymentTerms,
+          deliveryTerms: v.deliveryTerms,
+          comments: v.comments,
+          addresses: Array.isArray(v.addresses) ? [...v.addresses] : [],
+          contacts: Array.isArray(v.contacts) ? [...v.contacts] : [],
+          createdOn: v.createdOn || v.createdAt,
+          createdBy: v.createdBy || 'System',
+        }));
 
       if (mode === 'EDIT') {
         // Update existing version entry
@@ -740,9 +739,8 @@ export default function ClientEffectiveDatesPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  client.isActive ? 'bg-success' : 'bg-danger'
-                }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${client.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                 aria-hidden="true"
               />
               {client.isActive ? 'Active' : 'Inactive'}
@@ -812,11 +810,10 @@ export default function ClientEffectiveDatesPage() {
                 <div
                   key={ver.id}
                   onClick={() => handleSelectView(ver)}
-                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${
-                    isSelected
-                      ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
-                      : 'bg-surface border-border hover:border-primary/40'
-                  }`}
+                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${isSelected
+                    ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
+                    : 'bg-surface border-border hover:border-primary/40'
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -846,11 +843,10 @@ export default function ClientEffectiveDatesPage() {
                         size="icon"
                         onClick={() => handleSelectView(ver)}
                         title="View this version"
-                        className={`h-7 w-7 ${
-                          isSelected && mode === 'VIEW'
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-text-muted hover:text-primary hover:bg-surface'
-                        }`}
+                        className={`h-7 w-7 ${isSelected && mode === 'VIEW'
+                          ? 'bg-primary/15 text-primary'
+                          : 'text-text-muted hover:text-primary hover:bg-surface'
+                          }`}
                       >
                         <IconView size={14} />
                       </Button>
@@ -861,11 +857,10 @@ export default function ClientEffectiveDatesPage() {
                           size="icon"
                           onClick={() => handleStartEdit(ver)}
                           title="Edit this version"
-                          className={`h-7 w-7 ${
-                            isSelected && mode === 'EDIT'
-                              ? 'bg-primary/15 text-primary'
-                              : 'text-text-muted hover:text-primary hover:bg-surface'
-                          }`}
+                          className={`h-7 w-7 ${isSelected && mode === 'EDIT'
+                            ? 'bg-primary/15 text-primary'
+                            : 'text-text-muted hover:text-primary hover:bg-surface'
+                            }`}
                         >
                           <IconEdit size={14} />
                         </Button>
@@ -909,9 +904,8 @@ export default function ClientEffectiveDatesPage() {
                             ? header.getResizeHandler()
                             : undefined
                         }
-                        className={`relative py-3.5 px-6 select-none bg-surface ${
-                          canSort ? 'cursor-pointer hover:bg-surface/80' : ''
-                        }`}
+                        className={`relative py-3.5 px-6 select-none bg-surface ${canSort ? 'cursor-pointer hover:bg-surface/80' : ''
+                          }`}
                       >
                         {header.isPlaceholder ? null : canSort ? (
                           <button
@@ -949,9 +943,8 @@ export default function ClientEffectiveDatesPage() {
                           </button>
                         ) : (
                           <div
-                            className={`select-none ${
-                              header.id === 'actions' ? 'text-right w-full pr-1' : ''
-                            }`}
+                            className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''
+                              }`}
                           >
                             {flexRender(
                               header.column.columnDef.header,
@@ -982,11 +975,10 @@ export default function ClientEffectiveDatesPage() {
                     <tr
                       key={row.id}
                       onClick={() => handleSelectView(row.original)}
-                      className={`cursor-pointer transition-colors duration-120 ${
-                        isSelected
-                          ? 'bg-primary/[0.06]'
-                          : 'hover:bg-surface/50'
-                      }`}
+                      className={`cursor-pointer transition-colors duration-120 ${isSelected
+                        ? 'bg-primary/[0.06]'
+                        : 'hover:bg-surface/50'
+                        }`}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <Td
@@ -1141,7 +1133,8 @@ export default function ClientEffectiveDatesPage() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-1">
                 {/* Payment Terms */}
                 <div className="space-y-1.5">
-                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
+                  {/* <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block"> */}
+                  <span className="view-field-label mf-detail-label">
                     Payment Terms
                   </span>
                   {selectedPaymentTermsList.length === 0 ? (
@@ -1181,7 +1174,8 @@ export default function ClientEffectiveDatesPage() {
 
                 {/* Delivery Terms */}
                 <div className="space-y-1.5">
-                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
+                  {/* <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block"> */}
+                  <span className="view-field-label mf-detail-label">
                     Delivery Terms
                   </span>
                   {selectedVersion.deliveryTerms ? (
@@ -1204,7 +1198,8 @@ export default function ClientEffectiveDatesPage() {
 
                 {/* Internal Comments */}
                 <div className="space-y-1.5">
-                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
+                  {/* <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block"> */}
+                  <span className="view-field-label mf-detail-label">
                     Internal Comments
                   </span>
                   {selectedVersion.comments ? (
@@ -1419,7 +1414,7 @@ export default function ClientEffectiveDatesPage() {
                   label="Effective Date"
                   required
                   name="effectiveDate"
-                  min={minAllowedEffectiveDate || undefined}
+                  min={mode === 'ADD' ? (minAllowedEffectiveDate || undefined) : undefined}
                   value={formData.effectiveDate}
                   onChange={(e) => handleFieldChange('effectiveDate', e.target ? e.target.value : e)}
                   error={formErrors.effectiveDate}
@@ -1429,7 +1424,6 @@ export default function ClientEffectiveDatesPage() {
                       ? 'Effective date cannot be changed for an existing revision.'
                       : (minAllowedEffectiveDate ? `Must be on or after ${formatDateDisplay(minAllowedEffectiveDate)}` : 'The date from which this new client version becomes active.')
                   }
-                  required
                 />
               </div>
             </div>

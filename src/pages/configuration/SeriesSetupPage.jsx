@@ -662,11 +662,10 @@ export default function SeriesSetupPage() {
                     return (
                       <div
                         key={ver.id}
-                        className={`p-3.5 sm:p-4 rounded-xl border transition-all space-y-3 ${
-                          statusInfo.isCurrent
-                            ? 'border-primary/40 bg-primary/5 shadow-2xs'
-                            : 'border-border bg-surface/40'
-                        }`}
+                        className={`p-3.5 sm:p-4 rounded-xl border transition-all space-y-3 ${statusInfo.isCurrent
+                          ? 'border-primary/40 bg-primary/5 shadow-2xs'
+                          : 'border-border bg-surface/40'
+                          }`}
                       >
                         {/* Header: Effective Date & Status Badge */}
                         <div className="flex items-center justify-between gap-2">
@@ -788,9 +787,8 @@ export default function SeriesSetupPage() {
                         return (
                           <tr
                             key={ver.id}
-                            className={`transition-colors hover:bg-surface/50 ${
-                              statusInfo.isCurrent ? 'bg-primary/5' : ''
-                            }`}
+                            className={`transition-colors hover:bg-surface/50 ${statusInfo.isCurrent ? 'bg-primary/5' : ''
+                              }`}
                           >
                             {/* Effective Date */}
                             <Td className="py-3.5 px-4 font-mono font-semibold text-heading tabular-nums whitespace-nowrap">
@@ -1006,7 +1004,8 @@ export default function SeriesSetupPage() {
                   <IconSparkles size={14} />
                 </div>
                 <div>
-                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
+                  {/* <span className="text-2xs font-semibold tracking-wider text-text-muted block"> */}
+                  <span className="view-field-label mf-detail-label">
                     Updated Number Preview
                   </span>
                   <span className="font-mono font-bold text-sm text-primary tabular-nums">
@@ -1080,7 +1079,8 @@ export default function SeriesSetupPage() {
               {/* Sample Number Highlight */}
               <div className="bg-bg p-3.5 rounded-xl border border-border flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-2xs text-text-muted font-bold uppercase tracking-wider">
+                  {/* <span className="text-2xs text-text-muted font-bold  tracking-wider"> */}
+                  <span className="view-field-label mf-detail-label">
                     Generated Sample Number
                   </span>
                   <span className="text-2xs font-mono text-text-muted">
@@ -1095,34 +1095,40 @@ export default function SeriesSetupPage() {
               {/* Specs Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Prefix</span>
+                  {/* <span className="text-2xs tracking-wider text-text-muted font-bold block">Prefix</span> */}
+                  <span className="view-field-label mf-detail-label">Prefix</span>
                   <span className="font-mono font-bold text-heading">{viewingVersion.prefix}</span>
                 </div>
 
                 <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Separator</span>
+                  {/* <span className="text-2xs tracking-wider text-text-muted font-bold block">Separator</span> */}
+                  <span className="view-field-label mf-detail-label">Separator</span>
                   <span className="font-mono text-heading">
                     {viewingVersion.separator === '' || viewingVersion.separator === 'None' ? 'None' : viewingVersion.separator}
                   </span>
                 </div>
 
                 <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Year Format</span>
+                  {/* <span className="text-2xs tracking-wider text-text-muted font-bold block">Year Format</span> */}
+                  <span className="view-field-label mf-detail-label">Year Format</span>
                   <span className="font-mono text-heading">{viewingVersion.yearFormat || 'None'}</span>
                 </div>
 
                 <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Number Length</span>
+                  {/* <span className="text-2xs tracking-wider text-text-muted font-bold block">Number Length</span> */}
+                  <span className="view-field-label mf-detail-label">Number Length</span>
                   <span className="font-mono text-heading tabular-nums">{viewingVersion.numberLength} digits</span>
                 </div>
 
                 <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Start Number</span>
+                  {/* <span className="text-2xs tracking-wider text-text-muted font-bold block">Start Number</span> */}
+                  <span className="view-field-label mf-detail-label">Start Number</span>
                   <span className="font-mono text-heading tabular-nums">{viewingVersion.startingNumber}</span>
                 </div>
 
                 <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                  <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">Reset Frequency</span>
+                  {/* <span className="text-2xs tracking-wider text-text-muted font-bold block">Reset Frequency</span> */}
+                  <span className="view-field-label mf-detail-label">Reset Frequency</span>
                   <span className="text-heading truncate block font-medium">{viewingVersion.resetCounter || 'Yearly'}</span>
                 </div>
               </div>

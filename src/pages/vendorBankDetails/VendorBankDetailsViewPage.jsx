@@ -232,11 +232,11 @@ export default function VendorBankDetailsViewPage() {
       const blob = new Blob(
         [
           `MicroFlat ERP Banking Document: ${att.documentName || 'Proof'}\n` +
-            `File: ${att.fileName || ''}\n` +
-            `Vendor: ${vendor?.vendorName || ''} (${vendor?.vendorCode || ''})\n` +
-            `Bank: ${selectedAccount?.bankName || ''}\n` +
-            `Account Number: ${selectedAccount?.accountNumber || ''}\n` +
-            `IFSC: ${selectedAccount?.ifscCode || ''}\n`,
+          `File: ${att.fileName || ''}\n` +
+          `Vendor: ${vendor?.vendorName || ''} (${vendor?.vendorCode || ''})\n` +
+          `Bank: ${selectedAccount?.bankName || ''}\n` +
+          `Account Number: ${selectedAccount?.accountNumber || ''}\n` +
+          `IFSC: ${selectedAccount?.ifscCode || ''}\n`,
         ],
         { type: 'text/plain;charset=utf-8' }
       );
@@ -339,11 +339,10 @@ export default function VendorBankDetailsViewPage() {
                 size="icon"
                 onClick={() => handleSelectAccount(accId)}
                 title={isSelected ? 'Currently viewing this bank account' : 'View this bank account'}
-                className={`h-7 w-7 rounded-lg transition-colors ${
-                  isSelected
-                    ? 'bg-primary/15 text-primary'
-                    : 'text-text-muted hover:text-primary hover:bg-surface'
-                }`}
+                className={`h-7 w-7 rounded-lg transition-colors ${isSelected
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-text-muted hover:text-primary hover:bg-surface'
+                  }`}
               >
                 <IconView size={15} />
               </Button>
@@ -432,9 +431,8 @@ export default function VendorBankDetailsViewPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  vendor.isActive !== false ? 'bg-success' : 'bg-danger'
-                }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${vendor.isActive !== false ? 'bg-success' : 'bg-danger'
+                  }`}
                 aria-hidden="true"
               />
               {vendor.isActive !== false ? 'Active' : 'Inactive'}
@@ -598,11 +596,10 @@ export default function VendorBankDetailsViewPage() {
                 <div
                   key={accId}
                   onClick={() => handleSelectAccount(accId)}
-                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${
-                    isSelected
-                      ? 'bg-primary/[0.08] border-primary ring-2 ring-primary/20 shadow-xs'
-                      : 'bg-surface border-border hover:border-primary/40'
-                  }`}
+                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${isSelected
+                    ? 'bg-primary/[0.08] border-primary ring-2 ring-primary/20 shadow-xs'
+                    : 'bg-surface border-border hover:border-primary/40'
+                    }`}
                 >
                   {/* Top line: Bank Name + Type Badge + Actions */}
                   <div className="flex items-start justify-between gap-2">
@@ -635,11 +632,10 @@ export default function VendorBankDetailsViewPage() {
                         size="icon"
                         onClick={() => handleSelectAccount(accId)}
                         title={isSelected ? 'Currently viewing this bank account' : 'View this bank account'}
-                        className={`h-7 w-7 rounded-lg transition-colors ${
-                          isSelected
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-text-muted hover:text-primary hover:bg-surface'
-                        }`}
+                        className={`h-7 w-7 rounded-lg transition-colors ${isSelected
+                          ? 'bg-primary/15 text-primary'
+                          : 'text-text-muted hover:text-primary hover:bg-surface'
+                          }`}
                       >
                         <IconView size={14} />
                       </Button>
@@ -694,9 +690,8 @@ export default function VendorBankDetailsViewPage() {
                             ? header.getResizeHandler()
                             : undefined
                         }
-                        className={`relative py-3.5 px-6 select-none bg-surface ${
-                          canSort ? 'cursor-pointer hover:bg-surface/80' : ''
-                        }`}
+                        className={`relative py-3.5 px-6 select-none bg-surface ${canSort ? 'cursor-pointer hover:bg-surface/80' : ''
+                          }`}
                       >
                         {header.isPlaceholder ? null : canSort ? (
                           <button
@@ -734,9 +729,8 @@ export default function VendorBankDetailsViewPage() {
                           </button>
                         ) : (
                           <div
-                            className={`select-none ${
-                              header.id === 'actions' ? 'text-right w-full pr-1' : ''
-                            }`}
+                            className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''
+                              }`}
                           >
                             {flexRender(
                               header.column.columnDef.header,
@@ -768,21 +762,19 @@ export default function VendorBankDetailsViewPage() {
                     <tr
                       key={row.id}
                       onClick={() => handleSelectAccount(accId)}
-                      className={`cursor-pointer transition-colors duration-150 select-none ${
-                        isSelected
-                          ? 'bg-primary/[0.08] font-semibold'
-                          : 'hover:bg-surface/70'
-                      }`}
+                      className={`cursor-pointer transition-colors duration-150 select-none ${isSelected
+                        ? 'bg-primary/[0.08] font-semibold'
+                        : 'hover:bg-surface/70'
+                        }`}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <Td
                           key={cell.id}
                           style={{ width: cell.column.getSize() }}
-                          className={`py-3.5 px-6 ${
-                            isSelected && cell.column.id === 'bankName'
-                              ? 'border-l-4 border-l-primary'
-                              : ''
-                          }`}
+                          className={`py-3.5 px-6 ${isSelected && cell.column.id === 'bankName'
+                            ? 'border-l-4 border-l-primary'
+                            : ''
+                            }`}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
@@ -881,7 +873,8 @@ export default function VendorBankDetailsViewPage() {
                 {/* Account Number with Reveal and Copy */}
                 <div>
                   <div className="space-y-1">
-                    <span className="text-2xs text-text-muted block uppercase tracking-wider font-medium">
+                    {/* <span className="text-2xs text-text-muted block  tracking-wider font-medium"> */}
+                    <span className="view-field-label mf-detail-label">
                       Account Number
                     </span>
                     <div className="flex items-center gap-1.5">
@@ -946,7 +939,8 @@ export default function VendorBankDetailsViewPage() {
                 {/* IFSC Code with Copy */}
                 <div>
                   <div className="space-y-1">
-                    <span className="text-2xs text-text-muted block uppercase tracking-wider font-medium">
+                    {/* <span className="text-2xs text-text-muted block tracking-wider font-medium"> */}
+                    <span className="view-field-label mf-detail-label">
                       IFSC Code
                     </span>
                     <div className="flex items-center gap-1.5">
@@ -1017,7 +1011,8 @@ export default function VendorBankDetailsViewPage() {
 
               <div className="space-y-3 pt-1">
                 <div className="space-y-1">
-                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
+                  {/* <span className="text-2xs font-semibold tracking-wider text-text-muted block"> */}
+                  <span className="view-field-label mf-detail-label">
                     Remarks & Payment Instructions
                   </span>
                   <div className="text-xs text-heading font-medium bg-surface/50 rounded-lg p-3.5 border border-border/60 whitespace-pre-line leading-relaxed">

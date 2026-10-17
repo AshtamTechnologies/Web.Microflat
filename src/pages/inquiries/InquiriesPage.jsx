@@ -117,8 +117,8 @@ export default function InquiriesPage() {
       /* 1. INQUIRY NO */
       columnHelper.accessor('InquiryNo', {
         header: 'INQUIRY NO',
-        minSize: 140,
-        size: 155,
+        minSize: 125,
+        size: 135,
         cell: (info) => {
           const row = info.row.original;
           return (
@@ -138,8 +138,8 @@ export default function InquiriesPage() {
         {
           id: 'customerContact',
           header: 'CUSTOMER / CONTACT',
-          minSize: 220,
-          size: 260,
+          minSize: 210,
+          size: 240,
           cell: (info) => {
             const row = info.row.original;
             return (
@@ -162,8 +162,8 @@ export default function InquiriesPage() {
       /* 3. SUBJECT */
       columnHelper.accessor('Subject', {
         header: 'SUBJECT',
-        minSize: 200,
-        size: 250,
+        minSize: 180,
+        size: 220,
         cell: (info) => {
           const subject = info.getValue() || info.row.original.items?.[0]?.itemName || info.row.original.items?.[0]?.specification || '—';
           return (
@@ -180,8 +180,8 @@ export default function InquiriesPage() {
       /* 4. REGION */
       columnHelper.accessor('RegionId', {
         header: 'REGION',
-        minSize: 130,
-        size: 150,
+        minSize: 120,
+        size: 140,
         cell: (info) => {
           const regionId = info.getValue();
           const regionLabel = getRegionName(regionId);
@@ -196,8 +196,8 @@ export default function InquiriesPage() {
       /* 5. PRIORITY */
       columnHelper.accessor('Priority', {
         header: 'PRIORITY',
-        minSize: 105,
-        size: 115,
+        minSize: 95,
+        size: 105,
         cell: (info) => {
           const priority = info.getValue() || 'Medium';
           return (
@@ -211,8 +211,8 @@ export default function InquiriesPage() {
       /* 6. STATUS */
       columnHelper.accessor('StatusId', {
         header: 'STATUS',
-        minSize: 125,
-        size: 140,
+        minSize: 120,
+        size: 130,
         cell: (info) => {
           const statusId = info.getValue() || 'New';
           const statusInfo = getStatusOption(statusId);
@@ -230,8 +230,8 @@ export default function InquiriesPage() {
       /* 7. ASSIGNED TO */
       columnHelper.accessor('AssignedTo', {
         header: 'ASSIGNED TO',
-        minSize: 140,
-        size: 160,
+        minSize: 130,
+        size: 145,
         cell: (info) => {
           const assignedId = info.getValue();
           const resolvedName = resolveUserName(assignedId);
@@ -250,8 +250,8 @@ export default function InquiriesPage() {
       /* 8. CREATED ON */
       columnHelper.accessor('CreatedOn', {
         header: 'CREATED ON',
-        minSize: 140,
-        size: 150,
+        minSize: 115,
+        size: 125,
         cell: (info) => {
           const createdOn = info.getValue();
           return (
@@ -266,8 +266,8 @@ export default function InquiriesPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 100,
-        size: 110,
+        minSize: 140,
+        size: 150,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -277,8 +277,9 @@ export default function InquiriesPage() {
             <TableActions
               onView={() => navigate(`/inquiries/${row.id || row.InquiryId}`)}
               onEdit={() => navigate(`/inquiries/${row.id || row.InquiryId}/edit`)}
-              viewTitle="View Inquiry Details"
-              editTitle="Edit Inquiry"
+              viewTooltip="View Inquiry Details"
+              editTooltip="Edit Inquiry"
+              className="justify-end shrink-0"
               extraActions={
                 <Button
                   type="button"
@@ -286,7 +287,7 @@ export default function InquiriesPage() {
                   size="icon"
                   onClick={() => setAssignModalInquiry(row)}
                   title={row.AssignedTo ? 'Reassign Inquiry' : 'Assign Inquiry'}
-                  className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface transition-colors"
+                  className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface transition-colors shrink-0"
                 >
                   <IconUserPlus size={15} aria-hidden="true" />
                 </Button>

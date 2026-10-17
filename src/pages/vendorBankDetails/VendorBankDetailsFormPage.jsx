@@ -712,10 +712,10 @@ export default function VendorBankDetailsFormPage() {
             <SaveButton
               onClick={handleSaveChanges}
               loading={isSubmitting}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !selectedVendorId}
               size="sm"
             >
-              {isEditMode ? 'Save Changes' : 'Save'}
+              {isEditMode ? 'Save Changes' : 'Save Bank Account'}
             </SaveButton>
           </div>
         }
@@ -849,380 +849,380 @@ export default function VendorBankDetailsFormPage() {
         </div>
 
         <div className="space-y-5">
-            {/* Form Fields Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Account Holder Name */}
-              <div className="lg:col-span-2">
-                <Input
-                  label="Account Holder Name"
-                  id="bank-accountHolderName"
-                  required
-                  maxLength={150}
-                  value={formState.accountHolderName || ''}
-                  onChange={(e) => handleFieldChange('accountHolderName', e.target.value)}
-                  placeholder="e.g. Apex Precision Castings Pvt Ltd"
-                  error={fieldErrors.accountHolderName}
-                />
-              </div>
-
-              {/* Account Type with SearchableSelect */}
-              <div>
-                <SearchableSelect
-                  label="Account Type"
-                  id="bank-accountType"
-                  required
-                  options={ACCOUNT_TYPE_OPTIONS}
-                  value={formState.accountType || 'Current'}
-                  onChange={(e) => handleFieldChange('accountType', e.target.value)}
-                  placeholder="Select account type..."
-                  searchPlaceholder="Search account types..."
-                  emptyText="No matching account types"
-                  error={fieldErrors.accountType}
-                />
-              </div>
-
-              {/* Bank Name */}
-              <div>
-                <Input
-                  label="Bank Name"
-                  id="bank-bankName"
-                  required
-                  maxLength={100}
-                  value={formState.bankName || ''}
-                  onChange={(e) => handleFieldChange('bankName', e.target.value)}
-                  placeholder="e.g. HDFC Bank"
-                  error={fieldErrors.bankName}
-                />
-              </div>
-
-              {/* Branch Name */}
-              <div>
-                <Input
-                  label="Branch Name"
-                  id="bank-branchName"
-                  required
-                  maxLength={100}
-                  value={formState.branchName || ''}
-                  onChange={(e) => handleFieldChange('branchName', e.target.value)}
-                  placeholder="e.g. GIDC Industrial Estate Branch"
-                  error={fieldErrors.branchName}
-                />
-              </div>
-
-              {/* Account Number */}
-              <div>
-                <Input
-                  label="Account Number"
-                  id="bank-accountNumber"
-                  type={showAccountNumber ? 'text' : 'password'}
-                  required
-                  maxLength={20}
-                  value={formState.accountNumber || ''}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '');
-                    handleFieldChange('accountNumber', val);
-                  }}
-                  placeholder="6 to 20 digits"
-                  className="font-mono tabular-nums"
-                  error={fieldErrors.accountNumber}
-                  rightElement={
-                    <button
-                      type="button"
-                      onClick={() => setShowAccountNumber((prev) => !prev)}
-                      className="text-text-muted hover:text-heading p-1 rounded transition-colors focus:outline-none cursor-pointer"
-                      title={showAccountNumber ? 'Hide account number' : 'Show account number'}
-                      aria-label={showAccountNumber ? 'Hide account number' : 'Show account number'}
-                    >
-                      {showAccountNumber ? <IconEyeOff size={16} /> : <IconView size={16} />}
-                    </button>
-                  }
-                />
-              </div>
-
-              {/* Confirm Account Number */}
-              <div>
-                <Input
-                  label="Confirm Account Number"
-                  id="bank-confirmAccountNumber"
-                  type={showConfirmAccountNumber ? 'text' : 'password'}
-                  required
-                  maxLength={20}
-                  value={formState.confirmAccountNumber || ''}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '');
-                    handleFieldChange('confirmAccountNumber', val);
-                  }}
-                  placeholder="Re-enter account number"
-                  className="font-mono tabular-nums"
-                  error={fieldErrors.confirmAccountNumber}
-                  rightElement={
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmAccountNumber((prev) => !prev)}
-                      className="text-text-muted hover:text-heading p-1 rounded transition-colors focus:outline-none cursor-pointer"
-                      title={showConfirmAccountNumber ? 'Hide confirm account number' : 'Show confirm account number'}
-                      aria-label={showConfirmAccountNumber ? 'Hide confirm account number' : 'Show confirm account number'}
-                    >
-                      {showConfirmAccountNumber ? <IconEyeOff size={16} /> : <IconView size={16} />}
-                    </button>
-                  }
-                />
-              </div>
-
-              {/* IFSC Code */}
-              <div>
-                <Input
-                  label={`IFSC Code ${currentVendor?.countryId === 'IN' ? '' : '(Optional)'}`}
-                  id="bank-ifscCode"
-                  required={currentVendor?.countryId === 'IN'}
-                  maxLength={11}
-                  value={formState.ifscCode || ''}
-                  onChange={(e) => handleFieldChange('ifscCode', e.target.value.toUpperCase())}
-                  placeholder="e.g. HDFC0001234"
-                  className="font-mono tabular-nums uppercase"
-                  error={fieldErrors.ifscCode}
-                />
-              </div>
-
-              {/* MICR Code (Optional) */}
-              <div>
-                <Input
-                  label="MICR Code (Optional)"
-                  id="bank-micrCode"
-                  maxLength={9}
-                  value={formState.micrCode || ''}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '');
-                    handleFieldChange('micrCode', val);
-                  }}
-                  placeholder="9-digit MICR code (e.g. 400240012)"
-                  className="font-mono tabular-nums"
-                  error={fieldErrors.micrCode}
-                />
-              </div>
-
-              {/* SWIFT / BIC */}
-              <div>
-                <Input
-                  label="SWIFT / BIC Code (Optional)"
-                  id="bank-swiftCode"
-                  maxLength={11}
-                  value={formState.swiftCode || ''}
-                  onChange={(e) => handleFieldChange('swiftCode', e.target.value.toUpperCase())}
-                  placeholder="8 or 11 characters (e.g. HDFCINBB)"
-                  className="font-mono tabular-nums uppercase"
-                  error={fieldErrors.swiftCode}
-                />
-              </div>
-
-              {/* IBAN (Optional) */}
-              <div>
-                <Input
-                  label="IBAN (Optional / International)"
-                  id="bank-iban"
-                  maxLength={34}
-                  value={formState.iban || ''}
-                  onChange={(e) => handleFieldChange('iban', e.target.value.toUpperCase())}
-                  placeholder="e.g. GB29NWBK60161331926819"
-                  className="font-mono tabular-nums uppercase"
-                  error={fieldErrors.iban}
-                />
-              </div>
-
-              {/* Branch Address */}
-              <div className="lg:col-span-2">
-                <Input
-                  label="Branch Address (Optional)"
-                  id="bank-branchAddress"
-                  maxLength={250}
-                  value={formState.branchAddress || ''}
-                  onChange={(e) => handleFieldChange('branchAddress', e.target.value)}
-                  placeholder="e.g. Floor 2, Commercial Tower, MG Road..."
-                  error={fieldErrors.branchAddress}
-                />
-              </div>
-
-              {/* Remarks */}
-              <div className="lg:col-span-2">
-                <Input
-                  label="Remarks (Optional)"
-                  id="bank-remarks"
-                  maxLength={250}
-                  value={formState.remarks || ''}
-                  onChange={(e) => handleFieldChange('remarks', e.target.value)}
-                  placeholder="e.g. Operational bank account for vendor disbursements"
-                  error={fieldErrors.remarks}
-                />
-              </div>
-
-              {/* Account Status Switch */}
-              <div className="flex flex-col gap-1.5 pt-2">
-                <span className="mf-label text-2xs uppercase tracking-wider">Account Status</span>
-                <div className="flex items-center gap-3">
-                  <StatusSwitch
-                    id="bank-isActive-switch"
-                    checked={Boolean(formState.isActive)}
-                    onChange={(checked) => handleFieldChange('isActive', Boolean(checked))}
-                  />
-                  <span className="text-xs text-text-muted">
-                    {formState.isActive ? 'Active for vendor payouts' : 'Inactive account record'}
-                  </span>
-                </div>
-              </div>
+          {/* Form Fields Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Account Holder Name */}
+            <div className="lg:col-span-2">
+              <Input
+                label="Account Holder Name"
+                id="bank-accountHolderName"
+                required
+                maxLength={150}
+                value={formState.accountHolderName || ''}
+                onChange={(e) => handleFieldChange('accountHolderName', e.target.value)}
+                placeholder="e.g. Apex Precision Castings Pvt Ltd"
+                error={fieldErrors.accountHolderName}
+              />
             </div>
 
-            {/* ── Attachment & Supporting Documents (Optional Field) ── */}
-            <div className="p-4 rounded-xl border border-border bg-surface/40 space-y-3">
-              <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
-                <div className="flex items-center gap-2">
-                  <IconAttachment size={15} className="text-primary" />
-                  <span className="text-xs font-semibold text-heading uppercase tracking-wider">
-                    Bank Proof / Attachment (Optional)
-                  </span>
-                </div>
-                <span className="text-2xs text-text-muted">
-                  Upload cancelled cheque, passbook, or bank mandate letter
+            {/* Account Type with SearchableSelect */}
+            <div>
+              <SearchableSelect
+                label="Account Type"
+                id="bank-accountType"
+                required
+                options={ACCOUNT_TYPE_OPTIONS}
+                value={formState.accountType || 'Current'}
+                onChange={(e) => handleFieldChange('accountType', e.target.value)}
+                placeholder="Select account type..."
+                searchPlaceholder="Search account types..."
+                emptyText="No matching account types"
+                error={fieldErrors.accountType}
+              />
+            </div>
+
+            {/* Bank Name */}
+            <div>
+              <Input
+                label="Bank Name"
+                id="bank-bankName"
+                required
+                maxLength={100}
+                value={formState.bankName || ''}
+                onChange={(e) => handleFieldChange('bankName', e.target.value)}
+                placeholder="e.g. HDFC Bank"
+                error={fieldErrors.bankName}
+              />
+            </div>
+
+            {/* Branch Name */}
+            <div>
+              <Input
+                label="Branch Name"
+                id="bank-branchName"
+                required
+                maxLength={100}
+                value={formState.branchName || ''}
+                onChange={(e) => handleFieldChange('branchName', e.target.value)}
+                placeholder="e.g. GIDC Industrial Estate Branch"
+                error={fieldErrors.branchName}
+              />
+            </div>
+
+            {/* Account Number */}
+            <div>
+              <Input
+                label="Account Number"
+                id="bank-accountNumber"
+                type={showAccountNumber ? 'text' : 'password'}
+                required
+                maxLength={20}
+                value={formState.accountNumber || ''}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  handleFieldChange('accountNumber', val);
+                }}
+                placeholder="6 to 20 digits"
+                className="font-mono tabular-nums"
+                error={fieldErrors.accountNumber}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowAccountNumber((prev) => !prev)}
+                    className="text-text-muted hover:text-heading p-1 rounded transition-colors focus:outline-none cursor-pointer"
+                    title={showAccountNumber ? 'Hide account number' : 'Show account number'}
+                    aria-label={showAccountNumber ? 'Hide account number' : 'Show account number'}
+                  >
+                    {showAccountNumber ? <IconEyeOff size={16} /> : <IconView size={16} />}
+                  </button>
+                }
+              />
+            </div>
+
+            {/* Confirm Account Number */}
+            <div>
+              <Input
+                label="Confirm Account Number"
+                id="bank-confirmAccountNumber"
+                type={showConfirmAccountNumber ? 'text' : 'password'}
+                required
+                maxLength={20}
+                value={formState.confirmAccountNumber || ''}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  handleFieldChange('confirmAccountNumber', val);
+                }}
+                placeholder="Re-enter account number"
+                className="font-mono tabular-nums"
+                error={fieldErrors.confirmAccountNumber}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmAccountNumber((prev) => !prev)}
+                    className="text-text-muted hover:text-heading p-1 rounded transition-colors focus:outline-none cursor-pointer"
+                    title={showConfirmAccountNumber ? 'Hide confirm account number' : 'Show confirm account number'}
+                    aria-label={showConfirmAccountNumber ? 'Hide confirm account number' : 'Show confirm account number'}
+                  >
+                    {showConfirmAccountNumber ? <IconEyeOff size={16} /> : <IconView size={16} />}
+                  </button>
+                }
+              />
+            </div>
+
+            {/* IFSC Code */}
+            <div>
+              <Input
+                label={`IFSC Code ${currentVendor?.countryId === 'IN' ? '' : '(Optional)'}`}
+                id="bank-ifscCode"
+                required={currentVendor?.countryId === 'IN'}
+                maxLength={11}
+                value={formState.ifscCode || ''}
+                onChange={(e) => handleFieldChange('ifscCode', e.target.value.toUpperCase())}
+                placeholder="e.g. HDFC0001234"
+                className="font-mono tabular-nums uppercase"
+                error={fieldErrors.ifscCode}
+              />
+            </div>
+
+            {/* MICR Code (Optional) */}
+            <div>
+              <Input
+                label="MICR Code (Optional)"
+                id="bank-micrCode"
+                maxLength={9}
+                value={formState.micrCode || ''}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  handleFieldChange('micrCode', val);
+                }}
+                placeholder="9-digit MICR code (e.g. 400240012)"
+                className="font-mono tabular-nums"
+                error={fieldErrors.micrCode}
+              />
+            </div>
+
+            {/* SWIFT / BIC */}
+            <div>
+              <Input
+                label="SWIFT / BIC Code (Optional)"
+                id="bank-swiftCode"
+                maxLength={11}
+                value={formState.swiftCode || ''}
+                onChange={(e) => handleFieldChange('swiftCode', e.target.value.toUpperCase())}
+                placeholder="8 or 11 characters (e.g. HDFCINBB)"
+                className="font-mono tabular-nums uppercase"
+                error={fieldErrors.swiftCode}
+              />
+            </div>
+
+            {/* IBAN (Optional) */}
+            <div>
+              <Input
+                label="IBAN (Optional / International)"
+                id="bank-iban"
+                maxLength={34}
+                value={formState.iban || ''}
+                onChange={(e) => handleFieldChange('iban', e.target.value.toUpperCase())}
+                placeholder="e.g. GB29NWBK60161331926819"
+                className="font-mono tabular-nums uppercase"
+                error={fieldErrors.iban}
+              />
+            </div>
+
+            {/* Branch Address */}
+            <div className="lg:col-span-2">
+              <Input
+                label="Branch Address (Optional)"
+                id="bank-branchAddress"
+                maxLength={250}
+                value={formState.branchAddress || ''}
+                onChange={(e) => handleFieldChange('branchAddress', e.target.value)}
+                placeholder="e.g. Floor 2, Commercial Tower, MG Road..."
+                error={fieldErrors.branchAddress}
+              />
+            </div>
+
+            {/* Remarks */}
+            <div className="lg:col-span-2">
+              <Input
+                label="Remarks (Optional)"
+                id="bank-remarks"
+                maxLength={250}
+                value={formState.remarks || ''}
+                onChange={(e) => handleFieldChange('remarks', e.target.value)}
+                placeholder="e.g. Operational bank account for vendor disbursements"
+                error={fieldErrors.remarks}
+              />
+            </div>
+
+            {/* Account Status Switch */}
+            <div className="flex flex-col gap-1.5 pt-2">
+              <span className="mf-label text-2xs uppercase tracking-wider">Account Status</span>
+              <div className="flex items-center gap-3">
+                <StatusSwitch
+                  id="bank-isActive-switch"
+                  checked={Boolean(formState.isActive)}
+                  onChange={(checked) => handleFieldChange('isActive', Boolean(checked))}
+                />
+                <span className="text-xs text-text-muted">
+                  {formState.isActive ? 'Active for vendor payouts' : 'Inactive account record'}
                 </span>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-                {/* Document Type Selector with SearchableSelect */}
-                <div className="md:col-span-1 space-y-1">
-                  <SearchableSelect
-                    label="Document Type"
-                    id="bank-doc-type"
-                    options={BANK_DOCUMENT_TYPE_OPTIONS}
-                    value={attDocType}
-                    onChange={(e) => setAttDocType(e.target.value)}
-                    placeholder="Select document type..."
-                    searchPlaceholder="Search document types..."
-                    emptyText="No document types"
-                  />
-                  <p className="text-2xs text-text-muted mt-1">
-                    Select category before choosing your file.
-                  </p>
-                </div>
-
-                {/* File Dropzone */}
-                <div className="md:col-span-2">
-                  <span className="mf-label block mb-2">Upload Bank Document</span>
-                  <div
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsDraggingFile(true);
-                    }}
-                    onDragLeave={() => setIsDraggingFile(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setIsDraggingFile(false);
-                      handleFilesUpload(e.dataTransfer.files);
-                    }}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={[
-                      'border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200',
-                      isDraggingFile
-                        ? 'border-primary bg-primary/10 scale-[0.99]'
-                        : 'border-border hover:border-primary/60 bg-bg hover:bg-surface/60',
-                    ].join(' ')}
-                  >
-                    {/* Native file input hidden for custom drag-drop styling */}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*"
-                      onChange={(e) => {
-                        handleFilesUpload(e.target.files);
-                        e.target.value = '';
-                      }}
-                      className="hidden"
-                    />
-                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1.5">
-                      <IconUpload size={17} />
-                    </div>
-                    <p className="text-xs font-medium text-heading">
-                      <span className="text-primary hover:underline font-semibold">
-                        Click to browse file
-                      </span>{' '}
-                      or drag & drop here
-                    </p>
-                    <p className="text-2xs text-text-muted mt-0.5">
-                      Accepted: <strong className="text-heading font-medium">PDF</strong> or{' '}
-                      <strong className="text-heading font-medium">Images (PNG, JPG, WEBP)</strong>{' '}
-                      (Max 10MB)
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* List of Attached Documents for this Account */}
-              {Array.isArray(formState.attachments) && formState.attachments.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-border/60">
-                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
-                    Attached Files ({formState.attachments.length})
-                  </span>
-                  <div className="space-y-1.5">
-                    {formState.attachments.map((att) => (
-                      <div
-                        key={att.id}
-                        className="p-2.5 rounded-lg border border-border bg-surface flex items-center justify-between gap-3 text-xs hover:border-primary/30 transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="p-1.5 rounded-md bg-bg border border-border shrink-0">
-                            {getFileIcon(att.fileName, att.fileType)}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-heading truncate">
-                                {att.documentName}
-                              </span>
-                              <Badge variant="neutral" size="sm" className="font-mono text-2xs">
-                                {att.fileName}
-                              </Badge>
-                            </div>
-                            <p className="text-2xs text-text-muted mt-0.5 font-mono">
-                              {att.fileSize || '1 file'} • Uploaded {formatDate(att.uploadedAt)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <IconButton
-                          icon={IconDelete}
-                          size="sm"
-                          variant="ghost"
-                          title="Remove attachment"
-                          aria-label="Remove attachment"
-                          onClick={() => handleRemoveAttachment(att.id)}
-                          className="hover:text-danger hover:bg-danger/10 shrink-0"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/60">
-              <CancelButton
-                size="sm"
-                onClick={handleCancel}
-                className="text-xs shadow-2xs"
-              />
-              <SaveButton
-                type="button"
-                size="sm"
-                onClick={handleFormActionClick}
-                disabled={isSubmitting || !selectedVendorId}
-                loading={isSubmitting}
-                loadingText="Saving..."
-                title={!selectedVendorId ? 'Please select a vendor first' : undefined}
-                className="text-xs font-semibold shadow-2xs"
-              >
-                {isEditing ? 'Save Changes' : 'Save Bank Account'}
-              </SaveButton>
             </div>
           </div>
+
+          {/* ── Attachment & Supporting Documents (Optional Field) ── */}
+          <div className="p-4 rounded-xl border border-border bg-surface/40 space-y-3">
+            <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
+              <div className="flex items-center gap-2">
+                <IconAttachment size={15} className="text-primary" />
+                <span className="text-xs font-semibold text-heading  tracking-wider">
+                  Bank Proof / Attachment (Optional)
+                </span>
+              </div>
+              <span className="text-2xs text-text-muted">
+                Upload cancelled cheque, passbook, or bank mandate letter
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+              {/* Document Type Selector with SearchableSelect */}
+              <div className="md:col-span-1 space-y-1">
+                <SearchableSelect
+                  label="Document Type"
+                  id="bank-doc-type"
+                  options={BANK_DOCUMENT_TYPE_OPTIONS}
+                  value={attDocType}
+                  onChange={(e) => setAttDocType(e.target.value)}
+                  placeholder="Select document type..."
+                  searchPlaceholder="Search document types..."
+                  emptyText="No document types"
+                />
+                <p className="text-2xs text-text-muted mt-1">
+                  Select category before choosing your file.
+                </p>
+              </div>
+
+              {/* File Dropzone */}
+              <div className="md:col-span-2">
+                <span className="mf-label block mb-2">Upload Bank Document</span>
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingFile(true);
+                  }}
+                  onDragLeave={() => setIsDraggingFile(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingFile(false);
+                    handleFilesUpload(e.dataTransfer.files);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={[
+                    'border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200',
+                    isDraggingFile
+                      ? 'border-primary bg-primary/10 scale-[0.99]'
+                      : 'border-border hover:border-primary/60 bg-bg hover:bg-surface/60',
+                  ].join(' ')}
+                >
+                  {/* Native file input hidden for custom drag-drop styling */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*"
+                    onChange={(e) => {
+                      handleFilesUpload(e.target.files);
+                      e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1.5">
+                    <IconUpload size={17} />
+                  </div>
+                  <p className="text-xs font-medium text-heading">
+                    <span className="text-primary hover:underline font-semibold">
+                      Click to browse file
+                    </span>{' '}
+                    or drag & drop here
+                  </p>
+                  <p className="text-2xs text-text-muted mt-0.5">
+                    Accepted: <strong className="text-heading font-medium">PDF</strong> or{' '}
+                    <strong className="text-heading font-medium">Images (PNG, JPG, WEBP)</strong>{' '}
+                    (Max 10MB)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* List of Attached Documents for this Account */}
+            {Array.isArray(formState.attachments) && formState.attachments.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-border/60">
+                <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
+                  Attached Files ({formState.attachments.length})
+                </span>
+                <div className="space-y-1.5">
+                  {formState.attachments.map((att) => (
+                    <div
+                      key={att.id}
+                      className="p-2.5 rounded-lg border border-border bg-surface flex items-center justify-between gap-3 text-xs hover:border-primary/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 rounded-md bg-bg border border-border shrink-0">
+                          {getFileIcon(att.fileName, att.fileType)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-heading truncate">
+                              {att.documentName}
+                            </span>
+                            <Badge variant="neutral" size="sm" className="font-mono text-2xs">
+                              {att.fileName}
+                            </Badge>
+                          </div>
+                          <p className="text-2xs text-text-muted mt-0.5 font-mono">
+                            {att.fileSize || '1 file'} • Uploaded {formatDate(att.uploadedAt)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <IconButton
+                        icon={IconDelete}
+                        size="sm"
+                        variant="ghost"
+                        title="Remove attachment"
+                        aria-label="Remove attachment"
+                        onClick={() => handleRemoveAttachment(att.id)}
+                        className="hover:text-danger hover:bg-danger/10 shrink-0"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/60">
+            <CancelButton
+              size="sm"
+              onClick={handleCancel}
+              className="text-xs shadow-2xs"
+            />
+            <SaveButton
+              type="button"
+              size="sm"
+              onClick={handleFormActionClick}
+              disabled={isSubmitting || !selectedVendorId}
+              loading={isSubmitting}
+              loadingText="Saving..."
+              title={!selectedVendorId ? 'Please select a vendor first' : undefined}
+              className="text-xs font-semibold shadow-2xs"
+            >
+              {isEditing ? 'Save Changes' : 'Save Changes'}
+            </SaveButton>
+          </div>
+        </div>
       </Card>
 
       {/* ── 3. Bank Accounts History Grid Card ── */}
@@ -1439,8 +1439,8 @@ export default function VendorBankDetailsFormPage() {
                               {row.updatedAt
                                 ? formatDate(row.updatedAt)
                                 : row.createdAt
-                                ? formatDate(row.createdAt)
-                                : 'Just now'}
+                                  ? formatDate(row.createdAt)
+                                  : 'Just now'}
                             </span>
                             <span className="text-2xs text-text-muted/80 font-sans mt-0.5 truncate">
                               by {row.updatedBy || row.createdBy || 'Ian Chesnut'}
@@ -1677,11 +1677,10 @@ export default function VendorBankDetailsFormPage() {
         title="Bank Account Attachments"
         subtitle={
           viewingAttachmentsRow
-            ? `${viewingAttachmentsRow.bankName} • Account ${
-                viewingAttachmentsRow.accountNumber
-                  ? '•••• ' + String(viewingAttachmentsRow.accountNumber).slice(-4)
-                  : ''
-              }`
+            ? `${viewingAttachmentsRow.bankName} • Account ${viewingAttachmentsRow.accountNumber
+              ? '•••• ' + String(viewingAttachmentsRow.accountNumber).slice(-4)
+              : ''
+            }`
             : ''
         }
         icon={IconAttachment}
@@ -1689,8 +1688,8 @@ export default function VendorBankDetailsFormPage() {
       >
         <div className="space-y-4">
           {viewingAttachmentsRow &&
-          Array.isArray(viewingAttachmentsRow.attachments) &&
-          viewingAttachmentsRow.attachments.length > 0 ? (
+            Array.isArray(viewingAttachmentsRow.attachments) &&
+            viewingAttachmentsRow.attachments.length > 0 ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs text-text-muted pb-2 border-b border-border">
                 <span className="font-medium text-heading">

@@ -39,6 +39,8 @@ export function useClients() {
               paymentTerms: activeVersion.paymentTerms || c.paymentTerms,
               deliveryTerms: activeVersion.deliveryTerms || c.deliveryTerms,
               comments: activeVersion.comments || c.comments,
+              contacts: activeVersion.contacts || c.contacts || [],
+              addresses: activeVersion.addresses || c.addresses || [],
             }
           : {
               effectiveDate: effDate,

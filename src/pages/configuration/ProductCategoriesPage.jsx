@@ -423,9 +423,8 @@ export default function ProductCategoriesPage() {
                   />
                 )}
                 <span
-                  className={`text-sm font-medium truncate ${
-                    cat.isActive ? 'text-heading' : 'text-text-muted line-through'
-                  }`}
+                  className={`text-sm font-medium truncate ${cat.isActive ? 'text-heading' : 'text-text-muted line-through'
+                    }`}
                   title={cat.categoryName}
                 >
                   {cat.categoryName}
@@ -463,9 +462,8 @@ export default function ProductCategoriesPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isActive ? 'bg-success' : 'bg-danger'
-                }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                 aria-hidden="true"
               />
               {isActive ? 'Active' : 'Inactive'}
@@ -579,45 +577,44 @@ export default function ProductCategoriesPage() {
           />
         </div>
 
-          {/* Status Filter Chips & Expand Controls */}
-          <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5">
-            <div className="flex items-center p-1 bg-surface rounded-lg border border-border">
-              {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
-                    statusFilter === status
-                      ? 'bg-bg text-heading shadow-2xs font-semibold'
-                      : 'text-text-muted hover:text-text'
+        {/* Status Filter Chips & Expand Controls */}
+        <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5">
+          <div className="flex items-center p-1 bg-surface rounded-lg border border-border">
+            {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setStatusFilter(status)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${statusFilter === status
+                  ? 'bg-bg text-heading shadow-2xs font-semibold'
+                  : 'text-text-muted hover:text-text'
                   }`}
-                >
-                  {status.toLowerCase()}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-1.5 border-l border-border pl-2.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={expandAll}
               >
-                Expand All
-              </Button>
-              <span className="text-text-muted/40">•</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={collapseAll}
-              >
-                Collapse
-              </Button>
-            </div>
+                {status.toLowerCase()}
+              </button>
+            ))}
           </div>
+
+          <div className="flex items-center gap-1.5 border-l border-border pl-2.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={expandAll}
+            >
+              Expand All
+            </Button>
+            <span className="text-text-muted/40">•</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={collapseAll}
+            >
+              Collapse
+            </Button>
+          </div>
+        </div>
       </FilterBar>
 
       {/* ── Desktop View (md+): Hierarchical Resizable Table ── */}
@@ -645,9 +642,8 @@ export default function ProductCategoriesPage() {
                       }
                     >
                       <div
-                        className={`flex items-center gap-1.5 ${
-                          header.column.getCanSort() ? 'cursor-pointer select-none' : ''
-                        }`}
+                        className={`flex items-center gap-1.5 ${header.column.getCanSort() ? 'cursor-pointer select-none' : ''
+                          }`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <span className="truncate">
@@ -788,9 +784,8 @@ export default function ProductCategoriesPage() {
                   ].join(' ')}
                 >
                   <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      cat.isActive ? 'bg-success' : 'bg-danger'
-                    }`}
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${cat.isActive ? 'bg-success' : 'bg-danger'
+                      }`}
                     aria-hidden="true"
                   />
                   {cat.isActive ? 'Active' : 'Inactive'}
@@ -959,7 +954,7 @@ export default function ProductCategoriesPage() {
               disabled={isSubmitting}
               className="justify-center font-semibold shadow-2xs"
             >
-              {editingCategory ? 'Save Changes' : 'Create Category'}
+              {editingCategory ? 'Save Changes' : 'Save Category'}
             </SaveButton>
           </div>
         </form>
@@ -996,9 +991,8 @@ export default function ProductCategoriesPage() {
                 ].join(' ')}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    viewingCategory.isActive ? 'bg-success' : 'bg-danger'
-                  }`}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${viewingCategory.isActive ? 'bg-success' : 'bg-danger'
+                    }`}
                   aria-hidden="true"
                 />
                 {viewingCategory.isActive ? 'Active' : 'Inactive'}
@@ -1008,7 +1002,8 @@ export default function ProductCategoriesPage() {
             {/* Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Category Code
                 </span>
                 <span className="font-mono text-sm font-semibold text-heading break-words">
@@ -1017,7 +1012,8 @@ export default function ProductCategoriesPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Category Type
                 </span>
                 <span className="text-xs font-medium text-heading">
@@ -1026,7 +1022,8 @@ export default function ProductCategoriesPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Parent Category
                 </span>
                 <span className="text-xs text-text break-words block leading-relaxed">
@@ -1035,7 +1032,8 @@ export default function ProductCategoriesPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Sub-Categories
                 </span>
                 <span className="text-xs font-medium text-heading">
@@ -1044,7 +1042,8 @@ export default function ProductCategoriesPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Created On
                 </span>
                 <span className="font-mono text-xs text-text-muted">
@@ -1052,14 +1051,14 @@ export default function ProductCategoriesPage() {
                 </span>
               </div>
 
-              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+              {/* <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
                 <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
                   Linked Inquiries
                 </span>
                 <span className="text-xs text-text">
                   {inquiries.filter(inq => inq.CategoryId === viewingCategory.categoryId || inq.categoryId === viewingCategory.categoryId).length} inquiries
                 </span>
-              </div>
+              </div> */}
             </div>
 
             {/* Footer Actions */}

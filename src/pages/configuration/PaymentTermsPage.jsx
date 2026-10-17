@@ -327,9 +327,8 @@ export default function PaymentTermsPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isActive ? 'bg-success' : 'bg-danger'
-                }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                 aria-hidden="true"
               />
               {isActive ? 'Active' : 'Inactive'}
@@ -429,23 +428,22 @@ export default function PaymentTermsPage() {
           />
         </div>
 
-          {/* Status Filter Chips */}
-          <div className="flex items-center p-1 bg-surface rounded-lg border border-border self-start sm:self-auto">
-            {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setStatusFilter(status)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
-                  statusFilter === status
-                    ? 'bg-bg text-heading shadow-2xs font-semibold'
-                    : 'text-text-muted hover:text-text'
+        {/* Status Filter Chips */}
+        <div className="flex items-center p-1 bg-surface rounded-lg border border-border self-start sm:self-auto">
+          {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setStatusFilter(status)}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${statusFilter === status
+                ? 'bg-bg text-heading shadow-2xs font-semibold'
+                : 'text-text-muted hover:text-text'
                 }`}
-              >
-                {status.toLowerCase()}
-              </button>
-            ))}
-          </div>
+            >
+              {status.toLowerCase()}
+            </button>
+          ))}
+        </div>
       </FilterBar>
 
       {/* ── Desktop View (md+): Data Table ── */}
@@ -473,9 +471,8 @@ export default function PaymentTermsPage() {
                       }
                     >
                       <div
-                        className={`flex items-center gap-1.5 ${
-                          header.column.getCanSort() ? 'cursor-pointer select-none' : ''
-                        }`}
+                        className={`flex items-center gap-1.5 ${header.column.getCanSort() ? 'cursor-pointer select-none' : ''
+                          }`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <span className="truncate">
@@ -612,9 +609,8 @@ export default function PaymentTermsPage() {
                     ].join(' ')}
                   >
                     <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        term.isActive ? 'bg-success' : 'bg-danger'
-                      }`}
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${term.isActive ? 'bg-success' : 'bg-danger'
+                        }`}
                       aria-hidden="true"
                     />
                     {term.isActive ? 'Active' : 'Inactive'}
@@ -753,7 +749,8 @@ export default function PaymentTermsPage() {
                   setFormErrors((prev) => ({ ...prev, description: '' }));
                 }
               }}
-              placeholder="Enter payment terms in order, e.g.:&#10;1. payment term-1&#10;2. payment term-2"
+              // placeholder="Enter payment terms in order, e.g.:&#10;1. payment term-1&#10;2. payment term-2"
+              placeholder="Enter payment terms.."
               minHeight="min-h-[160px]"
             />
             {formErrors.description && (
@@ -808,7 +805,7 @@ export default function PaymentTermsPage() {
               disabled={isSubmitting}
               className="justify-center font-semibold shadow-2xs"
             >
-              {editingTerm ? 'Save Changes' : 'Create Payment Term'}
+              {editingTerm ? 'Save Changes' : 'Save Payment Term'}
             </SaveButton>
           </div>
         </form>
@@ -845,9 +842,8 @@ export default function PaymentTermsPage() {
                 ].join(' ')}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    viewingTerm.isActive ? 'bg-success' : 'bg-danger'
-                  }`}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${viewingTerm.isActive ? 'bg-success' : 'bg-danger'
+                    }`}
                   aria-hidden="true"
                 />
                 {viewingTerm.isActive ? 'Active' : 'Inactive'}
@@ -857,7 +853,8 @@ export default function PaymentTermsPage() {
             {/* Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs  tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Display Order
                 </span>
                 <span className="font-mono text-sm font-semibold text-heading tabular-nums">
@@ -866,7 +863,8 @@ export default function PaymentTermsPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Created Date
                 </span>
                 <span className="font-mono text-xs text-text-muted">
@@ -875,7 +873,8 @@ export default function PaymentTermsPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-2 sm:col-span-2">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs  tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Payment Terms / Description
                 </span>
                 {/<[a-z][\s\S]*>/i.test(viewingTerm.description || '') ? (

@@ -221,7 +221,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
           {/* State (Cascading) */}
           <div>
             <SearchableSelect
-              label="State / Province"
+              label="State"
               id="addr-state"
               value={formState.stateId}
               onChange={handleStateChange}
@@ -384,9 +384,8 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                     return (
                       <tr
                         key={rowId}
-                        className={`transition-colors hover:bg-surface/50 ${
-                          isCurrentEditing ? 'bg-primary/5 ring-1 ring-primary/20' : ''
-                        }`}
+                        className={`transition-colors hover:bg-surface/50 ${isCurrentEditing ? 'bg-primary/5 ring-1 ring-primary/20' : ''
+                          }`}
                       >
                         {/* Type */}
                         <Td className="py-3 px-3.5">
@@ -439,9 +438,8 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                             ].join(' ')}
                           >
                             <span
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                row.isActive !== false ? 'bg-success' : 'bg-text-muted/60'
-                              }`}
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${row.isActive !== false ? 'bg-success' : 'bg-text-muted/60'
+                                }`}
                               aria-hidden="true"
                             />
                             {row.isActive !== false ? 'Active' : 'Inactive'}
@@ -495,11 +493,10 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                 return (
                   <div
                     key={rowId}
-                    className={`p-3.5 rounded-xl border transition-all space-y-2.5 bg-surface/40 ${
-                      isCurrentEditing
-                        ? 'border-primary ring-1 ring-primary/30 bg-primary/5'
-                        : 'border-border hover:border-primary/30'
-                    }`}
+                    className={`p-3.5 rounded-xl border transition-all space-y-2.5 bg-surface/40 ${isCurrentEditing
+                      ? 'border-primary ring-1 ring-primary/30 bg-primary/5'
+                      : 'border-border hover:border-primary/30'
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -521,9 +518,8 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
                         ].join(' ')}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            row.isActive !== false ? 'bg-success' : 'bg-text-muted/60'
-                          }`}
+                          className={`w-1.5 h-1.5 rounded-full ${row.isActive !== false ? 'bg-success' : 'bg-text-muted/60'
+                            }`}
                         />
                         {row.isActive !== false ? 'Active' : 'Inactive'}
                       </span>

@@ -313,9 +313,8 @@ export default function DocumentTypesPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  isActive ? 'bg-success' : 'bg-danger'
-                }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                 aria-hidden="true"
               />
               {isActive ? 'Active' : 'Inactive'}
@@ -440,9 +439,8 @@ export default function DocumentTypesPage() {
                       }
                     >
                       <div
-                        className={`flex items-center gap-1.5 ${
-                          header.column.getCanSort() ? 'cursor-pointer select-none' : ''
-                        }`}
+                        className={`flex items-center gap-1.5 ${header.column.getCanSort() ? 'cursor-pointer select-none' : ''
+                          }`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <span className="truncate">
@@ -574,9 +572,8 @@ export default function DocumentTypesPage() {
                       ].join(' ')}
                     >
                       <span
-                        className={`w-1 h-1 rounded-full shrink-0 ${
-                          dt.isActive !== false ? 'bg-success' : 'bg-danger'
-                        }`}
+                        className={`w-1 h-1 rounded-full shrink-0 ${dt.isActive !== false ? 'bg-success' : 'bg-danger'
+                          }`}
                         aria-hidden="true"
                       />
                       {dt.isActive !== false ? 'Active' : 'Inactive'}
@@ -761,7 +758,7 @@ export default function DocumentTypesPage() {
               disabled={isSubmitting}
               className="justify-center font-semibold shadow-2xs"
             >
-              {editingItem ? 'Save Changes' : 'Create Document Type'}
+              {editingItem ? 'Save Changes' : 'Save Document Type'}
             </SaveButton>
           </div>
         </form>
@@ -798,9 +795,8 @@ export default function DocumentTypesPage() {
                 ].join(' ')}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    viewingItem.isActive !== false ? 'bg-success' : 'bg-danger'
-                  }`}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${viewingItem.isActive !== false ? 'bg-success' : 'bg-danger'
+                    }`}
                   aria-hidden="true"
                 />
                 {viewingItem.isActive !== false ? 'Active' : 'Inactive'}
@@ -810,7 +806,8 @@ export default function DocumentTypesPage() {
             {/* Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Mandatory for RFQ
                 </span>
                 <div>
@@ -827,7 +824,8 @@ export default function DocumentTypesPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs  tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Max File Size Limit
                 </span>
                 <span className="font-mono text-sm font-semibold text-heading">
@@ -836,7 +834,8 @@ export default function DocumentTypesPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
+                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+                <span className="view-field-label mf-detail-label">
                   Allowed Extensions
                 </span>
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
@@ -851,14 +850,14 @@ export default function DocumentTypesPage() {
                 </div>
               </div>
 
-              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
+              {/* <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
                 <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
                   Usage in Inquiries
                 </span>
                 <span className="text-xs text-text">
                   {documents.filter(d => d.documentTypeId === (viewingItem.documentTypeId || viewingItem.id)).length} document(s) currently linked to this type.
                 </span>
-              </div>
+              </div> */}
             </div>
 
             {/* Footer Actions */}

@@ -210,8 +210,8 @@ export default function ClientFormPage() {
     const selected = Array.isArray(form.paymentTerms)
       ? form.paymentTerms
       : form.paymentTerms
-      ? [form.paymentTerms]
-      : [];
+        ? [form.paymentTerms]
+        : [];
 
     return selected.map((val) => {
       const match = paymentTerms.find(
@@ -403,7 +403,7 @@ export default function ClientFormPage() {
               disabled={isSubmitting}
               size="sm"
             >
-              {isEdit ? 'Save Changes' : 'Save'}
+              {isEdit ? 'Save Changes' : 'Save Client'}
             </SaveButton>
           </div>
         }
@@ -639,7 +639,7 @@ export default function ClientFormPage() {
                 {/* Selected Terms Cards */}
                 {selectedPaymentTermsList.length > 0 && (
                   <div className="space-y-2 pt-1">
-                    <div className="flex items-center justify-between text-2xs font-semibold text-text-muted uppercase tracking-wider">
+                    <div className="flex items-center justify-between text-2xs font-semibold text-text-muted  tracking-wider">
                       <span>Selected Terms ({selectedPaymentTermsList.length})</span>
                       <button
                         type="button"
@@ -738,7 +738,7 @@ export default function ClientFormPage() {
           />
 
           {/* Save Button for Tab 2 */}
-          
+          {renderTabSaveBar('Client Addresses')}
         </div>
       )}
 
@@ -753,7 +753,7 @@ export default function ClientFormPage() {
           />
 
           {/* Save Button for Tab 3 */}
-          
+          {renderTabSaveBar('Contact Persons')}
         </div>
       )}
 

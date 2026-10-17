@@ -202,7 +202,7 @@ export default function PurchaseRequisitionCreate() {
               onClick={handleSubmitForApproval}
               size="sm"
             >
-              Create Requisition
+              Save Requisition
             </SaveButton>
           </div>
         }

@@ -73,6 +73,7 @@ import { useInquiryDocumentsContext } from '../../context/InquiryDocumentsContex
 import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
 import { useRegions } from '../../context/RegionsContext';
+import { useClientsContext } from '../../context/ClientsContext';
 import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/treeUtils';
 import { getTodayISO } from '../../utils/dateUtils';
 import {
@@ -83,6 +84,11 @@ import {
 } from '../../mocks/inquiries';
 import { MOCK_MATERIALS } from '../../mocks/purchaseRequisitions';
 import { formatFileSizeKB, getDocumentType } from '../../mocks/inquiryDocuments';
+
+const CLIENT_TYPE_OPTIONS = [
+  { value: 'New', label: 'New Client' },
+  { value: 'Existing', label: 'Existing Client' },
+];
 
 const PRODUCT_SELECT_OPTIONS = [
   { value: '', label: '-- Select Product from Catalog --' },
@@ -120,6 +126,8 @@ const INITIAL_ITEM_ENTRY = {
 };
 
 const INITIAL_FORM = {
+  clientType: 'New',
+  clientId: '',
   InquiryNo: '',
   InquiryDate: getTodayISO(),
   parentRegionId: '',
@@ -205,7 +213,6 @@ function validateStep1(form) {
   const requiredFields = [
     'InquiryNo',
     'InquiryDate',
-    'CustomerName',
     'RegionId',
   ];
 
@@ -213,6 +220,16 @@ function validateStep1(form) {
     const err = validateField(field, form[field]);
     if (err) errors[field] = err;
   });
+
+  if (form.clientType === 'Existing') {
+    if (!form.clientId && !form.CustomerName?.trim()) {
+      errors.CustomerName = 'Please select an existing client.';
+    }
+  } else {
+    if (!form.CustomerName?.trim()) {
+      errors.CustomerName = 'Customer / Company name is required.';
+    }
+  }
 
   if (form.Email) {
     const err = validateField('Email', form.Email);
@@ -263,6 +280,7 @@ export default function InquiryFormPage() {
   };
   const { categories = [] } = useProductCategoriesContext();
   const { regions = [], getRegionOptions } = useRegions();
+  const { clients = [] } = useClientsContext();
 
   const userList = allUsers.length > 0 ? allUsers : users;
 
@@ -270,11 +288,92 @@ export default function InquiryFormPage() {
     return isEdit ? getInquiryById(id) : null;
   }, [isEdit, id, getInquiryById]);
 
+  // Client dropdown options for existing client selection
+  const clientOptions = useMemo(() => {
+    return clients
+      .filter((c) => c.isActive !== false)
+      .map((c) => ({
+        value: c.clientId || c.id,
+        label: c.companyName || c.billingName || c.clientId,
+      }));
+  }, [clients]);
+
   const [activeTab, setActiveTab] = useState('inquiry_customer');
   const [form, setForm] = useState(INITIAL_FORM);
   const [initialSnapshot, setInitialSnapshot] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  const handleClientTypeChange = (typeOrEvent) => {
+    const type = typeOrEvent && typeof typeOrEvent === 'object' && 'target' in typeOrEvent
+      ? typeOrEvent.target.value
+      : typeOrEvent;
+
+    setForm((prev) => {
+      const isNowExisting = type === 'Existing';
+      let matchedId = prev.clientId;
+      if (isNowExisting && !matchedId && prev.CustomerName) {
+        const found = clients.find(
+          (c) => (c.companyName || '').toLowerCase() === prev.CustomerName.toLowerCase()
+        );
+        if (found) matchedId = found.clientId || found.id;
+      }
+      return {
+        ...prev,
+        clientType: type,
+        clientId: isNowExisting ? matchedId : '',
+      };
+    });
+    if (errors.CustomerName) {
+      setErrors((prev) => ({ ...prev, CustomerName: '' }));
+    }
+  };
+
+  const handleClientSelect = (selectedVal) => {
+    const rawVal = selectedVal && typeof selectedVal === 'object' && 'target' in selectedVal
+      ? selectedVal.target.value
+      : selectedVal;
+
+    const selected = clients.find((c) => (c.clientId || c.id) === rawVal);
+    if (!selected) {
+      setForm((prev) => ({
+        ...prev,
+        clientId: rawVal || '',
+        CustomerName: '',
+      }));
+      return;
+    }
+
+    const contacts = selected.contacts || selected.activeVersion?.contacts || [];
+    const primaryContact = contacts.find((c) => c.isPrimary) || contacts[0] || null;
+
+    const resolvedContactName = primaryContact
+      ? `${primaryContact.firstName || ''} ${primaryContact.lastName || ''}`.trim()
+      : (selected.contactPerson || '');
+
+    const resolvedEmail = (primaryContact && primaryContact.email) || selected.email || '';
+    const resolvedPhone = (primaryContact && primaryContact.mobile1) || selected.phone || '';
+    const resolvedAltPhone = (primaryContact && primaryContact.mobile2) || selected.alternativePhone || '';
+
+    setForm((prev) => ({
+      ...prev,
+      clientId: rawVal,
+      CustomerName: selected.companyName || selected.billingName || '',
+      ContactPerson: resolvedContactName || prev.ContactPerson,
+      Email: resolvedEmail || prev.Email,
+      Phone: resolvedPhone || prev.Phone,
+      AlternativePhone: resolvedAltPhone || prev.AlternativePhone,
+    }));
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.CustomerName;
+      delete next.Email;
+      delete next.Phone;
+      delete next.AlternativePhone;
+      return next;
+    });
+  };
 
   const step1Fields = useMemo(() => [
     'InquiryNo',
@@ -717,7 +816,20 @@ export default function InquiryFormPage() {
           ? loadedRegion.parentRegionId
           : (loadedRegion ? loadedRegion.regionId : '');
 
+        const matchedClient = clients.find((c) =>
+          (existingInquiry.clientId && (c.clientId === existingInquiry.clientId || c.id === existingInquiry.clientId)) ||
+          ((c.companyName || '').toLowerCase() === (existingInquiry.CustomerName || '').toLowerCase())
+        );
+        const loadedClientId = existingInquiry.clientId || (matchedClient ? (matchedClient.clientId || matchedClient.id) : '');
+        const loadedClientType = existingInquiry.clientType
+          ? existingInquiry.clientType
+          : loadedClientId
+            ? 'Existing'
+            : 'New';
+
         const data = {
+          clientType: loadedClientType,
+          clientId: loadedClientId,
           InquiryNo: existingInquiry.InquiryNo || '',
           InquiryDate: existingInquiry.InquiryDate || getTodayISO(),
           Subject: existingInquiry.Subject || '',
@@ -759,6 +871,8 @@ export default function InquiryFormPage() {
         const defaultAssignee = userList.length > 0 ? userList[0].id : '';
         const data = {
           ...INITIAL_FORM,
+          clientType: 'New',
+          clientId: '',
           InquiryNo: generatedNo,
           AssignedTo: defaultAssignee,
           attachments: [],
@@ -768,7 +882,7 @@ export default function InquiryFormPage() {
         setErrors({});
       }
     }
-  }, [isEdit, id, existingInquiry, getNextInquiryNo, userList, regions]);
+  }, [isEdit, id, existingInquiry, getNextInquiryNo, userList, regions, clients]);
 
   // Document type options for Select
   const docTypeOptions = useMemo(() => {
@@ -1053,7 +1167,7 @@ export default function InquiryFormPage() {
               disabled={loading}
               size="sm"
             >
-              {isEdit ? 'Save Changes' : 'Create Inquiry'}
+              {isEdit ? 'Save Changes' : 'Save Inquiry'}
             </SaveButton>
           </div>
         }
@@ -1164,8 +1278,8 @@ export default function InquiryFormPage() {
                     !form.parentRegionId
                       ? 'Select parent region first'
                       : subRegionOptions.length <= 1
-                      ? 'No sub-regions (Parent selected)'
-                      : '-- Select Sub-Region --'
+                        ? 'No sub-regions (Parent selected)'
+                        : '-- Select Sub-Region --'
                   }
                   searchPlaceholder="Search sub-regions..."
                   disabled={!form.parentRegionId || subRegionOptions.length <= 1}
@@ -1220,7 +1334,7 @@ export default function InquiryFormPage() {
               <RichTextEditor
                 id="Description"
                 name="Description"
-                label="Detailed Specifications & Requirement Notes"
+                label="Detailed Specifications"
                 value={form.Description}
                 onChange={handleChange}
                 placeholder="Provide technical specifications, tolerances, material grade, delivery expectations, drawing numbers, or testing requirements..."
@@ -1242,24 +1356,59 @@ export default function InquiryFormPage() {
             </div>
 
             <div className="space-y-4 sm:space-y-5">
-              {/* 2-Column Grid for All Customer Information Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                {/* 1. Customer / Company Name */}
-                <Input
-                  id="CustomerName"
-                  name="CustomerName"
-                  type="text"
-                  label="Customer / Company Name"
-                  placeholder="e.g. Precision AutoWorks India Ltd"
-                  required
-                  value={form.CustomerName}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  error={errors.CustomerName}
-                  autoComplete="organization"
+              {/* 3-Column Grid for All Customer Information Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+                {/* 1. Client Type Dropdown (SearchableSelect) */}
+                <SearchableSelect
+                  id="clientType"
+                  name="clientType"
+                  label="Client Type"
+                  options={CLIENT_TYPE_OPTIONS}
+                  value={form.clientType}
+                  onChange={handleClientTypeChange}
+                  placeholder="Select client type..."
+                  searchPlaceholder="Search client type..."
+                  hint="Choose whether inquiry is from a new or existing client"
                 />
 
-                {/* 2. Contact Person Name */}
+                {/* 2. Customer / Company Name */}
+                {form.clientType === 'Existing' ? (
+                  <SearchableSelect
+                    id="CustomerName"
+                    name="CustomerName"
+                    label="Company Name"
+                    placeholder="Select an existing client..."
+                    searchPlaceholder="Search clients by company name..."
+                    required
+                    options={clientOptions}
+                    value={form.clientId}
+                    onChange={(val) => handleClientSelect(val)}
+                    onBlur={handleBlur}
+                    error={errors.CustomerName}
+                    hint={
+                      form.clientId
+                        ? 'Client selected. Contact person, email, and phone auto-filled.'
+                        : 'Select an existing registered client from the master list.'
+                    }
+                  />
+                ) : (
+                  <Input
+                    id="CustomerName"
+                    name="CustomerName"
+                    type="text"
+                    label="Company Name"
+                    placeholder="e.g. Precision AutoWorks India Ltd"
+                    required
+                    value={form.CustomerName}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.CustomerName}
+                    autoComplete="organization"
+                    hint="Enter the company name for this new customer."
+                  />
+                )}
+
+                {/* 3. Contact Person Name */}
                 <Input
                   id="ContactPerson"
                   name="ContactPerson"
@@ -1272,7 +1421,7 @@ export default function InquiryFormPage() {
                   autoComplete="name"
                 />
 
-                {/* 3. Email Address */}
+                {/* 4. Email Address */}
                 <Input
                   id="Email"
                   name="Email"
@@ -1286,12 +1435,12 @@ export default function InquiryFormPage() {
                   autoComplete="email"
                 />
 
-                {/* 4. Phone / Mobile Number */}
+                {/* 5. Phone / Mobile Number */}
                 <Input
                   id="Phone"
                   name="Phone"
                   type="tel"
-                  label="Phone / Mobile Number"
+                  label="Mobile Number"
                   placeholder="9823012345"
                   value={form.Phone}
                   onChange={handleChange}
@@ -1301,7 +1450,7 @@ export default function InquiryFormPage() {
                   autoComplete="tel"
                 />
 
-                {/* 5. Alternative Phone */}
+                {/* 6. Alternative Phone */}
                 <Input
                   id="AlternativePhone"
                   name="AlternativePhone"
@@ -1316,7 +1465,7 @@ export default function InquiryFormPage() {
                   autoComplete="tel"
                 />
 
-                {/* 6. City */}
+                {/* 7. City */}
                 <Input
                   id="City"
                   name="City"
@@ -1329,12 +1478,12 @@ export default function InquiryFormPage() {
                   autoComplete="address-level2"
                 />
 
-                {/* 7. State / Province */}
+                {/* 8. State / Province */}
                 <Input
                   id="State"
                   name="State"
                   type="text"
-                  label="State / Province"
+                  label="State"
                   placeholder="e.g. Gujarat"
                   value={form.State}
                   onChange={handleChange}
@@ -1342,7 +1491,7 @@ export default function InquiryFormPage() {
                   autoComplete="address-level1"
                 />
 
-                {/* 8. Country */}
+                {/* 9. Country */}
                 <Input
                   id="Country"
                   name="Country"
@@ -1355,7 +1504,7 @@ export default function InquiryFormPage() {
                   autoComplete="country-name"
                 />
 
-                {/* 9. Address Line 1 (After Country) */}
+                {/* 10. Address Line 1 */}
                 <Input
                   id="AddressLine1"
                   name="AddressLine1"
@@ -1368,7 +1517,7 @@ export default function InquiryFormPage() {
                   autoComplete="address-line1"
                 />
 
-                {/* 10. Address Line 2 (After Country) */}
+                {/* 11. Address Line 2 */}
                 <Input
                   id="AddressLine2"
                   name="AddressLine2"
@@ -1402,16 +1551,16 @@ export default function InquiryFormPage() {
             {/* ── Sub-Card: Add Item to Inquiry ── */}
             <div
               className={`p-4 sm:p-5 rounded-xl border bg-surface/50 space-y-4 transition-all duration-200 ${editingItemId
-                  ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
-                  : 'border-border'
+                ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
+                : 'border-border'
                 }`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-border/70">
                 <div className="flex items-center gap-2.5">
                   <div
                     className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${editingItemId
-                        ? 'bg-primary text-white'
-                        : 'bg-primary/10 text-primary'
+                      ? 'bg-primary text-white'
+                      : 'bg-primary/10 text-primary'
                       }`}
                   >
                     {editingItemId ? <IconEdit size={15} /> : <IconPackage size={16} />}
@@ -1467,8 +1616,8 @@ export default function InquiryFormPage() {
                         !itemFormState.parentCategoryId
                           ? 'Select parent category first'
                           : subCategoryOptions.length <= 1
-                          ? 'No sub-categories (Parent selected)'
-                          : '-- Select Sub-Category --'
+                            ? 'No sub-categories (Parent selected)'
+                            : '-- Select Sub-Category --'
                       }
                       searchPlaceholder="Search sub-categories..."
                       disabled={!itemFormState.parentCategoryId || subCategoryOptions.length <= 1}
@@ -1654,9 +1803,8 @@ export default function InquiryFormPage() {
                           return (
                             <tr
                               key={itemId}
-                              className={`hover:bg-surface/50 transition-colors ${
-                                isRowSelected ? 'bg-primary/[0.04]' : ''
-                              }`}
+                              className={`hover:bg-surface/50 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : ''
+                                }`}
                             >
                               <Td className="text-center">
                                 <Checkbox
@@ -1721,9 +1869,8 @@ export default function InquiryFormPage() {
                       return (
                         <div
                           key={itemId}
-                          className={`p-3.5 space-y-2.5 transition-colors ${
-                            isRowSelected ? 'bg-primary/[0.04]' : 'hover:bg-surface/40'
-                          }`}
+                          className={`p-3.5 space-y-2.5 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : 'hover:bg-surface/40'
+                            }`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -1739,22 +1886,22 @@ export default function InquiryFormPage() {
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               <IconButton
-                                    icon={IconEdit}
-                                    size="sm"
-                                    variant="ghost"
-                                    title="Edit Item"
-                                    aria-label="Edit Item"
-                                    onClick={() => handleStartEditItem(item, idx)}
-                                  />
+                                icon={IconEdit}
+                                size="sm"
+                                variant="ghost"
+                                title="Edit Item"
+                                aria-label="Edit Item"
+                                onClick={() => handleStartEditItem(item, idx)}
+                              />
                               <IconButton
-                                    icon={IconDelete}
-                                    size="sm"
-                                    variant="ghost"
-                                    title="Remove Item"
-                                    aria-label="Remove Item"
-                                    onClick={() => setItemToDelete({ item, index: idx })}
-                                    className="hover:text-danger hover:bg-danger/10"
-                                  />
+                                icon={IconDelete}
+                                size="sm"
+                                variant="ghost"
+                                title="Remove Item"
+                                aria-label="Remove Item"
+                                onClick={() => setItemToDelete({ item, index: idx })}
+                                className="hover:text-danger hover:bg-danger/10"
+                              />
                             </div>
                           </div>
 

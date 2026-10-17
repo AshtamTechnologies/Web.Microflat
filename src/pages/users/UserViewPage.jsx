@@ -216,16 +216,14 @@ export default function UserViewPage() {
           <div className="flex items-center gap-2 flex-wrap">
             {/* Status Badge */}
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none ${
-                user.isActive
-                  ? 'bg-success/10 text-success border border-success/20'
-                  : 'bg-danger/10 text-danger border border-danger/20'
-              }`}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none ${user.isActive
+                ? 'bg-success/10 text-success border border-success/20'
+                : 'bg-danger/10 text-danger border border-danger/20'
+                }`}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  user.isActive ? 'bg-success' : 'bg-danger'
-                }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${user.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                 aria-hidden="true"
               />
               {user.isActive ? 'Active' : 'Inactive'}
@@ -342,11 +340,10 @@ export default function UserViewPage() {
                 {userRoles.map((r, i) => (
                   <span
                     key={i}
-                    className={`inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium border ${
-                      r.isPrimary
-                        ? 'bg-primary/15 text-primary border-primary/30 font-semibold'
-                        : 'bg-surface text-text-muted border-border'
-                    }`}
+                    className={`inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium border ${r.isPrimary
+                      ? 'bg-primary/15 text-primary border-primary/30 font-semibold'
+                      : 'bg-surface text-text-muted border-border'
+                      }`}
                   >
                     <IconShieldCheck size={12} className="shrink-0" />
                     {r.roleName || r}
@@ -377,7 +374,8 @@ export default function UserViewPage() {
         {/* Audit & Security Metadata Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-border/80 text-xs text-text-muted">
           <div>
-            <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
+            {/* <span className="text-2xs font-semibold text-text-muted tracking-wider block"> */}
+            <span className="view-field-label mf-detail-label">
               Created On
             </span>
             <span className="font-mono text-heading mt-0.5 block">
@@ -386,7 +384,8 @@ export default function UserViewPage() {
           </div>
 
           <div>
-            <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
+            {/* <span className="text-2xs font-semibold text-text-muted tracking-wider block"> */}
+            <span className="view-field-label mf-detail-label">
               Last Updated On
             </span>
             <span className="font-mono text-heading mt-0.5 block">
@@ -395,7 +394,8 @@ export default function UserViewPage() {
           </div>
 
           <div>
-            <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
+            {/* <span className="text-2xs font-semibold text-text-muted tracking-wider block"> */}
+            <span className="view-field-label mf-detail-label">
               Temporary Password Expiry
             </span>
             <span className="font-mono text-heading mt-0.5 block">
@@ -473,9 +473,8 @@ export default function UserViewPage() {
                         </Td>
                         <Td>
                           <span
-                            className={`font-mono tabular-nums text-xs ${
-                              isActive ? 'text-success font-semibold' : 'text-text'
-                            }`}
+                            className={`font-mono tabular-nums text-xs ${isActive ? 'text-success font-semibold' : 'text-text'
+                              }`}
                           >
                             {durationText}
                           </span>

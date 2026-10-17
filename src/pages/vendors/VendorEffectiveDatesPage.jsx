@@ -5,7 +5,8 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import {  useReactTable,
+import {
+  useReactTable,
   getCoreRowModel,
   getSortedRowModel,
   flexRender,
@@ -336,12 +337,11 @@ export default function VendorEffectiveDatesPage() {
   // Latest previous effective date that new revisions cannot precede
   const minAllowedEffectiveDate = useMemo(() => {
     const dates = versions
-      .filter((v) => (mode === 'EDIT' ? v.id !== selectedVersionId : true))
-      .map((v) => v.effectiveDate)
+      .map((v) => (v.effectiveDate || '').slice(0, 10))
       .filter(Boolean);
     if (dates.length === 0) return null;
     return [...dates].sort().reverse()[0];
-  }, [versions, mode, selectedVersionId]);
+  }, [versions]);
 
   // Form state for ADD or EDIT
   const [formData, setFormData] = useState({
@@ -453,8 +453,11 @@ export default function VendorEffectiveDatesPage() {
     // Clone forward from active version and default to today's date
     const base = activeVersion || selectedVersion || {};
     const today = getTodayIsoDate();
+    const initialDate = minAllowedEffectiveDate && minAllowedEffectiveDate > today
+      ? minAllowedEffectiveDate
+      : today;
     setFormData({
-      effectiveDate: today,
+      effectiveDate: initialDate,
       contactPersonName: base.contactPersonName || '',
       phoneNo: base.phoneNo || '',
       alternatePhoneNo: base.alternatePhoneNo || '',
@@ -616,7 +619,7 @@ export default function VendorEffectiveDatesPage() {
       });
       if (collision) {
         errors.effectiveDate = 'Another version with this effective date already exists for this vendor.';
-      } else if (minAllowedEffectiveDate && enteredDate < minAllowedEffectiveDate) {
+      } else if (mode === 'ADD' && minAllowedEffectiveDate && enteredDate < minAllowedEffectiveDate) {
         errors.effectiveDate = `Effective date cannot be earlier than previous effective date (${formatDateDisplay(minAllowedEffectiveDate)}).`;
       }
     }
@@ -840,8 +843,8 @@ export default function VendorEffectiveDatesPage() {
                     !vendor?.isActive
                       ? 'opacity-40 cursor-not-allowed text-text-muted'
                       : isSelected && mode === 'EDIT'
-                      ? 'bg-primary/15 text-primary'
-                      : 'text-text-muted hover:text-primary hover:bg-surface'
+                        ? 'bg-primary/15 text-primary'
+                        : 'text-text-muted hover:text-primary hover:bg-surface'
                   }
                 >
                   <IconEdit size={15} />
@@ -918,9 +921,8 @@ export default function VendorEffectiveDatesPage() {
                 ].join(' ')}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    vendor.isActive ? 'bg-success' : 'bg-danger'
-                  }`}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${vendor.isActive ? 'bg-success' : 'bg-danger'
+                    }`}
                   aria-hidden="true"
                 />
                 {vendor.isActive ? 'Active' : 'Inactive'}
@@ -1064,11 +1066,10 @@ export default function VendorEffectiveDatesPage() {
                 <div
                   key={ver.id}
                   onClick={() => handleSelectView(ver)}
-                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${
-                    isSelected
-                      ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
-                      : 'bg-surface border-border hover:border-primary/40'
-                  }`}
+                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${isSelected
+                    ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
+                    : 'bg-surface border-border hover:border-primary/40'
+                    }`}
                 >
                   {/* Top line: Date + Badge + Actions */}
                   <div className="flex items-start justify-between gap-2">
@@ -1100,11 +1101,10 @@ export default function VendorEffectiveDatesPage() {
                         size="icon"
                         onClick={() => handleSelectView(ver)}
                         title="View this version"
-                        className={`h-7 w-7 ${
-                          isSelected && mode === 'VIEW'
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-text-muted hover:text-primary hover:bg-surface'
-                        }`}
+                        className={`h-7 w-7 ${isSelected && mode === 'VIEW'
+                          ? 'bg-primary/15 text-primary'
+                          : 'text-text-muted hover:text-primary hover:bg-surface'
+                          }`}
                       >
                         <IconView size={14} />
                       </Button>
@@ -1116,13 +1116,12 @@ export default function VendorEffectiveDatesPage() {
                           disabled={!vendor?.isActive}
                           onClick={() => handleStartEdit(ver)}
                           title={!vendor?.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : 'Edit this version'}
-                          className={`h-7 w-7 ${
-                            !vendor?.isActive
-                              ? 'opacity-40 cursor-not-allowed text-text-muted'
-                              : isSelected && mode === 'EDIT'
+                          className={`h-7 w-7 ${!vendor?.isActive
+                            ? 'opacity-40 cursor-not-allowed text-text-muted'
+                            : isSelected && mode === 'EDIT'
                               ? 'bg-primary/15 text-primary'
                               : 'text-text-muted hover:text-primary hover:bg-surface'
-                          }`}
+                            }`}
                         >
                           <IconEdit size={13} />
                         </Button>
@@ -1180,9 +1179,8 @@ export default function VendorEffectiveDatesPage() {
                             ? header.getResizeHandler()
                             : undefined
                         }
-                        className={`relative py-3.5 px-6 select-none bg-surface ${
-                          canSort ? 'cursor-pointer hover:bg-surface/80' : ''
-                        }`}
+                        className={`relative py-3.5 px-6 select-none bg-surface ${canSort ? 'cursor-pointer hover:bg-surface/80' : ''
+                          }`}
                       >
                         {header.isPlaceholder ? null : canSort ? (
                           <button
@@ -1220,9 +1218,8 @@ export default function VendorEffectiveDatesPage() {
                           </button>
                         ) : (
                           <div
-                            className={`select-none ${
-                              header.id === 'actions' ? 'text-right w-full pr-1' : ''
-                            }`}
+                            className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''
+                              }`}
                           >
                             {flexRender(
                               header.column.columnDef.header,
@@ -1253,11 +1250,10 @@ export default function VendorEffectiveDatesPage() {
                     <tr
                       key={row.id}
                       onClick={() => handleSelectView(row.original)}
-                      className={`cursor-pointer transition-colors duration-120 ${
-                        isSelected
-                          ? 'bg-primary/[0.06]'
-                          : 'hover:bg-surface/50'
-                      }`}
+                      className={`cursor-pointer transition-colors duration-120 ${isSelected
+                        ? 'bg-primary/[0.06]'
+                        : 'hover:bg-surface/50'
+                        }`}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <Td
@@ -1413,7 +1409,7 @@ export default function VendorEffectiveDatesPage() {
                   value={getCountryName(selectedVersion.countryId)}
                 />
                 <DetailField
-                  label="State / Province"
+                  label="State"
                   value={getStateName(selectedVersion.countryId, selectedVersion.stateId)}
                 />
                 <DetailField
@@ -1444,7 +1440,8 @@ export default function VendorEffectiveDatesPage() {
               </div>
               <div className="space-y-3 pt-1">
                 <div className="space-y-1">
-                  <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
+                  {/* <span className="text-2xs font-semibold  tracking-wider text-text-muted block"> */}
+                  <span className="view-field-label mf-detail-label">
                     Notes & Terms
                   </span>
                   <div className="text-xs text-heading font-medium bg-surface/50 rounded-lg p-3.5 border border-border/60 whitespace-pre-line leading-relaxed">
@@ -1556,7 +1553,7 @@ export default function VendorEffectiveDatesPage() {
                     id="effectiveDate"
                     name="effectiveDate"
                     label="Effective Date"
-                    min={minAllowedEffectiveDate || undefined}
+                    min={mode === 'ADD' ? (minAllowedEffectiveDate || undefined) : undefined}
                     value={formData.effectiveDate}
                     onChange={handleInputChange}
                     error={formErrors.effectiveDate}
@@ -1688,7 +1685,7 @@ export default function VendorEffectiveDatesPage() {
                   <SearchableSelect
                     id="stateId"
                     name="stateId"
-                    label="State / Province"
+                    label="State"
                     required
                     options={stateOptions}
                     value={formData.stateId}
@@ -1772,7 +1769,7 @@ export default function VendorEffectiveDatesPage() {
                 <Textarea
                   id="notes"
                   name="notes"
-                  label="Revision Notes / ISO References"
+                  label="Notes & Terms"
                   rows={3}
                   value={formData.notes}
                   onChange={handleInputChange}
@@ -1823,11 +1820,10 @@ export default function VendorEffectiveDatesPage() {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-150 ${
-                  isDragging
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-primary/40 hover:bg-surface/50'
-                }`}
+                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-150 ${isDragging
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/40 hover:bg-surface/50'
+                  }`}
               >
                 {/* Native file input hidden for custom drag-drop styling */}
                 <input
@@ -1840,9 +1836,8 @@ export default function VendorEffectiveDatesPage() {
                 />
                 <IconUpload
                   size={28}
-                  className={`mx-auto mb-2 ${
-                    isDragging ? 'text-primary' : 'text-text-muted'
-                  }`}
+                  className={`mx-auto mb-2 ${isDragging ? 'text-primary' : 'text-text-muted'
+                    }`}
                 />
                 <p className="text-xs font-semibold text-heading">
                   Drag and drop files here, or <span className="text-primary">browse</span>

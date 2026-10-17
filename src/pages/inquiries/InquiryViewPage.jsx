@@ -232,10 +232,10 @@ export default function InquiryViewPage() {
         const mimeType = fileName.toLowerCase().endsWith('.pdf')
           ? 'application/pdf'
           : fileName.toLowerCase().endsWith('.docx')
-          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-          : fileName.toLowerCase().endsWith('.dwg')
-          ? 'application/acad'
-          : 'text/plain;charset=utf-8';
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : fileName.toLowerCase().endsWith('.dwg')
+              ? 'application/acad'
+              : 'text/plain;charset=utf-8';
 
         const blob = new Blob([fileContent], { type: mimeType });
         const url = URL.createObjectURL(blob);
@@ -425,7 +425,8 @@ export default function InquiryViewPage() {
 
             {inquiry.Description && (
               <div className="sm:col-span-2 pt-2 border-t border-border/60">
-                <span className="view-field-label">Specifications & Notes</span>
+                {/* <span className="view-field-label">Specifications & Notes</span> */}
+                <span className="view-field-label">Detailed Specifications</span>
                 {inquiry.Description.includes('<') ? (
                   <div
                     className="rich-text-content text-text bg-surface/40 p-3.5 rounded-lg border border-border leading-relaxed text-sm overflow-x-auto"
@@ -453,7 +454,7 @@ export default function InquiryViewPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <DetailField
-              label="Company / Customer Name"
+              label="Company Name"
               value={inquiry.CustomerName}
               className="sm:col-span-2"
               valueClassName="text-sm font-bold"
@@ -473,7 +474,7 @@ export default function InquiryViewPage() {
             />
 
             <DetailField
-              label="Phone / Contact No"
+              label="Contact No"
               value={inquiry.Phone}
               icon={IconPhone}
               isPhone
@@ -543,22 +544,20 @@ export default function InquiryViewPage() {
                 <button
                   type="button"
                   onClick={() => setMobileViewMode('cards')}
-                  className={`px-2 py-0.5 text-2xs font-medium rounded transition-colors ${
-                    mobileViewMode === 'cards'
-                      ? 'bg-primary text-white shadow-2xs'
-                      : 'text-text-muted hover:text-heading'
-                  }`}
+                  className={`px-2 py-0.5 text-2xs font-medium rounded transition-colors ${mobileViewMode === 'cards'
+                    ? 'bg-primary text-white shadow-2xs'
+                    : 'text-text-muted hover:text-heading'
+                    }`}
                 >
                   Cards
                 </button>
                 <button
                   type="button"
                   onClick={() => setMobileViewMode('table')}
-                  className={`px-2 py-0.5 text-2xs font-medium rounded transition-colors ${
-                    mobileViewMode === 'table'
-                      ? 'bg-primary text-white shadow-2xs'
-                      : 'text-text-muted hover:text-heading'
-                  }`}
+                  className={`px-2 py-0.5 text-2xs font-medium rounded transition-colors ${mobileViewMode === 'table'
+                    ? 'bg-primary text-white shadow-2xs'
+                    : 'text-text-muted hover:text-heading'
+                    }`}
                 >
                   Table
                 </button>
@@ -851,157 +850,197 @@ export default function InquiryViewPage() {
                 </tr>
               </thead>
 
-                <tbody className="divide-y divide-border bg-bg">
-                  {inquiryDocuments.map((doc) => {
-                    const docType = getDocumentTypeById(doc.documentTypeId);
-                    const isExpanded = expandedDocIds.has(doc.documentId);
-                    const versions = doc.versions || [];
-                    const currentVersion = versions.find((v) => v.isCurrent) || versions[0] || {};
+              <tbody className="divide-y divide-border bg-bg">
+                {inquiryDocuments.map((doc) => {
+                  const docType = getDocumentTypeById(doc.documentTypeId);
+                  const isExpanded = expandedDocIds.has(doc.documentId);
+                  const versions = doc.versions || [];
+                  const currentVersion = versions.find((v) => v.isCurrent) || versions[0] || {};
 
-                    return (
-                      <Fragment key={doc.documentId}>
-                        <tr className="hover:bg-surface/50 transition-colors group">
-                          {/* Expand / Collapse Button */}
-                          <Td className="py-3 px-3 w-12 text-center">
-                            <button
-                              type="button"
-                              onClick={() => toggleDocExpanded(doc.documentId)}
-                              className="p-1 rounded-lg text-text-muted hover:text-heading hover:bg-surface transition-colors cursor-pointer inline-flex items-center justify-center"
-                              title={isExpanded ? 'Collapse version history' : 'Expand version history'}
-                            >
-                              {isExpanded ? (
-                                <IconChevronDown size={16} className="text-primary" />
-                              ) : (
-                                <IconChevronRight size={16} />
-                              )}
-                            </button>
-                          </Td>
+                  return (
+                    <Fragment key={doc.documentId}>
+                      <tr className="hover:bg-surface/50 transition-colors group">
+                        {/* Expand / Collapse Button */}
+                        <Td className="py-3 px-3 w-12 text-center">
+                          <button
+                            type="button"
+                            onClick={() => toggleDocExpanded(doc.documentId)}
+                            className="p-1 rounded-lg text-text-muted hover:text-heading hover:bg-surface transition-colors cursor-pointer inline-flex items-center justify-center"
+                            title={isExpanded ? 'Collapse version history' : 'Expand version history'}
+                          >
+                            {isExpanded ? (
+                              <IconChevronDown size={16} className="text-primary" />
+                            ) : (
+                              <IconChevronRight size={16} />
+                            )}
+                          </button>
+                        </Td>
 
-                          {/* Document Type */}
-                          <Td className="py-3 px-4 w-40">
+                        {/* Document Type */}
+                        <Td className="py-3 px-4 w-40">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${docType.badgeClass}`}
+                          >
+                            {docType.typeName}
+                          </span>
+                        </Td>
+
+                        {/* Document Title */}
+                        <Td className="py-3 px-4 min-w-[220px]">
+                          <span className="font-semibold text-heading text-xs block truncate" title={doc.documentTitle}>
+                            {doc.documentTitle}
+                          </span>
+                          <span className="text-2xs text-text-muted font-mono block mt-0.5">
+                            {versions.length} revision{versions.length > 1 ? 's' : ''} recorded
+                          </span>
+                        </Td>
+
+                        {/* Current Version File Name (Click to open preview) */}
+                        <Td className="py-3 px-4 min-w-[220px]">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewItem({
+                                ...currentVersion,
+                                documentTitle: doc.documentTitle,
+                                documentTypeId: doc.documentTypeId,
+                              })
+                            }
+                            className="flex items-center gap-2 group/file hover:text-primary transition-colors cursor-pointer text-left w-full focus:outline-none"
+                            title={`Click to open preview of ${currentVersion.fileName}`}
+                          >
+                            {renderFileExtIcon(currentVersion.fileExtension)}
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${docType.badgeClass}`}
+                              className="font-mono text-xs text-heading font-medium truncate group-hover/file:text-primary group-hover/file:underline"
+                              title={currentVersion.fileName}
                             >
-                              {docType.typeName}
+                              {currentVersion.fileName}
                             </span>
-                          </Td>
+                            <IconView size={13} className="text-text-muted/50 group-hover/file:text-primary shrink-0 opacity-0 group-hover/file:opacity-100 transition-opacity" />
+                          </button>
+                        </Td>
 
-                          {/* Document Title */}
-                          <Td className="py-3 px-4 min-w-[220px]">
-                            <span className="font-semibold text-heading text-xs block truncate" title={doc.documentTitle}>
-                              {doc.documentTitle}
-                            </span>
-                            <span className="text-2xs text-text-muted font-mono block mt-0.5">
-                              {versions.length} revision{versions.length > 1 ? 's' : ''} recorded
-                            </span>
-                          </Td>
+                        {/* File Size */}
+                        <Td className="py-3 px-4 w-28 font-mono tabular-nums text-text-muted text-xs">
+                          {formatFileSizeKB(currentVersion.fileSizeKB)}
+                        </Td>
 
-                          {/* Current Version File Name (Click to open preview) */}
-                          <Td className="py-3 px-4 min-w-[220px]">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setPreviewItem({
-                                  ...currentVersion,
-                                  documentTitle: doc.documentTitle,
-                                  documentTypeId: doc.documentTypeId,
-                                })
-                              }
-                              className="flex items-center gap-2 group/file hover:text-primary transition-colors cursor-pointer text-left w-full focus:outline-none"
-                              title={`Click to open preview of ${currentVersion.fileName}`}
-                            >
-                              {renderFileExtIcon(currentVersion.fileExtension)}
-                              <span
-                                className="font-mono text-xs text-heading font-medium truncate group-hover/file:text-primary group-hover/file:underline"
-                                title={currentVersion.fileName}
-                              >
-                                {currentVersion.fileName}
-                              </span>
-                              <IconView size={13} className="text-text-muted/50 group-hover/file:text-primary shrink-0 opacity-0 group-hover/file:opacity-100 transition-opacity" />
-                            </button>
-                          </Td>
+                        {/* Uploaded By & On */}
+                        <Td className="py-3 px-4 w-48">
+                          <span className="text-heading font-medium block text-xs truncate">
+                            {currentVersion.uploadedBy || doc.createdBy}
+                          </span>
+                          <span className="font-mono text-2xs text-text-muted tabular-nums block mt-0.5">
+                            {formatDate(currentVersion.uploadedOn || doc.createdOn)}
+                          </span>
+                        </Td>
 
-                          {/* File Size */}
-                          <Td className="py-3 px-4 w-28 font-mono tabular-nums text-text-muted text-xs">
-                            {formatFileSizeKB(currentVersion.fileSizeKB)}
-                          </Td>
+                        {/* Actions */}
+                        <Td className="py-3 px-4 w-32 text-right whitespace-nowrap">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedDocForVersion(doc);
+                              setUploadModalMode('new_version');
+                              setIsUploadModalOpen(true);
+                            }}
+                            title="Upload new version"
+                            className="text-xs font-semibold text-primary border-primary/30 hover:border-primary hover:bg-primary/10 bg-surface shadow-2xs h-7 px-2.5 inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+                          >
+                            <IconUpload size={13} className="shrink-0 text-primary" />
+                            <span>New Rev</span>
+                          </Button>
+                        </Td>
+                      </tr>
 
-                          {/* Uploaded By & On */}
-                          <Td className="py-3 px-4 w-48">
-                            <span className="text-heading font-medium block text-xs truncate">
-                              {currentVersion.uploadedBy || doc.createdBy}
-                            </span>
-                            <span className="font-mono text-2xs text-text-muted tabular-nums block mt-0.5">
-                              {formatDate(currentVersion.uploadedOn || doc.createdOn)}
-                            </span>
-                          </Td>
+                      {/* Nested Version History Accordion Drawer */}
+                      {isExpanded && (
+                        <tr className="bg-surface/30">
+                          <td colSpan={7} className="p-0 border-b border-border/80">
+                            <div className="p-3 sm:p-4 sm:pl-12 space-y-2.5 animate-in fade-in duration-100">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
+                                <span className="text-xs font-bold text-heading flex items-center gap-1.5 min-w-0">
+                                  <IconClock size={14} className="text-text-muted shrink-0" />
+                                  <span className="truncate">Version History for "{doc.documentTitle}"</span>
+                                </span>
+                                <span className="text-2xs text-text-muted shrink-0">
+                                  Newest revisions listed first
+                                </span>
+                              </div>
 
-                          {/* Actions */}
-                          <Td className="py-3 px-4 w-32 text-right whitespace-nowrap">
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedDocForVersion(doc);
-                                setUploadModalMode('new_version');
-                                setIsUploadModalOpen(true);
-                              }}
-                              title="Upload new version"
-                              className="text-xs font-semibold text-primary border-primary/30 hover:border-primary hover:bg-primary/10 bg-surface shadow-2xs h-7 px-2.5 inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                            >
-                              <IconUpload size={13} className="shrink-0 text-primary" />
-                              <span>New Rev</span>
-                            </Button>
-                          </Td>
-                        </tr>
+                              <div className="bg-bg border border-border rounded-lg overflow-x-auto shadow-2xs">
+                                <table className="w-full min-w-[720px] text-xs text-left border-collapse">
+                                  <thead>
+                                    <tr className="bg-surface/60 border-b border-border text-2xs font-semibold text-text-muted">
+                                      <th className="py-2.5 px-3 w-24">REVISION</th>
+                                      <th className="py-2.5 px-3 min-w-[200px]">FILE NAME</th>
+                                      <th className="py-2.5 px-3 w-20">SIZE</th>
+                                      <th className="py-2.5 px-3 w-40">UPLOADED BY / DATE</th>
+                                      <th className="py-2.5 px-3 min-w-[220px]">CHANGE REMARKS</th>
+                                      <th className="py-2.5 px-3 w-48 text-right">ACTION</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border/60">
+                                    {versions.map((ver) => (
+                                      <tr key={ver.versionId} className="hover:bg-surface/40 transition-colors">
+                                        <td className="py-2.5 px-3 whitespace-nowrap">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-mono font-bold text-heading">
+                                              v{ver.versionNo}
+                                            </span>
+                                            {ver.isCurrent && (
+                                              <Badge variant="success" className="text-2xs px-1.5 py-0">
+                                                Current
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </td>
 
-                        {/* Nested Version History Accordion Drawer */}
-                        {isExpanded && (
-                          <tr className="bg-surface/30">
-                            <td colSpan={7} className="p-0 border-b border-border/80">
-                              <div className="p-3 sm:p-4 sm:pl-12 space-y-2.5 animate-in fade-in duration-100">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
-                                  <span className="text-xs font-bold text-heading flex items-center gap-1.5 min-w-0">
-                                    <IconClock size={14} className="text-text-muted shrink-0" />
-                                    <span className="truncate">Version History for "{doc.documentTitle}"</span>
-                                  </span>
-                                  <span className="text-2xs text-text-muted shrink-0">
-                                    Newest revisions listed first
-                                  </span>
-                                </div>
+                                        <td className="py-2.5 px-3 font-mono text-heading">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setPreviewItem({
+                                                ...ver,
+                                                documentTitle: doc.documentTitle,
+                                                documentTypeId: doc.documentTypeId,
+                                              })
+                                            }
+                                            className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-pointer text-left group/verfile focus:outline-none"
+                                            title={`Click to view ${ver.fileName}`}
+                                          >
+                                            {renderFileExtIcon(ver.fileExtension)}
+                                            <span
+                                              className="truncate max-w-[200px] sm:max-w-[240px] group-hover/verfile:underline"
+                                              title={ver.fileName}
+                                            >
+                                              {ver.fileName}
+                                            </span>
+                                            <IconView size={12} className="text-text-muted/50 group-hover/verfile:text-primary shrink-0 opacity-0 group-hover/verfile:opacity-100 transition-opacity" />
+                                          </button>
+                                        </td>
 
-                                <div className="bg-bg border border-border rounded-lg overflow-x-auto shadow-2xs">
-                                  <table className="w-full min-w-[720px] text-xs text-left border-collapse">
-                                    <thead>
-                                      <tr className="bg-surface/60 border-b border-border text-2xs font-semibold text-text-muted">
-                                        <th className="py-2.5 px-3 w-24">REVISION</th>
-                                        <th className="py-2.5 px-3 min-w-[200px]">FILE NAME</th>
-                                        <th className="py-2.5 px-3 w-20">SIZE</th>
-                                        <th className="py-2.5 px-3 w-40">UPLOADED BY / DATE</th>
-                                        <th className="py-2.5 px-3 min-w-[220px]">CHANGE REMARKS</th>
-                                        <th className="py-2.5 px-3 w-48 text-right">ACTION</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/60">
-                                      {versions.map((ver) => (
-                                        <tr key={ver.versionId} className="hover:bg-surface/40 transition-colors">
-                                          <td className="py-2.5 px-3 whitespace-nowrap">
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="font-mono font-bold text-heading">
-                                                v{ver.versionNo}
-                                              </span>
-                                              {ver.isCurrent && (
-                                                <Badge variant="success" className="text-2xs px-1.5 py-0">
-                                                  Current
-                                                </Badge>
-                                              )}
-                                            </div>
-                                          </td>
+                                        <td className="py-2.5 px-3 font-mono tabular-nums text-text-muted whitespace-nowrap">
+                                          {formatFileSizeKB(ver.fileSizeKB)}
+                                        </td>
 
-                                          <td className="py-2.5 px-3 font-mono text-heading">
-                                            <button
+                                        <td className="py-2.5 px-3 font-mono text-2xs text-text-muted tabular-nums whitespace-nowrap">
+                                          <div className="font-medium text-heading/90">{ver.uploadedBy}</div>
+                                          <div>{formatDate(ver.uploadedOn)}</div>
+                                        </td>
+
+                                        <td className="py-2.5 px-3 text-text">
+                                          {ver.changeRemarks || '—'}
+                                        </td>
+
+                                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                          <div className="flex items-center justify-end gap-1.5">
+                                            <Button
                                               type="button"
+                                              variant="secondary"
+                                              size="sm"
                                               onClick={() =>
                                                 setPreviewItem({
                                                   ...ver,
@@ -1009,85 +1048,45 @@ export default function InquiryViewPage() {
                                                   documentTypeId: doc.documentTypeId,
                                                 })
                                               }
-                                              className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-pointer text-left group/verfile focus:outline-none"
-                                              title={`Click to view ${ver.fileName}`}
+                                              title="View / Preview attachment"
+                                              className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2.5 inline-flex items-center gap-1 cursor-pointer"
                                             >
-                                              {renderFileExtIcon(ver.fileExtension)}
-                                              <span
-                                                className="truncate max-w-[200px] sm:max-w-[240px] group-hover/verfile:underline"
-                                                title={ver.fileName}
-                                              >
-                                                {ver.fileName}
-                                              </span>
-                                              <IconView size={12} className="text-text-muted/50 group-hover/verfile:text-primary shrink-0 opacity-0 group-hover/verfile:opacity-100 transition-opacity" />
-                                            </button>
-                                          </td>
-
-                                          <td className="py-2.5 px-3 font-mono tabular-nums text-text-muted whitespace-nowrap">
-                                            {formatFileSizeKB(ver.fileSizeKB)}
-                                          </td>
-
-                                          <td className="py-2.5 px-3 font-mono text-2xs text-text-muted tabular-nums whitespace-nowrap">
-                                            <div className="font-medium text-heading/90">{ver.uploadedBy}</div>
-                                            <div>{formatDate(ver.uploadedOn)}</div>
-                                          </td>
-
-                                          <td className="py-2.5 px-3 text-text">
-                                            {ver.changeRemarks || '—'}
-                                          </td>
-
-                                          <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                                            <div className="flex items-center justify-end gap-1.5">
-                                              <Button
-                                                type="button"
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() =>
-                                                  setPreviewItem({
-                                                    ...ver,
-                                                    documentTitle: doc.documentTitle,
-                                                    documentTypeId: doc.documentTypeId,
-                                                  })
-                                                }
-                                                title="View / Preview attachment"
-                                                className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2.5 inline-flex items-center gap-1 cursor-pointer"
-                                              >
-                                                <IconView size={13} className="text-text-muted shrink-0" />
-                                                <span>View</span>
-                                              </Button>
-                                              <Button
-                                                type="button"
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleDownloadAttachment({
-                                                    ...ver,
-                                                    documentTitle: doc.documentTitle,
-                                                    documentTypeId: doc.documentTypeId,
-                                                  })
-                                                }
-                                                title="Download attachment"
-                                                className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2.5 inline-flex items-center gap-1 cursor-pointer"
-                                              >
-                                                <IconDownload size={13} className="text-text-muted shrink-0" />
-                                                <span>Download</span>
-                                              </Button>
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
+                                              <IconView size={13} className="text-text-muted shrink-0" />
+                                              <span>View</span>
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant="secondary"
+                                              size="sm"
+                                              onClick={() =>
+                                                handleDownloadAttachment({
+                                                  ...ver,
+                                                  documentTitle: doc.documentTitle,
+                                                  documentTypeId: doc.documentTypeId,
+                                                })
+                                              }
+                                              title="Download attachment"
+                                              className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2.5 inline-flex items-center gap-1 cursor-pointer"
+                                            >
+                                              <IconDownload size={13} className="text-text-muted shrink-0" />
+                                              <span>Download</span>
+                                            </Button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </TableContainer>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </TableContainer>
           )}
         </Card>
       </div>
@@ -1105,10 +1104,9 @@ export default function InquiryViewPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-surface/60 p-3.5 rounded-xl border border-border">
               <div className="flex items-center gap-2 flex-wrap">
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
-                    getDocumentTypeById(previewItem.documentTypeId)?.badgeClass ||
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${getDocumentTypeById(previewItem.documentTypeId)?.badgeClass ||
                     'bg-surface text-text-muted border-border'
-                  }`}
+                    }`}
                 >
                   {getDocumentTypeById(previewItem.documentTypeId)?.typeName || 'Attachment'}
                 </span>

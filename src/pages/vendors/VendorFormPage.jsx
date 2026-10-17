@@ -13,7 +13,8 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {  IconAttachment,
+import {
+  IconAttachment,
   IconBack,
   IconBuilding2,
   IconClose,
@@ -167,7 +168,7 @@ function validateField(name, value, currentForm = {}) {
       if (!value) return 'Country is required.';
       return '';
     case 'stateId':
-      if (!value) return 'State / Province is required.';
+      if (!value) return 'State is required.';
       return '';
     case 'city':
       if (!str) return 'City is required.';
@@ -544,7 +545,7 @@ export default function VendorFormPage() {
               disabled={loading}
               size="sm"
             >
-              {isEdit ? 'Save Changes' : 'Save'}
+              {isEdit ? 'Save Changes' : 'Save Vendor'}
             </SaveButton>
           </div>
         }
@@ -586,7 +587,7 @@ export default function VendorFormPage() {
               id="vendorName"
               name="vendorName"
               type="text"
-              label="Vendor / Company Name"
+              label="Vendor Name"
               placeholder="e.g. Apex Precision Castings Pvt Ltd"
               required
               value={form.vendorName}
@@ -769,7 +770,7 @@ export default function VendorFormPage() {
             id="website"
             name="website"
             type="url"
-            label="Website / Company URL"
+            label="Company Website URL"
             placeholder="https://www.company.com (optional)"
             value={form.website}
             onChange={handleChange}
@@ -813,7 +814,7 @@ export default function VendorFormPage() {
           <SearchableSelect
             id="stateId"
             name="stateId"
-            label="State / Province"
+            label="State"
             placeholder={
               !form.countryId
                 ? 'Select country first...'
@@ -912,14 +913,14 @@ export default function VendorFormPage() {
         </div>
 
         <Textarea
-            id="notes"
-            name="notes"
-            label="Internal Notes / ISO Certifications / Special Capabilities"
-            rows={4}
-            placeholder="Add any internal remarks, capability notes, tooling standards, or ISO certification references..."
-            value={form.notes}
-            onChange={handleChange}
-          />
+          id="notes"
+          name="notes"
+          label="Notes & Terms"
+          rows={4}
+          placeholder="Add any internal remarks, capability notes, tooling standards, or ISO certification references..."
+          value={form.notes}
+          onChange={handleChange}
+        />
       </Card>
 
       {/* ── SECTION 5: ATTACHMENTS & SUPPORTING DOCUMENTS ── */}
@@ -971,8 +972,8 @@ export default function VendorFormPage() {
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 ${isDragging
-                      ? 'border-primary bg-primary/10 scale-[0.99]'
-                      : 'border-border hover:border-primary/60 bg-bg hover:bg-surface/60'
+                    ? 'border-primary bg-primary/10 scale-[0.99]'
+                    : 'border-border hover:border-primary/60 bg-bg hover:bg-surface/60'
                     }`}
                 >
                   {/* Native file input hidden for custom drag-drop styling */}
@@ -1196,7 +1197,7 @@ export default function VendorFormPage() {
             disabled={loading}
             className="flex-1 sm:flex-initial"
           >
-            {isEdit ? 'Save Changes' : 'Create Vendor'}
+            {isEdit ? 'Save Changes' : 'Save Vendor'}
           </SaveButton>
         </div>
       </div>
