@@ -185,6 +185,11 @@ export function userToRegisterApi(form) {
     ? form.roleIds.map(Number).filter((n) => !Number.isNaN(n) && n > 0)
     : [];
 
+  const primaryRoleId =
+    form.primaryRoleId !== undefined && form.primaryRoleId !== null && form.primaryRoleId !== ''
+      ? Number(form.primaryRoleId)
+      : (roleIds.length > 0 ? roleIds[0] : 0);
+
   return {
     firstName: (form.firstName || '').trim(),
     lastName: (form.lastName || '').trim(),
@@ -193,7 +198,7 @@ export function userToRegisterApi(form) {
     secondaryPhone: form.secondaryPhone ? form.secondaryPhone.trim() : null,
     address: form.address ? form.address.trim() : null,
     roleIds: roleIds.length > 0 ? roleIds : null,
-    primaryRoleId: 0,
+    primaryRoleId: primaryRoleId || 0,
   };
 }
 
@@ -206,10 +211,10 @@ export function userToUpdateApi(form) {
   return {
     firstName: (form.firstName || '').trim(),
     lastName: (form.lastName || '').trim(),
-    email: (form.email || '').trim().toLowerCase(),
     mobile: (form.mobile || '').trim(),
     secondaryPhone: form.secondaryPhone ? form.secondaryPhone.trim() : null,
     address: form.address ? form.address.trim() : null,
+    email: (form.email || '').trim().toLowerCase(),
   };
 }
 

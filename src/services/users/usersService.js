@@ -90,9 +90,16 @@ export async function createUser(formData) {
     const payload = userToRegisterApi(formData);
     const response = await axiosInstance.post(AUTH_ENDPOINTS.REGISTER, payload);
     const data = response.data || {};
+    const createdUser = userFromApi(data.user);
+
+    // If isActive was set to false in Add New User popup, patch status via PATCH /api/users/{id}/status
+    if (typeof formData.isActive === 'boolean' && !formData.isActive && (createdUser.id || createdUser.userId)) {
+      await updateStatus(createdUser.id || createdUser.userId, false).catch(() => null);
+      createdUser.isActive = false;
+    }
 
     return {
-      user: userFromApi(data.user),
+      user: createdUser,
       temporaryPasswordEmailSent: Boolean(data.temporaryPasswordEmailSent),
       temporaryPasswordExpiresOn: data.temporaryPasswordExpiresOn || null,
       message: data.message || 'User registered successfully. Temporary password has been sent by email.',
@@ -111,11 +118,17 @@ export async function createUser(formData) {
  * @param {number} [payload.primaryRoleId]
  * @returns {Promise<any>}
  */
-export async function updateUserRoles(id, { roleIds }) {
+export async function updateUserRoles(id, { roleIds, primaryRoleId }) {
   try {
+    const roleIdList = (roleIds || []).map((r) => Number(r) || 0);
+    const pRoleId =
+      primaryRoleId !== undefined && primaryRoleId !== null && primaryRoleId !== ''
+        ? Number(primaryRoleId)
+        : (roleIdList[0] || 0);
+
     const payload = {
-      roleIds: (roleIds || []).map((r) => Number(r) || 0),
-      primaryRoleId: 0,
+      roleIds: roleIdList,
+      primaryRoleId: pRoleId || 0,
     };
     const response = await axiosInstance.put(USERS_ENDPOINTS.USER_ROLES(id), payload);
     return response.data;
@@ -139,8 +152,13 @@ export async function updateUser(id, formData) {
     if (Array.isArray(formData.roleIds) && formData.roleIds.length > 0) {
       await updateUserRoles(id, {
         roleIds: formData.roleIds,
-        primaryRoleId: 0,
+        primaryRoleId: formData.primaryRoleId,
       });
+    }
+
+    // If isActive status is provided/changed in edit popup, invoke PATCH /api/users/{id}/status
+    if (typeof formData.isActive === 'boolean') {
+      await updateStatus(id, formData.isActive);
     }
 
     return getUserById(id);
@@ -167,6 +185,19 @@ export async function updateStatus(id, isActive) {
 }
 
 /**
+ * Retrieves the signed-in user's profile via GET /api/users/me.
+ * @returns {Promise<import('../../models/users/userModel').UserModel>}
+ */
+export async function getMe() {
+  try {
+    const response = await axiosInstance.get(USERS_ENDPOINTS.USER_ME);
+    return userFromApi(response.data);
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
  * Updates signed-in user's own profile via PUT /api/users/me.
  * @param {object} formData
  * @returns {Promise<import('../../models/users/userModel').UserModel>}
@@ -175,7 +206,42 @@ export async function updateProfile(formData) {
   try {
     const payload = userToProfileApi(formData);
     const response = await axiosInstance.put(USERS_ENDPOINTS.USER_ME, payload);
-    return userFromApi(response.data);
+    if (response.data && (response.data.userId !== undefined || response.data.id !== undefined)) {
+      return userFromApi(response.data);
+    }
+    return getMe();
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Fetches recent login sessions for a user via GET /api/users/{id}/sessions?take={take}.
+ * @param {string|number} id
+ * @param {object} [params]
+ * @param {number} [params.take=5]
+ * @returns {Promise<Array<object>>}
+ */
+export async function getUserSessions(id, { take = 5 } = {}) {
+  try {
+    const response = await axiosInstance.get(USERS_ENDPOINTS.USER_SESSIONS(id), {
+      params: { take },
+    });
+    return response.data || [];
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Sends a temporary password to a user via POST /api/users/{id}/temporary-password.
+ * @param {string|number} id
+ * @returns {Promise<{ message?: string, temporaryPassword?: string, temporaryPasswordExpiresOn?: string }>}
+ */
+export async function sendTemporaryPassword(id) {
+  try {
+    const response = await axiosInstance.post(USERS_ENDPOINTS.USER_TEMPORARY_PASSWORD(id));
+    return response.data || { message: 'Temporary password sent successfully.' };
   } catch (err) {
     throw normalizeApiError(err);
   }

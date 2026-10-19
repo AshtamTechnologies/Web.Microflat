@@ -234,12 +234,6 @@ export default function LoginPage() {
     if (formError) setFormError('');
   }
 
-  function handleFillDemo(identifier, password) {
-    setLoginForm((prev) => ({ ...prev, identifier, password }));
-    setErrors({});
-    setFormError('');
-  }
-
   async function handleLoginSubmit(e) {
     e.preventDefault();
     const fieldErrors = validateLogin(loginForm);
@@ -489,37 +483,6 @@ export default function LoginPage() {
                 >
                   {loading ? 'Signing in…' : 'Sign in'}
                 </Button>
-
-                <div className="pt-2 border-t border-border/70 space-y-2">
-                  <p className="text-2xs font-medium text-text-muted uppercase tracking-wider text-center select-none">
-                    Demo Credentials (Click to test)
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleFillDemo('admin@microflat.in', 'admin123')}
-                      className="p-2 rounded-lg border border-border bg-surface/60 hover:bg-surface hover:border-primary/40 text-left transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-heading">Standard User</span>
-                        <span className="text-2xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Direct</span>
-                      </div>
-                      <p className="text-2xs font-mono text-text-muted mt-0.5">admin@microflat.in</p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleFillDemo('newuser@microflat.in', 'welcome123')}
-                      className="p-2 rounded-lg border border-border bg-surface/60 hover:bg-surface hover:border-warning/40 text-left transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-heading">First-Time User</span>
-                        <span className="text-2xs bg-warning/10 text-warning px-1.5 py-0.5 rounded font-medium">Force Reset</span>
-                      </div>
-                      <p className="text-2xs font-mono text-text-muted mt-0.5">newuser@microflat.in</p>
-                    </button>
-                  </div>
-                </div>
               </form>
             </div>
           )}

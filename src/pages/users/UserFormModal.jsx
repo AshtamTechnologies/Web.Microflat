@@ -21,6 +21,7 @@ import {
   SaveButton,
   CancelButton,
   Button,
+  StatusSwitch,
 } from '../../components/ui';
 import { roleService } from '../../services';
 import { IconCheck, IconCopy, IconMail, IconShieldCheck } from '../../constants/icons';
@@ -35,6 +36,7 @@ const INITIAL_FORM = {
   roleIds: [],
   primaryRoleId: '',
   address: '',
+  isActive: true,
 };
 
 function validateField(name, value) {
@@ -84,6 +86,7 @@ export default function UserFormModal({
   onClose,
   user = null, // null for Add, user object for Edit
   onSubmit,
+  isProfileMode = false,
 }) {
   const isEdit = Boolean(user?.id);
   const [form, setForm] = useState(INITIAL_FORM);
@@ -141,6 +144,14 @@ export default function UserFormModal({
           })
           .filter(Boolean);
 
+        const primaryRoleObj = (user.roles || []).find((r) => r.isPrimary);
+        const primaryId = primaryRoleObj?.roleId ?? primaryRoleObj?.id;
+        const initialPrimary = primaryId
+          ? String(primaryId)
+          : existingRoleIds[0]
+          ? String(existingRoleIds[0])
+          : '';
+
         setForm({
           firstName: user.firstName || '',
           lastName: user.lastName || '',
@@ -148,8 +159,9 @@ export default function UserFormModal({
           mobile: user.mobile || '',
           secondaryPhone: user.secondaryPhone || '',
           roleIds: existingRoleIds,
-          primaryRoleId: '0',
+          primaryRoleId: initialPrimary,
           address: user.address || '',
+          isActive: user.isActive !== undefined ? Boolean(user.isActive) : true,
         });
       } else {
         setForm(INITIAL_FORM);
@@ -163,6 +175,21 @@ export default function UserFormModal({
 
   function handleChange(e) {
     const { name, value } = e.target;
+    if (name === 'roleIds') {
+      const newRoleIds = Array.isArray(value) ? value : [];
+      setForm((prev) => {
+        let newPrimary = prev.primaryRoleId;
+        if (newRoleIds.length === 1) {
+          newPrimary = String(newRoleIds[0]);
+        } else if (!newRoleIds.includes(String(newPrimary))) {
+          newPrimary = newRoleIds[0] ? String(newRoleIds[0]) : '';
+        }
+        return { ...prev, roleIds: newRoleIds, primaryRoleId: newPrimary };
+      });
+      if (errors.roleIds) setErrors((prev) => ({ ...prev, roleIds: '' }));
+      return;
+    }
+
     setForm((prev) => ({ ...prev, [name]: value }));
 
     if (errors[name]) {
@@ -172,6 +199,7 @@ export default function UserFormModal({
 
   function handleBlur(e) {
     const { name, value } = e.target;
+    if (isProfileMode && (name === 'email' || name === 'roleIds')) return;
     const err = validateField(name, value, form);
     if (err) setErrors((prev) => ({ ...prev, [name]: err }));
   }
@@ -179,6 +207,10 @@ export default function UserFormModal({
   async function handleSubmit(e) {
     e.preventDefault();
     const fieldErrors = validateAll(form);
+    if (isProfileMode) {
+      delete fieldErrors.email;
+      delete fieldErrors.roleIds;
+    }
     if (Object.keys(fieldErrors).length) {
       setErrors(fieldErrors);
       return;
@@ -186,21 +218,38 @@ export default function UserFormModal({
 
     setLoading(true);
     try {
-      const payload = {
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        email: form.email.trim(),
-        mobile: form.mobile.trim(),
-        secondaryPhone: form.secondaryPhone ? form.secondaryPhone.trim() : null,
-        address: form.address ? form.address.trim() : null,
-        roleIds: form.roleIds.map(Number),
-        primaryRoleId: 0,
-      };
+      let payload;
+      if (isProfileMode) {
+        payload = {
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          mobile: form.mobile.trim(),
+          secondaryPhone: form.secondaryPhone ? form.secondaryPhone.trim() : null,
+          address: form.address ? form.address.trim() : null,
+        };
+      } else {
+        const effectivePrimaryRoleId =
+          form.roleIds.length === 1
+            ? Number(form.roleIds[0])
+            : Number(form.primaryRoleId) || (form.roleIds[0] ? Number(form.roleIds[0]) : 0);
+
+        payload = {
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          email: form.email.trim(),
+          mobile: form.mobile.trim(),
+          secondaryPhone: form.secondaryPhone ? form.secondaryPhone.trim() : null,
+          address: form.address ? form.address.trim() : null,
+          roleIds: form.roleIds.map(Number),
+          primaryRoleId: effectivePrimaryRoleId,
+          isActive: Boolean(form.isActive),
+        };
+      }
 
       const result = await onSubmit(payload);
 
       // If creating user returned temporary password info, show confirmation dialog
-      if (!isEdit && result?.data) {
+      if (!isEdit && !isProfileMode && result?.data) {
         setTempPassResult(result.data);
       } else {
         onClose();
@@ -301,11 +350,17 @@ export default function UserFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEdit ? 'Edit User' : 'Add New User'}
+      title={isProfileMode ? 'Edit Profile' : isEdit ? 'Edit User' : 'Add New User'}
       maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {isProfileMode && (
+            <div className="sm:col-span-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-text-muted leading-relaxed">
+              Updates your signed-in contact details. Email, roles, and status cannot be modified here.
+            </div>
+          )}
+
           {/* First Name */}
           <Input
             id="user-first-name"
@@ -343,12 +398,14 @@ export default function UserFormModal({
             type="email"
             label="Email Address"
             placeholder="user@example.com"
-            required
+            required={!isProfileMode}
+            disabled={isProfileMode}
             value={form.email}
             onChange={handleChange}
             onBlur={handleBlur}
             error={errors.email}
             autoComplete="email"
+            hint={isProfileMode ? 'Email cannot be changed' : ''}
           />
 
           {/* Primary Mobile */}
@@ -382,22 +439,86 @@ export default function UserFormModal({
             autoComplete="tel"
           />
 
-          {/* Roles Multi-Select (Available in both Add and Edit mode) */}
-          <div className="sm:col-span-2">
-            <SearchableMultiSelect
-              id="user-roles"
-              name="roleIds"
-              label="Assigned Roles"
-              placeholder="Select roles..."
-              searchPlaceholder="Search roles..."
-              required
-              value={form.roleIds}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              error={errors.roleIds}
-              options={roleSelectOptions}
-            />
-          </div>
+          {/* Roles Selection (Hidden in Profile Mode per API spec) */}
+          {!isProfileMode && (
+            <div className="sm:col-span-2 space-y-2.5">
+              <SearchableMultiSelect
+                id="user-roles"
+                name="roleIds"
+                label="Assigned Roles"
+                placeholder="Select roles..."
+                searchPlaceholder="Search roles..."
+                required
+                value={form.roleIds}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                error={errors.roleIds}
+                options={roleSelectOptions}
+              />
+
+              {/* Single Role Auto-Assigned as Primary */}
+              {form.roleIds.length === 1 && (
+                <div className="p-2.5 rounded-lg bg-surface border border-border flex items-center justify-between text-xs">
+                  <span className="text-text-muted">Primary Role:</span>
+                  <span className="font-semibold text-primary">
+                    {roleSelectOptions.find((o) => o.value === String(form.roleIds[0]))?.label ||
+                      `Role #${form.roleIds[0]}`}{' '}
+                    <span className="text-2xs font-normal text-text-muted">(Auto-assigned)</span>
+                  </span>
+                </div>
+              )}
+
+              {/* Multiple Roles: User selects which one is Primary */}
+              {form.roleIds.length > 1 && (
+                <div className="p-3 rounded-xl bg-surface/70 border border-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-heading">
+                      Select Primary Role <span className="text-danger">*</span>
+                    </label>
+                    <span className="text-2xs text-text-muted">
+                      Determines primary permissions & role badge
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {form.roleIds.map((rid) => {
+                      const option = roleSelectOptions.find((o) => o.value === String(rid));
+                      const label = option?.label || `Role #${rid}`;
+                      const isSelected = String(form.primaryRoleId) === String(rid);
+                      return (
+                        <label
+                          key={rid}
+                          className={`flex items-center justify-between gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                            isSelected
+                              ? 'border-primary bg-primary/10 text-heading font-semibold shadow-2xs'
+                              : 'border-border bg-bg hover:bg-surface text-text'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="radio"
+                              name="primaryRoleId"
+                              value={String(rid)}
+                              checked={isSelected}
+                              onChange={() =>
+                                setForm((prev) => ({ ...prev, primaryRoleId: String(rid) }))
+                              }
+                              className="text-primary focus:ring-primary h-3.5 w-3.5 shrink-0"
+                            />
+                            <span className="text-xs truncate">{label}</span>
+                          </div>
+                          {isSelected && (
+                            <span className="text-2xs bg-primary text-white px-1.5 py-0.5 rounded font-medium shrink-0">
+                              Primary
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Address */}
           <div className="sm:col-span-2">
@@ -411,6 +532,24 @@ export default function UserFormModal({
               placeholder="Enter full address, street, city, state, postal code..."
             />
           </div>
+
+          {/* Account Status Switch (Add & Edit mode, hidden in profile mode) */}
+          {!isProfileMode && (
+            <div className="sm:col-span-2 pt-1">
+              <span className="mf-label block mb-2">
+                Account Status <span className="mf-required" aria-hidden="true">*</span>
+              </span>
+              <div className="flex items-center gap-3">
+                <StatusSwitch
+                  id="user-status-switch"
+                  checked={form.isActive}
+                  onChange={(checked) =>
+                    setForm((prev) => ({ ...prev, isActive: checked }))
+                  }
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modal Footer Actions */}
@@ -426,7 +565,7 @@ export default function UserFormModal({
             disabled={loading}
             className="flex-1 sm:flex-none justify-center font-semibold shadow-2xs"
           >
-            {isEdit ? 'Save Changes' : 'Create User'}
+            {isProfileMode ? 'Update Profile' : isEdit ? 'Save Changes' : 'Create User'}
           </SaveButton>
         </div>
       </form>

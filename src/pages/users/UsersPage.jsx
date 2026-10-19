@@ -43,6 +43,8 @@ import {
 } from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
 import { useUserSessions } from '../../context/UserSessionsContext';
+import { useAuthContext } from '../../context/AuthContext';
+import { userService } from '../../services';
 import { formatDateTime, formatRelative } from '../../utils/dateUtils';
 import UserFormModal from './UserFormModal';
 
@@ -78,8 +80,21 @@ export default function UsersPage() {
     deleteUser,
     createUser,
     updateUser,
+    updateUserRoles,
+    updateProfile,
     toggleStatus,
+    sendTemporaryPassword,
   } = useUsersContext();
+
+  const { user: authUser, setUser: setAuthUser } = useAuthContext();
+
+  const isSelfUser = (targetUser) => {
+    if (!targetUser || !authUser) return false;
+    if (authUser.id && targetUser.id && String(authUser.id) === String(targetUser.id)) return true;
+    if (authUser.userId && targetUser.userId && String(authUser.userId) === String(targetUser.userId)) return true;
+    if (authUser.email && targetUser.email && authUser.email.toLowerCase() === targetUser.email.toLowerCase()) return true;
+    return false;
+  };
 
   const { getLastLogin } = useUserSessions();
 
@@ -124,8 +139,23 @@ export default function UsersPage() {
     setIsFormModalOpen(true);
   }
 
-  function handleOpenEdit(user) {
-    setSelectedUser(user);
+  async function handleOpenEdit(user) {
+    if (isSelfUser(user)) {
+      try {
+        const meUser = await userService.getMe();
+        setSelectedUser(meUser || user);
+      } catch {
+        setSelectedUser(user);
+      }
+    } else {
+      try {
+        const targetId = user?.id || user?.userId;
+        const fullUser = await userService.getUserById(targetId);
+        setSelectedUser(fullUser || user);
+      } catch {
+        setSelectedUser(user);
+      }
+    }
     setIsFormModalOpen(true);
   }
 
@@ -135,6 +165,13 @@ export default function UsersPage() {
   }
 
   async function handleModalSubmit(formData) {
+    if (isSelfUser(selectedUser)) {
+      const res = await updateProfile(formData);
+      if (res?.user && setAuthUser) {
+        setAuthUser(res.user);
+      }
+      return res;
+    }
     if (selectedUser?.id) {
       return updateUser(selectedUser.id, formData);
     }
@@ -344,9 +381,10 @@ export default function UsersPage() {
         enableResizing: false,
         cell: (info) => {
           const row = info.row.original;
+          const isSelf = isSelfUser(row);
           return (
             <TableActions
-              onView={() => navigate(`/users/${row.id}`)}
+              onView={() => navigate(isSelf ? '/users/me' : `/users/${row.id}`)}
               onEdit={() => handleOpenEdit(row)}
               onDelete={capabilities.delete ? () => setUserToDelete(row) : undefined}
               viewTooltip="View user details"
@@ -359,7 +397,7 @@ export default function UsersPage() {
     );
 
     return cols;
-  }, [capabilities, isMockApi, lastLoginMap, navigate]);
+  }, [capabilities, isMockApi, lastLoginMap, navigate, authUser]);
 
   const pagination = useMemo(
     () => ({
@@ -563,7 +601,7 @@ export default function UsersPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => navigate(`/users/${user.id}`)}
+                  onClick={() => navigate(isSelfUser(user) ? '/users/me' : `/users/${user.id}`)}
                   className="flex-1 text-xs"
                 >
                   <IconView size={13} className="mr-1.5" aria-hidden="true" />
@@ -590,6 +628,7 @@ export default function UsersPage() {
         onClose={handleCloseModal}
         user={selectedUser}
         onSubmit={handleModalSubmit}
+        isProfileMode={isSelfUser(selectedUser)}
       />
 
       {/* ── Status Toggle Confirmation Modal ── */}

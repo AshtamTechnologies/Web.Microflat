@@ -18,6 +18,7 @@ export default function Textarea({
   id,
   error,
   hint,
+  helperText,
   required = false,
   className = '',
   rows = 3,
@@ -27,6 +28,7 @@ export default function Textarea({
   ...rest
 }) {
   const hasError = Boolean(error);
+  const effectiveHint = hint || helperText;
   const currentLength = typeof value === 'string' ? value.length : 0;
 
   return (
@@ -55,7 +57,7 @@ export default function Textarea({
           .filter(Boolean)
           .join(' ')}
         aria-describedby={
-          error ? `${id}-error` : hint ? `${id}-hint` : undefined
+          error ? `${id}-error` : effectiveHint ? `${id}-hint` : undefined
         }
         aria-invalid={hasError ? 'true' : undefined}
         {...rest}
@@ -66,9 +68,9 @@ export default function Textarea({
           <p id={`${id}-error`} role="alert" className="mf-error">
             {error}
           </p>
-        ) : hint ? (
+        ) : effectiveHint ? (
           <p id={`${id}-hint`} className="mf-hint">
-            {hint}
+            {effectiveHint}
           </p>
         ) : (
           <span />

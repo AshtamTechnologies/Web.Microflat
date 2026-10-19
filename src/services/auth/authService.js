@@ -44,16 +44,23 @@ export async function refreshToken({ refreshToken: token }) {
 }
 
 /**
- * Revokes the current session and refresh tokens on the server via POST /api/auth/logout.
+ * Revokes all sessions of the current user on the server via POST /api/auth/logout-all.
  * @returns {Promise<{ message: string }>}
  */
 export async function logout() {
   try {
-    const response = await axiosInstance.post(AUTH_ENDPOINTS.LOGOUT);
+    const response = await axiosInstance.post(AUTH_ENDPOINTS.LOGOUT_ALL);
     return response.data || { message: 'Logged out successfully.' };
   } catch (err) {
     throw normalizeApiError(err);
   }
+}
+
+/**
+ * Explicit logout-all alias.
+ */
+export async function logoutAll() {
+  return logout();
 }
 
 /**

@@ -18,6 +18,7 @@ export default function Input({
   size = 'md',
   error,
   hint,
+  helperText,
   leftIcon,
   rightElement,
   required = false,
@@ -25,6 +26,7 @@ export default function Input({
   ...rest
 }) {
   const hasError = Boolean(error);
+  const effectiveHint = hint || helperText;
 
   const sizeClass = size === 'sm' ? 'mf-input--sm' : size === 'lg' ? 'mf-input--lg' : '';
 
@@ -63,7 +65,7 @@ export default function Input({
           data-has-left-icon={leftIcon ? 'true' : undefined}
           data-has-right-element={rightElement ? 'true' : undefined}
           aria-describedby={
-            error ? `${id}-error` : hint ? `${id}-hint` : undefined
+            error ? `${id}-error` : effectiveHint ? `${id}-hint` : undefined
           }
           aria-invalid={hasError ? 'true' : undefined}
           {...rest}
@@ -84,9 +86,9 @@ export default function Input({
       )}
 
       {/* Hint text */}
-      {!hasError && hint && (
+      {!hasError && effectiveHint && (
         <p id={`${id}-hint`} className="mf-hint">
-          {hint}
+          {effectiveHint}
         </p>
       )}
     </div>

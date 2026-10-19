@@ -91,6 +91,10 @@ export async function logout() {
   return { message: 'Logged out successfully.' };
 }
 
+export async function logoutAll() {
+  return logout();
+}
+
 export async function forgotPassword({ email }) {
   await new Promise((r) => setTimeout(r, 400));
   return {

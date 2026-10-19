@@ -271,18 +271,47 @@ export function useUsers() {
   // Get single user by ID
   const getUserById = useCallback(
     async (id) => {
-      const cached = allUsers.find((u) => String(u.id) === String(id));
-      if (cached) return cached;
+      if (id === 'me') {
+        const fetchedMe = await userService.getMe();
+        if (fetchedMe) {
+          setAllUsers((prev) => {
+            const map = new Map(prev.map((u) => [String(u.id), u]));
+            map.set(String(fetchedMe.id), fetchedMe);
+            return Array.from(map.values());
+          });
+        }
+        return fetchedMe;
+      }
 
       const fetched = await userService.getUserById(id);
-      setAllUsers((prev) => {
-        const map = new Map(prev.map((u) => [String(u.id), u]));
-        map.set(String(fetched.id), fetched);
-        return Array.from(map.values());
-      });
+      if (fetched) {
+        setAllUsers((prev) => {
+          const map = new Map(prev.map((u) => [String(u.id), u]));
+          map.set(String(fetched.id), fetched);
+          return Array.from(map.values());
+        });
+      }
       return fetched;
     },
-    [allUsers]
+    []
+  );
+
+  // Update Signed-In User Profile via PUT /api/users/me
+  const updateProfile = useCallback(
+    async (formData) => {
+      try {
+        const updated = await userService.updateProfile(formData);
+        toast.success('Profile updated successfully.');
+        setUsers((prev) => prev.map((u) => (String(u.id) === String(updated.id) ? updated : u)));
+        setAllUsers((prev) => prev.map((u) => (String(u.id) === String(updated.id) ? updated : u)));
+        return { ok: true, user: updated };
+      } catch (err) {
+        const msg = err?.message || 'Failed to update profile.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    []
   );
 
   // Create User
@@ -314,6 +343,25 @@ export function useUsers() {
         return { ok: true, user: updated };
       } catch (err) {
         const msg = err?.message || 'Failed to update user.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    []
+  );
+
+  // Update User Roles via PUT /api/users/{id}/roles
+  const updateUserRoles = useCallback(
+    async (id, { roleIds, primaryRoleId }) => {
+      try {
+        await userService.updateUserRoles(id, { roleIds, primaryRoleId });
+        toast.success('User roles updated successfully.');
+        const updated = await userService.getUserById(id);
+        setUsers((prev) => prev.map((u) => (String(u.id) === String(id) ? updated : u)));
+        setAllUsers((prev) => prev.map((u) => (String(u.id) === String(id) ? updated : u)));
+        return { ok: true, user: updated };
+      } catch (err) {
+        const msg = err?.message || 'Failed to update user roles.';
         toast.error(msg);
         throw err;
       }
@@ -365,20 +413,34 @@ export function useUsers() {
     []
   );
 
+  // Send Temporary Password via POST /api/users/{id}/temporary-password
+  const sendTemporaryPassword = useCallback(
+    async (id) => {
+      try {
+        const res = await userService.sendTemporaryPassword(id);
+        const msg = res?.message || 'Temporary password has been dispatched by email.';
+        toast.success(msg);
+        const updated = await userService.getUserById(id).catch(() => null);
+        if (updated) {
+          setUsers((prev) => prev.map((u) => (String(u.id) === String(id) ? updated : u)));
+          setAllUsers((prev) => prev.map((u) => (String(u.id) === String(id) ? updated : u)));
+        }
+        return { ok: true, data: res, user: updated };
+      } catch (err) {
+        const msg = err?.message || 'Failed to send temporary password.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    []
+  );
+
   // Reset Password (generates temporary password in API mode)
   const resetPassword = useCallback(
     async (id) => {
-      const user = users.find((u) => String(u.id) === String(id));
-      if (user?.email) {
-        try {
-          await roleService.getRoles(); // ping check
-          toast.success(`Password reset link sent to ${user.email}`);
-        } catch {
-          toast.success(`Password reset link sent to ${user.email}`);
-        }
-      }
+      return sendTemporaryPassword(id);
     },
-    [users]
+    [sendTemporaryPassword]
   );
 
   // Safe user lookup by ID
@@ -412,8 +474,11 @@ export function useUsers() {
     getUserName: resolveUserName,
     createUser,
     updateUser,
+    updateUserRoles,
+    updateProfile,
     toggleStatus,
     deleteUser,
     resetPassword,
+    sendTemporaryPassword,
   };
 }

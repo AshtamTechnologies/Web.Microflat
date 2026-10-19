@@ -22,6 +22,7 @@ import {
   IconDelete,
   IconEdit,
   IconHistory,
+  IconKeyRound,
   IconLaptop,
   IconLocation,
   IconLock,
@@ -48,6 +49,8 @@ import {
 } from '../../components/ui';
 import { useUsersContext } from '../../context/UsersContext';
 import { useUserSessions } from '../../context/UserSessionsContext';
+import { useAuthContext } from '../../context/AuthContext';
+import { userService } from '../../services';
 import { formatDateTime, formatDuration } from '../../utils/dateUtils';
 import UserFormModal from './UserFormModal';
 
@@ -55,36 +58,104 @@ export default function UserViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const {
-    getUserById,
-    updateUser,
-    toggleStatus,
-    deleteUser,
-    capabilities,
-    isMockApi,
-  } = useUsersContext();
-
-  const { getRecentSessions, getSessionStatus } = useUserSessions();
+  const { user: authUser, setUser: setAuthUser } = useAuthContext();
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  // Derived isSelf: check route param or match with authUser by id, userId, or email
+  const isSelf =
+    id === 'me' ||
+    Boolean(
+      authUser &&
+        ((user?.id && String(authUser.id) === String(user.id)) ||
+          (user?.userId && String(authUser.userId) === String(user.userId)) ||
+          (authUser.id && String(authUser.id) === String(id)) ||
+          (authUser.userId && String(authUser.userId) === String(id)) ||
+          (authUser.email &&
+            user?.email &&
+            authUser.email.toLowerCase() === user.email.toLowerCase()))
+    );
+
+  const {
+    getUserById,
+    updateUser,
+    updateProfile,
+    toggleStatus,
+    deleteUser,
+    sendTemporaryPassword,
+    capabilities,
+  } = useUsersContext();
+
+  const { getRecentSessions } = useUserSessions();
+
+  // Sessions state from GET /api/users/{id}/sessions?take=5
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
   // Modal states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isTempPassModalOpen, setIsTempPassModalOpen] = useState(false);
+  const [sendingTempPass, setSendingTempPass] = useState(false);
 
   // Load user data on mount / ID change
   useEffect(() => {
     let ignore = false;
 
     async function fetchUser() {
+      setLoading(true);
       try {
-        const fetchedUser = await getUserById(id);
+        let fetchedUser = null;
+
+        // 1. If explicitly /users/me or matching authUser ID directly, fetch via GET /api/users/me
+        const isDirectSelf =
+          id === 'me' ||
+          (authUser &&
+            (String(authUser.id) === String(id) || String(authUser.userId) === String(id)));
+
+        if (isDirectSelf) {
+          fetchedUser = await userService.getMe();
+        } else {
+          fetchedUser = await getUserById(id);
+
+          // If the fetched user matches authUser (e.g. matching email or ID), load via getMe()
+          if (
+            fetchedUser &&
+            authUser &&
+            ((fetchedUser.email &&
+              authUser.email &&
+              fetchedUser.email.toLowerCase() === authUser.email.toLowerCase()) ||
+              String(fetchedUser.id) === String(authUser.id) ||
+              String(fetchedUser.userId) === String(authUser.userId))
+          ) {
+            const meUser = await userService.getMe().catch(() => null);
+            if (meUser) fetchedUser = meUser;
+          }
+        }
+
         if (!ignore) {
           if (fetchedUser) {
             setUser(fetchedUser);
+
+            // Fetch recent 5 sessions using GET /api/users/{id}/sessions?take=5
+            setLoadingSessions(true);
+            try {
+              const sessionUserId = fetchedUser.userId || fetchedUser.id || id;
+              const sessionList = await userService.getUserSessions(sessionUserId, { take: 5 });
+              if (!ignore) {
+                setSessions(Array.isArray(sessionList) ? sessionList : []);
+              }
+            } catch {
+              if (!ignore) {
+                // If API fails or in mock fallback mode
+                setSessions(getRecentSessions(fetchedUser.id || fetchedUser.userId, 5));
+              }
+            } finally {
+              if (!ignore) setLoadingSessions(false);
+            }
           } else {
             setNotFound(true);
           }
@@ -103,13 +174,7 @@ export default function UserViewPage() {
     return () => {
       ignore = true;
     };
-  }, [id, getUserById]);
-
-  // Recent sessions for mock mode
-  const recentSessions = useMemo(() => {
-    if (!isMockApi || !user) return [];
-    return getRecentSessions(user.id, 5);
-  }, [isMockApi, user, getRecentSessions]);
+  }, [id, authUser, getUserById, getRecentSessions]);
 
   // User details computations
   const userRoles = useMemo(() => {
@@ -135,8 +200,50 @@ export default function UserViewPage() {
     }
   }
 
+  function resolveSessionStatus(sess) {
+    if (!sess) return { label: 'Unknown', variant: 'neutral' };
+    if (sess.isActive) {
+      return { label: 'Active', variant: 'success' };
+    }
+    const logoutType = (sess.logoutType || '').toLowerCase();
+    if (logoutType === 'timeout') {
+      return { label: 'Timed out', variant: 'warning' };
+    }
+    return { label: 'Signed out', variant: 'neutral' };
+  }
+
+  async function handleOpenEdit() {
+    if (isSelf) {
+      try {
+        const meUser = await userService.getMe();
+        if (meUser) {
+          setUser(meUser);
+          if (setAuthUser) setAuthUser(meUser);
+        }
+      } catch {
+        /* fallback to current user */
+      }
+    } else if (user?.id || id) {
+      try {
+        const targetId = user?.id || id;
+        const freshUser = await userService.getUserById(targetId);
+        if (freshUser) setUser(freshUser);
+      } catch {
+        /* fallback to current user */
+      }
+    }
+    setIsEditModalOpen(true);
+  }
+
   async function handleEditSubmit(formData) {
-    if (user?.id) {
+    if (isSelf) {
+      const res = await updateProfile(formData);
+      if (res?.user) {
+        setUser(res.user);
+        if (setAuthUser) setAuthUser(res.user);
+      }
+      setIsEditModalOpen(false);
+    } else if (user?.id) {
       const res = await updateUser(user.id, formData);
       if (res?.user) {
         setUser(res.user);
@@ -152,6 +259,24 @@ export default function UserViewPage() {
         setUser(res.user);
       }
       setIsStatusModalOpen(false);
+    }
+  }
+
+  async function handleConfirmSendTempPassword() {
+    if (user?.id) {
+      setSendingTempPass(true);
+      try {
+        const res = await sendTemporaryPassword(user.id);
+        if (res?.user) {
+          setUser(res.user);
+        } else {
+          const fresh = await getUserById(user.id).catch(() => null);
+          if (fresh) setUser(fresh);
+        }
+        setIsTempPassModalOpen(false);
+      } finally {
+        setSendingTempPass(false);
+      }
     }
   }
 
@@ -252,24 +377,38 @@ export default function UserViewPage() {
             <Button
               variant="secondary"
               size="md"
-              onClick={() => setIsEditModalOpen(true)}
+              onClick={handleOpenEdit}
               icon={<IconEdit />}
             >
-              Edit User
+              {isSelf ? 'Edit Profile' : 'Edit User'}
             </Button>
 
-            {/* Activate / Deactivate Button */}
-            <Button
-              variant={user.isActive ? 'warning-soft' : 'primary'}
-              size="md"
-              onClick={() => setIsStatusModalOpen(true)}
-              icon={user.isActive ? <IconClose /> : <IconCheck />}
-            >
-              {user.isActive ? 'Deactivate' : 'Activate'}
-            </Button>
+            {/* Activate / Deactivate Button (Only for other users) */}
+            {!isSelf && (
+              <Button
+                variant={user.isActive ? 'warning-soft' : 'primary'}
+                size="md"
+                onClick={() => setIsStatusModalOpen(true)}
+                icon={user.isActive ? <IconClose /> : <IconCheck />}
+              >
+                {user.isActive ? 'Deactivate' : 'Activate'}
+              </Button>
+            )}
 
-            {/* Delete Button (Only when capabilities.delete is true) */}
-            {capabilities.delete && (
+            {/* Send Temporary Password Button (Only for other users) */}
+            {!isSelf && (
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setIsTempPassModalOpen(true)}
+                icon={<IconKeyRound className="text-warning" />}
+              >
+                Send Temporary Password
+              </Button>
+            )}
+
+            {/* Delete Button (Only when capabilities.delete is true and not self) */}
+            {!isSelf && capabilities.delete && (
               <Button
                 variant="danger-soft"
                 size="md"
@@ -408,28 +547,34 @@ export default function UserViewPage() {
       </Card>
 
       {/* ════════════════════════════════════════════════════════════════ */}
-      {/* CARD 2: Recent Logins Card (Rendered ONLY in mock mode)          */}
+      {/* CARD 2: Recent Logins Card                                      */}
       {/* ════════════════════════════════════════════════════════════════ */}
-      {isMockApi && (
-        <Card padding="md" className="bg-bg border border-border shadow-2xs space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h2 className="text-base font-bold text-heading tracking-tight flex items-center gap-2">
-                <IconHistory size={17} className="text-primary" />
-                Recent Logins (Mock Simulation)
-              </h2>
-              <p className="text-xs text-text-muted mt-0.5">
-                Last 5 sessions
-              </p>
-            </div>
-            <span className="font-mono text-xs text-text-muted">
-              {recentSessions.length} {recentSessions.length === 1 ? 'session' : 'sessions'}
-            </span>
+      <Card padding="md" className="bg-bg border border-border shadow-2xs space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-heading tracking-tight flex items-center gap-2">
+              <IconHistory size={17} className="text-primary" />
+              Recent Logins
+            </h2>
+            <p className="text-xs text-text-muted mt-0.5">
+              Last 5 sessions
+            </p>
           </div>
+          <span className="font-mono text-xs text-text-muted">
+            {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'}
+          </span>
+        </div>
 
-          {/* Table */}
-          <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden">
-            {recentSessions.length > 0 ? (
+        {/* Content */}
+        {loadingSessions ? (
+          <div className="py-12 text-center text-text-muted">
+            <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-xs font-medium">Loading session history…</p>
+          </div>
+        ) : sessions.length > 0 ? (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden">
               <TableContainer tableStyle={{ width: '100%' }}>
                 <thead>
                   <tr className="bg-surface">
@@ -442,10 +587,10 @@ export default function UserViewPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border bg-bg">
-                  {recentSessions.map((sess) => {
-                    const status = getSessionStatus(sess);
-                    const isTimeout = sess.logoutType === 'timeout';
-                    const isActive = !sess.logoutAt && !sess.logoutType;
+                  {sessions.map((sess) => {
+                    const status = resolveSessionStatus(sess);
+                    const isTimeout = (sess.logoutType || '').toLowerCase() === 'timeout';
+                    const isActive = Boolean(sess.isActive);
 
                     let durationText = '—';
                     if (isActive) {
@@ -459,8 +604,11 @@ export default function UserViewPage() {
                       durationText = formatDuration(diff);
                     }
 
+                    const sessKey =
+                      sess.userSessionId || sess.sessionId || `${sess.loginAt}-${sess.ipAddress}`;
+
                     return (
-                      <tr key={sess.sessionId} className="hover:bg-surface/50 transition-colors">
+                      <tr key={sessKey} className="hover:bg-surface/50 transition-colors">
                         <Td>
                           <span className="font-mono tabular-nums text-xs font-semibold text-heading">
                             {formatDateTime(sess.loginAt)}
@@ -473,25 +621,26 @@ export default function UserViewPage() {
                         </Td>
                         <Td>
                           <span
-                            className={`font-mono tabular-nums text-xs ${isActive ? 'text-success font-semibold' : 'text-text'
-                              }`}
+                            className={`font-mono tabular-nums text-xs ${
+                              isActive ? 'text-success font-semibold' : 'text-text'
+                            }`}
                           >
                             {durationText}
                           </span>
                         </Td>
                         <Td>
                           <span className="font-mono tabular-nums text-xs text-text-muted bg-surface/70 border border-border px-2 py-0.5 rounded-md">
-                            {sess.ipAddress}
+                            {sess.ipAddress || '—'}
                           </span>
                         </Td>
                         <Td>
                           <div className="flex flex-col">
                             <span className="text-xs font-semibold text-heading flex items-center gap-1.5">
                               {getDeviceIcon(sess.device)}
-                              {sess.device}
+                              {sess.device || 'Desktop'}
                             </span>
                             <span className="text-2xs text-text-muted truncate">
-                              {sess.browser} • {sess.os}
+                              {sess.browser || 'Browser'} • {sess.os || 'OS'}
                             </span>
                           </div>
                         </Td>
@@ -505,51 +654,157 @@ export default function UserViewPage() {
                   })}
                 </tbody>
               </TableContainer>
-            ) : (
-              <div className="py-10 text-center text-text-muted">
-                <IconHistory size={26} className="mx-auto text-text-muted/50 mb-2" />
-                <p className="font-semibold text-heading text-xs">No login history yet</p>
-                <p className="text-2xs mt-0.5">This user has not authenticated to the system.</p>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
+            </div>
 
-      {/* ── Edit User Modal ── */}
+            {/* Mobile Cards View (Visible on screens < md) */}
+            <div className="md:hidden space-y-2.5">
+              {sessions.map((sess) => {
+                const status = resolveSessionStatus(sess);
+                const isTimeout = (sess.logoutType || '').toLowerCase() === 'timeout';
+                const isActive = Boolean(sess.isActive);
+
+                let durationText = '—';
+                if (isActive) {
+                  durationText = 'Active now';
+                } else if (isTimeout) {
+                  durationText = '—';
+                } else if (sess.loginAt && sess.logoutAt) {
+                  const start = new Date(sess.loginAt).getTime();
+                  const end = new Date(sess.logoutAt).getTime();
+                  const diff = Math.max(0, Math.abs(end - start));
+                  durationText = formatDuration(diff);
+                }
+
+                const sessKey =
+                  sess.userSessionId || sess.sessionId || `${sess.loginAt}-${sess.ipAddress}`;
+
+                return (
+                  <div
+                    key={sessKey}
+                    className="p-3.5 rounded-xl border border-border bg-surface/40 space-y-2.5 shadow-2xs"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 font-semibold text-xs text-heading">
+                        {getDeviceIcon(sess.device)}
+                        <span>{sess.device || 'Desktop'}</span>
+                        <span className="text-2xs text-text-muted font-normal">
+                          ({sess.browser || 'Browser'} • {sess.os || 'OS'})
+                        </span>
+                      </div>
+                      <Badge variant={status.variant} className="text-2xs px-2 py-0.5">
+                        {status.label}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-2xs pt-2 border-t border-border/70">
+                      <div>
+                        <span className="text-text-muted block text-3xs font-semibold uppercase">
+                          Login Time
+                        </span>
+                        <span className="font-mono font-medium text-heading tabular-nums text-xs">
+                          {formatDateTime(sess.loginAt)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-text-muted block text-3xs font-semibold uppercase">
+                          Logout Time
+                        </span>
+                        <span className="font-mono text-text-muted tabular-nums text-xs">
+                          {sess.logoutAt ? formatDateTime(sess.logoutAt) : '—'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-2xs pt-2 border-t border-border/70">
+                      <div>
+                        <span className="text-text-muted">Duration: </span>
+                        <span
+                          className={`font-mono font-medium ${
+                            isActive ? 'text-success font-semibold' : 'text-text'
+                          }`}
+                        >
+                          {durationText}
+                        </span>
+                      </div>
+                      <span className="font-mono text-text-muted bg-surface border border-border px-1.5 py-0.5 rounded text-3xs">
+                        {sess.ipAddress || '—'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="py-10 text-center text-text-muted rounded-xl border border-border bg-bg">
+            <IconHistory size={26} className="mx-auto text-text-muted/50 mb-2" />
+            <p className="font-semibold text-heading text-xs">No login history yet</p>
+            <p className="text-2xs mt-0.5">This user has not authenticated to the system.</p>
+          </div>
+        )}
+      </Card>
+
+      {/* ── Edit User / Profile Modal ── */}
       <UserFormModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         user={user}
         onSubmit={handleEditSubmit}
+        isProfileMode={isSelf}
       />
 
-      {/* ── Status Toggle Confirmation Modal ── */}
-      <ConfirmModal
-        isOpen={isStatusModalOpen}
-        onClose={() => setIsStatusModalOpen(false)}
-        title={user.isActive ? 'Deactivate User Account' : 'Activate User Account'}
-        confirmText={user.isActive ? 'Deactivate User' : 'Activate User'}
-        variant={user.isActive ? 'warning' : 'primary'}
-        message={
-          <p>
-            Are you sure you want to {user.isActive ? 'deactivate' : 'activate'}{' '}
-            <strong className="text-heading font-semibold">
-              {user.firstName} {user.lastName}
-            </strong>{' '}
-            ({user.email})?
-            {user.isActive && (
+      {/* ── Status Toggle Confirmation Modal (Only for other users) ── */}
+      {!isSelf && (
+        <ConfirmModal
+          isOpen={isStatusModalOpen}
+          onClose={() => setIsStatusModalOpen(false)}
+          title={user.isActive ? 'Deactivate User Account' : 'Activate User Account'}
+          confirmText={user.isActive ? 'Deactivate User' : 'Activate User'}
+          variant={user.isActive ? 'warning' : 'primary'}
+          message={
+            <p>
+              Are you sure you want to {user.isActive ? 'deactivate' : 'activate'}{' '}
+              <strong className="text-heading font-semibold">
+                {user.firstName} {user.lastName}
+              </strong>{' '}
+              ({user.email})?
+              {user.isActive && (
+                <span className="block mt-1 text-xs text-text-muted">
+                  Deactivating this user will revoke all their active login sessions immediately.
+                </span>
+              )}
+            </p>
+          }
+          onConfirm={handleConfirmStatusToggle}
+        />
+      )}
+
+      {/* ── Send Temporary Password Confirmation Modal (Only for other users) ── */}
+      {!isSelf && (
+        <ConfirmModal
+          isOpen={isTempPassModalOpen}
+          onClose={() => setIsTempPassModalOpen(false)}
+          title="Send Temporary Password"
+          confirmText={sendingTempPass ? 'Sending…' : 'Send Password'}
+          variant="warning"
+          message={
+            <p>
+              Are you sure you want to generate and send a new temporary password to{' '}
+              <strong className="text-heading font-semibold">
+                {user.firstName} {user.lastName}
+              </strong>{' '}
+              ({user.email})?
               <span className="block mt-1 text-xs text-text-muted">
-                Deactivating this user will revoke all their active login sessions immediately.
+                A temporary password will be dispatched to their registered email address. The user will be required to change it at their next login.
               </span>
-            )}
-          </p>
-        }
-        onConfirm={handleConfirmStatusToggle}
-      />
+            </p>
+          }
+          onConfirm={handleConfirmSendTempPassword}
+        />
+      )}
 
-      {/* ── Delete Confirmation Modal ── */}
-      {capabilities.delete && (
+      {/* ── Delete Confirmation Modal (Only for other users) ── */}
+      {!isSelf && capabilities.delete && (
         <ConfirmModal
           isOpen={isDeleteModalOpen}
           onClose={() => setIsDeleteModalOpen(false)}

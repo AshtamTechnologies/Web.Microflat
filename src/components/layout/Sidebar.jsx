@@ -479,6 +479,7 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [collapsed, onCollapsedToggle]);
 
+  const navigate = useNavigate();
   const { recordLogout } = useUserSessions();
   const { user: authUser, logout } = useAuthContext();
 
@@ -704,34 +705,59 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
       </nav>
 
       {/* ── User Profile & System Status Footer ── */}
-      <div className="border-t border-border p-3 bg-surface/30 shrink-0">
+      <div className="border-t border-border p-2.5 bg-surface/30 shrink-0">
         <div
           className={[
-            collapsed ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2.5',
+            'rounded-xl border border-border/70 bg-surface/40 hover:bg-surface/80 transition-colors p-2',
+            collapsed ? 'flex flex-col items-center gap-2' : 'flex items-center justify-between gap-2',
           ].join(' ')}
         >
-          {/* Avatar */}
-          <div
-            className="w-8 h-8 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center shrink-0 border border-primary/20"
-            aria-hidden="true"
+          {/* User Profile Card (Click to view /users/me) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onChildClick) onChildClick();
+              navigate('/users/me');
+            }}
+            title={`View profile (${user.name})`}
+            className={[
+              'text-left transition-colors cursor-pointer group flex items-center min-w-0',
+              collapsed ? 'justify-center p-0.5' : 'flex-1 gap-2.5',
+            ].join(' ')}
           >
-            {initials(user.name)}
-          </div>
-
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-xs font-semibold text-heading truncate">{user.name}</p>
-                <span className="px-1.5 py-0.2 bg-primary/10 text-primary text-2xs font-bold rounded-md">
-                  {user.role}
-                </span>
+            {/* Avatar */}
+            <div className="relative shrink-0">
+              <div
+                className="w-9 h-9 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center border border-primary/25 group-hover:border-primary/60 transition-colors shadow-xs"
+                aria-hidden="true"
+              >
+                {initials(user.name)}
               </div>
-              <div className="flex items-center gap-1 mt-0.5 text-2xs text-text-muted">
-                <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
-                <span className="truncate">Connected (Live)</span>
-              </div>
+              <span
+                className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-success ring-2 ring-surface"
+                title="Active"
+              />
             </div>
-          )}
+
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p
+                  className="text-xs font-semibold text-heading truncate group-hover:text-primary transition-colors leading-tight"
+                  title={user.name}
+                >
+                  {user.name}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1 min-w-0">
+                  <span className="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary text-2xs font-semibold rounded whitespace-nowrap leading-none shrink-0">
+                    {user.role}
+                  </span>
+                  {/* <span className="text-2xs text-text-muted truncate group-hover:text-text transition-colors">
+                    View profile
+                  </span> */}
+                </div>
+              </div>
+            )}
+          </button>
 
           {/* Logout Button */}
           <button
@@ -739,9 +765,9 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
             onClick={handleLogout}
             aria-label="Sign out"
             title="Sign out"
-            className="p-1.5 rounded-lg text-text-muted hover:bg-danger/10 hover:text-danger transition-colors cursor-pointer shrink-0"
+            className="p-1.5 rounded-lg text-text-muted hover:bg-danger/10 hover:text-danger active:scale-95 transition-all cursor-pointer shrink-0"
           >
-            <IconLogout size={15} aria-hidden="true" />
+            <IconLogout size={16} aria-hidden="true" />
           </button>
         </div>
       </div>

@@ -64,14 +64,20 @@ export function AuthProvider({ children }) {
         const { user: refreshedUser } = await refreshAuthSession();
 
         if (isMounted) {
-          if (refreshedUser) {
-            setUser(refreshedUser);
-            setMustChangePassword(Boolean(refreshedUser.mustChangePassword));
+          // Always query /api/users/me so the logged-in user state has full profile data & IDs
+          let authoritativeUser = null;
+          try {
+            authoritativeUser = await authService.getMe();
+          } catch {
+            authoritativeUser = refreshedUser;
+          }
+
+          if (authoritativeUser) {
+            setUser(authoritativeUser);
+            setMustChangePassword(Boolean(authoritativeUser.mustChangePassword));
           } else {
-            // If refresh payload had no user, fetch profile
-            const meUser = await authService.getMe();
-            setUser(meUser);
-            setMustChangePassword(Boolean(meUser?.mustChangePassword));
+            clearTokens();
+            setUser(null);
           }
         }
       } catch {
@@ -106,12 +112,20 @@ export function AuthProvider({ children }) {
       // 2. Schedule proactive refresh ~60s before expiry
       scheduleProactiveRefresh(tokens.accessTokenExpiresOn);
 
-      // 3. Fill user state
-      setUser(authUser);
-      const needsPasswordChange = Boolean(authUser.mustChangePassword);
+      // 3. Fetch full profile from GET /api/users/me
+      let fullUser = authUser;
+      try {
+        const meUser = await authService.getMe();
+        if (meUser) fullUser = meUser;
+      } catch {
+        // fallback to login authUser
+      }
+
+      setUser(fullUser);
+      const needsPasswordChange = Boolean(fullUser?.mustChangePassword);
       setMustChangePassword(needsPasswordChange);
 
-      return { user: authUser, mustChangePassword: needsPasswordChange };
+      return { user: fullUser, mustChangePassword: needsPasswordChange };
     },
     []
   );
