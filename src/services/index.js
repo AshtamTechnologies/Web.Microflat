@@ -16,9 +16,13 @@ import * as mockUsers from './users/usersService.mock';
 import * as realRoles from './roles/rolesService';
 import * as mockRoles from './roles/rolesService.mock';
 
+import * as realProcessFlow from './processFlow/processFlowService';
+import * as mockProcessFlow from './processFlow/processFlowService.mock';
+
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 export const authService = useMock ? mockAuth : realAuth;
 export const userService = useMock ? mockUsers : realUsers;
 export const roleService = useMock ? mockRoles : realRoles;
+export const processFlowService = useMock ? mockProcessFlow : realProcessFlow;
 export const isMockApi = useMock;

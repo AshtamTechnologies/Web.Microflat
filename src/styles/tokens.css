@@ -133,6 +133,12 @@
   --header-height:           56px;
   --content-max-width:       1440px;
 
+  /* ── Process Flow Diagram ── */
+  --flow-node-w:             180px;
+  --flow-node-h:             88px;
+  --flow-gap-x:              72px;
+  --flow-gap-y:              56px;
+
   /* ── 9. Shape & Radius ───────────────────────────────────────────────────── */
   --radius-sm:      0.25rem;  /* 4px */
   --radius-md:      0.375rem; /* 6px */

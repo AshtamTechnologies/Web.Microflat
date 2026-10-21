@@ -30,6 +30,7 @@ import {
   SaveButton,
   CancelButton,
   Card,
+  CollapsibleCard,
   Input,
   RichTextEditor,
   DatePicker,
@@ -122,7 +123,7 @@ export default function PurchaseRequisitionCreate() {
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   // Attachment handlers
@@ -152,8 +153,28 @@ export default function PurchaseRequisitionCreate() {
 
   // Action: Submit for Approval
   const handleSubmitForApproval = () => {
-    if (!validateForm()) {
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
       toast.error('Please complete all required fields before submitting.');
+      setTimeout(() => {
+        const fieldPriority = [
+          { key: 'projectId', id: 'pr-project-id' },
+          { key: 'department', id: 'pr-department' },
+          { key: 'requiredDate', id: 'pr-required-date' },
+          { key: 'items', id: 'item-catalog-preset' },
+        ];
+
+        for (const field of fieldPriority) {
+          if (validationErrors[field.key]) {
+            const el = document.getElementById(field.id);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              el.focus?.();
+              break;
+            }
+          }
+        }
+      }, 60);
       return;
     }
 
@@ -216,22 +237,13 @@ export default function PurchaseRequisitionCreate() {
       )}
 
       {/* ── Section 1: Purchase Requisition Information ── */}
-      <Card padding="md" className="space-y-5 shadow-xs border-border">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <IconFileSpreadsheet size={18} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-heading">
-                Purchase Requisition Information
-              </h2>
-              <p className="text-xs text-text-muted">
-                General details, department, and timeline.
-              </p>
-            </div>
-          </div>
-
+      <CollapsibleCard
+        title="Purchase Requisition Information"
+        subtitle="General details, department, and timeline."
+        icon={<IconFileSpreadsheet size={18} />}
+        defaultOpen={true}
+        hasError={Boolean(errors.projectId || errors.department || errors.requiredDate)}
+        badge={
           <div className="flex items-center gap-2 shrink-0">
             <span className="inline-flex items-center font-mono font-bold text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg">
               {formData.prNumber}
@@ -240,7 +252,8 @@ export default function PurchaseRequisitionCreate() {
               System Generated
             </Badge>
           </div>
-        </div>
+        }
+      >
 
         {/* Form Fields Grid: 3 columns per row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -336,34 +349,37 @@ export default function PurchaseRequisitionCreate() {
             />
           </div>
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* ── Section 2: Purchase Requisition Items ── */}
       <ItemsEditor
         items={items}
-        onChange={setItems}
+        onChange={(newItems) => {
+          setItems(newItems);
+          if (errors.items && newItems.length > 0) {
+            setErrors((prev) => ({ ...prev, items: null }));
+          }
+        }}
+        error={errors.items}
+        onClearError={() => {
+          if (errors.items) {
+            setErrors((prev) => ({ ...prev, items: null }));
+          }
+        }}
       />
 
       {/* ── Section 3: Document Attachments ── */}
-      <Card padding="md" className="space-y-4 shadow-xs border-border">
-        <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <IconAttachment size={18} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-heading">
-                Document Attachments
-              </h2>
-              <p className="text-xs text-text-muted">
-                Upload drawings, technical specifications, or quotation comparisons.
-              </p>
-            </div>
-          </div>
+      <CollapsibleCard
+        title="Document Attachments"
+        subtitle="Upload drawings, technical specifications, or quotation comparisons."
+        icon={<IconAttachment size={18} />}
+        defaultOpen={true}
+        badge={
           <Badge variant="role" className="text-xs">
             {attachments.length} {attachments.length === 1 ? 'File' : 'Files'}
           </Badge>
-        </div>
+        }
+      >
 
         {/* Upload Drop Zone / Button */}
         <div>
@@ -425,7 +441,7 @@ export default function PurchaseRequisitionCreate() {
             ))}
           </div>
         )}
-      </Card>
+      </CollapsibleCard>
 
       {/* ── Section 3: Bottom Form Actions ── */}
       <div className="mf-form-actions">

@@ -68,6 +68,7 @@ import {
   DatePicker,
   Badge,
   Card,
+  CollapsibleCard,
   DetailField,
   TableContainer,
   Th,
@@ -767,19 +768,14 @@ export default function ClientEffectiveDatesPage() {
       />
 
       {/* ── 2. EFFECTIVE DATES GRID (TOP CARD WITH RESIZABLE COLUMNS) ── */}
-      <Card className="overflow-hidden shadow-xs border-border">
-        <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-heading flex items-center gap-2">
-              <IconCalendar size={17} className="text-primary shrink-0" />
-              Effective Dates
-            </h2>
-            <p className="text-xs text-text-muted mt-0.5">
-              Timeline of version records for this client. Drag column borders to resize columns.
-            </p>
-          </div>
-
-          {!isReadOnly && (
+      <CollapsibleCard
+        title="Effective Dates"
+        subtitle="Timeline of version records for this client. Drag column borders to resize columns."
+        icon={<IconCalendar size={17} />}
+        defaultOpen={true}
+        className="overflow-hidden shadow-xs border-border"
+        actions={
+          !isReadOnly && (
             <Button
               variant="primary"
               size="sm"
@@ -789,8 +785,9 @@ export default function ClientEffectiveDatesPage() {
               <IconAdd size={14} className="mr-1.5" />
               Add New Effective Date
             </Button>
-          )}
-        </div>
+          )
+        }
+      >
 
         {/* ── Mobile Card List (< md) ── */}
         <div className="block md:hidden p-3 space-y-2.5 bg-bg/50 max-h-[260px] overflow-y-auto overscroll-y-contain border-t border-border/60">
@@ -999,48 +996,45 @@ export default function ClientEffectiveDatesPage() {
             </tbody>
           </TableContainer>
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* ── 3. DETAIL / FORM PANEL (CARD MATCHING VENDOR PAGE) ── */}
-      <Card padding="none" className="overflow-hidden shadow-xs border-border">
-        {/* Panel Header */}
-        <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-sm sm:text-base font-bold text-heading break-words flex items-center gap-2 flex-wrap">
-              {mode === 'VIEW' && (
-                <>
-                  Viewing version — Effective{' '}
-                  <span className="font-mono text-primary">
-                    {formatDateDisplay(selectedVersion?.effectiveDate)}
-                  </span>
-                  {selectedStatus && (
-                    <Badge variant={selectedStatus.badgeVariant} className="text-2xs px-2 py-0.5">
-                      {selectedStatus.label}
-                    </Badge>
-                  )}
-                </>
+      <CollapsibleCard
+        title={
+          mode === 'VIEW' ? (
+            <>
+              Viewing version — Effective{' '}
+              <span className="font-mono text-primary">
+                {formatDateDisplay(selectedVersion?.effectiveDate)}
+              </span>
+              {selectedStatus && (
+                <Badge variant={selectedStatus.badgeVariant} className="text-2xs px-2 py-0.5">
+                  {selectedStatus.label}
+                </Badge>
               )}
-              {mode === 'EDIT' && (
-                <>
-                  Editing version — Effective{' '}
-                  <span className="font-mono text-primary">
-                    {formatDateDisplay(formData.effectiveDate || selectedVersion?.effectiveDate)}
-                  </span>
-                </>
-              )}
-              {mode === 'ADD' && 'Add new effective date'}
-            </h3>
-            <p className="text-xs text-text-muted mt-0.5">
-              {mode === 'VIEW' &&
-                'Read-only view of client profile, commercial terms, addresses, and contacts effective from this date.'}
-              {mode === 'EDIT' &&
-                'Modify versioned client profile, terms, addresses, and contacts.'}
-              {mode === 'ADD' &&
-                'Clone-forward from current active version with a new unique effective date.'}
-            </p>
-          </div>
-
-          {/* Panel Top Actions */}
+            </>
+          ) : mode === 'EDIT' ? (
+            <>
+              Editing version — Effective{' '}
+              <span className="font-mono text-primary">
+                {formatDateDisplay(formData.effectiveDate || selectedVersion?.effectiveDate)}
+              </span>
+            </>
+          ) : (
+            'Add new effective date'
+          )
+        }
+        subtitle={
+          mode === 'VIEW'
+            ? 'Read-only view of client profile, commercial terms, addresses, and contacts effective from this date.'
+            : mode === 'EDIT'
+              ? 'Modify versioned client profile, terms, addresses, and contacts.'
+              : 'Clone-forward from current active version with a new unique effective date.'
+        }
+        icon={<IconClient size={17} />}
+        defaultOpen={true}
+        className="overflow-hidden shadow-xs border-border"
+        actions={
           <div className="flex items-center gap-2 self-start sm:self-auto w-full sm:w-auto justify-end">
             {!isReadOnly && mode === 'VIEW' && selectedVersion && (
               <Button
@@ -1060,7 +1054,7 @@ export default function ClientEffectiveDatesPage() {
                   size="sm"
                   onClick={handleCancel}
                   disabled={isSaving}
-                  className="text-xs shadow-2xs"
+                  className="text-xs shadow-2xs font-medium"
                 />
                 <SaveButton
                   type="button"
@@ -1069,14 +1063,15 @@ export default function ClientEffectiveDatesPage() {
                   loading={isSaving}
                   loadingText="Saving..."
                   disabled={isSaving}
-                  className="text-xs"
+                  className="text-xs font-semibold shadow-2xs"
                 >
                   Save Changes
                 </SaveButton>
               </>
             )}
           </div>
-        </div>
+        }
+      >
 
         {/* ── MODE 1: VIEW MODE (MATCHING VENDOR VIEW PAGE ARCHITECTURE) ── */}
         {mode === 'VIEW' && selectedVersion && (
@@ -1695,7 +1690,7 @@ export default function ClientEffectiveDatesPage() {
             </div>
           </form>
         )}
-      </Card>
+      </CollapsibleCard>
     </div>
   );
 }

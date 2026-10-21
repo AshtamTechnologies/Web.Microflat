@@ -45,6 +45,7 @@ import {
   Select,
   StatusSwitch,
   Card,
+  CollapsibleCard,
   Checkbox,
   DatePicker,
   RichTextEditor,
@@ -497,18 +498,14 @@ export default function ClientFormPage() {
       {activeTab === 'company_terms' && (
         <div className="space-y-6">
           {/* 1. Company Details Card */}
-          <Card padding="md" className="space-y-4">
-            <div className="flex items-center gap-2.5 border-b border-border pb-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <IconBuilding2 size={17} />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-heading">Company Details</h3>
-                <p className="text-xs text-text-muted mt-0.5">
-                  Legal name, trade billing title, contact classification, and tax credentials
-                </p>
-              </div>
-            </div>
+          <CollapsibleCard
+            title="Company Details"
+            subtitle="Legal name, trade billing title, contact classification, and tax credentials"
+            icon={<IconBuilding2 size={17} />}
+            defaultOpen={true}
+            hasError={Boolean(errors.companyName || errors.billingName || errors.contactTypeId || errors.email)}
+            className="space-y-4"
+          >
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Company Name */}
@@ -604,21 +601,16 @@ export default function ClientFormPage() {
                 </div>
               </div>
             </div>
-          </Card>
+          </CollapsibleCard>
 
           {/* 2. Terms & Notes Card */}
-          <Card padding="md" className="space-y-4">
-            <div className="flex items-center gap-2.5 border-b border-border pb-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <IconFileText size={17} />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-heading">Terms & Notes</h3>
-                <p className="text-xs text-text-muted mt-0.5">
-                  Standard payment terms, freight dispatch clauses, and operational remarks
-                </p>
-              </div>
-            </div>
+          <CollapsibleCard
+            title="Terms & Notes"
+            subtitle="Standard payment terms, freight dispatch clauses, and operational remarks"
+            icon={<IconFileText size={17} />}
+            defaultOpen={true}
+            className="space-y-4"
+          >
 
             <div className="space-y-5">
               {/* Payment Terms Multi-Select */}
@@ -720,7 +712,7 @@ export default function ClientFormPage() {
                 />
               </div>
             </div>
-          </Card>
+          </CollapsibleCard>
 
           {/* Save Button for Tab 1 */}
           {renderTabSaveBar('Client Details & Terms')}

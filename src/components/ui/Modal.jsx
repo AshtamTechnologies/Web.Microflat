@@ -31,6 +31,7 @@ export default function Modal({
   subtitle,
   icon: IconComponent,
   children,
+  footer,
   size,
   maxWidth,
 }) {
@@ -125,6 +126,13 @@ export default function Modal({
         <div className="p-5 sm:p-6 overflow-y-auto flex-1">
           {children}
         </div>
+
+        {/* Optional Footer Actions */}
+        {footer && (
+          <div className="px-5 sm:px-6 py-4 border-t border-border bg-surface/30 flex items-center justify-end gap-3 shrink-0">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -41,6 +41,7 @@ import {
   SaveButton,
   CancelButton,
   Card,
+  CollapsibleCard,
   Input,
   SearchableSelect,
   Toggle,
@@ -722,20 +723,18 @@ export default function VendorBankDetailsFormPage() {
       />
 
       {/* ── 1. Vendor Card ── */}
-      <Card padding="md" className="space-y-4 shadow-2xs">
-        <div className="flex items-center gap-2.5 border-b border-border pb-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <IconBuilding2 size={17} />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-heading">Vendor Information</h3>
-            <p className="text-2xs text-text-muted">
-              {isEditMode
-                ? 'Vendor identity is fixed in edit mode'
-                : 'Select the vendor company to associate bank accounts'}
-            </p>
-          </div>
-        </div>
+      <CollapsibleCard
+        title="Vendor Information"
+        subtitle={
+          isEditMode
+            ? 'Vendor identity is fixed in edit mode'
+            : 'Select the vendor company to associate bank accounts'
+        }
+        icon={<IconBuilding2 size={17} />}
+        defaultOpen={true}
+        hasError={Boolean(fieldErrors?.vendor)}
+        className="space-y-4 shadow-2xs"
+      >
 
         {isEditMode ? (
           /* Read-only vendor details in edit mode */
@@ -805,35 +804,30 @@ export default function VendorBankDetailsFormPage() {
             </p>
           </div>
         )}
-      </Card>
+      </CollapsibleCard>
 
       {/* ── 2. Bank Account Form Card ── */}
-      <Card id="bank-account-form-card" padding="md" className="space-y-4 shadow-2xs scroll-mt-20">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <IconBankDetails size={17} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-semibold text-heading">
-                  {isEditing ? 'Edit Bank Account' : 'Add Bank Account'}
-                </h3>
-                {isEditing && (
-                  <Badge variant="pending" size="sm" className="font-medium">
-                    Editing: {formState.bankName || 'Account'} {formState.accountNumber ? `(•••• ${String(formState.accountNumber).slice(-4)})` : ''}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-2xs text-text-muted">
-                {isEditing
-                  ? 'Update details below, or select any other bank from the Configured Bank Accounts grid below'
-                  : 'Enter beneficiary bank details for payment processing'}
-              </p>
-            </div>
-          </div>
-
-          {isEditing && (
+      <CollapsibleCard
+        id="bank-account-form-card"
+        title={isEditing ? 'Edit Bank Account' : 'Add Bank Account'}
+        subtitle={
+          isEditing
+            ? 'Update details below, or select any other bank from the Configured Bank Accounts grid below'
+            : 'Enter beneficiary bank details for payment processing'
+        }
+        icon={<IconBankDetails size={17} />}
+        defaultOpen={true}
+        hasError={Boolean(fieldErrors && Object.keys(fieldErrors).some((k) => k !== 'vendor'))}
+        className="space-y-4 shadow-2xs scroll-mt-20"
+        badge={
+          isEditing ? (
+            <Badge variant="pending" size="sm" className="font-medium">
+              Editing: {formState.bankName || 'Account'} {formState.accountNumber ? `(•••• ${String(formState.accountNumber).slice(-4)})` : ''}
+            </Badge>
+          ) : null
+        }
+        actions={
+          isEditing ? (
             <CancelButton
               size="sm"
               onClick={() => {
@@ -845,8 +839,9 @@ export default function VendorBankDetailsFormPage() {
             >
               Cancel Edit
             </CancelButton>
-          )}
-        </div>
+          ) : null
+        }
+      >
 
         <div className="space-y-5">
           {/* Form Fields Grid */}
@@ -1223,25 +1218,16 @@ export default function VendorBankDetailsFormPage() {
             </SaveButton>
           </div>
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* ── 3. Bank Accounts History Grid Card ── */}
-      <Card padding="md" className="space-y-4 shadow-2xs">
-        <div className="flex items-center justify-between border-b border-border pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <IconBankDetails size={17} />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-heading">
-                Configured Bank Accounts ({draftRows.length})
-              </h3>
-              <p className="text-2xs text-text-muted">
-                Active accounts appear first. Any account can be edited or deleted with security credentials authorization.
-              </p>
-            </div>
-          </div>
-        </div>
+      <CollapsibleCard
+        title={`Configured Bank Accounts (${draftRows.length})`}
+        subtitle="Active accounts appear first. Any account can be edited or deleted with security credentials authorization."
+        icon={<IconBankDetails size={17} />}
+        defaultOpen={true}
+        className="space-y-4 shadow-2xs"
+      >
 
         {sortedGridRows.length === 0 ? (
           <div className="text-center py-10 px-4 border border-dashed border-border rounded-xl bg-surface/30 space-y-2">
@@ -1637,7 +1623,7 @@ export default function VendorBankDetailsFormPage() {
             </div>
           </>
         )}
-      </Card>
+      </CollapsibleCard>
 
 
       {/* ── Confirm Discard Modal ── */}

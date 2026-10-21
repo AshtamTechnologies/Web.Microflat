@@ -32,3 +32,5 @@ export { default as TableToolbar }      from './TableToolbar';
 export { default as TableActions }      from './TableActions';
 export { default as StatusBadge }       from './StatusBadge';
 export { default as FormActionsBar } from './FormActionsBar';
+export { default as CollapsibleCard } from './CollapsibleCard';
+export { default as IconPicker } from './IconPicker';

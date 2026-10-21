@@ -22,6 +22,7 @@ import {
   IconButton,
   CancelButton,
   Card,
+  CollapsibleCard,
   Input,
   StatusSwitch,
   Badge,
@@ -188,27 +189,18 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
   };
 
   return (
-    <Card padding="md" className="space-y-5">
-      {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <IconUsers size={17} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-heading">Contact Persons</h3>
-              <Badge variant="neutral" className="text-xs font-mono px-2 py-0.5">
-                {effectiveRows.length}
-              </Badge>
-            </div>
-            <p className="text-xs text-text-muted mt-0.5">
-              Add primary liaisons, sales points of contact, or finance coordinators
-            </p>
-          </div>
-        </div>
-
-        {isEditing && (
+    <CollapsibleCard
+      title="Contact Persons"
+      subtitle="Add primary liaisons, sales points of contact, or finance coordinators"
+      icon={<IconUsers size={17} />}
+      defaultOpen={true}
+      badge={
+        <Badge variant="neutral" className="text-xs font-mono px-2 py-0.5">
+          {effectiveRows.length}
+        </Badge>
+      }
+      actions={
+        isEditing ? (
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-md">
               Editing contact #{editingIndex + 1}
@@ -219,8 +211,10 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
               className="text-xs shadow-2xs"
             />
           </div>
-        )}
-      </div>
+        ) : null
+      }
+      bodyClassName="space-y-6"
+    >
 
       {/* ── Form Above ── */}
       <div className="bg-surface/50 border border-border rounded-xl p-4 space-y-4">
@@ -661,6 +655,6 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
         cancelText="Cancel"
         variant="danger"
       />
-    </Card>
+    </CollapsibleCard>
   );
 }

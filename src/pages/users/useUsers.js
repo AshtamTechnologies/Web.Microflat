@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { userService, roleService, isMockApi } from '../../services';
 import { mockUsers } from '../../mocks/users';
@@ -115,6 +116,15 @@ export function useUserOptions() {
 }
 
 export function useUsers() {
+  const location = useLocation();
+
+  // Flag to enable fetching when requested by a component or when on a user-related route
+  const [hasRequestedUsers, setHasRequestedUsers] = useState(false);
+
+  // Auto-enable if currently on a user route (/users, /users/:id, etc.)
+  const isUsersRoute = Boolean(location?.pathname?.startsWith('/users'));
+  const shouldFetch = hasRequestedUsers || isUsersRoute;
+
   // Current page items
   const [users, setUsers] = useState([]);
   // Cached list of all loaded users (for cross-module consumers like Inquiries/Vendors)
@@ -135,7 +145,7 @@ export function useUsers() {
   const [totalPages, setTotalPages] = useState(1);
 
   // Loading & roles state
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [rolesList, setRolesList] = useState([]);
   const debounceTimerRef = useRef(null);
 
@@ -154,8 +164,11 @@ export function useUsers() {
     };
   }, [search]);
 
-  // Load roles list for dropdowns & filters
+  // Load roles list for dropdowns & filters (lazy-loaded only when requested or on /users route)
   useEffect(() => {
+    if (!shouldFetch) return;
+    if (rolesList.length > 0) return;
+
     let isMounted = true;
     async function fetchRoles() {
       try {
@@ -171,11 +184,14 @@ export function useUsers() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [shouldFetch, rolesList.length]);
 
-  // Main data fetcher
+  // Main data fetcher (lazy-loaded: only triggers when on /users or explicitly requested)
   useEffect(() => {
+    if (!shouldFetch) return;
+
     let ignore = false;
+    setLoading(true);
 
     async function runFetch() {
       try {
@@ -222,10 +238,16 @@ export function useUsers() {
     return () => {
       ignore = true;
     };
-  }, [debouncedSearch, statusFilter, roleFilter, pageNumber, pageSize]);
+  }, [shouldFetch, debouncedSearch, statusFilter, roleFilter, pageNumber, pageSize]);
+
+  // Explicit helper to ensure users are loaded when needed outside /users route
+  const ensureUsersLoaded = useCallback(() => {
+    setHasRequestedUsers(true);
+  }, []);
 
   // Manual refresh helper
   const fetchUsers = useCallback(async () => {
+    setHasRequestedUsers(true);
     setLoading(true);
     try {
       const isActiveParam =
@@ -251,13 +273,17 @@ export function useUsers() {
         items.forEach((u) => map.set(String(u.id), u));
         return Array.from(map.values());
       });
+
+      if (rolesList.length === 0) {
+        roleService.getRoles({ isActive: true }).then((r) => setRolesList(r)).catch(() => {});
+      }
     } catch (err) {
       const msg = err?.message || 'Failed to load users list.';
       toast.error(msg);
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, roleFilter, pageNumber, pageSize]);
+  }, [debouncedSearch, statusFilter, roleFilter, pageNumber, pageSize, rolesList.length]);
 
   // Reset filters
   const resetFilters = useCallback(() => {
@@ -470,6 +496,7 @@ export function useUsers() {
     isMockApi,
     resetFilters,
     fetchUsers,
+    ensureUsersLoaded,
     getUserById,
     getUserName: resolveUserName,
     createUser,

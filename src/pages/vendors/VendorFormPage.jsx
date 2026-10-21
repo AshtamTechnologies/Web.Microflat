@@ -43,6 +43,7 @@ import {
   StatusSwitch,
   Badge,
   Card,
+  CollapsibleCard,
   Modal,
   PageHeader,
   Textarea,
@@ -552,23 +553,15 @@ export default function VendorFormPage() {
       />
 
       {/* ── SECTION 1: VENDOR MASTER DETAILS ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-5 border-b border-border">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <IconVendor size={18} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-heading">
-                1. Vendor Master Details
-              </h2>
-              <p className="text-xs text-text-muted">
-                Basic classification, effective date & active account status
-              </p>
-            </div>
-          </div>
-
-          {form.vendorCode && (
+      <CollapsibleCard
+        title="1. Vendor Master Details"
+        subtitle="Basic classification, effective date & active account status"
+        icon={<IconVendor size={18} />}
+        className="bg-bg"
+        defaultOpen={true}
+        hasError={Boolean(errors.vendorCode || errors.vendorName || errors.effectiveDate || errors.inactiveComment)}
+        badge={
+          form.vendorCode ? (
             <div className="flex items-center gap-2 shrink-0">
               <span className="inline-flex items-center font-mono font-bold text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg">
                 {form.vendorCode}
@@ -577,8 +570,9 @@ export default function VendorFormPage() {
                 System Generated
               </Badge>
             </div>
-          )}
-        </div>
+          ) : null
+        }
+      >
 
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -670,19 +664,17 @@ export default function VendorFormPage() {
             )}
           </div>
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* ── SECTION 2: CONTACT INFORMATION ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <IconContact size={18} className="text-primary" aria-hidden="true" />
-            <span>2. Contact Information</span>
-          </div>
-          <span className="text-xs text-text-muted font-normal">
-            Primary communication channel & tax identifier
-          </span>
-        </div>
+      <CollapsibleCard
+        title="2. Contact Information"
+        subtitle="Primary communication channel & tax identifier"
+        icon={<IconContact size={18} />}
+        className="bg-bg"
+        defaultOpen={true}
+        hasError={Boolean(errors.contactPersonName || errors.email || errors.phoneNo || errors.alternatePhoneNo || errors.gstNo || errors.website)}
+      >
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {/* Contact Person Name */}
@@ -779,19 +771,17 @@ export default function VendorFormPage() {
             hint="Optional company website or vendor portal link"
           />
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* ── SECTION 3: ADDRESS & LOCATION ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <IconLocation size={18} className="text-primary" aria-hidden="true" />
-            <span>3. Address & Location</span>
-          </div>
-          <span className="text-xs text-text-muted font-normal">
-            Billing & dispatch registered location
-          </span>
-        </div>
+      <CollapsibleCard
+        title="3. Address & Location"
+        subtitle="Billing & dispatch registered location"
+        icon={<IconLocation size={18} />}
+        className="bg-bg"
+        defaultOpen={true}
+        hasError={Boolean(errors.countryId || errors.stateId || errors.city || errors.zipCode || errors.address1)}
+      >
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {/* Country (SearchableSelect) */}
@@ -898,19 +888,16 @@ export default function VendorFormPage() {
             autoComplete="postal-code"
           />
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* ── SECTION 4: PROCUREMENT & QUALITY NOTES ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <IconFileText size={18} className="text-primary" aria-hidden="true" />
-            <span>4. Procurement & Quality Notes</span>
-          </div>
-          <span className="text-xs text-text-muted font-normal">
-            Optional supplier remarks
-          </span>
-        </div>
+      <CollapsibleCard
+        title="4. Procurement & Quality Notes"
+        subtitle="Optional supplier remarks"
+        icon={<IconFileText size={18} />}
+        className="bg-bg"
+        defaultOpen={true}
+      >
 
         <Textarea
           id="notes"
@@ -921,24 +908,21 @@ export default function VendorFormPage() {
           value={form.notes}
           onChange={handleChange}
         />
-      </Card>
+      </CollapsibleCard>
 
       {/* ── SECTION 5: ATTACHMENTS & SUPPORTING DOCUMENTS ── */}
-      <Card padding="md" className="bg-bg">
-        <div className="border-b border-border pb-3 mb-5 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-heading font-semibold text-base">
-            <IconAttachment size={18} className="text-primary" aria-hidden="true" />
-            <span>5. Attachments & Supporting Documents</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-text-muted font-normal">
-              Upload commercial, tax, and quality compliance files
-            </span>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-              {form.attachments?.length || 0} {form.attachments?.length === 1 ? 'file' : 'files'}
-            </span>
-          </div>
-        </div>
+      <CollapsibleCard
+        title="5. Attachments & Supporting Documents"
+        subtitle="Upload commercial, tax, and quality compliance files"
+        icon={<IconAttachment size={18} />}
+        className="bg-bg"
+        defaultOpen={true}
+        badge={
+          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+            {form.attachments?.length || 0} {form.attachments?.length === 1 ? 'file' : 'files'}
+          </span>
+        }
+      >
 
         <div className="space-y-6">
           {/* Uploader Control Box */}
@@ -1084,32 +1068,23 @@ export default function VendorFormPage() {
             )}
           </div>
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* ── SECTION 6 (EDIT MODE ONLY): READ-ONLY APPROVAL & AUDIT PANEL ── */}
       {isEdit && existingVendor && (
-        <Card padding="md" className="bg-surface/50 border-border/80">
-          <button
-            type="button"
-            onClick={() => setIsAuditCollapsed((prev) => !prev)}
-            className="w-full flex items-center justify-between text-left cursor-pointer select-none group"
-          >
-            <div className="flex items-center gap-2">
-              <IconShieldCheck size={18} className="text-text-muted group-hover:text-primary transition-colors" />
-              <span className="text-sm font-semibold text-heading">
-                6. System-Managed Approval & Audit Info
-              </span>
-              <span className="text-xs text-text-muted bg-border/60 px-2 py-0.5 rounded">
-                Read-only
-              </span>
-            </div>
-            <span className="text-xs text-primary font-medium group-hover:underline">
-              {isAuditCollapsed ? 'Show details' : 'Hide details'}
+        <CollapsibleCard
+          title="6. System-Managed Approval & Audit Info"
+          subtitle="Read-only system metadata and approval records"
+          icon={<IconShieldCheck size={18} />}
+          className="bg-surface/50 border-border/80"
+          defaultOpen={false}
+          badge={
+            <span className="text-xs text-text-muted bg-border/60 px-2 py-0.5 rounded">
+              Read-only
             </span>
-          </button>
-
-          {!isAuditCollapsed && (
-            <div className="mt-4 pt-4 border-t border-border space-y-4">
+          }
+        >
+          <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 {/* Approval Status */}
                 <div className="space-y-1">
@@ -1166,8 +1141,7 @@ export default function VendorFormPage() {
                 </span>
               </div>
             </div>
-          )}
-        </Card>
+        </CollapsibleCard>
       )}
 
       {/* ── STICKY FOOTER SAVE BAR ── */}

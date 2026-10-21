@@ -56,6 +56,7 @@ import {
   SearchableSelect,
   Badge,
   Card,
+  CollapsibleCard,
   DetailField,
   TableContainer,
   Th,
@@ -1023,32 +1024,32 @@ export default function VendorEffectiveDatesPage() {
       )}
 
       {/* ── 2. EFFECTIVE DATES GRID / CARDS (CARD WITH RESIZABLE COLUMNS) ── */}
-      <Card className="overflow-hidden shadow-xs border-border">
-        <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-heading flex items-center gap-2">
-              <IconCalendar size={17} className="text-primary shrink-0" />
-              Effective Dates
-            </h2>
-            <p className="text-xs text-text-muted mt-0.5">
-              Timeline of version records for this vendor. Drag column borders to resize columns.
-            </p>
-          </div>
-
-          {!isReadOnly && (
+      <CollapsibleCard
+        title="Effective Dates"
+        subtitle="Timeline of version records for this vendor. Drag column borders to resize columns."
+        icon={<IconCalendar size={17} />}
+        defaultOpen={true}
+        className="overflow-hidden shadow-xs border-border"
+        actions={
+          !isReadOnly && (
             <Button
               variant="primary"
               size="sm"
               onClick={handleStartAdd}
               disabled={!vendor.isActive}
               className="text-xs shrink-0 w-full sm:w-auto justify-center"
-              title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to add new effective dates.' : 'Add new effective date'}
+              title={
+                !vendor.isActive
+                  ? 'Vendor is inactive. Activate vendor to add new effective dates.'
+                  : 'Add new effective date'
+              }
             >
               <IconAdd size={14} className="mr-1.5" />
               Add New Effective Date
             </Button>
-          )}
-        </div>
+          )
+        }
+      >
 
         {/* ── MOBILE VIEW (< md): Card List for Small Screens ── */}
         <div className="block md:hidden p-3 space-y-2.5 bg-bg/50 max-h-[260px] overflow-y-auto overscroll-y-contain border-t border-border/60">
@@ -1274,43 +1275,40 @@ export default function VendorEffectiveDatesPage() {
             </tbody>
           </TableContainer>
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* ── 3. DETAIL / FORM PANEL (CARD) ── */}
-      <Card className="overflow-hidden shadow-xs border-border">
-        {/* Panel Header */}
-        <div className="p-4 sm:px-6 sm:py-4 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-sm sm:text-base font-bold text-heading break-words">
-              {mode === 'VIEW' && (
-                <>
-                  Viewing version — Effective{' '}
-                  <span className="font-mono text-primary">
-                    {formatDateDisplay(selectedVersion?.effectiveDate)}
-                  </span>
-                </>
-              )}
-              {mode === 'EDIT' && (
-                <>
-                  Editing version — Effective{' '}
-                  <span className="font-mono text-primary">
-                    {formatDateDisplay(formData.effectiveDate || selectedVersion?.effectiveDate)}
-                  </span>
-                </>
-              )}
-              {mode === 'ADD' && 'Add new effective date'}
-            </h3>
-            <p className="text-xs text-text-muted mt-0.5">
-              {mode === 'VIEW' &&
-                'Read-only view of fields and attachments effective from this date.'}
-              {mode === 'EDIT' &&
-                'Modify versioned vendor information, address, and attachments.'}
-              {mode === 'ADD' &&
-                'Clone-forward from current active version with a new unique effective date.'}
-            </p>
-          </div>
-
-          {/* Panel Top Actions */}
+      <CollapsibleCard
+        title={
+          mode === 'VIEW' ? (
+            <>
+              Viewing version — Effective{' '}
+              <span className="font-mono text-primary">
+                {formatDateDisplay(selectedVersion?.effectiveDate)}
+              </span>
+            </>
+          ) : mode === 'EDIT' ? (
+            <>
+              Editing version — Effective{' '}
+              <span className="font-mono text-primary">
+                {formatDateDisplay(formData.effectiveDate || selectedVersion?.effectiveDate)}
+              </span>
+            </>
+          ) : (
+            'Add new effective date'
+          )
+        }
+        subtitle={
+          mode === 'VIEW'
+            ? 'Read-only view of fields and attachments effective from this date.'
+            : mode === 'EDIT'
+              ? 'Modify versioned vendor information, address, and attachments.'
+              : 'Clone-forward from current active version with a new unique effective date.'
+        }
+        icon={<IconVendor size={17} />}
+        defaultOpen={true}
+        className="overflow-hidden shadow-xs border-border"
+        actions={
           <div className="flex items-center gap-2 self-start sm:self-auto w-full sm:w-auto justify-end">
             {!isReadOnly && mode === 'VIEW' && selectedVersion && (
               <Button
@@ -1319,7 +1317,11 @@ export default function VendorEffectiveDatesPage() {
                 onClick={() => handleStartEdit(selectedVersion)}
                 disabled={!vendor.isActive}
                 className="text-xs w-full sm:w-auto justify-center"
-                title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : 'Edit this version'}
+                title={
+                  !vendor.isActive
+                    ? 'Vendor is inactive. Activate vendor to edit version.'
+                    : 'Edit this version'
+                }
               >
                 <IconEdit size={13} className="mr-1.5" />
                 Edit this version
@@ -1348,7 +1350,8 @@ export default function VendorEffectiveDatesPage() {
               </>
             )}
           </div>
-        </div>
+        }
+      >
 
         {/* ── Mode 1: VIEW MODE ── */}
         {mode === 'VIEW' && selectedVersion && (
@@ -1936,7 +1939,7 @@ export default function VendorEffectiveDatesPage() {
             </div>
           </form>
         )}
-      </Card>
+      </CollapsibleCard>
 
       {/* ── Document Screen Popup (Modal) ── */}
       {previewItem && (

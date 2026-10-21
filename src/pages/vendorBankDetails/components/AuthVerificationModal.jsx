@@ -24,7 +24,7 @@ export default function AuthVerificationModal({
   bankAccount = null,
   vendorName = '',
 }) {
-  const { allUsers = [] } = useUsersContext();
+  const { allUsers = [], ensureUsersLoaded } = useUsersContext();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -35,6 +35,9 @@ export default function AuthVerificationModal({
   // Reset fields on modal open
   useEffect(() => {
     if (isOpen) {
+      if (allUsers.length === 0 && ensureUsersLoaded) {
+        ensureUsersLoaded();
+      }
       // Default placeholder / suggested active session username
       setUsername('ian.chesnut@gmail.com');
       setPassword('');
@@ -42,7 +45,7 @@ export default function AuthVerificationModal({
       setError('');
       setIsVerifying(false);
     }
-  }, [isOpen]);
+  }, [isOpen, allUsers.length, ensureUsersLoaded]);
 
   if (!isOpen) return null;
 

@@ -31,6 +31,7 @@ import {
   MapPin,
   HandCoins,
   ListTree,
+  Workflow,
 
   // ── Action Icons ──
   Plus,
@@ -183,12 +184,15 @@ export const IconProductCategories = FolderTree;
 export const IconUOM = Scale;
 export const IconRegions = MapPin;
 export const IconPaymentTerms = HandCoins;
+export const IconProcessFlow = Workflow;
+export const IconWorkflow = Workflow;
 export const IconList = ListTree;
 
 /* ── 2. GLOBAL ACTION ICONS (Canonical semantic registry) ── */
 export const IconAdd = Plus;
 export const IconEdit = Pencil;
 export const IconDelete = Trash2;
+export const IconTrash = Trash2;
 export const IconView = Eye;
 export const IconClose = X;
 export const IconCancel = X; // Alias for IconClose
@@ -202,6 +206,7 @@ export const IconInfo = Info;
 export const IconSearch = Search;
 export const IconSearchEmpty = SearchX;
 export const IconReset = RotateCcw;
+export const IconRotateCcw = RotateCcw;
 export const IconUpload = UploadCloud; // Outliers merged to UploadCloud
 export const IconUploadCloud = UploadCloud;
 export const IconDownload = Download;
@@ -217,6 +222,7 @@ export const IconChevronDown = ChevronDown;
 export const IconChevronUp = ChevronUp;
 export const IconChevronLeft = ChevronLeft;
 export const IconChevronRight = ChevronRight;
+export const IconArrowLeft = ArrowLeft;
 export const IconArrowRight = ArrowRight;
 export const IconArrowUpDown = ArrowUpDown;
 export const IconArrowUp = ArrowUp;
@@ -326,6 +332,7 @@ export const MODULE_ICONS = {
   uom: IconUOM,
   regions: IconRegions,
   paymentTerms: IconPaymentTerms,
+  processFlow: IconProcessFlow,
 };
 
 export default MODULE_ICONS;

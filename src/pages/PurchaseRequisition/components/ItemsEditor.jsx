@@ -4,7 +4,7 @@
  * Manages adding, editing, and deleting items with full field validation.
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   IconAdd,
   IconCheck,
@@ -20,6 +20,7 @@ import {
   Button,
   CancelButton,
   Card,
+  CollapsibleCard,
   Input,
   SearchableSelect,
   Badge,
@@ -60,6 +61,7 @@ export default function ItemsEditor({
   onChange,
   onChangeItems,
   error = '',
+  onClearError,
 }) {
   // Support both onChange and onChangeItems prop names
   const handleUpdateItems = (nextItems) => {
@@ -69,6 +71,7 @@ export default function ItemsEditor({
     if (typeof onChangeItems === 'function') {
       onChangeItems(nextItems);
     }
+    onClearError?.();
   };
 
   // Form State
@@ -77,6 +80,14 @@ export default function ItemsEditor({
   // Track editing row ID (null when in Add mode)
   const [editingId, setEditingId] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [isFormOpen, setIsFormOpen] = useState(true);
+
+  // Auto-expand the Add Item form if items are required and currently empty with an error
+  useEffect(() => {
+    if (error && items.length === 0) {
+      setIsFormOpen(true);
+    }
+  }, [error, items.length]);
 
   // Track error attempt count when user clicks Add Item without filling required fields
   const errorCountRef = useRef(0);
@@ -142,6 +153,7 @@ export default function ItemsEditor({
     if (fieldErrors[field]) {
       setFieldErrors((prev) => ({ ...prev, [field]: null }));
     }
+    onClearError?.();
     errorCountRef.current = 0;
   };
 
@@ -239,6 +251,7 @@ export default function ItemsEditor({
   const handleStartEdit = (item, index) => {
     const id = getItemKey(item, index);
     setEditingId(id);
+    setIsFormOpen(true);
     setFieldErrors({});
     setFormState({
       prItemId: item.prItemId || item.id || null,
@@ -298,56 +311,43 @@ export default function ItemsEditor({
   return (
     <div className="space-y-6">
       {/* ── 1. ITEM FORM (Top Card) ── */}
-      <Card
-        padding="md"
-        className={`space-y-5 shadow-xs transition-all duration-200 ${
+      <CollapsibleCard
+        title={isEditing ? `Edit Item #${editingIndex + 1}` : 'Add Item to Requisition'}
+        subtitle={
+          isEditing
+            ? `Modifying details for ${formState.itemName || 'selected item'}. Click "Update Item" to save changes.`
+            : 'Enter material details, required quantity, and specifications below.'
+        }
+        icon={isEditing ? <IconEdit size={17} /> : <IconPackage size={18} />}
+        isOpen={isFormOpen}
+        onToggle={setIsFormOpen}
+        hasError={Boolean(fieldErrors.itemId || fieldErrors.quantity || fieldErrors.itemCode || fieldErrors.itemName || (items.length === 0 && error))}
+        className={`shadow-xs transition-all duration-200 ${
           isEditing
             ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
+            : (items.length === 0 && error)
+            ? 'border-danger/60 ring-2 ring-danger/20'
             : 'border-border'
         }`}
-      >
-        {/* Form Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-border">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                isEditing
-                  ? 'bg-primary text-white'
-                  : 'bg-primary/10 text-primary'
-              }`}
-            >
-              {isEditing ? <IconEdit size={17} /> : <IconPackage size={18} />}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-heading">
-                  {isEditing
-                    ? `Edit Item #${editingIndex + 1}`
-                    : 'Add Item to Requisition'}
-                </h2>
-                {isEditing && (
-                  <Badge variant="role" className="text-xs px-2 py-0.5">
-                    Editing Mode
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-text-muted">
-                {isEditing
-                  ? `Modifying details for ${formState.itemName || 'selected item'}. Click "Update Item" to save changes.`
-                  : 'Enter material details, required quantity, and specifications below.'}
-              </p>
-            </div>
-          </div>
-
-          {isEditing && (
+        badge={
+          isEditing ? (
+            <Badge variant="role" className="text-xs px-2 py-0.5">
+              Editing Mode
+            </Badge>
+          ) : null
+        }
+        actions={
+          isEditing ? (
             <CancelButton
               size="sm"
               onClick={resetForm}
-              className="text-xs self-start sm:self-auto"
+              className="text-xs"
             />
-          )}
-        </div>
-
+          ) : null
+        }
+        padding="md"
+        bodyClassName="space-y-4"
+      >
         {/* Form Body: Exactly 3 fields per row */}
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -361,7 +361,7 @@ export default function ItemsEditor({
                 value={formState.itemId ? String(formState.itemId) : ''}
                 placeholder="-- Select Material from Catalog --"
                 searchPlaceholder="Search catalog..."
-                error={fieldErrors.itemId || fieldErrors.itemCode || fieldErrors.itemName}
+                error={fieldErrors.itemId || fieldErrors.itemCode || fieldErrors.itemName || (items.length === 0 ? error : '')}
                 onChange={(e) => handleFieldChange('itemId', e.target.value)}
               />
             </div>
@@ -465,35 +465,24 @@ export default function ItemsEditor({
             </Button>
           </div>
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* ── 2. ITEMS GRID (Review Table Card) ── */}
-      <Card
+      <CollapsibleCard
+        title="Requisition Items List"
+        subtitle="Review, edit, or remove items included in this purchase requisition."
+        icon={<IconPackage size={18} />}
+        defaultOpen={true}
+        hasError={Boolean(error)}
         padding="none"
         className="overflow-hidden border border-border shadow-xs bg-surface"
-      >
-        {/* Grid Header */}
-        <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-surface">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <IconPackage size={18} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-heading">
-                  Requisition Items List
-                </h3>
-                <Badge variant="role" className="text-xs px-2.5 py-0.5">
-                  {items.length} {items.length === 1 ? 'Item' : 'Items'}
-                </Badge>
-              </div>
-              <p className="text-xs text-text-muted">
-                Review, edit, or remove items included in this purchase requisition.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+        badge={
+          <Badge variant="role" className="text-xs px-2.5 py-0.5">
+            {items.length} {items.length === 1 ? 'Item' : 'Items'}
+          </Badge>
+        }
+        actions={
+          <div className="flex items-center gap-2.5 flex-wrap">
             {selectedIds.length > 0 && (
               <Button
                 type="button"
@@ -516,7 +505,8 @@ export default function ItemsEditor({
               </div>
             )}
           </div>
-        </div>
+        }
+      >
 
         {/* Section Error Banner if provided */}
         {error && (
@@ -674,7 +664,7 @@ export default function ItemsEditor({
             )}
           </TableContainer>
         )}
-      </Card>
+      </CollapsibleCard>
 
       {/* ── Single Delete Confirmation Modal ── */}
       <ConfirmModal

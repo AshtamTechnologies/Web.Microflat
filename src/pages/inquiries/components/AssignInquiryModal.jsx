@@ -17,9 +17,14 @@ import { useUsersContext } from '../../../context/UsersContext';
 
 export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
   const { reassignInquiry } = useInquiriesContext();
-  const { allUsers = [], users = [] } = useUsersContext();
+  const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
 
   const userList = allUsers.length > 0 ? allUsers : users;
+  useEffect(() => {
+    if (isOpen && userList.length === 0 && ensureUsersLoaded) {
+      ensureUsersLoaded();
+    }
+  }, [isOpen, userList.length, ensureUsersLoaded]);
 
   const [selectedUserId, setSelectedUserId] = useState('');
   const [remarks, setRemarks] = useState('');

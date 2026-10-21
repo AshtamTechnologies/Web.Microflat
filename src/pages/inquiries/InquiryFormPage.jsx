@@ -54,6 +54,7 @@ import {
   DatePicker,
   SearchableSelect,
   Card,
+  CollapsibleCard,
   Badge,
   Modal,
   ConfirmModal,
@@ -271,7 +272,7 @@ export default function InquiryFormPage() {
     addInquiryComment,
   } = useInquiriesContext();
 
-  const { allUsers = [], users = [] } = useUsersContext();
+  const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
   const { addDocument } = useInquiryDocumentsContext();
   const { documentTypes = [], getDocumentTypeById } = useDocumentTypesContext();
 
@@ -283,6 +284,12 @@ export default function InquiryFormPage() {
   const { clients = [] } = useClientsContext();
 
   const userList = allUsers.length > 0 ? allUsers : users;
+
+  useEffect(() => {
+    if (userList.length === 0 && ensureUsersLoaded) {
+      ensureUsersLoaded();
+    }
+  }, [userList.length, ensureUsersLoaded]);
 
   const existingInquiry = useMemo(() => {
     return isEdit ? getInquiryById(id) : null;
@@ -1202,23 +1209,15 @@ export default function InquiryFormPage() {
       {activeTab === 'inquiry_customer' && (
         <div className="space-y-6">
           {/* ── SECTION 1: INQUIRY DETAILS ── */}
-          <Card padding="md" className="bg-bg">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-5 border-b border-border">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <IconFileText size={18} />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-heading">
-                    1. Inquiry Details
-                  </h2>
-                  <p className="text-xs text-text-muted">
-                    Reference code, date, estimate date & priority
-                  </p>
-                </div>
-              </div>
-
-              {form.InquiryNo && (
+          <CollapsibleCard
+            title="1. Inquiry Details"
+            subtitle="Reference code, date, estimate date & priority"
+            icon={<IconFileText size={18} />}
+            className="bg-bg"
+            defaultOpen={true}
+            hasError={Boolean(errors.InquiryDate || errors.RegionId || errors.DistributorName)}
+            badge={
+              form.InquiryNo ? (
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="inline-flex items-center font-mono font-bold text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg">
                     {form.InquiryNo}
@@ -1227,8 +1226,9 @@ export default function InquiryFormPage() {
                     System Generated
                   </Badge>
                 </div>
-              )}
-            </div>
+              ) : null
+            }
+          >
 
             <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
@@ -1341,19 +1341,17 @@ export default function InquiryFormPage() {
                 hint="Use the formatting toolbar for lists, bold specifications, headings, and quotes."
               />
             </div>
-          </Card>
+          </CollapsibleCard>
 
           {/* ── SECTION 2: CUSTOMER INFORMATION ── */}
-          <Card padding="md" className="bg-bg">
-            <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-base">
-                <IconUser size={18} className="text-primary shrink-0" aria-hidden="true" />
-                <span>2. Customer Information</span>
-              </div>
-              <span className="text-xs text-text-muted font-normal">
-                Company profile, contact persons & address details
-              </span>
-            </div>
+          <CollapsibleCard
+            title="2. Customer Information"
+            subtitle="Company profile, contact persons & address details"
+            icon={<IconUser size={18} />}
+            className="bg-bg"
+            defaultOpen={true}
+            hasError={Boolean(errors.CustomerName || errors.ContactPerson || errors.Email || errors.Phone)}
+          >
 
             <div className="space-y-4 sm:space-y-5">
               {/* 3-Column Grid for All Customer Information Fields */}
@@ -1531,22 +1529,22 @@ export default function InquiryFormPage() {
                 />
               </div>
             </div>
-          </Card>
+          </CollapsibleCard>
 
           {/* ── SECTION 3: PRODUCT SELECTION ── */}
-          <Card padding="md" className="bg-bg space-y-6">
-            <div className="border-b border-border pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-base">
-                <IconPackage size={18} className="text-primary shrink-0" aria-hidden="true" />
-                <span>3. Product Selection</span>
-                <span className="text-2xs font-medium text-text-muted bg-surface border border-border px-2 py-0.5 rounded-full">
-                  Optional
-                </span>
-              </div>
-              <span className="text-xs text-text-muted font-normal">
-                Category classification & optional item specifications (can be specified later)
+          <CollapsibleCard
+            title="3. Product Selection"
+            subtitle="Category classification & optional item specifications (can be specified later)"
+            icon={<IconPackage size={18} />}
+            className="bg-bg"
+            bodyClassName="space-y-6"
+            defaultOpen={true}
+            badge={
+              <span className="text-2xs font-medium text-text-muted bg-surface border border-border px-2 py-0.5 rounded-full">
+                {form.items?.length > 0 ? `${form.items.length} ${form.items.length === 1 ? 'Item' : 'Items'}` : 'Optional'}
               </span>
-            </div>
+            }
+          >
 
             {/* ── Sub-Card: Add Item to Inquiry ── */}
             <div
@@ -1935,7 +1933,7 @@ export default function InquiryFormPage() {
                 </div>
               )}
             </div>
-          </Card>
+          </CollapsibleCard>
 
           {/* ── Tab 1 Bottom Action Controls ── */}
           <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-3 border-t border-border">
@@ -1983,16 +1981,14 @@ export default function InquiryFormPage() {
       {activeTab === 'assignment_documents' && (
         <div className="space-y-6">
           {/* ── SECTION 4: ASSIGNMENT & INITIAL STATUS ── */}
-          <Card padding="md" className="bg-bg">
-            <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-base">
-                <IconUserCheck size={18} className="text-primary shrink-0" aria-hidden="true" />
-                <span>4. Assignment & Initial Status</span>
-              </div>
-              <span className="text-xs text-text-muted font-normal">
-                Assign internal owner & add handover remarks
-              </span>
-            </div>
+          <CollapsibleCard
+            title="4. Assignment & Initial Status"
+            subtitle="Assign internal owner & add handover remarks"
+            icon={<IconUserCheck size={18} />}
+            className="bg-bg"
+            defaultOpen={true}
+            hasError={Boolean(errors.AssignedTo)}
+          >
 
             <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -2049,19 +2045,23 @@ export default function InquiryFormPage() {
                 />
               </div>
             </div>
-          </Card>
+          </CollapsibleCard>
 
           {/* ── SECTION 5: DOCUMENTS & ATTACHMENTS ── */}
-          <Card padding="md" className="bg-bg">
-            <div className="border-b border-border pb-3 mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-base">
-                <IconAttachment size={18} className="text-primary shrink-0" aria-hidden="true" />
-                <span>5. Documents & Attachments</span>
-              </div>
-              <span className="text-xs text-text-muted font-normal">
-                Attach RFQs, 2D/3D blueprints, specifications or client PO files
-              </span>
-            </div>
+          <CollapsibleCard
+            title="5. Documents & Attachments"
+            subtitle="Attach RFQs, 2D/3D blueprints, specifications or client PO files"
+            icon={<IconAttachment size={18} />}
+            className="bg-bg"
+            defaultOpen={true}
+            badge={
+              (form.attachments?.length || 0) > 0 ? (
+                <Badge variant="role" className="text-xs">
+                  {form.attachments.length} {form.attachments.length === 1 ? 'File' : 'Files'}
+                </Badge>
+              ) : null
+            }
+          >
 
             <div className="space-y-5">
               {/* Staging Form Controls */}
@@ -2321,7 +2321,7 @@ export default function InquiryFormPage() {
                 </div>
               )}
             </div>
-          </Card>
+          </CollapsibleCard>
 
           {/* ── Tab 2 Bottom Action Controls ── */}
           <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pt-3 border-t border-border">

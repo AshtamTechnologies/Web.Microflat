@@ -46,6 +46,8 @@ import { RegionsProvider } from './context/RegionsContext';
 
 import PaymentTermsPage from './pages/configuration/PaymentTermsPage';
 import { PaymentTermsProvider } from './context/PaymentTermsContext';
+import ProcessFlowsPage from './pages/configuration/processFlow/ProcessFlowsPage';
+import ProcessFlowEditorPage from './pages/configuration/processFlow/ProcessFlowEditorPage';
 
 import UserViewPage from './pages/users/UserViewPage';
 import { UserSessionsProvider } from './context/UserSessionsContext';
@@ -177,6 +179,8 @@ export default function App() {
               <Route path="/configuration/uom" element={<UomPage />} />
               <Route path="/configuration/regions" element={<RegionsPage />} />
               <Route path="/configuration/payment-terms" element={<PaymentTermsPage />} />
+              <Route path="/configuration/process-flows" element={<ProcessFlowsPage />} />
+              <Route path="/configuration/process-flows/:flowId" element={<ProcessFlowEditorPage />} />
             </Route>
 
             {/* Default: redirect root to login */}

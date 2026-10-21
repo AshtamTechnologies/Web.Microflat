@@ -30,6 +30,7 @@ import {
   IconUOM,
   IconRegions,
   IconPaymentTerms,
+  IconProcessFlow,
   IconList,
   IconAdd,
 } from '../constants/icons';
@@ -189,6 +190,12 @@ export const navigation = [
             label: 'Payment Terms',
             icon: IconPaymentTerms,
             path: '/configuration/payment-terms',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Process Flows',
+            icon: IconProcessFlow,
+            path: '/configuration/process-flows',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
         ],

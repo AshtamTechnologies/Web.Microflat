@@ -71,8 +71,14 @@ export default function InquiriesPage() {
     deleteInquiry,
   } = useInquiriesContext();
 
-  const { allUsers = [], users = [] } = useUsersContext();
+  const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
   const userList = allUsers.length > 0 ? allUsers : users;
+
+  useEffect(() => {
+    if (userList.length === 0 && ensureUsersLoaded) {
+      ensureUsersLoaded();
+    }
+  }, [userList.length, ensureUsersLoaded]);
 
   // Modals state
   const [assignModalInquiry, setAssignModalInquiry] = useState(null);
