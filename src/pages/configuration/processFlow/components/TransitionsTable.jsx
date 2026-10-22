@@ -11,6 +11,7 @@ import {
   StatusBadge,
   Button,
   IconButton,
+  TableActions,
 } from '../../../../components/ui';
 import { IconEdit, IconArrowRight } from '../../../../constants/icons';
 import { getOutcomeStyle } from '../../../../constants/processFlow';
@@ -149,20 +150,17 @@ export default function TransitionsTable({
 
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: 'ACTIONS',
         size: 80,
+        enableSorting: false,
+        enableResizing: false,
         cell: (info) => {
           const trans = info.row.original;
           return (
-            <div className="flex items-center justify-end">
-              <IconButton
-                icon={IconEdit}
-                size="sm"
-                variant="ghost"
-                title="Edit Transition"
-                onClick={() => onEdit?.(trans)}
-              />
-            </div>
+            <TableActions
+              onEdit={() => onEdit?.(trans)}
+              editTooltip="Edit Transition"
+            />
           );
         },
       }),

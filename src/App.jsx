@@ -57,6 +57,11 @@ import ClientsPage from './pages/clients/ClientsPage';
 import ClientFormPage from './pages/clients/ClientFormPage';
 import ClientEffectiveDatesPage from './pages/clients/ClientEffectiveDatesPage';
 import { ClientsProvider } from './context/ClientsContext';
+
+import CompanyRegistrationPage from './pages/companyRegistration/CompanyRegistrationPage';
+import CompanyFormPage from './pages/companyRegistration/CompanyFormPage';
+import CompanyViewPage from './pages/companyRegistration/CompanyViewPage';
+import { CompanyProvider } from './context/CompanyContext';
 import ScrollToTop from './components/common/ScrollToTop';
 
 /**
@@ -115,7 +120,9 @@ export default function App() {
                                       <RegionsProvider>
                                         <PaymentTermsProvider>
                                           <SeriesProvider>
-                                            <AppLayout />
+                                            <CompanyProvider>
+                                              <AppLayout />
+                                            </CompanyProvider>
                                           </SeriesProvider>
                                         </PaymentTermsProvider>
                                       </RegionsProvider>
@@ -157,6 +164,12 @@ export default function App() {
               <Route path="/clients/:id" element={<ClientEffectiveDatesPage />} />
               <Route path="/clients/:id/edit" element={<ClientEffectiveDatesPage />} />
               <Route path="/clients/:id/effective-dates" element={<ClientEffectiveDatesPage />} />
+
+              {/* Company Registration Routes */}
+              <Route path="/company-registration" element={<CompanyRegistrationPage />} />
+              <Route path="/company-registration/new" element={<CompanyFormPage />} />
+              <Route path="/company-registration/:id" element={<CompanyViewPage />} />
+              <Route path="/company-registration/:id/edit" element={<CompanyFormPage />} />
 
               {/* Purchase Requisition Routes */}
               <Route path="/purchase-requisition" element={<PurchaseRequisition />} />

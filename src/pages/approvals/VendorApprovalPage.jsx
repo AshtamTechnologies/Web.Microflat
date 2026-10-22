@@ -11,7 +11,7 @@
  *   - Row click navigates to /vendors/:id for full read-only review.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useReactTable,
@@ -45,6 +45,7 @@ import {
   TableToolbar,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
+import { approvalsService } from '../../services';
 import { getStateName } from '../../mocks/vendors';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -84,12 +85,66 @@ export default function VendorApprovalPage() {
   const [rejectComments, setRejectComments] = useState('');
   const [isSubmittingReject, setIsSubmittingReject] = useState(false);
 
-  /* ── Filter all vendors for Pending only & Search query ── */
+  const [approvalRequests, setApprovalRequests] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  /* ── Load pending approval requests from GET /api/approval-requests ── */
+  const fetchPendingApprovals = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await approvalsService.listApprovalRequests({
+        status: 'Pending',
+        moduleCode: 'VENDOR',
+      });
+      if (res && Array.isArray(res.items)) {
+        setApprovalRequests(res.items);
+      }
+    } catch (err) {
+      console.warn('Could not fetch approval requests from API:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingApprovals();
+  }, [fetchPendingApprovals]);
+
+  /* ── Merge API approval requests with VendorsContext for rich display ── */
   const pendingVendors = useMemo(() => {
+    if (approvalRequests.length > 0) {
+      return approvalRequests.map((req) => {
+        const vMatch = allVendors.find(
+          (v) =>
+            String(v.id) === String(req.referenceId) ||
+            String(v.vendorId) === String(req.referenceId) ||
+            (v.vendorName && req.referenceTitle && v.vendorName.toLowerCase() === req.referenceTitle.toLowerCase())
+        );
+
+        return {
+          ...req,
+          id: req.id || req.approvalRequestId,
+          approvalRequestId: req.id || req.approvalRequestId,
+          referenceId: req.referenceId || vMatch?.id,
+          vendorId: req.referenceId || vMatch?.id,
+          vendorName: req.referenceTitle || vMatch?.vendorName || 'Unknown Vendor',
+          vendorCode: vMatch?.vendorCode || req.vendorCode || '—',
+          contactPersonName: vMatch?.contactPersonName || req.contactPersonName || '',
+          city: vMatch?.city || req.city || '',
+          countryId: vMatch?.countryId || 'IN',
+          stateId: vMatch?.stateId || '',
+          effectiveDate: req.initiatedOn || vMatch?.effectiveDate || '',
+          createdOn: req.initiatedOn || vMatch?.createdOn || '',
+          approvalStatus: 'Pending',
+        };
+      });
+    }
+
+    // Fallback to local pending vendors from VendorsContext
     return allVendors.filter(
       (v) => (v.approvalStatus || '').toLowerCase() === 'pending'
     );
-  }, [allVendors]);
+  }, [approvalRequests, allVendors]);
 
   const filteredPendingVendors = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -127,16 +182,34 @@ export default function VendorApprovalPage() {
     try {
       setIsSubmittingApprove(true);
       const now = formatAuditTimestamp();
+      const reqId = vendorToApprove.approvalRequestId || vendorToApprove.id;
+      const targetVendorId = vendorToApprove.referenceId || vendorToApprove.vendorId || vendorToApprove.id;
 
-      await updateVendor(vendorToApprove.id, {
-        approvalStatus: 'Approved',
-        approvedOn: now,
-        approvedBy: 'Ian Chesnut',
-        approvedByComments: approveComments.trim(),
-      });
+      // 1. Post approval to API: POST /api/approval-requests/{id}/approve
+      try {
+        if (reqId) {
+          await approvalsService.approveRequest(reqId, {
+            comments: approveComments.trim(),
+            isDocumentVerified: true,
+          });
+        }
+      } catch (apiErr) {
+        console.warn('POST /api/approval-requests/{id}/approve failed:', apiErr);
+      }
+
+      // 2. Synchronize VendorsContext state
+      if (targetVendorId) {
+        await updateVendor(targetVendorId, {
+          approvalStatus: 'Approved',
+          approvedOn: now,
+          approvedBy: 'Current User',
+          approvedByComments: approveComments.trim(),
+        });
+      }
 
       toast.success(`${vendorToApprove.vendorName} approved successfully`);
       handleCloseApprove();
+      fetchPendingApprovals();
     } catch {
       toast.error('Failed to approve vendor. Please try again.');
     } finally {
@@ -163,16 +236,33 @@ export default function VendorApprovalPage() {
     try {
       setIsSubmittingReject(true);
       const now = formatAuditTimestamp();
+      const reqId = vendorToReject.approvalRequestId || vendorToReject.id;
+      const targetVendorId = vendorToReject.referenceId || vendorToReject.vendorId || vendorToReject.id;
 
-      await updateVendor(vendorToReject.id, {
-        approvalStatus: 'Rejected',
-        approvedOn: now,
-        approvedBy: 'Ian Chesnut',
-        approvedByComments: rejectComments.trim(),
-      });
+      // 1. Post rejection to API: POST /api/approval-requests/{id}/reject
+      try {
+        if (reqId) {
+          await approvalsService.rejectRequest(reqId, {
+            comments: rejectComments.trim(),
+          });
+        }
+      } catch (apiErr) {
+        console.warn('POST /api/approval-requests/{id}/reject failed:', apiErr);
+      }
+
+      // 2. Synchronize VendorsContext state
+      if (targetVendorId) {
+        await updateVendor(targetVendorId, {
+          approvalStatus: 'Rejected',
+          approvedOn: now,
+          approvedBy: 'Current User',
+          approvedByComments: rejectComments.trim(),
+        });
+      }
 
       toast.success(`${vendorToReject.vendorName} rejected`);
       handleCloseReject();
+      fetchPendingApprovals();
     } catch {
       toast.error('Failed to reject vendor. Please try again.');
     } finally {
@@ -272,11 +362,17 @@ export default function VendorApprovalPage() {
                 type="button"
                 variant="primary-soft"
                 size="sm"
-                onClick={() =>
-                  navigate(`/vendors/${row.id}/effective-dates`, {
-                    state: { from: '/approvals/vendors', backLabel: 'Vendor Approval', readOnly: true },
-                  })
-                }
+                onClick={() => {
+                  const targetId = row.referenceId || row.vendorId || row.id;
+                  navigate(`/vendors/${targetId}/effective-dates`, {
+                    state: {
+                      from: '/approvals/vendors',
+                      backLabel: 'Vendor Approval',
+                      readOnly: true,
+                      approvalRequestId: row.approvalRequestId || row.id,
+                    },
+                  });
+                }}
                 className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title={`View ${row.vendorName}`}
               >
@@ -367,6 +463,7 @@ export default function VendorApprovalPage() {
         table={table}
         columns={columns}
         totalCount={filteredPendingVendors.length}
+        loading={isLoading}
         entityName="pending vendors"
         emptyTitle={
           hasSearchFilter
@@ -440,7 +537,17 @@ export default function VendorApprovalPage() {
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={() => navigate(`/vendors/${vendor.id}`)}
+                  onClick={() => {
+                    const targetId = vendor.referenceId || vendor.vendorId || vendor.id;
+                    navigate(`/vendors/${targetId}/effective-dates`, {
+                      state: {
+                        from: '/approvals/vendors',
+                        backLabel: 'Vendor Approval',
+                        readOnly: true,
+                        approvalRequestId: vendor.approvalRequestId || vendor.id,
+                      },
+                    });
+                  }}
                   className="flex-1 text-xs font-semibold h-8 justify-center gap-1"
                 >
                   <IconView size={13} />

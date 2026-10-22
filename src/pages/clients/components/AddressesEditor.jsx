@@ -234,7 +234,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
           </div>
 
           {/* City */}
-          <div>
+          <div className="sm:col-span-2">
             <Input
               label="City"
               id="addr-city"
@@ -248,7 +248,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
           </div>
 
           {/* ZIP Code */}
-          <div>
+          <div className="sm:col-span-2">
             <Input
               label="ZIP / Postal Code"
               id="addr-zip"
@@ -261,7 +261,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
             />
           </div>
 
-          {/* Address 1 */}
+          {/* Address Line 1 */}
           <div className="sm:col-span-2">
             <Input
               label="Address Line 1"
@@ -275,8 +275,8 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
             />
           </div>
 
-          {/* Address 2 */}
-          <div className="sm:col-span-2 lg:col-span-4">
+          {/* Address Line 2 */}
+          <div className="sm:col-span-2">
             <Input
               label="Address Line 2"
               id="addr-line2"

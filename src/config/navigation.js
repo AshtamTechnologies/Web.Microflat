@@ -19,6 +19,7 @@ import {
   IconPR,
   IconInquiry,
   IconDashboard,
+  IconCompany,
   IconUsers,
   IconApproval,
   IconVendorApproval,
@@ -146,6 +147,17 @@ export const navigation = [
     section: 'ADMINISTRATION',
     items: [
       {
+        label: 'Company Registration',
+        icon: IconCompany,
+        path: '/company-registration',
+        roles: ['ADMIN', 'MANAGER'],
+        quickAction: {
+          icon: IconAdd,
+          title: 'Register Company',
+          path: '/company-registration/new',
+        },
+      },
+      {
         label: 'Users & Roles',
         icon: IconUsers,
         path: '/users',
@@ -163,7 +175,7 @@ export const navigation = [
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {
-            label: 'Inquiry Document Types',
+            label: 'Document Types',
             icon: IconDocumentTypes,
             path: '/configuration/document-types',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],

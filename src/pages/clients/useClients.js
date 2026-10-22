@@ -75,6 +75,8 @@ export function useClients() {
           const fullName = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase();
           return (
             fullName.includes(q) ||
+            c.department?.toLowerCase().includes(q) ||
+            c.designation?.toLowerCase().includes(q) ||
             c.mobile1?.toLowerCase().includes(q) ||
             c.mobile2?.toLowerCase().includes(q)
           );

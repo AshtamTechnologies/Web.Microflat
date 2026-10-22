@@ -13,10 +13,12 @@ import {
   Button,
   IconButton,
   StatusBadge,
+  TableActions,
 } from '../../../components/ui';
 import {
   IconAdd,
   IconEdit,
+  IconView,
   IconWorkflow,
   IconProcessFlow,
   IconRefresh,
@@ -126,27 +128,20 @@ export default function ProcessFlowsPage() {
 
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
-        size: 110,
+        header: 'ACTIONS',
+        size: 100,
+        minSize: 90,
+        enableSorting: false,
+        enableResizing: false,
         cell: (info) => {
           const flow = info.row.original;
           return (
-            <div className="flex items-center justify-end gap-1">
-              <IconButton
-                icon={IconWorkflow}
-                size="sm"
-                variant="ghost"
-                title="Open Flow Designer"
-                onClick={() => navigate(`/configuration/process-flows/${flow.id}`)}
-              />
-              <IconButton
-                icon={IconEdit}
-                size="sm"
-                variant="ghost"
-                title="Edit Flow Properties"
-                onClick={() => openEditModal(flow)}
-              />
-            </div>
+            <TableActions
+              onView={() => navigate(`/configuration/process-flows/${flow.id}`)}
+              onEdit={() => openEditModal(flow)}
+              viewTooltip="Open Flow Designer"
+              editTooltip="Edit Flow Properties"
+            />
           );
         },
       }),
@@ -291,7 +286,7 @@ export default function ProcessFlowsPage() {
                   onClick={() => navigate(`/configuration/process-flows/${flow.id}`)}
                   className="flex-1 text-xs"
                 >
-                  <IconWorkflow size={14} className="mr-1.5" />
+                  <IconView size={14} className="mr-1.5" />
                   Open Designer
                 </Button>
                 <Button

@@ -431,7 +431,9 @@ export default function ClientViewPage() {
               <TableContainer tableClassName="w-full text-left border-collapse text-xs">
                 <thead className="bg-surface/80 border-b border-border">
                     <tr>
-                      <Th className="py-2.5 px-3">NAME</Th>
+                      <Th className="py-2.5 px-3 min-w-[160px]">NAME</Th>
+                      <Th className="py-2.5 px-3 min-w-[130px] whitespace-nowrap">DESIGNATION</Th>
+                      <Th className="py-2.5 px-3 min-w-[130px] whitespace-nowrap">DEPARTMENT</Th>
                       <Th className="py-2.5 px-3 w-48">MOBILE 1</Th>
                       <Th className="py-2.5 px-3 w-48">MOBILE 2</Th>
                       <Th className="py-2.5 px-3">EMAIL</Th>
@@ -445,7 +447,28 @@ export default function ClientViewPage() {
                       return (
                         <tr key={c.clientContactPersonId || idx} className="hover:bg-surface/40 transition-colors">
                           <Td className="py-3 px-3 font-semibold text-heading">
-                            {fullName}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span>{fullName}</span>
+                              {c.isPrimary && (
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold bg-primary/15 text-primary border border-primary/30">
+                                  Primary
+                                </span>
+                              )}
+                            </div>
+                          </Td>
+                          <Td className="py-3 px-3 text-xs text-text">
+                            {c.designation ? (
+                              <span className="font-medium text-heading">{c.designation}</span>
+                            ) : (
+                              <span className="text-text-muted">—</span>
+                            )}
+                          </Td>
+                          <Td className="py-3 px-3 text-xs text-text">
+                            {c.department ? (
+                              <span>{c.department}</span>
+                            ) : (
+                              <span className="text-text-muted">—</span>
+                            )}
                           </Td>
                           <Td className="py-3 px-3 font-mono tabular-nums text-text">
                             {c.mobile1 || '—'}
@@ -488,7 +511,14 @@ export default function ClientViewPage() {
                     className="bg-surface/50 border border-border rounded-xl p-3.5 space-y-2.5 shadow-2xs"
                   >
                     <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
-                      <span className="font-semibold text-xs text-heading">{fullName}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-xs text-heading">{fullName}</span>
+                        {c.isPrimary && (
+                          <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-bold bg-primary/15 text-primary border border-primary/30">
+                            Primary
+                          </span>
+                        )}
+                      </div>
                       <Badge
                         variant={c.isActive ? 'active' : 'inactive'}
                         className="text-2xs px-2 py-0.5"
@@ -498,6 +528,18 @@ export default function ClientViewPage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-2xs text-text-muted uppercase block">Designation</span>
+                        <span className="font-medium text-heading">
+                          {c.designation || '—'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-2xs text-text-muted uppercase block">Department</span>
+                        <span className="font-medium text-heading">
+                          {c.department || '—'}
+                        </span>
+                      </div>
                       <div>
                         <span className="text-2xs text-text-muted uppercase block">Mobile 1</span>
                         <span className="font-mono tabular-nums font-medium text-heading">

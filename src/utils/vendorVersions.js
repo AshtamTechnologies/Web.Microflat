@@ -20,8 +20,10 @@ export function getActiveVendorVersion(vendor, asOfDate = new Date()) {
 
   if (versions.length === 0) {
     // If effectiveVersions is not yet present, construct fallback from vendor top-level properties
+    const actualId = vendor.vendorDetailId || vendor.vendorId || vendor.id || 1;
     return {
-      id: vendor.id ? `ver_${vendor.id}_0` : 'ver_0',
+      id: actualId,
+      vendorDetailId: actualId,
       effectiveDate: vendor.effectiveDate || getTodayISO(),
       contactPersonName: vendor.contactPersonName || '',
       phoneNo: vendor.phoneNo || '',

@@ -1328,8 +1328,10 @@ export default function ClientEffectiveDatesPage() {
                             </div>
                             <div className="min-w-0">
                               <span className="font-semibold text-heading text-xs block truncate">{fullName}</span>
-                              {con.designation && (
-                                <span className="text-2xs text-text-muted block truncate">{con.designation}</span>
+                              {(con.designation || con.department) && (
+                                <span className="text-2xs text-text-muted block truncate">
+                                  {[con.designation, con.department].filter(Boolean).join(' • ')}
+                                </span>
                               )}
                             </div>
                           </div>

@@ -11,6 +11,7 @@ import {
   StatusBadge,
   Button,
   IconButton,
+  TableActions,
 } from '../../../../components/ui';
 import { IconEdit } from '../../../../constants/icons';
 import { getOutcomeStyle } from '../../../../constants/processFlow';
@@ -123,20 +124,17 @@ export default function StepsTable({
 
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: 'ACTIONS',
         size: 80,
+        enableSorting: false,
+        enableResizing: false,
         cell: (info) => {
           const step = info.row.original;
           return (
-            <div className="flex items-center justify-end">
-              <IconButton
-                icon={IconEdit}
-                size="sm"
-                variant="ghost"
-                title="Edit Step"
-                onClick={() => onEdit?.(step)}
-              />
-            </div>
+            <TableActions
+              onEdit={() => onEdit?.(step)}
+              editTooltip="Edit Step"
+            />
           );
         },
       }),

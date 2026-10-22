@@ -89,6 +89,8 @@ export default function VendorsPage() {
     setApprovalFilter,
     resetFilters,
     deleteVendor,
+    isLoading: loading,
+    refreshVendors,
   } = useVendorsContext();
 
   const hasActiveFilters = Boolean(
@@ -101,7 +103,7 @@ export default function VendorsPage() {
     pageIndex: 0,
     pageSize: 10,
   });
-  const [loading] = useState(false);
+  // Loading state managed via useVendorsContext
   const [vendorToDelete, setVendorToDelete] = useState(null);
 
   const [searchParams] = useSearchParams();
@@ -166,7 +168,7 @@ export default function VendorsPage() {
           const row = info.row.original;
           return (
             <Link
-              to={`/vendors/${row.id}/effective-dates`}
+              to={`/vendors/${row.vendorId ?? row.id}/effective-dates`}
               className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
             >
               {row.vendorCode}
@@ -186,7 +188,7 @@ export default function VendorsPage() {
           return (
             <div className="flex flex-col py-0.5">
               <Link
-                to={`/vendors/${row.id}/effective-dates`}
+                to={`/vendors/${row.vendorId ?? row.id}/effective-dates`}
                 className="font-semibold text-heading text-sm leading-snug hover:text-primary transition-colors truncate text-left cursor-pointer"
               >
                 {row.vendorName}
@@ -301,8 +303,8 @@ export default function VendorsPage() {
 
           return (
             <TableActions
-              onView={() => navigate(`/vendors/${row.id}/effective-dates`, { state: { readOnly: true } })}
-              onEdit={() => navigate(`/vendors/${row.id}/effective-dates`)}
+              onView={() => navigate(`/vendors/${row.vendorId ?? row.id}/effective-dates`, { state: { readOnly: true } })}
+              onEdit={() => navigate(`/vendors/${row.vendorId ?? row.id}/effective-dates`, { state: { mode: 'EDIT' } })}
               viewTitle="View vendor details"
               editTitle="Edit vendor"
             />
@@ -441,7 +443,7 @@ export default function VendorsPage() {
                     </Badge>
                   </div>
                   <Link
-                    to={`/vendors/${vendor.id}/effective-dates`}
+                    to={`/vendors/${vendor.vendorId ?? vendor.id}/effective-dates`}
                     className="block text-sm font-semibold text-heading leading-tight mt-1 hover:text-primary"
                   >
                     {vendor.vendorName}
@@ -479,7 +481,7 @@ export default function VendorsPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`, { state: { readOnly: true } })}
+                  onClick={() => navigate(`/vendors/${vendor.vendorId ?? vendor.id}/effective-dates`, { state: { readOnly: true } })}
                   className="flex-1 text-xs"
                 >
                   <IconView size={13} className="mr-1.5" aria-hidden="true" />
@@ -489,7 +491,7 @@ export default function VendorsPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => navigate(`/vendors/${vendor.id}/effective-dates`)}
+                  onClick={() => navigate(`/vendors/${vendor.vendorId ?? vendor.id}/effective-dates`, { state: { mode: 'EDIT' } })}
                   className="flex-1 text-xs"
                 >
                   <IconEdit size={13} className="mr-1.5" aria-hidden="true" />

@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   IconAttachment,
   IconBack,
@@ -52,6 +53,7 @@ import {
 } from '../../components/ui';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 import { useVendorsContext } from '../../context/VendorsContext';
+import { vendorService } from '../../services';
 import {
   COUNTRY_OPTIONS,
   STATE_OPTIONS,
@@ -128,7 +130,7 @@ function validateField(name, value, currentForm = {}) {
 
   switch (name) {
     case 'vendorCode':
-      if (!str) return 'Vendor code is required.';
+      // Backend automatically assigns sequential codes like VEN-0001
       return '';
     case 'vendorName':
       if (!str) return 'Vendor name is required.';
@@ -194,7 +196,6 @@ function validateField(name, value, currentForm = {}) {
 function validateAll(form) {
   const errors = {};
   const requiredFields = [
-    'vendorCode',
     'vendorName',
     'effectiveDate',
     'contactPersonName',
@@ -244,11 +245,43 @@ export default function VendorFormPage() {
     getNextVendorCode,
     createVendor,
     updateVendor,
+    fetchVendorDetail,
   } = useVendorsContext();
 
+  const [fetchedVendor, setFetchedVendor] = useState(null);
+  const [fetchingVendor, setFetchingVendor] = useState(Boolean(isEdit && !getVendorById(id)));
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isEdit && id) {
+      const cached = getVendorById(id);
+      if (cached) {
+        setFetchedVendor(cached);
+        setFetchingVendor(false);
+      } else if (fetchVendorDetail) {
+        setFetchingVendor(true);
+        fetchVendorDetail(id)
+          .then((v) => {
+            if (isMounted && v) {
+              setFetchedVendor(v);
+            }
+          })
+          .catch((err) => console.warn('Could not fetch vendor:', err))
+          .finally(() => {
+            if (isMounted) setFetchingVendor(false);
+          });
+      }
+    } else {
+      setFetchingVendor(false);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isEdit, id, fetchVendorDetail, getVendorById]);
+
   const existingVendor = useMemo(() => {
-    return isEdit ? getVendorById(id) : null;
-  }, [isEdit, id, getVendorById]);
+    return isEdit ? (fetchedVendor || getVendorById(id)) : null;
+  }, [isEdit, id, fetchedVendor, getVendorById]);
 
   const [form, setForm] = useState(INITIAL_FORM);
   const [initialSnapshot, setInitialSnapshot] = useState(INITIAL_FORM);
@@ -302,7 +335,7 @@ export default function VendorFormPage() {
         const today = getTodayIsoDate();
         const data = {
           ...INITIAL_FORM,
-          vendorCode: generatedCode,
+          vendorCode: '',
           effectiveDate: today,
         };
         setForm(data);
@@ -385,6 +418,7 @@ export default function VendorFormPage() {
         fileType: file.type || 'application/octet-stream',
         fileUrl,
         uploadedAt: getTodayISO(),
+        file,
       };
     });
 
@@ -414,6 +448,12 @@ export default function VendorFormPage() {
   }
 
   function handleDownloadAttachment(att) {
+    if (att.id && typeof att.id === 'number') {
+      vendorService.downloadVendorAttachment(att.id, att.fileName).catch(() => {
+        toast.error('Failed to download attachment');
+      });
+      return;
+    }
     if (att.fileUrl) {
       const a = document.createElement('a');
       a.href = att.fileUrl;
@@ -422,7 +462,7 @@ export default function VendorFormPage() {
       a.click();
       document.body.removeChild(a);
     } else {
-      const blob = new Blob([`MicroFlat ERP Mock Document: ${att.documentName}\nFile: ${att.fileName}`], {
+      const blob = new Blob([`MicroFlat ERP Document: ${att.documentName}\nFile: ${att.fileName}`], {
         type: 'text/plain;charset=utf-8',
       });
       const url = URL.createObjectURL(blob);
@@ -495,6 +535,19 @@ export default function VendorFormPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (isEdit && fetchingVendor) {
+    return (
+      <div className="max-w-4xl mx-auto py-12 px-4 text-center">
+        <Card padding="lg" className="space-y-4">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </div>
+          <p className="text-sm text-text-muted">Loading vendor details...</p>
+        </Card>
+      </div>
+    );
   }
 
   if (isEdit && !existingVendor) {
@@ -570,7 +623,16 @@ export default function VendorFormPage() {
                 System Generated
               </Badge>
             </div>
-          ) : null
+          ) : (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="inline-flex items-center font-mono text-xs text-text-muted bg-surface border border-border px-2.5 py-1 rounded-lg">
+                Auto Generated
+              </span>
+              <Badge variant="neutral" size="sm" className="font-medium text-2xs">
+                Assigned on Save
+              </Badge>
+            </div>
+          )
         }
       >
 

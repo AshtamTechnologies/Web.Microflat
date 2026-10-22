@@ -37,6 +37,8 @@ const INITIAL_CONTACT_FORM = {
   clientContactPersonId: null,
   firstName: '',
   lastName: '',
+  department: '',
+  designation: '',
   mobile1: '',
   mobile2: '',
   email: '',
@@ -74,6 +76,8 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
     if (!form.firstName?.trim()) errors.firstName = 'First name is required';
     if (form.firstName && form.firstName.length > 100) errors.firstName = 'Max 100 characters';
     if (form.lastName && form.lastName.length > 100) errors.lastName = 'Max 100 characters';
+    if (form.department && form.department.length > 100) errors.department = 'Max 100 characters';
+    if (form.designation && form.designation.length > 100) errors.designation = 'Max 100 characters';
 
     const m1Err = validatePhone(form.mobile1, true, 'Phone number');
     if (m1Err) errors.mobile1 = m1Err;
@@ -181,6 +185,8 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
   const onEdit = (row) => {
     handleStartEdit({
       ...row,
+      department: row.department || '',
+      designation: row.designation || '',
       mobile1: row.mobile1 ? String(row.mobile1).replace(/\D/g, '').slice(-10) : '',
       mobile2: row.mobile2 ? String(row.mobile2).replace(/\D/g, '').slice(-10) : '',
       isPrimary: Boolean(row.isPrimary),
@@ -218,7 +224,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
 
       {/* ── Form Above ── */}
       <div className="bg-surface/50 border border-border rounded-xl p-4 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* First Name */}
           <div>
             <Input
@@ -245,6 +251,34 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
               onChange={(e) => handleFieldChange('lastName', e.target.value)}
               placeholder="e.g. Panchal"
               error={fieldErrors.lastName}
+            />
+          </div>
+
+          {/* Department */}
+          <div>
+            <Input
+              label="Department"
+              id="con-department"
+              name="department"
+              maxLength={100}
+              value={formState.department}
+              onChange={(e) => handleFieldChange('department', e.target.value)}
+              placeholder="e.g. Procurement / Quality"
+              error={fieldErrors.department}
+            />
+          </div>
+
+          {/* Designation */}
+          <div>
+            <Input
+              label="Designation"
+              id="con-designation"
+              name="designation"
+              maxLength={100}
+              value={formState.designation}
+              onChange={(e) => handleFieldChange('designation', e.target.value)}
+              placeholder="e.g. Senior Purchase Officer"
+              error={fieldErrors.designation}
             />
           </div>
 
@@ -381,12 +415,14 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
               >
                 <thead className="bg-surface/80 border-b border-border">
                   <tr>
-                    <Th className="py-2.5 px-3.5 min-w-[180px]">FULL NAME</Th>
-                    <Th className="py-2.5 px-3.5 min-w-[140px] whitespace-nowrap">PRIMARY PHONE</Th>
-                    <Th className="py-2.5 px-3.5 min-w-[140px] whitespace-nowrap">ALTERNATE PHONE</Th>
-                    <Th className="py-2.5 px-3.5 min-w-[190px]">EMAIL</Th>
-                    <Th className="py-2.5 px-3.5 w-28 text-center whitespace-nowrap">STATUS</Th>
-                    <Th className="py-2.5 px-3.5 w-24 text-right whitespace-nowrap">ACTIONS</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[170px]">FULL NAME</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[130px] whitespace-nowrap">DESIGNATION</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[130px] whitespace-nowrap">DEPARTMENT</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[130px] whitespace-nowrap">PRIMARY PHONE</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[130px] whitespace-nowrap">ALTERNATE PHONE</Th>
+                    <Th className="py-2.5 px-3.5 min-w-[160px]">EMAIL</Th>
+                    <Th className="py-2.5 px-3.5 w-24 text-center whitespace-nowrap">STATUS</Th>
+                    <Th className="py-2.5 px-3.5 w-20 text-right whitespace-nowrap">ACTIONS</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border bg-bg">
@@ -428,6 +464,24 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                           </div>
                         </Td>
 
+                        {/* Designation */}
+                        <Td className="py-3 px-3.5 text-xs text-text">
+                          {row.designation ? (
+                            <span className="font-medium text-heading">{row.designation}</span>
+                          ) : (
+                            <span className="text-text-muted">—</span>
+                          )}
+                        </Td>
+
+                        {/* Department */}
+                        <Td className="py-3 px-3.5 text-xs text-text">
+                          {row.department ? (
+                            <span>{row.department}</span>
+                          ) : (
+                            <span className="text-text-muted">—</span>
+                          )}
+                        </Td>
+
                         {/* Mobile 1 */}
                         <Td className="py-3 px-3.5 font-mono tabular-nums text-text">
                           {row.mobile1 ? (
@@ -466,7 +520,7 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                               className="text-text hover:text-primary transition-colors inline-flex items-center gap-1"
                             >
                               <IconMail size={12} className="text-text-muted shrink-0" />
-                              <span className="truncate max-w-[200px]">{row.email}</span>
+                              <span className="truncate max-w-[180px]">{row.email}</span>
                             </a>
                           ) : (
                             <span className="text-text-muted">—</span>
@@ -580,6 +634,17 @@ export default function ContactsEditor({ rows, contacts, onChange }) {
                     </div>
 
                     <div className="text-2xs text-text space-y-1.5 pt-1 border-t border-border/50">
+                      {(row.designation || row.department) && (
+                        <div className="flex items-center gap-1.5 flex-wrap text-text-muted">
+                          {row.designation && (
+                            <span className="font-medium text-heading">{row.designation}</span>
+                          )}
+                          {row.designation && row.department && <span>•</span>}
+                          {row.department && (
+                            <span>{row.department}</span>
+                          )}
+                        </div>
+                      )}
                       {row.mobile1 && (
                         <div className="flex items-center gap-1.5">
                           <IconPhone size={12} className="text-text-muted shrink-0" />

@@ -29,7 +29,7 @@ export { default as IconButton }       from './IconButton';
 export { default as ScrollableTabs }    from './ScrollableTabs';
 export { default as DataTable }         from './DataTable';
 export { default as TableToolbar }      from './TableToolbar';
-export { default as TableActions }      from './TableActions';
+export { default as TableActions, DEFAULT_TABLE_ACTIONS_ALIGN } from './TableActions';
 export { default as StatusBadge }       from './StatusBadge';
 export { default as FormActionsBar } from './FormActionsBar';
 export { default as CollapsibleCard } from './CollapsibleCard';

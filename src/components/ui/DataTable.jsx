@@ -53,7 +53,12 @@ export default function DataTable({
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
-                    const canSort = header.column.getCanSort();
+                    const isActionsCol =
+                      header.id === 'actions' ||
+                      header.id === 'action' ||
+                      (typeof header.column.columnDef.header === 'string' &&
+                        header.column.columnDef.header.toUpperCase() === 'ACTIONS');
+                    const canSort = !isActionsCol && header.column.getCanSort();
                     const sorted = header.column.getIsSorted();
 
                     return (
@@ -107,7 +112,7 @@ export default function DataTable({
                         ) : (
                           <div
                             className={`select-none ${
-                              header.id === 'actions' ? 'text-right w-full pr-1' : ''
+                              isActionsCol ? 'text-right w-full pr-1' : ''
                             }`}
                           >
                             {flexRender(
