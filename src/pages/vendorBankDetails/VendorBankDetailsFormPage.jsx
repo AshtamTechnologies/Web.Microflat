@@ -65,11 +65,13 @@ import {
   ACCOUNT_TYPE_OPTIONS,
   BANK_DOCUMENT_TYPE_OPTIONS,
 } from '../../mocks/vendorBankDetails';
+import { vendorService } from '../../services';
 import { getCountryName } from '../../mocks/vendors';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 
 const INITIAL_BANK_FORM = {
   bankDetailId: null,
+  accountName: '',
   accountHolderName: '',
   bankName: '',
   branchName: '',
@@ -132,9 +134,14 @@ export default function VendorBankDetailsFormPage() {
   const isAddAction = actionParam === 'add';
 
   const { allVendors = [], getVendorById } = useVendorsContext();
-  const { getBanksForVendor, saveVendorBanks, deleteBankDetail } = useVendorBankDetails();
+  const { getBanksForVendor, fetchBanksForVendor, saveVendorBanks, deleteBankDetail } = useVendorBankDetails();
 
   const isEditMode = Boolean(routeVendorId);
+
+  // Dynamic lookups from GET /api/vendors/lookups
+  const [accountTypeOptions, setAccountTypeOptions] = useState(ACCOUNT_TYPE_OPTIONS);
+  const [documentTypeOptions, setDocumentTypeOptions] = useState(BANK_DOCUMENT_TYPE_OPTIONS);
+  const [rawDocumentTypes, setRawDocumentTypes] = useState([]);
 
   // Selected vendor state (locked in edit mode, selectable in add mode; blank initially in add mode)
   const [selectedVendorId, setSelectedVendorId] = useState(routeVendorId || '');
@@ -148,6 +155,47 @@ export default function VendorBankDetailsFormPage() {
       setSelectedVendorId('');
     }
   }, [routeVendorId]);
+
+  // Fetch dropdown lookups (bankAccountTypes and documentTypes) from API
+  useEffect(() => {
+    let isMounted = true;
+    async function loadLookups() {
+      try {
+        const lookups = await vendorService.getVendorLookups();
+        if (!isMounted) return;
+        if (Array.isArray(lookups.bankAccountTypes) && lookups.bankAccountTypes.length > 0) {
+          setAccountTypeOptions(
+            lookups.bankAccountTypes.map((type) => ({
+              value: type,
+              label: type,
+            }))
+          );
+        }
+        if (Array.isArray(lookups.documentTypes) && lookups.documentTypes.length > 0) {
+          const activeDocs = lookups.documentTypes.filter((d) => d.isActive !== false);
+          setRawDocumentTypes(activeDocs);
+          setDocumentTypeOptions(
+            activeDocs.map((d) => ({
+              value: d.id,
+              label: d.documentTypeName,
+              maxFileSizeMB: d.maxFileSizeMB,
+              allowedExtensions: d.allowedExtensions,
+              allowedExtensionList: d.allowedExtensionList,
+            }))
+          );
+          if (activeDocs.length > 0) {
+            setAttDocType(activeDocs[0].id);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load vendor lookups:', err);
+      }
+    }
+    loadLookups();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Draft rows state for the chosen vendor
   const [draftRows, setDraftRows] = useState([]);
@@ -169,7 +217,7 @@ export default function VendorBankDetailsFormPage() {
   });
 
   // Attachment upload controls inside the bank form
-  const [attDocType, setAttDocType] = useState('Bank Cancelled Cheque');
+  const [attDocType, setAttDocType] = useState('');
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -191,21 +239,29 @@ export default function VendorBankDetailsFormPage() {
 
   // Load existing accounts when a vendor is selected or on mount
   useEffect(() => {
-    if (selectedVendorId) {
-      const existing = getBanksForVendor(selectedVendorId);
-      const cloned = existing.map((b) => ({
-        ...b,
-        attachments: Array.isArray(b.attachments) ? [...b.attachments] : [],
-      }));
-      setDraftRows(cloned);
-      setInitialSnapshot(JSON.parse(JSON.stringify(cloned)));
-      setSavedRowIds(new Set(existing.map((b) => b.bankDetailId || b.id)));
-    } else {
-      setDraftRows([]);
-      setInitialSnapshot([]);
-      setSavedRowIds(new Set());
+    let isCancelled = false;
+    async function loadBanks() {
+      if (selectedVendorId) {
+        const existing = await fetchBanksForVendor(selectedVendorId);
+        if (isCancelled) return;
+        const cloned = (Array.isArray(existing) ? existing : []).map((b) => ({
+          ...b,
+          attachments: Array.isArray(b.attachments) ? [...b.attachments] : [],
+        }));
+        setDraftRows(cloned);
+        setInitialSnapshot(JSON.parse(JSON.stringify(cloned)));
+        setSavedRowIds(new Set(cloned.map((b) => b.bankDetailId || b.id)));
+      } else {
+        setDraftRows([]);
+        setInitialSnapshot([]);
+        setSavedRowIds(new Set());
+      }
     }
-  }, [selectedVendorId, getBanksForVendor]);
+    loadBanks();
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedVendorId, fetchBanksForVendor]);
 
   // Vendor options for Add mode
   const vendorOptions = useMemo(() => {
@@ -384,31 +440,39 @@ export default function VendorBankDetailsFormPage() {
     setFieldErrors({});
 
     if (!isEditing) {
-      // Adding new record: directly persist without auth credentials
-      const newId = `bd_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-      const { confirmAccountNumber, ...cleanBank } = formState;
-      const newRow = {
-        ...cleanBank,
-        bankDetailId: newId,
-        id: newId,
-        vendorId: selectedVendorId,
-        vendorName: currentVendor?.vendorName,
-        vendorCode: currentVendor?.vendorCode,
-        createdAt: new Date().toISOString(),
-        updatedAt: null,
-      };
+      // Adding new record: directly call POST /api/vendors/{vendorId}/bank-details
+      setIsSubmitting(true);
+      try {
+        const { confirmAccountNumber, ...cleanBank } = formState;
+        const created = await vendorService.createVendorBankDetail(selectedVendorId, cleanBank);
 
-      const nextRows = [...draftRows, newRow];
-      setDraftRows(nextRows);
-
-      if (selectedVendorId && saveVendorBanks) {
-        try {
-          await saveVendorBanks(selectedVendorId, nextRows);
-          toast.success(`Bank account for ${formState.bankName || 'vendor'} added successfully`);
-          navigate('/vendor-bank-details');
-        } catch (err) {
-          toast.error('Failed to save bank account');
+        // Upload any attached files if present
+        if (created && Array.isArray(formState.attachments)) {
+          const bankId = created.id ?? created.bankDetailId;
+          for (const att of formState.attachments) {
+            if (att.file instanceof File) {
+              try {
+                await vendorService.uploadBankDetailAttachment(bankId, {
+                  documentTypeId: att.documentTypeId || 1,
+                  documentName: att.documentName || att.name,
+                  file: att.file,
+                });
+              } catch (attErr) {
+                console.warn('Attachment upload failed:', attErr);
+              }
+            }
+          }
         }
+
+        // Re-fetch vendor bank list in context
+        await fetchBanksForVendor(selectedVendorId, true);
+
+        toast.success(`Bank account for ${formState.bankName || 'vendor'} added successfully`);
+        navigate('/vendor-bank-details');
+      } catch (err) {
+        toast.error(err?.message || 'Failed to save bank account');
+      } finally {
+        setIsSubmitting(false);
       }
       return;
     }
@@ -608,24 +672,65 @@ export default function VendorBankDetailsFormPage() {
     });
   };
 
-  // Handle file uploads for bank proof
+  // Currently selected document type configuration
+  const selectedDocConfig = useMemo(() => {
+    return (
+      rawDocumentTypes.find((d) => String(d.id) === String(attDocType)) ||
+      rawDocumentTypes.find((d) => d.documentTypeName === attDocType) ||
+      rawDocumentTypes[0] ||
+      null
+    );
+  }, [rawDocumentTypes, attDocType]);
+
+  const acceptedExtStr = selectedDocConfig?.allowedExtensions || '.pdf,.jpg,.jpeg,.png';
+  const acceptedMaxMB = selectedDocConfig?.maxFileSizeMB || 5;
+
+  // Handle file uploads with validation based on API document type constraints
   const handleFilesUpload = (files) => {
     if (!files || files.length === 0) return;
-    const newItems = Array.from(files).map((f) => ({
-      id: `att_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      documentName: attDocType || 'Bank Proof',
-      fileName: f.name,
-      fileSize:
-        f.size > 1048576
-          ? `${(f.size / (1024 * 1024)).toFixed(1)} MB`
-          : `${Math.max(1, Math.round(f.size / 1024))} KB`,
-      fileType: f.type || 'application/octet-stream',
-      uploadedAt: getTodayISO(),
-    }));
 
-    const current = Array.isArray(formState.attachments) ? formState.attachments : [];
-    handleFieldChange('attachments', [...current, ...newItems]);
-    toast.success(`${newItems.length} document attachment(s) added`);
+    const currentDoc = selectedDocConfig;
+    const maxMB = currentDoc?.maxFileSizeMB || 5;
+    const allowedExtList = currentDoc?.allowedExtensionList?.length
+      ? currentDoc.allowedExtensionList.map((e) => e.toLowerCase())
+      : (currentDoc?.allowedExtensions || '.pdf,.jpg,.jpeg,.png')
+          .split(',')
+          .map((e) => e.trim().toLowerCase());
+
+    const validNewItems = [];
+
+    for (const f of Array.from(files)) {
+      const ext = ('.' + (f.name.split('.').pop() || '')).toLowerCase();
+      if (allowedExtList.length > 0 && !allowedExtList.includes(ext)) {
+        toast.error(`File "${f.name}" has invalid extension (${ext}). Allowed: ${allowedExtList.join(', ')}`);
+        continue;
+      }
+
+      if (f.size > maxMB * 1024 * 1024) {
+        toast.error(`File "${f.name}" exceeds maximum allowed size of ${maxMB} MB.`);
+        continue;
+      }
+
+      validNewItems.push({
+        id: `att_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        documentTypeId: currentDoc?.id || 1,
+        documentName: currentDoc?.documentTypeName || f.name,
+        fileName: f.name,
+        fileSize:
+          f.size > 1048576
+            ? `${(f.size / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.max(1, Math.round(f.size / 1024))} KB`,
+        fileType: f.type || 'application/octet-stream',
+        uploadedAt: getTodayISO(),
+        file: f,
+      });
+    }
+
+    if (validNewItems.length > 0) {
+      const current = Array.isArray(formState.attachments) ? formState.attachments : [];
+      handleFieldChange('attachments', [...current, ...validNewItems]);
+      toast.success(`${validNewItems.length} document attachment(s) added`);
+    }
   };
 
   const handleRemoveAttachment = (attId) => {
@@ -643,6 +748,11 @@ export default function VendorBankDetailsFormPage() {
     if (!selectedVendorId) {
       toast.error('Please select a vendor first');
       return;
+    }
+
+    // If in Add mode with form filled, delegate to handleFormActionClick
+    if (!isEditing && (formState.accountNumber || formState.bankName)) {
+      return handleFormActionClick();
     }
 
     setIsSubmitting(true);
@@ -866,7 +976,7 @@ export default function VendorBankDetailsFormPage() {
                 label="Account Type"
                 id="bank-accountType"
                 required
-                options={ACCOUNT_TYPE_OPTIONS}
+                options={accountTypeOptions}
                 value={formState.accountType || 'Current'}
                 onChange={(e) => handleFieldChange('accountType', e.target.value)}
                 placeholder="Select account type..."
@@ -1086,7 +1196,7 @@ export default function VendorBankDetailsFormPage() {
                 <SearchableSelect
                   label="Document Type"
                   id="bank-doc-type"
-                  options={BANK_DOCUMENT_TYPE_OPTIONS}
+                  options={documentTypeOptions}
                   value={attDocType}
                   onChange={(e) => setAttDocType(e.target.value)}
                   placeholder="Select document type..."
@@ -1094,7 +1204,7 @@ export default function VendorBankDetailsFormPage() {
                   emptyText="No document types"
                 />
                 <p className="text-2xs text-text-muted mt-1">
-                  Select category before choosing your file.
+                  Allowed: {acceptedExtStr} &bull; Max {acceptedMaxMB} MB
                 </p>
               </div>
 
@@ -1125,7 +1235,7 @@ export default function VendorBankDetailsFormPage() {
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*"
+                    accept={acceptedExtStr}
                     onChange={(e) => {
                       handleFilesUpload(e.target.files);
                       e.target.value = '';
@@ -1142,9 +1252,8 @@ export default function VendorBankDetailsFormPage() {
                     or drag & drop here
                   </p>
                   <p className="text-2xs text-text-muted mt-0.5">
-                    Accepted: <strong className="text-heading font-medium">PDF</strong> or{' '}
-                    <strong className="text-heading font-medium">Images (PNG, JPG, WEBP)</strong>{' '}
-                    (Max 10MB)
+                    Accepted: <strong className="text-heading font-medium">{acceptedExtStr}</strong>{' '}
+                    (Max {acceptedMaxMB} MB)
                   </p>
                 </div>
               </div>
@@ -1814,8 +1923,10 @@ export default function VendorBankDetailsFormPage() {
         onSuccess={handleAuthSuccess}
         action={authModalState.action}
         bankAccount={authModalState.targetData || formState}
+        vendorId={selectedVendorId}
         vendorName={currentVendor?.vendorName}
       />
     </div>
   );
 }
+

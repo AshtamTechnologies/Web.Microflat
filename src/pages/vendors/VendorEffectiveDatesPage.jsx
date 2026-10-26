@@ -3,7 +3,7 @@
  * Route: /vendors/:id/effective-dates
  */
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   useReactTable,
@@ -62,8 +62,11 @@ import {
   Th,
   Td,
   Modal,
+  ConfirmModal,
   PageHeader,
   Textarea,
+  StatusBadge,
+  Checkbox,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { vendorService, approvalsService } from '../../services';
@@ -154,10 +157,37 @@ export default function VendorEffectiveDatesPage() {
 
   const [fetchedVendor, setFetchedVendor] = useState(null);
   const [fetchingVendor, setFetchingVendor] = useState(Boolean(id && !getVendorById(id)));
+  const [apiVersions, setApiVersions] = useState(null);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+
+  const loadVendorVersions = useCallback(async (vendorId) => {
+    if (!vendorId) return;
+    setLoadingVersions(true);
+    try {
+      // 1. GET /api/vendors/{vendorId}/versions
+      const list = await vendorService.getVendorVersions(vendorId);
+      if (Array.isArray(list)) {
+        setApiVersions(list);
+      }
+    } catch (err) {
+      console.warn('Failed to load /api/vendors/{id}/versions:', err);
+      setApiVersions([]);
+    } finally {
+      setLoadingVersions(false);
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
     if (id) {
+      // Clear previous vendor's versions & selected version state immediately
+      setSelectedVersionId(null);
+      setApiVersions(null);
+      setVersionDetailsMap({});
+      modeInitializedRef.current = false;
+      setPendingDeleteAttachmentIds([]);
+      setAttachmentToDelete(null);
+
       const cached = getVendorById(id);
       if (cached) {
         setFetchedVendor(cached);
@@ -177,11 +207,12 @@ export default function VendorEffectiveDatesPage() {
             if (isMounted) setFetchingVendor(false);
           });
       }
+      loadVendorVersions(id);
     }
     return () => {
       isMounted = false;
     };
-  }, [id, getVendorById, fetchVendorDetail]);
+  }, [id, getVendorById, fetchVendorDetail, loadVendorVersions]);
 
   const vendor = fetchedVendor || getVendorById(id);
 
@@ -335,11 +366,11 @@ export default function VendorEffectiveDatesPage() {
 
     try {
       setIsSubmittingDeactivate(true);
-      const now = formatAuditTimestamp();
+      const today = getTodayIsoDate();
       await updateVendor(vendor.id, {
         isActive: false,
         inactiveComment: deactivateComment.trim(),
-        inactiveDate: now,
+        inactiveDate: today,
       });
       setIsDeactivateModalOpen(false);
     } catch {
@@ -379,23 +410,45 @@ export default function VendorEffectiveDatesPage() {
     }
   }
 
-  // Versions array from vendor
+  // Versions array from API (GET /api/vendors/{vendorId}/versions)
   const versions = useMemo(() => {
-    if (!vendor?.effectiveVersions) return [];
-    // Sort descending by effectiveDate
-    return [...vendor.effectiveVersions].sort((a, b) =>
-      (b.effectiveDate || '').localeCompare(a.effectiveDate || '')
-    );
-  }, [vendor]);
+    if (!Array.isArray(apiVersions)) return [];
+    return [...apiVersions]
+      .map((v) => ({
+        id: v.vendorDetailId || v.id,
+        vendorDetailId: v.vendorDetailId || v.id,
+        effectiveDate: v.effectiveDate ? String(v.effectiveDate).slice(0, 10) : '',
+        approvalStatus: v.approvalStatus || 'Approved',
+        versionState: v.versionState || 'History',
+        isActive: v.isActive !== false,
+        attachmentCount: Number(v.attachmentCount) || 0,
+        createdOn: v.createdOn || '',
+        lastUpdatedOn: v.lastUpdatedOn || '',
+      }))
+      .sort((a, b) =>
+        (b.effectiveDate || '').localeCompare(a.effectiveDate || '')
+      );
+  }, [apiVersions]);
 
-  // Current active version
+  // Current active version (versionState === 'Current' or first in versions array)
   const activeVersion = useMemo(() => {
-    return vendor ? getActiveVendorVersion(vendor) : null;
-  }, [vendor]);
+    if (versions.length === 0) return null;
+    const current = versions.find((v) => (v.versionState || '').toLowerCase() === 'current');
+    if (current) return current;
+    return versions[0] || null;
+  }, [versions]);
 
   // UI state: mode is 'VIEW' | 'EDIT' | 'ADD'
-  const [mode, setMode] = useState('VIEW');
+  const [mode, setMode] = useState(() => (location.state?.mode === 'EDIT' ? 'EDIT' : 'VIEW'));
   const [selectedVersionId, setSelectedVersionId] = useState(null);
+
+  useEffect(() => {
+    if (location.state?.mode === 'EDIT') {
+      setMode('EDIT');
+    } else if (location.state?.readOnly) {
+      setMode('VIEW');
+    }
+  }, [location.state?.mode, location.state?.readOnly]);
 
   // TanStack table state for resizable column grid
   const [sorting, setSorting] = useState([]);
@@ -436,21 +489,98 @@ export default function VendorEffectiveDatesPage() {
   const [previewItem, setPreviewItem] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Deletion confirmation and deferred deletion on Save
+  const [attachmentToDelete, setAttachmentToDelete] = useState(null);
+  const [pendingDeleteAttachmentIds, setPendingDeleteAttachmentIds] = useState([]);
+
   const [formErrors, setFormErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const [copyAttachments, setCopyAttachments] = useState(true);
+  const [submitForApproval, setSubmitForApproval] = useState(true);
+  const [apiDocTypes, setApiDocTypes] = useState([]);
 
-  // Default selection on mount or vendor change
+  // Fetch active Document Types from GET /api/vendors/lookups
   useEffect(() => {
-    if (versions.length > 0 && !selectedVersionId) {
-      if (activeVersion?.id) {
-        setSelectedVersionId(activeVersion.id);
-      } else {
-        setSelectedVersionId(versions[0].id);
+    let isMounted = true;
+    vendorService
+      .getVendorLookups()
+      .then((data) => {
+        if (isMounted && data?.documentTypes && Array.isArray(data.documentTypes)) {
+          // Show only active document types
+          const activeOnly = data.documentTypes.filter(
+            (dt) => dt.isActive === true || dt.isActive === 'true'
+          );
+          setApiDocTypes(activeOnly);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch vendor lookups:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const documentTypeOptions = useMemo(() => {
+    if (apiDocTypes && apiDocTypes.length > 0) {
+      return apiDocTypes.map((dt) => ({
+        value: dt.documentTypeName || dt.typeName,
+        label: dt.documentTypeName || dt.typeName,
+        id: dt.id || dt.documentTypeId,
+        allowedExtensions: dt.allowedExtensions,
+        allowedExtensionList: dt.allowedExtensionList,
+        maxFileSizeMB: dt.maxFileSizeMB,
+      }));
+    }
+    return DOCUMENT_TYPE_OPTIONS;
+  }, [apiDocTypes]);
+
+  const currentDocTypeConfig = useMemo(() => {
+    if (!selectedDocType) return null;
+    return (
+      apiDocTypes.find(
+        (dt) => (dt.documentTypeName || dt.typeName) === selectedDocType
+      ) || null
+    );
+  }, [selectedDocType, apiDocTypes]);
+
+  const acceptExtensions = useMemo(() => {
+    if (currentDocTypeConfig?.allowedExtensions) {
+      return currentDocTypeConfig.allowedExtensions;
+    }
+    if (
+      Array.isArray(currentDocTypeConfig?.allowedExtensionList) &&
+      currentDocTypeConfig.allowedExtensionList.length > 0
+    ) {
+      return currentDocTypeConfig.allowedExtensionList.join(',');
+    }
+    return '.pdf,.png,.jpg,.jpeg,.webp';
+  }, [currentDocTypeConfig]);
+
+  const maxFileSizeMB = currentDocTypeConfig?.maxFileSizeMB || 10;
+
+  // Default selection on mount or versions change
+  useEffect(() => {
+    if (versions.length > 0) {
+      const isSelectedValid =
+        selectedVersionId &&
+        versions.some(
+          (v) => String(v.vendorDetailId || v.id) === String(selectedVersionId)
+        );
+      if (!isSelectedValid) {
+        const target =
+          activeVersion?.vendorDetailId ||
+          activeVersion?.id ||
+          versions[0]?.vendorDetailId ||
+          versions[0]?.id;
+        if (target) {
+          setSelectedVersionId(target);
+        }
       }
     }
   }, [versions, activeVersion, selectedVersionId]);
 
-  // Version details cache for GET /api/vendor-versions/{id}
+  // Version details cache for GET /api/vendor-versions/{vendorDetailId}
   const [versionDetailsMap, setVersionDetailsMap] = useState({});
   const [isLoadingVersion, setIsLoadingVersion] = useState(false);
 
@@ -479,37 +609,49 @@ export default function VendorEffectiveDatesPage() {
     }
   }, [vendor]);
 
+  // Fetch version detail from GET /api/vendor-versions/{vendorDetailId} whenever selected version changes
   useEffect(() => {
     let isMounted = true;
-    const targetVerId = selectedVersionId || activeVersion?.id || versions[0]?.id;
-    if (targetVerId && !versionDetailsMap[targetVerId]) {
-      setIsLoadingVersion(true);
-      vendorService
-        .getVendorVersion(targetVerId)
-        .then((verDetail) => {
-          if (isMounted && verDetail) {
-            setVersionDetailsMap((prev) => ({
-              ...prev,
-              [targetVerId]: verDetail,
-            }));
-          }
-        })
-        .catch((err) => {
-          console.warn('Could not fetch vendor version details:', err);
-        })
-        .finally(() => {
-          if (isMounted) setIsLoadingVersion(false);
-        });
+    const targetVerId =
+      selectedVersionId ||
+      activeVersion?.vendorDetailId ||
+      activeVersion?.id ||
+      versions[0]?.vendorDetailId ||
+      versions[0]?.id;
+    if (targetVerId) {
+      if (!versionDetailsMap[targetVerId]) {
+        setIsLoadingVersion(true);
+        vendorService
+          .getVendorVersion(targetVerId)
+          .then((verDetail) => {
+            if (isMounted && verDetail) {
+              setVersionDetailsMap((prev) => ({
+                ...prev,
+                [targetVerId]: verDetail,
+              }));
+            }
+          })
+          .catch((err) => {
+            console.warn('Could not fetch vendor version details:', err);
+          })
+          .finally(() => {
+            if (isMounted) setIsLoadingVersion(false);
+          });
+      }
     }
     return () => {
       isMounted = false;
     };
-  }, [selectedVersionId, activeVersion, versions, versionDetailsMap]);
+  }, [selectedVersionId, activeVersion?.vendorDetailId, activeVersion?.id, versions, versionDetailsMap]);
 
   // The currently viewed/selected version object merged with rich version details
   const selectedVersion = useMemo(() => {
-    const targetId = selectedVersionId || activeVersion?.id || versions[0]?.id;
-    const baseSummary = versions.find((v) => String(v.id) === String(targetId)) || activeVersion || versions[0] || null;
+    const targetId = selectedVersionId || activeVersion?.vendorDetailId || activeVersion?.id || versions[0]?.vendorDetailId || versions[0]?.id;
+    const baseSummary =
+      versions.find((v) => String(v.vendorDetailId || v.id) === String(targetId)) ||
+      activeVersion ||
+      versions[0] ||
+      null;
     const fullDetail = targetId ? versionDetailsMap[targetId] : null;
 
     if (!baseSummary && !fullDetail) return null;
@@ -517,6 +659,8 @@ export default function VendorEffectiveDatesPage() {
     return {
       ...(baseSummary || {}),
       ...(fullDetail || {}),
+      id: fullDetail?.vendorDetailId || baseSummary?.vendorDetailId || baseSummary?.id || targetId,
+      vendorDetailId: fullDetail?.vendorDetailId || baseSummary?.vendorDetailId || targetId,
       effectiveDate: fullDetail?.effectiveDate || baseSummary?.effectiveDate || '',
       attachments: fullDetail?.attachments || baseSummary?.attachments || vendor?.attachments || [],
     };
@@ -552,17 +696,31 @@ export default function VendorEffectiveDatesPage() {
   }, [formData.countryId]);
 
   /* ── Handlers for switching modes ── */
-  function handleSelectView(ver) {
-    setSelectedVersionId(ver.id);
+  async function handleSelectView(ver) {
+    const verId = ver.vendorDetailId || ver.id;
+    setSelectedVersionId(verId);
     setMode('VIEW');
     setFormErrors({});
-    const full = versionDetailsMap[ver.id] || ver;
-    const verAtts = Array.isArray(full.attachments)
-      ? full.attachments
-      : Array.isArray(ver.attachments)
-        ? ver.attachments
-        : vendor?.attachments || [];
-    setAttachments(verAtts);
+
+    // If already in cache, display immediately for instant UI response
+    if (versionDetailsMap[verId]) {
+      setAttachments(versionDetailsMap[verId].attachments || []);
+    } else {
+      setIsLoadingVersion(true);
+    }
+
+    // Always fetch fresh version details from GET /api/vendor-versions/{vendorDetailId}
+    try {
+      const fetched = await vendorService.getVendorVersion(verId);
+      if (fetched) {
+        setVersionDetailsMap((prev) => ({ ...prev, [verId]: fetched }));
+        setAttachments(fetched.attachments || []);
+      }
+    } catch (err) {
+      console.warn('Could not fetch vendor version details:', err);
+    } finally {
+      setIsLoadingVersion(false);
+    }
   }
 
   async function handleStartEdit(ver) {
@@ -570,23 +728,11 @@ export default function VendorEffectiveDatesPage() {
     setSelectedVersionId(verId);
     setMode('EDIT');
     setFormErrors({});
+    setPendingDeleteAttachmentIds([]);
+    setAttachmentToDelete(null);
 
     let full = versionDetailsMap[verId] || ver;
-    if (!full.contactPersonName && verId) {
-      try {
-        setIsLoadingVersion(true);
-        const fetched = await vendorService.getVendorVersion(verId);
-        if (fetched) {
-          full = fetched;
-          setVersionDetailsMap((prev) => ({ ...prev, [verId]: fetched }));
-        }
-      } catch (err) {
-        console.warn('Could not fetch version detail for edit:', err);
-      } finally {
-        setIsLoadingVersion(false);
-      }
-    }
-
+    // Set immediate form values from cache
     setFormData({
       effectiveDate: full.effectiveDate || ver.effectiveDate || '',
       contactPersonName: full.contactPersonName || ver.contactPersonName || '',
@@ -603,57 +749,173 @@ export default function VendorEffectiveDatesPage() {
       address2: full.address2 || ver.address2 || '',
       notes: full.notes || ver.notes || '',
     });
-    const verAtts = Array.isArray(full.attachments)
-      ? full.attachments
-      : Array.isArray(ver.attachments)
-        ? ver.attachments
-        : vendor?.attachments || [];
-    setAttachments(verAtts);
+    setAttachments(Array.isArray(full.attachments) ? full.attachments : []);
+
+    // Always fetch latest fresh data from GET /api/vendor-versions/{vendorDetailId} for editing
+    try {
+      setIsLoadingVersion(true);
+      const fetched = await vendorService.getVendorVersion(verId);
+      if (fetched) {
+        setVersionDetailsMap((prev) => ({ ...prev, [verId]: fetched }));
+        setFormData({
+          effectiveDate: fetched.effectiveDate || '',
+          contactPersonName: fetched.contactPersonName || '',
+          phoneNo: fetched.phoneNo || '',
+          alternatePhoneNo: fetched.alternatePhoneNo || '',
+          email: fetched.email || '',
+          gstNo: fetched.gstNo || '',
+          website: fetched.website || '',
+          countryId: fetched.countryId || 'IN',
+          stateId: fetched.stateId || '',
+          city: fetched.city || '',
+          zipCode: fetched.zipCode || '',
+          address1: fetched.address1 || '',
+          address2: fetched.address2 || '',
+          notes: fetched.notes || '',
+        });
+        setAttachments(Array.isArray(fetched.attachments) ? fetched.attachments : []);
+      }
+    } catch (err) {
+      console.warn('Could not fetch version detail for edit:', err);
+    } finally {
+      setIsLoadingVersion(false);
+    }
   }
 
   // Handle incoming edit mode from navigation
   const modeInitializedRef = useRef(false);
   useEffect(() => {
-    if (!modeInitializedRef.current && location.state?.mode === 'EDIT' && (activeVersion || versions[0])) {
-      modeInitializedRef.current = true;
-      handleStartEdit(activeVersion || versions[0]);
+    if (
+      !modeInitializedRef.current &&
+      location.state?.mode === 'EDIT' &&
+      Array.isArray(apiVersions) &&
+      versions.length > 0
+    ) {
+      const target = activeVersion || versions[0];
+      if (target) {
+        modeInitializedRef.current = true;
+        handleStartEdit(target);
+      }
     }
-  }, [location.state, activeVersion, versions]);
+  }, [location.state?.mode, apiVersions, versions, activeVersion]);
 
-  function handleStartAdd() {
-    // Clone forward from active version and default to today's date
-    const base = activeVersion || selectedVersion || {};
+  // Synchronize formData with loaded version details in EDIT mode
+  useEffect(() => {
+    if (mode === 'EDIT' && selectedVersionId && versionDetailsMap[selectedVersionId]) {
+      const detail = versionDetailsMap[selectedVersionId];
+      if (!formData.contactPersonName && detail.contactPersonName) {
+        setFormData({
+          effectiveDate: detail.effectiveDate || '',
+          contactPersonName: detail.contactPersonName || '',
+          phoneNo: detail.phoneNo || '',
+          alternatePhoneNo: detail.alternatePhoneNo || '',
+          email: detail.email || '',
+          gstNo: detail.gstNo || '',
+          website: detail.website || '',
+          countryId: detail.countryId || 'IN',
+          stateId: detail.stateId || '',
+          city: detail.city || '',
+          zipCode: detail.zipCode || '',
+          address1: detail.address1 || '',
+          address2: detail.address2 || '',
+          notes: detail.notes || '',
+        });
+        setAttachments(Array.isArray(detail.attachments) ? detail.attachments : []);
+      }
+    }
+  }, [mode, selectedVersionId, versionDetailsMap, formData.contactPersonName]);
+
+  async function handleStartAdd() {
+    setCopyAttachments(true);
+    setSubmitForApproval(true);
+    setPendingDeleteAttachmentIds([]);
+    setAttachmentToDelete(null);
+
+    // Identify the latest version record (newest version at versions[0] or activeVersion)
+    const latestVersionRecord = versions[0] || activeVersion || selectedVersion || null;
+    const latestVerId = latestVersionRecord?.vendorDetailId || latestVersionRecord?.id;
+
+    let base = latestVerId ? versionDetailsMap[latestVerId] : null;
+
     const today = getTodayIsoDate();
     const initialDate = minAllowedEffectiveDate && minAllowedEffectiveDate > today
       ? minAllowedEffectiveDate
       : today;
-    setFormData({
-      effectiveDate: initialDate,
-      contactPersonName: base.contactPersonName || '',
-      phoneNo: base.phoneNo || '',
-      alternatePhoneNo: base.alternatePhoneNo || '',
-      email: base.email || '',
-      gstNo: base.gstNo || '',
-      website: base.website || '',
-      countryId: base.countryId || 'IN',
-      stateId: base.stateId || '',
-      city: base.city || '',
-      zipCode: base.zipCode || '',
-      address1: base.address1 || '',
-      address2: base.address2 || '',
-      notes: base.notes || '',
-    });
-    const baseAtts = Array.isArray(base.attachments)
-      ? base.attachments
-      : vendor?.attachments || [];
-    setAttachments([...baseAtts]);
+
+    const applyPrefill = (src) => {
+      if (!src) return;
+      setFormData({
+        effectiveDate: initialDate,
+        contactPersonName: src.contactPersonName || '',
+        phoneNo: src.phoneNo || '',
+        alternatePhoneNo: src.alternatePhoneNo || '',
+        email: src.email || '',
+        gstNo: src.gstNo || '',
+        website: src.website || '',
+        countryId: src.countryId || 'IN',
+        stateId: src.stateId || '',
+        city: src.city || '',
+        zipCode: src.zipCode || '',
+        address1: src.address1 || '',
+        address2: src.address2 || '',
+        notes: src.notes || '',
+      });
+      const baseAtts = Array.isArray(src.attachments)
+        ? src.attachments
+        : vendor?.attachments || [];
+      setAttachments([...baseAtts]);
+    };
+
+    // Pre-fill immediately with cached data or available summary
+    if (base) {
+      applyPrefill(base);
+    } else {
+      setFormData({
+        effectiveDate: initialDate,
+        contactPersonName: latestVersionRecord?.contactPersonName || '',
+        phoneNo: latestVersionRecord?.phoneNo || '',
+        alternatePhoneNo: latestVersionRecord?.alternatePhoneNo || '',
+        email: latestVersionRecord?.email || '',
+        gstNo: latestVersionRecord?.gstNo || '',
+        website: latestVersionRecord?.website || '',
+        countryId: latestVersionRecord?.countryId || 'IN',
+        stateId: latestVersionRecord?.stateId || '',
+        city: latestVersionRecord?.city || '',
+        zipCode: latestVersionRecord?.zipCode || '',
+        address1: latestVersionRecord?.address1 || '',
+        address2: latestVersionRecord?.address2 || '',
+        notes: latestVersionRecord?.notes || '',
+      });
+      setAttachments([]);
+    }
+
     setMode('ADD');
     setFormErrors({});
+
+    // Fetch fresh details of the latest version to ensure all fields are completely pre-filled
+    if (latestVerId) {
+      if (!base?.contactPersonName) {
+        setIsLoadingVersion(true);
+      }
+      try {
+        const fresh = await vendorService.getVendorVersion(latestVerId);
+        if (fresh) {
+          setVersionDetailsMap((prev) => ({ ...prev, [latestVerId]: fresh }));
+          applyPrefill(fresh);
+        }
+      } catch (err) {
+        console.warn('Could not fetch last version for pre-fill:', err);
+      } finally {
+        setIsLoadingVersion(false);
+      }
+    }
   }
 
   function handleCancel() {
     setMode('VIEW');
     setFormErrors({});
+    setPendingDeleteAttachmentIds([]);
+    setAttachmentToDelete(null);
     setAttachments(currentViewAttachments);
   }
 
@@ -679,15 +941,44 @@ export default function VendorEffectiveDatesPage() {
 
   /* ── Attachment Handlers ── */
   function handleFilesAdded(files) {
-    const validFiles = Array.from(files).filter(isAllowedFile);
-    if (validFiles.length === 0) {
-      setAttachmentError('Only PDF and image files (PNG, JPG, JPEG, WEBP) are allowed.');
-      return;
+    const fileList = Array.from(files);
+    if (fileList.length === 0) return;
+
+    // Allowed extensions from selected document type or default
+    const allowedExts =
+      currentDocTypeConfig?.allowedExtensionList &&
+      currentDocTypeConfig.allowedExtensionList.length > 0
+        ? currentDocTypeConfig.allowedExtensionList.map((e) => e.toLowerCase().trim())
+        : (currentDocTypeConfig?.allowedExtensions
+            ? currentDocTypeConfig.allowedExtensions.split(',').map((e) => e.toLowerCase().trim())
+            : ALLOWED_FILE_EXTENSIONS);
+
+    const maxMb = currentDocTypeConfig?.maxFileSizeMB || 10;
+    const maxBytes = maxMb * 1024 * 1024;
+
+    for (const file of fileList) {
+      const name = (file.name || '').toLowerCase();
+      const hasValidExt = allowedExts.some((ext) => name.endsWith(ext));
+      if (!hasValidExt) {
+        setAttachmentError(
+          `"${file.name}" is not an allowed file type. Allowed formats: ${allowedExts.join(', ')}`
+        );
+        return;
+      }
+      if (file.size > maxBytes) {
+        setAttachmentError(
+          `"${file.name}" exceeds the maximum allowed file size of ${maxMb} MB.`
+        );
+        return;
+      }
     }
 
     setAttachmentError('');
 
-    const newAttachments = validFiles.map((file, idx) => {
+    const matchedDocType = currentDocTypeConfig;
+    const docTypeId = matchedDocType?.id || matchedDocType?.documentTypeId || 1;
+
+    const newAttachments = fileList.map((file, idx) => {
       const docName =
         selectedDocType ||
         file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') ||
@@ -698,6 +989,7 @@ export default function VendorEffectiveDatesPage() {
 
       return {
         id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${idx}`,
+        documentTypeId: docTypeId,
         documentName: docName,
         fileName: file.name,
         fileSize: formatFileSize(file.size),
@@ -724,16 +1016,30 @@ export default function VendorEffectiveDatesPage() {
     }
   }
 
-  async function handleRemoveAttachment(idToRemove) {
-    if (typeof idToRemove === 'number') {
-      try {
-        await vendorService.deleteVendorAttachment(idToRemove);
-        toast.success('Document removed from server');
-      } catch (err) {
-        console.warn('Failed to delete attachment from server:', err);
-      }
+  function handleRequestDeleteAttachment(att) {
+    setAttachmentToDelete(att);
+  }
+
+  function handleConfirmDeleteAttachment() {
+    if (!attachmentToDelete) return;
+    const id = attachmentToDelete.id;
+
+    // Record server-persisted attachment ID to be deleted when clicking Save Changes
+    const serverId =
+      attachmentToDelete.attachmentId ||
+      (typeof id === 'number' ? id : null);
+    if (serverId) {
+      setPendingDeleteAttachmentIds((prev) => {
+        if (!prev.includes(serverId)) {
+          return [...prev, serverId];
+        }
+        return prev;
+      });
     }
-    setAttachments((prev) => prev.filter((att) => att.id !== idToRemove));
+
+    // Remove from local attachments list
+    setAttachments((prev) => prev.filter((att) => att.id !== id));
+    setAttachmentToDelete(null);
   }
 
   async function handleDownloadAttachment(att, e) {
@@ -867,10 +1173,30 @@ export default function VendorEffectiveDatesPage() {
 
     try {
       if (mode === 'EDIT') {
-        const targetVerId = selectedVersionId || activeVersion?.id || versions[0]?.id;
+        const targetVerId =
+          selectedVersionId ||
+          activeVersion?.vendorDetailId ||
+          activeVersion?.id ||
+          versions[0]?.vendorDetailId ||
+          versions[0]?.id;
+
         try {
           if (targetVerId) {
             await vendorService.editVendorVersion(targetVerId, formData);
+
+            // 1. Delete attachments marked for deletion on server
+            if (pendingDeleteAttachmentIds.length > 0) {
+              for (const delId of pendingDeleteAttachmentIds) {
+                try {
+                  await vendorService.deleteVendorAttachment(delId);
+                } catch (delErr) {
+                  console.warn(`Failed to delete attachment ${delId} on server:`, delErr);
+                }
+              }
+              setPendingDeleteAttachmentIds([]);
+            }
+
+            // 2. Upload newly added local files
             const rawFiles = attachments.filter((a) => a.file);
             for (const att of rawFiles) {
               await vendorService.uploadVersionAttachment(targetVerId, {
@@ -895,11 +1221,110 @@ export default function VendorEffectiveDatesPage() {
           return next;
         });
 
-        // Update existing version entry with version-scoped attachments
-        const updatedVersions = (vendor.effectiveVersions || []).map((v) => {
-          if (v.id !== selectedVersionId) return v;
-          return {
-            ...v,
+        // Re-fetch fresh version list and version details
+        if (id) {
+          await loadVendorVersions(id);
+          try {
+            const fresh = await vendorService.getVendorVersion(targetVerId);
+            if (fresh) {
+              setVersionDetailsMap((prev) => ({ ...prev, [targetVerId]: fresh }));
+            }
+          } catch (e) {
+            console.warn('Could not refresh version detail:', e);
+          }
+        }
+
+        // Update existing version entry in vendor context
+        if (updateVendorVersions && vendor?.id) {
+          const updatedVersions = (vendor.effectiveVersions || []).map((v) => {
+            if (String(v.vendorDetailId || v.id) !== String(targetVerId)) return v;
+            return {
+              ...v,
+              effectiveDate: formData.effectiveDate.trim(),
+              contactPersonName: formData.contactPersonName.trim(),
+              phoneNo: formData.phoneNo.trim(),
+              alternatePhoneNo: formData.alternatePhoneNo?.trim() || '',
+              gstNo: formData.gstNo?.trim().toUpperCase() || '',
+              website: formData.website?.trim() || '',
+              email: formData.email.trim(),
+              countryId: formData.countryId,
+              stateId: formData.stateId,
+              city: formData.city.trim(),
+              zipCode: formData.zipCode.trim(),
+              address1: formData.address1.trim(),
+              address2: formData.address2?.trim() || '',
+              notes: formData.notes?.trim() || '',
+              attachments: [...attachments],
+            };
+          });
+          updateVendorVersions(vendor.id, updatedVersions);
+        }
+
+        toast.success('Effective date updated');
+        setMode('VIEW');
+      } else if (mode === 'ADD') {
+        const rawFiles = attachments.filter((a) => a.file || a.rawFile);
+        const hasNewRawAttachments = rawFiles.length > 0;
+        let createdVersionId = null;
+
+        try {
+          // If uploading brand new local files, keep Draft first (initialSubmit = false)
+          // so version accepts uploads, then submit afterwards.
+          // Otherwise, submit directly according to submitForApproval.
+          const initialSubmit = hasNewRawAttachments ? false : submitForApproval;
+
+          const createdVer = await vendorService.createVendorVersion(
+            vendor?.id || id,
+            formData,
+            copyAttachments,
+            initialSubmit
+          );
+          createdVersionId = createdVer?.vendorDetailId || createdVer?.id;
+
+          if (createdVersionId && hasNewRawAttachments) {
+            for (const att of rawFiles) {
+              await vendorService.uploadVersionAttachment(createdVersionId, {
+                documentTypeId: att.documentTypeId || 1,
+                documentName: att.documentName || att.fileName,
+                file: att.file || att.rawFile,
+              });
+            }
+            if (submitForApproval) {
+              await vendorService.submitVendorVersion(createdVersionId);
+            }
+          }
+        } catch (apiErr) {
+          console.warn('POST /api/vendors/{id}/versions failed:', apiErr);
+          if (apiErr?.status === 400 || apiErr?.status === 422) {
+            toast.error(apiErr.detail || apiErr.message || 'Validation error adding version.');
+            return;
+          }
+        }
+
+        // Re-fetch fresh version list from API (GET /api/vendors/{vendorId}/versions)
+        if (vendor?.id || id) {
+          await loadVendorVersions(vendor?.id || id);
+        }
+
+        const newVersionId = createdVersionId || `ver_${Date.now()}`;
+
+        // Fetch fresh details for this created version to populate versionDetailsMap
+        if (createdVersionId) {
+          try {
+            const fresh = await vendorService.getVendorVersion(createdVersionId);
+            if (fresh) {
+              setVersionDetailsMap((prev) => ({ ...prev, [createdVersionId]: fresh }));
+            }
+          } catch (e) {
+            console.warn('Could not load new version detail:', e);
+          }
+        }
+
+        // Also keep local fallback context in sync if available
+        if (updateVendorVersions && vendor?.id) {
+          const newVersion = {
+            id: newVersionId,
+            vendorDetailId: createdVersionId,
             effectiveDate: formData.effectiveDate.trim(),
             contactPersonName: formData.contactPersonName.trim(),
             phoneNo: formData.phoneNo.trim(),
@@ -915,71 +1340,18 @@ export default function VendorEffectiveDatesPage() {
             address2: formData.address2?.trim() || '',
             notes: formData.notes?.trim() || '',
             attachments: [...attachments],
+            createdOn: now,
+            createdBy: 'Current User',
           };
-        });
-
-        await updateVendorVersions(vendor.id, updatedVersions);
-        toast.success('Effective date updated');
-        setMode('VIEW');
-      } else if (mode === 'ADD') {
-        const rawFiles = attachments.filter((a) => a.file);
-        const hasAttachments = rawFiles.length > 0;
-        let createdVersionId = null;
-
-        try {
-          const createdVer = await vendorService.createVendorVersion(
-            vendor.id,
-            formData,
-            !hasAttachments, // If attachments are present, keep Draft first to upload files
-            false
-          );
-          createdVersionId = createdVer?.vendorDetailId || createdVer?.id;
-
-          if (createdVersionId && hasAttachments) {
-            for (const att of rawFiles) {
-              await vendorService.uploadVersionAttachment(createdVersionId, {
-                documentTypeId: att.documentTypeId || 1,
-                documentName: att.documentName || att.fileName,
-                file: att.file,
-              });
-            }
-            await vendorService.submitVendorVersion(createdVersionId);
-          }
-        } catch (apiErr) {
-          console.warn('POST /api/vendors/{id}/versions failed:', apiErr);
-          if (apiErr?.status === 400 || apiErr?.status === 422) {
-            toast.error(apiErr.detail || apiErr.message || 'Validation error adding version.');
-            return;
-          }
+          const updatedVersions = [...(vendor.effectiveVersions || []), newVersion];
+          await updateVendorVersions(vendor.id, updatedVersions);
         }
 
-        // Create new version entry with version-scoped attachments
-        const newVersionId = createdVersionId || `ver_${Date.now()}`;
-        const newVersion = {
-          id: newVersionId,
-          vendorDetailId: createdVersionId,
-          effectiveDate: formData.effectiveDate.trim(),
-          contactPersonName: formData.contactPersonName.trim(),
-          phoneNo: formData.phoneNo.trim(),
-          alternatePhoneNo: formData.alternatePhoneNo?.trim() || '',
-          gstNo: formData.gstNo?.trim().toUpperCase() || '',
-          website: formData.website?.trim() || '',
-          email: formData.email.trim(),
-          countryId: formData.countryId,
-          stateId: formData.stateId,
-          city: formData.city.trim(),
-          zipCode: formData.zipCode.trim(),
-          address1: formData.address1.trim(),
-          address2: formData.address2?.trim() || '',
-          notes: formData.notes?.trim() || '',
-          attachments: [...attachments],
-          createdOn: now,
-          createdBy: 'Current User',
-        };
-
-        const updatedVersions = [...(vendor.effectiveVersions || []), newVersion];
-        await updateVendorVersions(vendor.id, updatedVersions);
-        toast.success('New effective date added');
+        toast.success(
+          submitForApproval
+            ? 'New effective date added and submitted for approval'
+            : 'New effective date draft added'
+        );
         setSelectedVersionId(newVersionId);
         setMode('VIEW');
       }
@@ -1044,55 +1416,86 @@ export default function VendorEffectiveDatesPage() {
       /* 1. EFFECTIVE DATE */
       columnHelper.accessor('effectiveDate', {
         header: 'EFFECTIVE DATE',
-        minSize: 180,
-        size: 240,
+        minSize: 140,
+        size: 160,
+        cell: (info) => (
+          <span className="font-mono text-xs font-semibold text-heading py-0.5 block">
+            {formatDateDisplay(info.getValue())}
+          </span>
+        ),
+      }),
+
+      /* 2. VERSION STATE */
+      columnHelper.accessor('versionState', {
+        header: 'VERSION STATE',
+        minSize: 130,
+        size: 140,
         cell: (info) => {
-          const row = info.row.original;
-          const isCurrent = activeVersion?.id === row.id;
+          const state = info.getValue() || 'History';
+          const s = String(state).toLowerCase();
+          let badgeCls = 'bg-muted/30 text-text-muted border-border';
+          if (s === 'current') {
+            badgeCls = 'bg-success/15 text-success border-success/30 font-bold';
+          } else if (s === 'scheduled') {
+            badgeCls = 'bg-sky-500/15 text-sky-600 border-sky-500/30 font-semibold';
+          }
           return (
-            <div className="flex items-center gap-2 flex-wrap py-0.5">
-              <span className="font-mono text-xs font-semibold text-heading">
-                {formatDateDisplay(row.effectiveDate)}
-              </span>
-              {isCurrent && (
-                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-bold bg-success/15 text-success border border-success/30 select-none">
-                  Current
-                </span>
-              )}
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs border select-none ${badgeCls}`}
+            >
+              {state}
+            </span>
+          );
+        },
+      }),
+
+      /* 3. APPROVAL STATUS */
+      columnHelper.accessor('approvalStatus', {
+        header: 'APPROVAL STATUS',
+        minSize: 130,
+        size: 140,
+        cell: (info) => {
+          const status = info.getValue() || 'Pending';
+          return (
+            <Badge variant={getApprovalBadgeVariant(status)}>
+              {status}
+            </Badge>
+          );
+        },
+      }),
+
+      /* 4. STATUS */
+      columnHelper.accessor('isActive', {
+        header: 'STATUS',
+        minSize: 100,
+        size: 110,
+        cell: (info) => <StatusBadge status={info.getValue()} size="sm" />,
+      }),
+
+      /* 5. ATTACHMENTS */
+      columnHelper.accessor('attachmentCount', {
+        header: 'ATTACHMENTS',
+        minSize: 110,
+        size: 120,
+        cell: (info) => {
+          const count = Number(info.getValue()) || 0;
+          return (
+            <div className="flex items-center gap-1.5 py-0.5 text-xs">
+              <IconAttachment
+                size={13}
+                className={count > 0 ? 'text-primary' : 'text-text-muted/60'}
+              />
+              <span className="font-mono text-xs text-text font-medium">{count}</span>
             </div>
           );
         },
       }),
 
-      /* 2. CITY / STATE */
-      columnHelper.accessor(
-        (row) => {
-          const full = versionDetailsMap[row.id] || row;
-          return `${full.city ? full.city + ', ' : ''}${getStateName(full.countryId, full.stateId) || '—'}`;
-        },
-        {
-          id: 'cityState',
-          header: 'CITY / STATE',
-          minSize: 180,
-          size: 260,
-          cell: (info) => {
-            const row = info.row.original;
-            const full = versionDetailsMap[row.id] || row;
-            return (
-              <span className="text-xs text-text truncate block py-0.5">
-                {full.city ? `${full.city}, ` : ''}
-                {getStateName(full.countryId, full.stateId) || '—'}
-              </span>
-            );
-          },
-        }
-      ),
-
-      /* 3. CREATED ON */
+      /* 6. CREATED ON */
       columnHelper.accessor('createdOn', {
         header: 'CREATED ON',
-        minSize: 160,
-        size: 220,
+        minSize: 140,
+        size: 160,
         cell: (info) => (
           <span className="font-mono text-xs text-text-muted py-0.5 block">
             {formatDateDisplay(info.getValue())}
@@ -1100,21 +1503,36 @@ export default function VendorEffectiveDatesPage() {
         ),
       }),
 
-      /* 4. ACTIONS */
+      /* 7. LAST UPDATED ON */
+      columnHelper.accessor('lastUpdatedOn', {
+        header: 'LAST UPDATED ON',
+        minSize: 140,
+        size: 160,
+        cell: (info) => (
+          <span className="font-mono text-xs text-text-muted py-0.5 block">
+            {formatDateDisplay(info.getValue())}
+          </span>
+        ),
+      }),
+
+      /* 8. ACTIONS */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 110,
-        size: 120,
+        minSize: 80,
+        size: 90,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
           const row = info.row.original;
-          const isSelected = selectedVersion?.id === row.id;
+          const rowId = row.vendorDetailId || row.id;
+          const isSelected =
+            String(selectedVersion?.vendorDetailId || selectedVersion?.id) ===
+            String(rowId);
 
           return (
             <div
-              className="flex items-center justify-end gap-1 py-0.5"
+              className="flex items-center justify-end gap-1 py-0.5 pr-2"
               onClick={(e) => e.stopPropagation()}
             >
               <Button
@@ -1130,31 +1548,12 @@ export default function VendorEffectiveDatesPage() {
               >
                 <IconView size={15} />
               </Button>
-
-              {!isReadOnly && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  disabled={!vendor?.isActive}
-                  onClick={() => handleStartEdit(row)}
-                  title={!vendor?.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : 'Edit this version'}
-                  className={
-                    !vendor?.isActive
-                      ? 'opacity-40 cursor-not-allowed text-text-muted'
-                      : isSelected && mode === 'EDIT'
-                        ? 'bg-primary/15 text-primary'
-                        : 'text-text-muted hover:text-primary hover:bg-surface'
-                  }
-                >
-                  <IconEdit size={15} />
-                </Button>
-              )}
             </div>
           );
         },
       }),
     ],
-    [activeVersion, selectedVersion, mode, isReadOnly, vendor?.isActive]
+    [selectedVersion, mode]
   );
 
   /* ── React Table Instance with Column Resizing Enabled ── */
@@ -1364,42 +1763,53 @@ export default function VendorEffectiveDatesPage() {
 
         {/* ── MOBILE VIEW (< md): Card List for Small Screens ── */}
         <div className="block md:hidden p-3 space-y-2.5 bg-bg/50 max-h-[260px] overflow-y-auto overscroll-y-contain border-t border-border/60">
-          {versions.length === 0 ? (
+          {loadingVersions ? (
+            <div className="py-8 text-center text-xs text-text-muted flex items-center justify-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+              <span>Loading versions...</span>
+            </div>
+          ) : versions.length === 0 ? (
             <div className="py-8 text-center text-xs text-text-muted">
               No effective date records found for this vendor.
             </div>
           ) : (
             versions.map((ver) => {
-              const isCurrent = activeVersion?.id === ver.id;
-              const isSelected = selectedVersion?.id === ver.id;
-              const verAtts = Array.isArray(ver.attachments) ? ver.attachments : [];
+              const isSelected =
+                String(selectedVersion?.vendorDetailId || selectedVersion?.id) ===
+                String(ver.vendorDetailId || ver.id);
+              const attCount = Number(ver.attachmentCount) || 0;
+              const state = ver.versionState || 'History';
+              const s = String(state).toLowerCase();
+              let stateBadgeCls = 'bg-muted/30 text-text-muted border-border';
+              if (s === 'current') {
+                stateBadgeCls = 'bg-success/15 text-success border-success/30 font-bold';
+              } else if (s === 'scheduled') {
+                stateBadgeCls = 'bg-sky-500/15 text-sky-600 border-sky-500/30 font-semibold';
+              }
 
               return (
                 <div
-                  key={ver.id}
+                  key={ver.vendorDetailId || ver.id}
                   onClick={() => handleSelectView(ver)}
                   className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${isSelected
                     ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
                     : 'bg-surface border-border hover:border-primary/40'
                     }`}
                 >
-                  {/* Top line: Date + Badge + Actions */}
+                  {/* Top line: Date + Badges + Actions */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-mono text-xs font-bold text-heading">
                           {formatDateDisplay(ver.effectiveDate)}
                         </span>
-                        {isCurrent && (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold bg-success/15 text-success border border-success/30">
-                            Current
-                          </span>
-                        )}
-                        {isSelected && (
-                          <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-semibold bg-primary/15 text-primary">
-                            Selected
-                          </span>
-                        )}
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs border select-none ${stateBadgeCls}`}>
+                          {state}
+                        </span>
+                        <Badge variant={getApprovalBadgeVariant(ver.approvalStatus)}>
+                          {ver.approvalStatus || 'Pending'}
+                        </Badge>
+                        <StatusBadge status={ver.isActive} size="sm" />
                       </div>
                     </div>
 
@@ -1420,49 +1830,26 @@ export default function VendorEffectiveDatesPage() {
                       >
                         <IconView size={14} />
                       </Button>
-
-                      {!isReadOnly && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          disabled={!vendor?.isActive}
-                          onClick={() => handleStartEdit(ver)}
-                          title={!vendor?.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : 'Edit this version'}
-                          className={`h-7 w-7 ${!vendor?.isActive
-                            ? 'opacity-40 cursor-not-allowed text-text-muted'
-                            : isSelected && mode === 'EDIT'
-                              ? 'bg-primary/15 text-primary'
-                              : 'text-text-muted hover:text-primary hover:bg-surface'
-                            }`}
-                        >
-                          <IconEdit size={13} />
-                        </Button>
-                      )}
                     </div>
                   </div>
 
                   {/* Middle / Bottom line: Context info */}
-                  <div className="mt-2 pt-2 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-2xs text-text-muted">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <IconLocation size={12} className="shrink-0 text-text-muted/70" />
-                      <span className="truncate">
-                        {ver.city ? `${ver.city}, ` : ''}
-                        {getStateName(ver.countryId, ver.stateId) || '—'}
-                      </span>
+                  <div className="mt-2 pt-2 border-t border-border/60 flex flex-wrap items-center justify-between gap-2 text-2xs text-text-muted">
+                    <div className="flex items-center gap-1.5 font-mono">
+                      <IconClock size={11} className="shrink-0 text-text-muted/70" />
+                      <span>Created: {formatDateDisplay(ver.createdOn)}</span>
                     </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-2">
-                      <div className="flex items-center gap-1.5 font-mono text-2xs">
+                    {ver.lastUpdatedOn && (
+                      <div className="flex items-center gap-1.5 font-mono">
                         <IconClock size={11} className="shrink-0 text-text-muted/70" />
-                        <span>{formatDateDisplay(ver.createdOn)}</span>
+                        <span>Updated: {formatDateDisplay(ver.lastUpdatedOn)}</span>
                       </div>
+                    )}
 
-                      {verAtts.length > 0 && (
-                        <span className="inline-flex items-center gap-1 text-2xs text-primary font-medium">
-                          <IconAttachment size={10} />
-                          {verAtts.length} doc{verAtts.length > 1 ? 's' : ''}
-                        </span>
-                      )}
+                    <div className="flex items-center gap-1 text-2xs font-medium">
+                      <IconAttachment size={11} className={attCount > 0 ? 'text-primary' : 'text-text-muted/60'} />
+                      <span>{attCount} attachment{attCount !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
                 </div>
@@ -1546,7 +1933,19 @@ export default function VendorEffectiveDatesPage() {
               ))}
             </thead>
             <tbody className="divide-y divide-border bg-bg">
-              {table.getRowModel().rows.length === 0 ? (
+              {loadingVersions ? (
+                <tr>
+                  <td
+                    colSpan={columns.length}
+                    className="py-8 text-center text-xs text-text-muted"
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                      <span>Loading versions...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length}
@@ -1557,7 +1956,9 @@ export default function VendorEffectiveDatesPage() {
                 </tr>
               ) : (
                 table.getRowModel().rows.map((row) => {
-                  const isSelected = selectedVersion?.id === row.original.id;
+                  const isSelected =
+                    String(selectedVersion?.vendorDetailId || selectedVersion?.id) ===
+                    String(row.original.vendorDetailId || row.original.id);
                   return (
                     <tr
                       key={row.id}
@@ -1692,8 +2093,24 @@ export default function VendorEffectiveDatesPage() {
         }
       >
 
+        {/* Loading spinner while versions or version details are loading */}
+        {loadingVersions ||
+        (isLoadingVersion && !selectedVersion && mode === 'VIEW') ||
+        (mode === 'EDIT' && (loadingVersions || (isLoadingVersion && !formData.effectiveDate))) ? (
+          <div className="py-12 text-center text-xs text-text-muted flex items-center justify-center gap-2">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
+            <span>Loading version details...</span>
+          </div>
+        ) : null}
+
+        {!loadingVersions && versions.length === 0 ? (
+          <div className="py-12 text-center text-xs text-text-muted">
+            No effective date records found for this vendor.
+          </div>
+        ) : null}
+
         {/* ── Mode 1: VIEW MODE ── */}
-        {mode === 'VIEW' && selectedVersion && (
+        {!loadingVersions && mode === 'VIEW' && selectedVersion && (
           <div className="p-4 sm:p-6 space-y-6 divide-y divide-border/60">
             {/* 1. Contact Information */}
             <div className="space-y-3">
@@ -1879,7 +2296,7 @@ export default function VendorEffectiveDatesPage() {
         )}
 
         {/* ── Mode 2 & 3: EDIT & ADD FORM ── */}
-        {(mode === 'EDIT' || mode === 'ADD') && (
+        {!loadingVersions && (mode === 'EDIT' || mode === 'ADD') && (!isLoadingVersion || formData.effectiveDate || mode === 'ADD') && (
           <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
             {/* Section 1: Effective Date & Contact Information */}
             <div className="space-y-4">
@@ -2130,14 +2547,52 @@ export default function VendorEffectiveDatesPage() {
                 </span>
               </div>
 
+              {/* Copy Attachments Option for ADD Mode */}
+              {mode === 'ADD' && (
+                <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/[0.04] flex items-start sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-semibold text-heading flex items-center gap-2">
+                      <IconAttachment size={14} className="text-primary" />
+                      Copy attachments from previous version
+                    </p>
+                    <p className="text-2xs text-text-muted">
+                      Include all documents and attachments from the older version in this new effective date revision.
+                    </p>
+                  </div>
+                  <Checkbox
+                    id="copyAttachments"
+                    name="copyAttachments"
+                    checked={copyAttachments}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setCopyAttachments(checked);
+                      if (!checked) {
+                        setAttachments((prev) => prev.filter((a) => a.file || a.rawFile));
+                      } else {
+                        const latest = versions[0] || activeVersion || selectedVersion;
+                        const prevDetail = latest ? versionDetailsMap[latest.vendorDetailId || latest.id] : null;
+                        const baseAtts = prevDetail?.attachments || latest?.attachments || vendor?.attachments || [];
+                        setAttachments((prev) => {
+                          const rawOnly = prev.filter((a) => a.file || a.rawFile);
+                          return [...baseAtts, ...rawOnly];
+                        });
+                      }
+                    }}
+                    className="shrink-0 pt-0.5 sm:pt-0"
+                  />
+                </div>
+              )}
+
               {/* Upload Header Controls */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <SearchableSelect
                     id="docTypeSelector"
-                    placeholder="Select Document Type before uploading (optional)..."
+                    label="Document Name / Type"
+                    placeholder="Select Document Name / Type..."
                     searchPlaceholder="Search document types..."
-                    options={DOCUMENT_TYPE_OPTIONS}
+                    emptyText="No matching document types found"
+                    options={documentTypeOptions}
                     value={selectedDocType}
                     onChange={(e) => setSelectedDocType(e.target.value)}
                   />
@@ -2172,7 +2627,7 @@ export default function VendorEffectiveDatesPage() {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  accept={acceptExtensions}
                   onChange={handleFileInputChange}
                   className="hidden"
                 />
@@ -2185,7 +2640,7 @@ export default function VendorEffectiveDatesPage() {
                   Drag and drop files here, or <span className="text-primary">browse</span>
                 </p>
                 <p className="text-2xs text-text-muted mt-1">
-                  Supported formats: PDF, PNG, JPG, JPEG, WEBP (Up to 10 MB per file)
+                  Supported formats: {acceptExtensions.replace(/,/g, ', ')} (Up to {maxFileSizeMB} MB per file)
                 </p>
               </div>
 
@@ -2245,7 +2700,7 @@ export default function VendorEffectiveDatesPage() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleRemoveAttachment(att.id)}
+                          onClick={() => handleRequestDeleteAttachment(att)}
                           title="Remove attachment"
                           className="h-7 w-7 text-text-muted hover:text-danger"
                         >
@@ -2257,6 +2712,28 @@ export default function VendorEffectiveDatesPage() {
                 </div>
               )}
             </div>
+
+            {/* Submission Option for ADD Mode */}
+            {mode === 'ADD' && (
+              <div className="p-3.5 rounded-xl border border-border bg-surface/70 flex items-start sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-heading flex items-center gap-2">
+                    <IconShieldCheck size={14} className="text-primary" />
+                    Submit for approval immediately
+                  </p>
+                  <p className="text-2xs text-text-muted">
+                    Submit this new revision directly for approval upon saving (uncheck to save as draft).
+                  </p>
+                </div>
+                <Checkbox
+                  id="submitForApproval"
+                  name="submitForApproval"
+                  checked={submitForApproval}
+                  onChange={(e) => setSubmitForApproval(e.target.checked)}
+                  className="shrink-0 pt-0.5 sm:pt-0"
+                />
+              </div>
+            )}
 
             {/* Bottom Actions Bar */}
             <div className="pt-4 border-t border-border flex items-center justify-end gap-2.5">
@@ -2682,6 +3159,27 @@ export default function VendorEffectiveDatesPage() {
           </div>
         )}
       </Modal>
+
+      {/* ── Delete Attachment Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={Boolean(attachmentToDelete)}
+        onClose={() => setAttachmentToDelete(null)}
+        title="Delete Attachment"
+        confirmText="Delete"
+        variant="danger"
+        message={
+          attachmentToDelete ? (
+            <p>
+              Are you sure you want to delete{' '}
+              <strong className="text-heading font-semibold">
+                {attachmentToDelete.documentName || attachmentToDelete.fileName}
+              </strong>
+              ? This document will be permanently deleted when you click Save Changes.
+            </p>
+          ) : null
+        }
+        onConfirm={handleConfirmDeleteAttachment}
+      />
     </div>
   );
 }

@@ -242,7 +242,9 @@ export function useVendors() {
       if (formData.isActive !== undefined) {
         await vendorService.updateVendorStatus(id, {
           isActive: formData.isActive,
-          inactiveDate: !formData.isActive ? (formData.inactiveDate || todayIso) : null,
+          inactiveDate: !formData.isActive
+            ? (formData.inactiveDate ? String(formData.inactiveDate).slice(0, 10) : todayIso)
+            : null,
           inactiveComment: !formData.isActive ? (formData.inactiveComment || '') : '',
         });
       }

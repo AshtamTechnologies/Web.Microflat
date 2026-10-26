@@ -6,26 +6,21 @@ export const INITIAL_COMPANIES = [
   {
     id: 'COMP-001',
     companyName: 'Micro-Flat Datasoft Pvt. Ltd.',
-    firstName: 'Krupal',
-    lastName: 'Bhoi',
+    contactPersonName: 'Krupal Bhoi',
+    contactPersonEmail: 'krupal.bhoi@microflat.com',
+    contactPersonMobile: '+91 98250 12345',
     email: 'contact@microflat.com',
-    phone1: '+91 98250 12345',
-    phone2: '+91 265 2345678',
+    phone1: '0265 2345678',
+    phone2: '0265 2345679',
     gstNo: '24AAACM1234F1Z5',
     address1: 'Plot No. 42, GIDC Industrial Estate',
     address2: 'Near Makarpura Railway Station',
     city: 'Vadodara',
-    state: 'Gujarat',
-    country: 'India',
+    state: 'GJ',
+    country: 'IN',
     pinCode: '390010',
+    website: 'https://www.microflat.com',
     isActive: true,
-
-    // Bank Details
-    bankName: 'HDFC Bank',
-    bankBranch: 'Alkapuri Branch, Vadodara',
-    bankAccountNo: '50200012345678',
-    bankIfscCode: 'HDFC0000042',
-    bankSwiftCode: 'HDFCINBBBAR',
 
     // Terms & Conditions and Disclaimer
     terms: `1. Payment is due within 30 days from the invoice date unless negotiated otherwise.
@@ -36,36 +31,5 @@ export const INITIAL_COMPANIES = [
     createdAt: '2026-01-15T09:30:00.000Z',
     updatedAt: '2026-10-20T14:45:00.000Z',
   },
-  {
-    id: 'COMP-002',
-    companyName: 'Apex Precision Engineering Works',
-    firstName: 'Rajesh',
-    lastName: 'Patel',
-    email: 'info@apexprecision.in',
-    phone1: '+91 94260 98765',
-    phone2: '+91 260 2233445',
-    gstNo: '24BBAPA9876K1Z2',
-    address1: 'Survey No. 118, Ring Road Industrial Park',
-    address2: 'Opposite Torrent Substation',
-    city: 'Ahmedabad',
-    state: 'Gujarat',
-    country: 'India',
-    pinCode: '382445',
-    isActive: true,
-
-    // Bank Details
-    bankName: 'State Bank of India',
-    bankBranch: 'Industrial Finance Branch, Ahmedabad',
-    bankAccountNo: '30987654321',
-    bankIfscCode: 'SBIN0001423',
-    bankSwiftCode: 'SBININBB450',
-
-    // Terms & Conditions and Disclaimer
-    terms: `1. Standard manufacturer warranty applies for 12 months from delivery date.
-2. Prices are ex-factory, freight and insurance extra as applicable.
-3. Delivery schedules are subject to force majeure conditions.`,
-    disclaimer: `Quotations and commercial commitments are valid for 30 calendar days from the date of issue. Technical specifications are subject to continuous improvement without prior notification.`,
-    createdAt: '2026-03-10T11:15:00.000Z',
-    updatedAt: '2026-09-18T16:20:00.000Z',
-  },
 ];
+

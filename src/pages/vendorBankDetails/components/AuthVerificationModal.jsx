@@ -14,7 +14,7 @@ import {
   IconView,
 } from '../../../constants/icons';
 import { Modal, Button, CancelButton, Input } from '../../../components/ui';
-import { useUsersContext } from '../../../context/UsersContext';
+import { vendorService } from '../../../services';
 
 export default function AuthVerificationModal({
   isOpen,
@@ -23,10 +23,8 @@ export default function AuthVerificationModal({
   action = 'update', // 'update' | 'delete'
   bankAccount = null,
   vendorName = '',
+  vendorId = '',
 }) {
-  const { allUsers = [], ensureUsersLoaded } = useUsersContext();
-
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -35,83 +33,55 @@ export default function AuthVerificationModal({
   // Reset fields on modal open
   useEffect(() => {
     if (isOpen) {
-      if (allUsers.length === 0 && ensureUsersLoaded) {
-        ensureUsersLoaded();
-      }
-      // Default placeholder / suggested active session username
-      setUsername('ian.chesnut@gmail.com');
       setPassword('');
       setShowPassword(false);
       setError('');
       setIsVerifying(false);
     }
-  }, [isOpen, allUsers.length, ensureUsersLoaded]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const isDelete = action === 'delete';
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     if (e && e.preventDefault) e.preventDefault();
 
-    const u = username.trim().toLowerCase();
     const p = password.trim();
 
-    if (!u) {
-      setError('Please enter your login username or email.');
-      return;
-    }
     if (!p) {
       setError('Please enter your login password.');
+      return;
+    }
+
+    const targetVendorId = vendorId || bankAccount?.vendorId;
+    if (!targetVendorId) {
+      setError('Vendor ID not found. Cannot authorize bank update.');
       return;
     }
 
     setIsVerifying(true);
     setError('');
 
-    setTimeout(() => {
-      // Verify against demo passwords
-      const validPasswords = ['admin123', 'admin', 'password', '123456'];
-
-      // Check admin shortcut
-      let matchedUser = null;
-      if (u === 'admin' && (validPasswords.includes(p) || p.length >= 4)) {
-        matchedUser = { name: 'Admin', email: 'admin@microflat.com' };
-      } else {
-        // Check across users
-        const found = allUsers.find(
-          (user) =>
-            user.email?.toLowerCase() === u ||
-            `${user.firstName} ${user.lastName}`.toLowerCase() === u ||
-            user.firstName?.toLowerCase() === u
-        );
-        if (found && (validPasswords.includes(p) || p.length >= 4)) {
-          matchedUser = {
-            name: `${found.firstName} ${found.lastName}`,
-            email: found.email,
-          };
-        } else if (
-          (u === 'ian' || u === 'ian.chesnut@gmail.com' || u === 'ian chesnut') &&
-          (validPasswords.includes(p) || p.length >= 4)
-        ) {
-          matchedUser = { name: 'Ian Chesnut', email: 'ian.chesnut@gmail.com' };
-        }
-      }
-
+    try {
+      const authResult = await vendorService.authenticateVendorBank(targetVendorId, p);
       setIsVerifying(false);
-
-      if (matchedUser) {
-        onSuccess(matchedUser);
-        onClose();
-      } else {
-        setError('Invalid username or password. Authorization failed. Please verify credentials.');
-      }
-    }, 400);
+      onSuccess(authResult);
+      onClose();
+    } catch (err) {
+      setIsVerifying(false);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Invalid password. Authorization failed. Please verify credentials.';
+      setError(errMsg);
+    }
   }
 
   const maskedAccount = bankAccount?.accountNumber
     ? `•••• ${String(bankAccount.accountNumber).slice(-4)}`
     : '—';
+
 
   return (
     <Modal
@@ -194,11 +164,11 @@ export default function AuthVerificationModal({
               }
             />
             <p className="text-2xs text-text-muted mt-1.5">
-              Hint: You can use active credentials (e.g. <span className="font-mono text-heading">ian.chesnut@gmail.com</span> /{' '}
-              <span className="font-mono text-heading">admin123</span>).
+              Confirm your user password to authorize bank detail modification.
             </p>
           </div>
         </div>
+
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">

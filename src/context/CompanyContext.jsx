@@ -6,7 +6,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { INITIAL_COMPANIES } from '../mocks/companies';
 
-const STORAGE_KEY = 'mf_company_registrations_v1';
+const STORAGE_KEY = 'mf_company_registrations_v2';
 
 const CompanyContext = createContext(null);
 
@@ -17,7 +17,7 @@ export function CompanyProvider({ children }) {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.slice(0, 1);
         }
       }
     } catch (e) {

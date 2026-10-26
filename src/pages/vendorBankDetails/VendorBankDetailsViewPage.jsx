@@ -65,6 +65,7 @@ import {
 
 import { useVendorsContext } from '../../context/VendorsContext';
 import { useVendorBankDetails } from '../../context/VendorBankDetailsContext';
+import { vendorService } from '../../services';
 import { getCountryName } from '../../mocks/vendors';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -102,7 +103,7 @@ export default function VendorBankDetailsViewPage() {
   const backLabel = location.state?.backLabel || 'Bank Details';
 
   const { allVendors = [], getVendorById } = useVendorsContext();
-  const { getBanksForVendor } = useVendorBankDetails();
+  const { getBanksForVendor, fetchBanksForVendor } = useVendorBankDetails();
 
   // Resolve vendor
   const vendor = useMemo(() => {
@@ -115,10 +116,24 @@ export default function VendorBankDetailsViewPage() {
   }, [vendorId, getVendorById, allVendors]);
 
   // Load bank accounts for this vendor
-  const bankAccounts = useMemo(() => {
-    if (!vendorId) return [];
-    return getBanksForVendor(vendorId);
-  }, [vendorId, getBanksForVendor]);
+  const [bankAccounts, setBankAccounts] = useState(() => getBanksForVendor(vendorId));
+
+  useEffect(() => {
+    let isCancelled = false;
+    async function loadVendorBanks() {
+      if (vendorId) {
+        const banks = await fetchBanksForVendor(vendorId);
+        if (!isCancelled && Array.isArray(banks)) {
+          setBankAccounts(banks);
+        }
+      }
+    }
+    loadVendorBanks();
+    return () => {
+      isCancelled = true;
+    };
+  }, [vendorId, fetchBanksForVendor]);
+
 
   // Reveal state for account numbers (set of bankDetailId)
   const [revealedIds, setRevealedIds] = useState(new Set());
@@ -177,11 +192,37 @@ export default function VendorBankDetailsViewPage() {
     );
   }, [bankAccounts, selectedBankId]);
 
+  const [remoteAttachments, setRemoteAttachments] = useState({});
+
+  useEffect(() => {
+    let isCancelled = false;
+    async function loadBankAttachments() {
+      const bankId = selectedAccount?.bankDetailId || selectedAccount?.id;
+      if (bankId && !String(bankId).startsWith('temp_') && !String(bankId).startsWith('bd_')) {
+        try {
+          const docs = await vendorService.getBankDetailAttachments(bankId);
+          if (!isCancelled && Array.isArray(docs)) {
+            setRemoteAttachments((prev) => ({ ...prev, [bankId]: docs }));
+          }
+        } catch (err) {
+          console.warn('Could not load attachments for bank account:', err);
+        }
+      }
+    }
+    loadBankAttachments();
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedAccount]);
+
   // Attachments for the currently selected bank account
   const selectedAttachments = useMemo(() => {
     if (!selectedAccount) return [];
+    const bankId = selectedAccount.bankDetailId || selectedAccount.id;
+    const remote = remoteAttachments[bankId];
+    if (Array.isArray(remote) && remote.length > 0) return remote;
     return Array.isArray(selectedAccount.attachments) ? selectedAccount.attachments : [];
-  }, [selectedAccount]);
+  }, [selectedAccount, remoteAttachments]);
 
   // Metrics
   const activeCount = useMemo(
@@ -219,8 +260,18 @@ export default function VendorBankDetailsViewPage() {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const handleDownloadAttachment = (att, e) => {
+  const handleDownloadAttachment = async (att, e) => {
     if (e) e.stopPropagation();
+    const attId = att.id || att.attachmentId;
+    if (attId && !String(attId).startsWith('att_')) {
+      try {
+        await vendorService.downloadBankAttachment(attId, att.fileName || 'bank_attachment');
+        toast.success(`Downloaded ${att.fileName || 'attachment'}`);
+        return;
+      } catch (err) {
+        console.warn('Real bank attachment download failed:', err);
+      }
+    }
     if (att.fileUrl) {
       const a = document.createElement('a');
       a.href = att.fileUrl;

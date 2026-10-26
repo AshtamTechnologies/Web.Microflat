@@ -151,6 +151,11 @@ export default function VendorsPage() {
     }
   }, [searchParams, setStatusFilter, setApprovalFilter, setSearch, resetFilters]);
 
+  // Re-fetch vendors whenever VendorsPage mounts to ensure fresh ERP data
+  useEffect(() => {
+    refreshVendors?.();
+  }, [refreshVendors]);
+
   // Reset pagination to page 1 when search or filters change
   useEffect(() => {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));

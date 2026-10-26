@@ -180,9 +180,11 @@ export async function updateVendorName(id, vendorName) {
  */
 export async function updateVendorStatus(id, { isActive, inactiveDate, inactiveComment }) {
   try {
+    const today = new Date().toISOString().slice(0, 10);
+    const dateOnly = inactiveDate ? String(inactiveDate).slice(0, 10) : today;
     const payload = {
       isActive: Boolean(isActive),
-      inactiveDate: !isActive ? (inactiveDate || new Date().toISOString().slice(0, 10)) : null,
+      inactiveDate: !isActive ? dateOnly : null,
       inactiveComment: !isActive ? String(inactiveComment || '').trim() : '',
     };
     const response = await axiosInstance.patch(VENDOR_ENDPOINTS.STATUS(id), payload);
@@ -456,7 +458,8 @@ export async function createVendorVersion(id, formData, copyAttachments = true, 
  */
 export async function getVendorBankDetails(vendorId) {
   try {
-    const response = await axiosInstance.get(VENDOR_ENDPOINTS.VENDOR_BANK_DETAILS(vendorId));
+    const validId = cleanId(vendorId);
+    const response = await axiosInstance.get(VENDOR_ENDPOINTS.VENDOR_BANK_DETAILS(validId));
     const items = Array.isArray(response.data) ? response.data : [];
     return items.map(bankDetailFromApi);
   } catch (err) {
@@ -471,8 +474,9 @@ export async function getVendorBankDetails(vendorId) {
  */
 export async function createVendorBankDetail(vendorId, form) {
   try {
+    const validId = cleanId(vendorId);
     const payload = bankDetailToApi(form);
-    const response = await axiosInstance.post(VENDOR_ENDPOINTS.VENDOR_BANK_DETAILS(vendorId), payload);
+    const response = await axiosInstance.post(VENDOR_ENDPOINTS.VENDOR_BANK_DETAILS(validId), payload);
     return bankDetailFromApi(response.data) || response.data;
   } catch (err) {
     throw normalizeApiError(err);
@@ -485,7 +489,8 @@ export async function createVendorBankDetail(vendorId, form) {
  */
 export async function getBankDetail(id) {
   try {
-    const response = await axiosInstance.get(VENDOR_ENDPOINTS.BANK_DETAIL_BY_ID(id));
+    const validId = cleanId(id);
+    const response = await axiosInstance.get(VENDOR_ENDPOINTS.BANK_DETAIL_BY_ID(validId));
     return bankDetailFromApi(response.data);
   } catch (err) {
     throw normalizeApiError(err);
@@ -499,8 +504,9 @@ export async function getBankDetail(id) {
  */
 export async function updateBankDetail(id, form) {
   try {
+    const validId = cleanId(id);
     const payload = bankDetailToApi(form);
-    const response = await axiosInstance.put(VENDOR_ENDPOINTS.BANK_DETAIL_BY_ID(id), payload);
+    const response = await axiosInstance.put(VENDOR_ENDPOINTS.BANK_DETAIL_BY_ID(validId), payload);
     return bankDetailFromApi(response.data) || response.data;
   } catch (err) {
     throw normalizeApiError(err);
@@ -514,8 +520,9 @@ export async function updateBankDetail(id, form) {
  */
 export async function updateBankDetailStatus(id, isActive) {
   try {
+    const validId = cleanId(id);
     const payload = { isActive: Boolean(isActive) };
-    const response = await axiosInstance.patch(VENDOR_ENDPOINTS.BANK_DETAIL_STATUS(id), payload);
+    const response = await axiosInstance.patch(VENDOR_ENDPOINTS.BANK_DETAIL_STATUS(validId), payload);
     return response.data;
   } catch (err) {
     throw normalizeApiError(err);
@@ -528,27 +535,30 @@ export async function updateBankDetailStatus(id, isActive) {
  */
 export async function getBankDetailAttachments(id) {
   try {
-    const response = await axiosInstance.get(VENDOR_ENDPOINTS.BANK_DETAIL_ATTACHMENTS(id));
+    const validId = cleanId(id);
+    const response = await axiosInstance.get(VENDOR_ENDPOINTS.BANK_DETAIL_ATTACHMENTS(validId));
     return Array.isArray(response.data) ? response.data : [];
   } catch (err) {
     throw normalizeApiError(err);
   }
 }
 
+
 /**
- * Uploads a banking document (multipart/form-data: documentTypeId, documentName, file).
+ * Uploads a banking document (multipart/form-data: DocumentTypeId, DocumentName?, File).
  * @param {string|number} id
  * @param {{ documentTypeId: number|string, documentName?: string, file: File }} attachmentData
  */
 export async function uploadBankDetailAttachment(id, { documentTypeId, documentName, file }) {
   try {
+    const validId = cleanId(id);
     const formData = new FormData();
-    formData.append('documentTypeId', documentTypeId);
-    if (documentName) formData.append('documentName', documentName);
-    formData.append('file', file);
+    formData.append('DocumentTypeId', String(documentTypeId));
+    if (documentName) formData.append('DocumentName', documentName);
+    formData.append('File', file);
 
     const response = await axiosInstance.post(
-      VENDOR_ENDPOINTS.BANK_DETAIL_ATTACHMENTS(id),
+      VENDOR_ENDPOINTS.BANK_DETAIL_ATTACHMENTS(validId),
       formData,
       {
         headers: {
@@ -561,6 +571,7 @@ export async function uploadBankDetailAttachment(id, { documentTypeId, documentN
     throw normalizeApiError(err);
   }
 }
+
 
 /**
  * Downloads a bank document attachment as a blob and triggers browser download.
@@ -602,3 +613,23 @@ export async function deleteBankAttachment(attachmentId) {
     throw normalizeApiError(err);
   }
 }
+
+/**
+ * Confirms the signed-in user's password for vendor bank operations.
+ * POST /api/vendors/{vendorId}/bank-authentication
+ * @param {string|number} vendorId
+ * @param {string} password
+ */
+export async function authenticateVendorBank(vendorId, password) {
+  try {
+    const validId = cleanId(vendorId);
+    const response = await axiosInstance.post(
+      VENDOR_ENDPOINTS.BANK_AUTHENTICATION(validId),
+      { password: String(password) }
+    );
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+

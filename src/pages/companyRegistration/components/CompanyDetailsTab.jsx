@@ -2,8 +2,8 @@
  * src/pages/companyRegistration/components/CompanyDetailsTab.jsx — Tab 1 of Company Registration.
  */
 
-import React from 'react';
-import { CollapsibleCard, Input, StatusSwitch } from '../../../components/ui';
+import React, { useMemo } from 'react';
+import { CollapsibleCard, Input, StatusSwitch, SearchableSelect } from '../../../components/ui';
 import {
   IconBuilding2,
   IconUser,
@@ -11,16 +11,21 @@ import {
   IconPhone,
   IconMapPin,
   IconHash,
+  IconWebsite,
 } from '../../../constants/icons';
+import { COUNTRY_OPTIONS, STATE_OPTIONS } from '../../../mocks/vendors';
 
 export default function CompanyDetailsTab({ form, onChange, errors }) {
   const hasInfoErrors = Boolean(
     errors.companyName ||
-      errors.firstName ||
+      errors.contactPersonName ||
+      errors.contactPersonEmail ||
+      errors.contactPersonMobile ||
       errors.email ||
+      errors.website ||
       errors.phone1 ||
-      errors.gstNo ||
-      errors.phone2
+      errors.phone2 ||
+      errors.gstNo
   );
 
   const hasAddressErrors = Boolean(
@@ -31,6 +36,12 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
       errors.pinCode ||
       errors.address2
   );
+
+  // Cascading state options based on selected country
+  const stateOptions = useMemo(() => {
+    if (!form.country) return [];
+    return STATE_OPTIONS[form.country] || [];
+  }, [form.country]);
 
   return (
     <div className="space-y-6">
@@ -43,7 +54,7 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
         defaultOpen={true}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Row 1: Company Name (1 col) + First Name (1 col) + Last Name (1 col) */}
+          {/* Row 1: Company Name (1 col) + Contact Person Name (1 col) + Contact Person Mobile (1 col) */}
           <div>
             <label className="mf-label" htmlFor="companyName">
               Company Name <span className="mf-required">*</span>
@@ -60,35 +71,53 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
           </div>
 
           <div>
-            <label className="mf-label" htmlFor="firstName">
-              First Name <span className="mf-required">*</span>
+            <label className="mf-label" htmlFor="contactPersonName">
+              Contact Person Name <span className="mf-required">*</span>
             </label>
             <Input
-              id="firstName"
-              placeholder="e.g. Krupal"
-              value={form.firstName || ''}
-              onChange={(e) => onChange('firstName', e.target.value)}
-              error={errors.firstName}
+              id="contactPersonName"
+              placeholder="e.g. Rajesh Patel"
+              value={form.contactPersonName || ''}
+              onChange={(e) => onChange('contactPersonName', e.target.value)}
+              error={errors.contactPersonName}
               icon={IconUser}
               required
             />
           </div>
 
           <div>
-            <label className="mf-label" htmlFor="lastName">
-              Last Name
+            <label className="mf-label" htmlFor="contactPersonMobile">
+              Contact Person Mobile <span className="mf-required">*</span>
             </label>
             <Input
-              id="lastName"
-              placeholder="e.g. Bhoi"
-              value={form.lastName || ''}
-              onChange={(e) => onChange('lastName', e.target.value)}
-              error={errors.lastName}
-              icon={IconUser}
+              id="contactPersonMobile"
+              type="tel"
+              placeholder="e.g. +91 98250 12345"
+              value={form.contactPersonMobile || ''}
+              onChange={(e) => onChange('contactPersonMobile', e.target.value)}
+              error={errors.contactPersonMobile}
+              icon={IconPhone}
+              required
             />
           </div>
 
-          {/* Row 2: Company Email (1 col) + Phone 1 (1 col) + Phone 2 (1 col) */}
+          {/* Row 2: Contact Person Email (1 col) + Company Email (1 col) + Company Website (1 col) */}
+          <div>
+            <label className="mf-label" htmlFor="contactPersonEmail">
+              Contact Person Email <span className="mf-required">*</span>
+            </label>
+            <Input
+              id="contactPersonEmail"
+              type="email"
+              placeholder="e.g. rajesh.patel@company.com"
+              value={form.contactPersonEmail || ''}
+              onChange={(e) => onChange('contactPersonEmail', e.target.value)}
+              error={errors.contactPersonEmail}
+              icon={IconMail}
+              required
+            />
+          </div>
+
           <div>
             <label className="mf-label" htmlFor="email">
               Company Email <span className="mf-required">*</span>
@@ -106,35 +135,21 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
           </div>
 
           <div>
-            <label className="mf-label" htmlFor="phone1">
-              Phone 1 <span className="mf-required">*</span>
+            <label className="mf-label" htmlFor="website">
+              Company Website
             </label>
             <Input
-              id="phone1"
-              placeholder="e.g. +91 98250 12345"
-              value={form.phone1 || ''}
-              onChange={(e) => onChange('phone1', e.target.value)}
-              error={errors.phone1}
-              icon={IconPhone}
-              required
+              id="website"
+              type="url"
+              placeholder="e.g. https://www.microflat.com"
+              value={form.website || ''}
+              onChange={(e) => onChange('website', e.target.value)}
+              error={errors.website}
+              icon={IconWebsite}
             />
           </div>
 
-          <div>
-            <label className="mf-label" htmlFor="phone2">
-              Phone 2
-            </label>
-            <Input
-              id="phone2"
-              placeholder="e.g. +91 265 2345678"
-              value={form.phone2 || ''}
-              onChange={(e) => onChange('phone2', e.target.value)}
-              error={errors.phone2}
-              icon={IconPhone}
-            />
-          </div>
-
-          {/* Row 3: GST No. (1 col) + Account Status (1 col) */}
+          {/* Row 3: GST No. + Phone 1 (Landline) + Phone 2 (Landline) */}
           <div>
             <label className="mf-label" htmlFor="gstNo">
               GST No.
@@ -147,6 +162,38 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
               error={errors.gstNo}
               icon={IconHash}
               className="uppercase font-mono"
+            />
+          </div>
+
+          {/* Row 3: Phone 1 (Landline) + Phone 2 (Landline) + Account Status */}
+          <div>
+            <label className="mf-label" htmlFor="phone1">
+              Phone 1 (Landline) <span className="mf-required">*</span>
+            </label>
+            <Input
+              id="phone1"
+              type="tel"
+              placeholder="Landline number (e.g. 0265 2345678)"
+              value={form.phone1 || ''}
+              onChange={(e) => onChange('phone1', e.target.value)}
+              error={errors.phone1}
+              icon={IconPhone}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="mf-label" htmlFor="phone2">
+              Phone 2 (Landline)
+            </label>
+            <Input
+              id="phone2"
+              type="tel"
+              placeholder="Landline number (e.g. 0265 2345679)"
+              value={form.phone2 || ''}
+              onChange={(e) => onChange('phone2', e.target.value)}
+              error={errors.phone2}
+              icon={IconPhone}
             />
           </div>
 
@@ -181,12 +228,17 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
               <label className="mf-label" htmlFor="country">
                 Country <span className="mf-required">*</span>
               </label>
-              <Input
+              <SearchableSelect
                 id="country"
-                placeholder="e.g. India"
-                value={form.country || ''}
-                onChange={(e) => onChange('country', e.target.value)}
+                name="country"
+                options={COUNTRY_OPTIONS}
+                value={form.country || 'IN'}
+                onChange={(val) => {
+                  onChange('country', val);
+                  onChange('state', '');
+                }}
                 error={errors.country}
+                placeholder="Select Country"
                 required
               />
             </div>
@@ -195,12 +247,15 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
               <label className="mf-label" htmlFor="state">
                 State <span className="mf-required">*</span>
               </label>
-              <Input
+              <SearchableSelect
                 id="state"
-                placeholder="e.g. Gujarat"
+                name="state"
+                options={stateOptions}
                 value={form.state || ''}
-                onChange={(e) => onChange('state', e.target.value)}
+                onChange={(val) => onChange('state', val)}
                 error={errors.state}
+                placeholder={form.country ? 'Select State' : 'Select Country first'}
+                disabled={!form.country}
                 required
               />
             </div>

@@ -70,21 +70,57 @@ export const APPROVER_USERS = [
   { id: 'u12', name: 'Priya Mehta (Manager)' },
 ];
 
+const STATE_ID_TO_CODE = {
+  1: 'GJ',
+  2: 'MH',
+  3: 'KA',
+  4: 'TN',
+  5: 'DL',
+  6: 'HR',
+  7: 'RJ',
+  8: 'UP',
+  9: 'TS',
+  10: 'WB',
+};
+
+const COUNTRY_ID_TO_CODE = {
+  1: 'IN',
+  2: 'US',
+  3: 'DE',
+  4: 'JP',
+  5: 'GB',
+  6: 'SG',
+  7: 'AE',
+};
+
 /**
- * Resolves country code to label
+ * Resolves country code or numeric ID to label
  */
 export function getCountryName(countryId) {
-  const found = COUNTRY_OPTIONS.find((c) => c.value === countryId);
+  if (!countryId) return '—';
+  const cCode =
+    typeof countryId === 'number' || /^\d+$/.test(String(countryId).trim())
+      ? COUNTRY_ID_TO_CODE[Number(countryId)]
+      : countryId;
+  const found = COUNTRY_OPTIONS.find((c) => c.value === cCode || c.value === countryId);
   return found ? found.label : countryId || '—';
 }
 
 /**
- * Resolves state code to label within country
+ * Resolves state code or numeric ID to label within country
  */
 export function getStateName(countryId, stateId) {
   if (!countryId || !stateId) return stateId || '—';
-  const states = STATE_OPTIONS[countryId] || [];
-  const found = states.find((s) => s.value === stateId);
+  const cCode =
+    typeof countryId === 'number' || /^\d+$/.test(String(countryId).trim())
+      ? COUNTRY_ID_TO_CODE[Number(countryId)]
+      : countryId;
+  const sCode =
+    typeof stateId === 'number' || /^\d+$/.test(String(stateId).trim())
+      ? STATE_ID_TO_CODE[Number(stateId)]
+      : stateId;
+  const states = STATE_OPTIONS[cCode] || STATE_OPTIONS[countryId] || [];
+  const found = states.find((s) => s.value === sCode || s.value === stateId);
   return found ? found.label : stateId || '—';
 }
 

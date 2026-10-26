@@ -17,18 +17,18 @@ import {
 
 import {
   IconBuilding2,
-  IconBankDetails,
-  IconFileText,
   IconEdit,
   IconBack,
   IconMail,
   IconPhone,
   IconMapPin,
   IconError,
+  IconWebsite,
 } from '../../constants/icons';
 
 import { useCompanyContext } from '../../context/CompanyContext';
 import { formatDateTime } from '../../utils/dateUtils';
+import { getCountryName, getStateName } from '../../mocks/vendors';
 
 export default function CompanyViewPage() {
   const { id } = useParams();
@@ -56,18 +56,19 @@ export default function CompanyViewPage() {
     );
   }
 
+  const stateName = getStateName(company.country, company.state) || company.state;
+  const countryName = getCountryName(company.country) || company.country;
+
   const fullAddress = [
     company.address1,
     company.address2,
     company.city,
-    company.state,
-    company.country,
+    stateName,
+    countryName,
     company.pinCode,
   ]
     .filter(Boolean)
     .join(', ');
-
-  const fullName = [company.firstName, company.lastName].filter(Boolean).join(' ');
 
   return (
     <div className="space-y-6 pb-20 w-full">
@@ -119,25 +120,51 @@ export default function CompanyViewPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-5 gap-x-6">
           <DetailField label="Company Name" value={company.companyName} />
-          <DetailField label="Authorized Contact Person" value={fullName || '—'} />
+          <DetailField label="Authorized Contact Person" value={company.contactPersonName || '—'} />
+          <DetailField
+            label="Contact Person Email"
+            value={company.contactPersonEmail || '—'}
+            isEmail={Boolean(company.contactPersonEmail)}
+            icon={IconMail}
+          />
+          <DetailField
+            label="Contact Person Mobile"
+            value={company.contactPersonMobile || '—'}
+            isPhone={Boolean(company.contactPersonMobile)}
+            mono
+            icon={IconPhone}
+          />
           <DetailField
             label="Company Email"
             value={company.email}
             isEmail
             icon={IconMail}
           />
+          <DetailField
+            label="Company Website"
+            value={company.website || '—'}
+            isLink={Boolean(company.website)}
+            href={
+              company.website
+                ? company.website.startsWith('http')
+                  ? company.website
+                  : `https://${company.website}`
+                : undefined
+            }
+            icon={IconWebsite}
+          />
 
           <DetailField
-            label="Primary Phone"
-            value={company.phone1}
-            isPhone
+            label="Primary Landline (Phone 1)"
+            value={company.phone1 || '—'}
+            isPhone={Boolean(company.phone1)}
             mono
             icon={IconPhone}
           />
           <DetailField
-            label="Secondary Phone"
-            value={company.phone2}
-            isPhone
+            label="Secondary Landline (Phone 2)"
+            value={company.phone2 || '—'}
+            isPhone={Boolean(company.phone2)}
             mono
             icon={IconPhone}
           />
@@ -163,7 +190,7 @@ export default function CompanyViewPage() {
             }
           />
 
-          <div className="md:col-span-2 lg:col-span-2">
+          <div className="md:col-span-2 lg:col-span-3">
             <DetailField
               label="Registered Office Address"
               value={fullAddress || '—'}
@@ -173,92 +200,7 @@ export default function CompanyViewPage() {
         </div>
       </Card>
 
-      {/* ── 2. Bank Details Card (3 Columns Layout) ── */}
-      <Card padding="md" className="space-y-5">
-        <div className="flex items-center gap-2.5 border-b border-border pb-3.5">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <IconBankDetails size={17} />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-heading">Bank Details</h3>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-5 gap-x-6">
-          <DetailField label="Bank Name" value={company.bankName || '—'} />
-          <DetailField label="Bank Branch" value={company.bankBranch || '—'} />
-          <DetailField
-            label="Bank Account No."
-            value={
-              company.bankAccountNo ? (
-                <span className="font-mono font-medium text-heading">
-                  {company.bankAccountNo}
-                </span>
-              ) : (
-                '—'
-              )
-            }
-          />
-          <DetailField
-            label="Bank IFSC Code"
-            value={
-              company.bankIfscCode ? (
-                <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-semibold text-heading">
-                  {company.bankIfscCode}
-                </span>
-              ) : (
-                '—'
-              )
-            }
-          />
-          <DetailField
-            label="Bank Swift Code"
-            value={
-              company.bankSwiftCode ? (
-                <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-semibold text-heading">
-                  {company.bankSwiftCode}
-                </span>
-              ) : (
-                '—'
-              )
-            }
-          />
-        </div>
-      </Card>
-
-      {/* ── 3. Terms & Conditions and Disclaimer Card ── */}
-      <Card padding="md" className="space-y-5">
-        <div className="flex items-center gap-2.5 border-b border-border pb-3.5">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <IconFileText size={17} />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-heading">Terms & Conditions and Disclaimer</h3>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h4 className="text-xs font-semibold text-heading mb-2 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              Terms & Conditions
-            </h4>
-            <div className="p-3.5 bg-surface/70 rounded-lg border border-border text-xs text-heading leading-relaxed whitespace-pre-line min-h-[90px]">
-              {company.terms || 'No specific terms configured.'}
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-semibold text-heading mb-2 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              Disclaimer
-            </h4>
-            <div className="p-3.5 bg-surface/70 rounded-lg border border-border text-xs text-heading leading-relaxed whitespace-pre-line min-h-[90px]">
-              {company.disclaimer || 'No disclaimer configured.'}
-            </div>
-          </div>
-        </div>
-      </Card>
 
       {/* ── Audit Footer ── */}
       {company.createdAt && (

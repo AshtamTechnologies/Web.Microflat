@@ -62,6 +62,10 @@ import CompanyRegistrationPage from './pages/companyRegistration/CompanyRegistra
 import CompanyFormPage from './pages/companyRegistration/CompanyFormPage';
 import CompanyViewPage from './pages/companyRegistration/CompanyViewPage';
 import { CompanyProvider } from './context/CompanyContext';
+import CompanyBankDetailsPage from './pages/companyBankDetails/CompanyBankDetailsPage';
+import CompanyBankDetailsFormPage from './pages/companyBankDetails/CompanyBankDetailsFormPage';
+import CompanyBankDetailsViewPage from './pages/companyBankDetails/CompanyBankDetailsViewPage';
+import { CompanyBankDetailsProvider } from './context/CompanyBankDetailsContext';
 import ScrollToTop from './components/common/ScrollToTop';
 
 /**
@@ -121,7 +125,9 @@ export default function App() {
                                         <PaymentTermsProvider>
                                           <SeriesProvider>
                                             <CompanyProvider>
-                                              <AppLayout />
+                                              <CompanyBankDetailsProvider>
+                                                <AppLayout />
+                                              </CompanyBankDetailsProvider>
                                             </CompanyProvider>
                                           </SeriesProvider>
                                         </PaymentTermsProvider>
@@ -170,6 +176,13 @@ export default function App() {
               <Route path="/company-registration/new" element={<CompanyFormPage />} />
               <Route path="/company-registration/:id" element={<CompanyViewPage />} />
               <Route path="/company-registration/:id/edit" element={<CompanyFormPage />} />
+
+              {/* Company Bank Details Routes */}
+              <Route path="/company-bank-details" element={<CompanyBankDetailsPage />} />
+              <Route path="/company-bank-details/new" element={<CompanyBankDetailsFormPage />} />
+              <Route path="/company-bank-details/:companyId" element={<CompanyBankDetailsViewPage />} />
+              <Route path="/company-bank-details/:companyId/view" element={<CompanyBankDetailsViewPage />} />
+              <Route path="/company-bank-details/:companyId/edit" element={<CompanyBankDetailsFormPage />} />
 
               {/* Purchase Requisition Routes */}
               <Route path="/purchase-requisition" element={<PurchaseRequisition />} />

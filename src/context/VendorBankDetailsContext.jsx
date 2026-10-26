@@ -2,7 +2,7 @@
  * VendorBankDetailsContext.jsx — Context and state management for Vendor Bank Details.
  */
 
-import { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { INITIAL_VENDOR_BANK_DETAILS } from '../mocks/vendorBankDetails';
 import { useVendorsContext } from './VendorsContext';
@@ -12,29 +12,72 @@ const VendorBankDetailsContext = createContext(null);
 
 export function VendorBankDetailsProvider({ children }) {
   const [bankDetails, setBankDetails] = useState(INITIAL_VENDOR_BANK_DETAILS);
+  const [loading, setLoading] = useState(false);
   const { allVendors = [], getVendorById } = useVendorsContext();
 
+  const fetchedVendorsRef = useRef(new Set());
+  const inFlightRef = useRef(new Map());
+  const bankDetailsRef = useRef(bankDetails);
+
+  useEffect(() => {
+    bankDetailsRef.current = bankDetails;
+  }, [bankDetails]);
+
   /**
-   * Returns all bank accounts for a specific vendor, trying API first with fallback.
+   * Synchronous selector for already cached bank accounts of a specific vendor.
    */
   const getBanksForVendor = useCallback(
-    async (vendorId) => {
+    (vendorId) => {
       if (!vendorId) return [];
-      try {
-        const remoteBanks = await vendorService.getVendorBankDetails(vendorId);
-        if (Array.isArray(remoteBanks) && remoteBanks.length > 0) {
-          setBankDetails((prev) => {
-            const others = prev.filter((b) => String(b.vendorId) !== String(vendorId));
-            return [...others, ...remoteBanks];
-          });
-          return remoteBanks;
-        }
-      } catch (err) {
-        console.warn('Could not fetch bank details from API, using cached state:', err);
-      }
-      return bankDetails.filter((b) => String(b.vendorId) === String(vendorId));
+      return bankDetailsRef.current.filter((b) => String(b.vendorId) === String(vendorId));
     },
-    [bankDetails]
+    []
+  );
+
+  /**
+   * Asynchronous fetch from GET /api/vendors/{vendorId}/bank-details, updating cache.
+   * Completely deduplicates concurrent requests and skips already-fetched vendors unless forced.
+   */
+  const fetchBanksForVendor = useCallback(
+    async (vendorId, force = false) => {
+      if (!vendorId) return [];
+      const vId = String(vendorId);
+
+      // Return deduplicated in-flight promise if currently fetching
+      if (!force && inFlightRef.current.has(vId)) {
+        return inFlightRef.current.get(vId);
+      }
+
+      // If already fetched and not forced, return cached banks immediately without network call
+      if (!force && fetchedVendorsRef.current.has(vId)) {
+        return bankDetailsRef.current.filter((b) => String(b.vendorId) === vId);
+      }
+
+      const fetchPromise = (async () => {
+        setLoading(true);
+        try {
+          const remoteBanks = await vendorService.getVendorBankDetails(vId);
+          fetchedVendorsRef.current.add(vId);
+          if (Array.isArray(remoteBanks)) {
+            setBankDetails((prev) => {
+              const others = prev.filter((b) => String(b.vendorId) !== vId);
+              return [...others, ...remoteBanks];
+            });
+            return remoteBanks;
+          }
+        } catch (err) {
+          console.warn(`Could not fetch bank details for vendor ${vId}:`, err);
+        } finally {
+          setLoading(false);
+          inFlightRef.current.delete(vId);
+        }
+        return bankDetailsRef.current.filter((b) => String(b.vendorId) === vId);
+      })();
+
+      inFlightRef.current.set(vId, fetchPromise);
+      return fetchPromise;
+    },
+    []
   );
 
   /**
@@ -56,6 +99,7 @@ export function VendorBankDetailsProvider({ children }) {
     });
   }, [bankDetails, getVendorById, allVendors]);
 
+
   /**
    * Replaces/saves a vendor's bank accounts.
    */
@@ -68,10 +112,12 @@ export function VendorBankDetailsProvider({ children }) {
 
       for (let index = 0; index < rows.length; index++) {
         const row = rows[index];
+        const rawId = String(row.bankDetailId || row.id || '');
         const isNew =
-          !row.bankDetailId ||
-          String(row.bankDetailId).startsWith('temp_') ||
-          String(row.id).startsWith('temp_');
+          !rawId ||
+          rawId.startsWith('temp_') ||
+          rawId.startsWith('bd_') ||
+          (Number(rawId) > 1000000000 && !isNaN(Number(rawId)));
 
         if (isNew) {
           try {
@@ -129,6 +175,23 @@ export function VendorBankDetailsProvider({ children }) {
           try {
             // Call real PUT /api/vendor-bank-details/{id}
             await vendorService.updateBankDetail(bankId, row);
+
+            // Upload any pending file attachments if present
+            if (Array.isArray(row.attachments)) {
+              for (const att of row.attachments) {
+                if (att.file instanceof File) {
+                  try {
+                    await vendorService.uploadBankDetailAttachment(bankId, {
+                      documentTypeId: att.documentTypeId || 1,
+                      documentName: att.documentName || att.name,
+                      file: att.file,
+                    });
+                  } catch (attErr) {
+                    console.warn('Attachment upload failed:', attErr);
+                  }
+                }
+              }
+            }
           } catch (err) {
             console.warn('API updateBankDetail failed, updating locally:', err);
           }
@@ -157,6 +220,21 @@ export function VendorBankDetailsProvider({ children }) {
             updatedBy: adminName,
           });
         }
+      }
+
+      fetchedVendorsRef.current.delete(String(vendorId));
+
+      try {
+        const remoteAfterSave = await vendorService.getVendorBankDetails(vendorId);
+        if (Array.isArray(remoteAfterSave) && remoteAfterSave.length > 0) {
+          setBankDetails((prev) => {
+            const otherVendorsAccounts = prev.filter((b) => String(b.vendorId) !== String(vendorId));
+            return [...otherVendorsAccounts, ...remoteAfterSave];
+          });
+          return { ok: true, count: remoteAfterSave.length };
+        }
+      } catch (fetchErr) {
+        console.warn('Could not re-fetch from API after save, using processed rows:', fetchErr);
       }
 
       setBankDetails((prev) => {
@@ -219,13 +297,15 @@ export function VendorBankDetailsProvider({ children }) {
   const value = useMemo(
     () => ({
       bankDetails,
+      loading,
       getBanksForVendor,
+      fetchBanksForVendor,
       getAllBanks,
       saveVendorBanks,
       deleteBankDetail,
       toggleBankActive,
     }),
-    [bankDetails, getBanksForVendor, getAllBanks, saveVendorBanks, deleteBankDetail, toggleBankActive]
+    [bankDetails, loading, getBanksForVendor, fetchBanksForVendor, getAllBanks, saveVendorBanks, deleteBankDetail, toggleBankActive]
   );
 
   return (
@@ -233,6 +313,7 @@ export function VendorBankDetailsProvider({ children }) {
       {children}
     </VendorBankDetailsContext.Provider>
   );
+
 }
 
 export function useVendorBankDetails() {

@@ -147,15 +147,28 @@ export const navigation = [
     section: 'ADMINISTRATION',
     items: [
       {
-        label: 'Company Registration',
+        label: 'Company',
         icon: IconCompany,
-        path: '/company-registration',
         roles: ['ADMIN', 'MANAGER'],
-        quickAction: {
-          icon: IconAdd,
-          title: 'Register Company',
-          path: '/company-registration/new',
-        },
+        children: [
+          {
+            label: 'Company Registration',
+            icon: IconList,
+            path: '/company-registration',
+            roles: ['ADMIN', 'MANAGER'],
+          },
+          {
+            label: 'Company Bank Details',
+            icon: IconBankDetails,
+            path: '/company-bank-details',
+            roles: ['ADMIN', 'MANAGER'],
+            quickAction: {
+              icon: IconAdd,
+              title: 'Add Bank Details',
+              path: '/company-bank-details/new',
+            },
+          },
+        ],
       },
       {
         label: 'Users & Roles',

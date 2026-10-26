@@ -26,4 +26,6 @@ export const VENDOR_ENDPOINTS = {
   BANK_DETAIL_ATTACHMENTS: (id) => `/api/vendor-bank-details/${id}/attachments`,
   BANK_DOWNLOAD_ATTACHMENT: (attachmentId) => `/api/vendor-bank-attachments/${attachmentId}/download`,
   BANK_DELETE_ATTACHMENT: (attachmentId) => `/api/vendor-bank-attachments/${attachmentId}`,
+  BANK_AUTHENTICATION: (vendorId) => `/api/vendors/${vendorId}/bank-authentication`,
 };
+

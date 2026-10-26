@@ -295,6 +295,67 @@ export default function VendorFormPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
   const fileInputRef = useRef(null);
+  const [apiDocTypes, setApiDocTypes] = useState([]);
+
+  // Fetch active Document Types from GET /api/vendors/lookups
+  useEffect(() => {
+    let isMounted = true;
+    vendorService
+      .getVendorLookups()
+      .then((data) => {
+        if (isMounted && data?.documentTypes && Array.isArray(data.documentTypes)) {
+          // Show only active document types
+          const activeOnly = data.documentTypes.filter(
+            (dt) => dt.isActive === true || dt.isActive === 'true'
+          );
+          setApiDocTypes(activeOnly);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch vendor lookups:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const documentTypeOptions = useMemo(() => {
+    if (apiDocTypes && apiDocTypes.length > 0) {
+      return apiDocTypes.map((dt) => ({
+        value: dt.documentTypeName || dt.typeName,
+        label: dt.documentTypeName || dt.typeName,
+        id: dt.id || dt.documentTypeId,
+        allowedExtensions: dt.allowedExtensions,
+        allowedExtensionList: dt.allowedExtensionList,
+        maxFileSizeMB: dt.maxFileSizeMB,
+      }));
+    }
+    return DOCUMENT_TYPE_OPTIONS;
+  }, [apiDocTypes]);
+
+  const currentDocTypeConfig = useMemo(() => {
+    if (!selectedDocType) return null;
+    return (
+      apiDocTypes.find(
+        (dt) => (dt.documentTypeName || dt.typeName) === selectedDocType
+      ) || null
+    );
+  }, [selectedDocType, apiDocTypes]);
+
+  const acceptExtensions = useMemo(() => {
+    if (currentDocTypeConfig?.allowedExtensions) {
+      return currentDocTypeConfig.allowedExtensions;
+    }
+    if (
+      Array.isArray(currentDocTypeConfig?.allowedExtensionList) &&
+      currentDocTypeConfig.allowedExtensionList.length > 0
+    ) {
+      return currentDocTypeConfig.allowedExtensionList.join(',');
+    }
+    return '.pdf,.png,.jpg,.jpeg,.webp';
+  }, [currentDocTypeConfig]);
+
+  const maxFileSizeMB = currentDocTypeConfig?.maxFileSizeMB || 10;
 
   const initializedIdRef = useRef(null);
 
@@ -392,15 +453,44 @@ export default function VendorFormPage() {
 
   // ── Attachment handling ──
   function handleFilesAdded(files) {
-    const validFiles = Array.from(files).filter(isAllowedFile);
-    if (validFiles.length === 0) {
-      setAttachmentError('Only PDF and image files (PNG, JPG, WEBP) are allowed.');
-      return;
+    const fileList = Array.from(files);
+    if (fileList.length === 0) return;
+
+    // Allowed extensions from selected document type or default
+    const allowedExts =
+      currentDocTypeConfig?.allowedExtensionList &&
+      currentDocTypeConfig.allowedExtensionList.length > 0
+        ? currentDocTypeConfig.allowedExtensionList.map((e) => e.toLowerCase().trim())
+        : (currentDocTypeConfig?.allowedExtensions
+            ? currentDocTypeConfig.allowedExtensions.split(',').map((e) => e.toLowerCase().trim())
+            : ALLOWED_FILE_EXTENSIONS);
+
+    const maxMb = currentDocTypeConfig?.maxFileSizeMB || 10;
+    const maxBytes = maxMb * 1024 * 1024;
+
+    for (const file of fileList) {
+      const name = (file.name || '').toLowerCase();
+      const hasValidExt = allowedExts.some((ext) => name.endsWith(ext));
+      if (!hasValidExt) {
+        setAttachmentError(
+          `"${file.name}" is not an allowed file type. Allowed formats: ${allowedExts.join(', ')}`
+        );
+        return;
+      }
+      if (file.size > maxBytes) {
+        setAttachmentError(
+          `"${file.name}" exceeds the maximum allowed file size of ${maxMb} MB.`
+        );
+        return;
+      }
     }
 
     setAttachmentError('');
 
-    const newAttachments = validFiles.map((file, idx) => {
+    const matchedDocType = currentDocTypeConfig;
+    const docTypeId = matchedDocType?.id || matchedDocType?.documentTypeId || 1;
+
+    const newAttachments = fileList.map((file, idx) => {
       const docName =
         selectedDocType ||
         file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') ||
@@ -411,6 +501,7 @@ export default function VendorFormPage() {
 
       return {
         id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${idx}`,
+        documentTypeId: docTypeId,
         documentName: docName,
         fileName: file.name,
         fileSize: formatFileSize(file.size),
@@ -1003,7 +1094,7 @@ export default function VendorFormPage() {
                   placeholder="Select document name / type..."
                   searchPlaceholder="Search document types..."
                   emptyText="No matching document types found"
-                  options={DOCUMENT_TYPE_OPTIONS}
+                  options={documentTypeOptions}
                   value={selectedDocType}
                   onChange={(e) => setSelectedDocType(e.target.value)}
                 />
@@ -1027,7 +1118,7 @@ export default function VendorFormPage() {
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp,application/pdf"
+                    accept={acceptExtensions}
                     onChange={handleFileInputChange}
                     className="hidden"
                   />
@@ -1038,7 +1129,7 @@ export default function VendorFormPage() {
                     <span className="text-primary hover:underline font-semibold">Click to choose files</span> or drag & drop here
                   </p>
                   <p className="text-2xs text-text-muted mt-1">
-                    Allowed formats: <strong className="text-heading font-medium">Images (PNG, JPG, WEBP)</strong> & <strong className="text-heading font-medium">PDF documents</strong> only (Max 15MB each)
+                    Allowed formats: <strong className="text-heading font-medium">{acceptExtensions.replace(/,/g, ', ')}</strong> (Up to {maxFileSizeMB} MB per file)
                   </p>
                 </div>
               </div>

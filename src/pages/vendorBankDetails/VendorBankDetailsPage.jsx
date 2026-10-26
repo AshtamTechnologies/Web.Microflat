@@ -2,7 +2,7 @@
  * VendorBankDetailsPage.jsx — Dashboard and data table for Vendor Bank Details.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   useReactTable,
@@ -52,6 +52,7 @@ import { useVendorsContext } from '../../context/VendorsContext';
 import { useVendorBankDetails } from '../../context/VendorBankDetailsContext';
 import { useVendorBankTable, STATUS_FILTER_OPTIONS } from './useVendorBankTable.jsx';
 import AuthVerificationModal from './components/AuthVerificationModal';
+import { vendorService } from '../../services';
 import { formatDate } from '../../utils/dateUtils';
 
 function getFileIcon(fileName = '', fileType = '') {
@@ -73,7 +74,7 @@ function getFileIcon(fileName = '', fileType = '') {
 
 export default function VendorBankDetailsPage() {
   const navigate = useNavigate();
-  const { getAllBanks, toggleBankActive, deleteBankDetail } = useVendorBankDetails();
+  const { getAllBanks, toggleBankActive, deleteBankDetail, fetchBanksForVendor } = useVendorBankDetails();
   const { allVendors = [] } = useVendorsContext();
 
   // Simulated initial loading delay
@@ -104,10 +105,36 @@ export default function VendorBankDetailsPage() {
     setAuthModalState({ isOpen: false, bank: null });
   };
 
+  const vendorsFingerprint = useMemo(() => {
+    if (!allVendors || !allVendors.length) return '';
+    return allVendors.map((v) => v.id || v.vendorId).join(',');
+  }, [allVendors]);
+
+  const loadedFingerprintRef = useRef('');
+
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(timer);
-  }, []);
+    let isCancelled = false;
+    async function loadAllBanks() {
+      if (!vendorsFingerprint || loadedFingerprintRef.current === vendorsFingerprint) {
+        return;
+      }
+      loadedFingerprintRef.current = vendorsFingerprint;
+      setLoading(true);
+      try {
+        if (allVendors && allVendors.length > 0) {
+          await Promise.allSettled(
+            allVendors.map((v) => fetchBanksForVendor(v.id || v.vendorId))
+          );
+        }
+      } catch (err) {
+        console.warn('Could not load banks across all vendors:', err);
+      } finally {
+        if (!isCancelled) setLoading(false);
+      }
+    }
+    loadAllBanks();
+    return () => { isCancelled = true; };
+  }, [vendorsFingerprint, allVendors, fetchBanksForVendor]);
 
   const allBanks = useMemo(() => getAllBanks(), [getAllBanks]);
 
@@ -438,7 +465,17 @@ export default function VendorBankDetailsPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
+                        onClick={async () => {
+                          const attId = att.id || att.attachmentId;
+                          if (attId && !String(attId).startsWith('att_')) {
+                            try {
+                              await vendorService.downloadBankAttachment(attId, att.fileName);
+                              toast.success(`Downloaded ${att.fileName}`);
+                              return;
+                            } catch (err) {
+                              console.warn('Backend download failed:', err);
+                            }
+                          }
                           toast.success(`Downloading ${att.fileName}...`);
                         }}
                         className="text-xs text-text-muted hover:text-primary"
@@ -523,6 +560,7 @@ export default function VendorBankDetailsPage() {
         onSuccess={handleAuthDeleteSuccess}
         action="delete"
         bankAccount={authModalState.bank}
+        vendorId={authModalState.bank?.vendorId}
         vendorName={authModalState.bank?.vendorName}
       />
     </div>

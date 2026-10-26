@@ -38,6 +38,7 @@ import {
 } from '../../constants/icons';
 
 import { useCompanyContext } from '../../context/CompanyContext';
+import { getStateName } from '../../mocks/vendors';
 
 const columnHelper = createColumnHelper();
 
@@ -63,9 +64,21 @@ export default function CompanyRegistrationPage() {
       const matchCity = (c.city || '').toLowerCase().includes(q);
       const matchEmail = (c.email || '').toLowerCase().includes(q);
       const matchGst = (c.gstNo || '').toLowerCase().includes(q);
-      const matchPerson = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase().includes(q);
+      const matchPerson = (c.contactPersonName || '').toLowerCase().includes(q);
+      const matchPersonEmail = (c.contactPersonEmail || '').toLowerCase().includes(q);
+      const matchPersonMobile = (c.contactPersonMobile || '').toLowerCase().includes(q);
+      const matchWebsite = (c.website || '').toLowerCase().includes(q);
 
-      return matchName || matchCity || matchEmail || matchGst || matchPerson;
+      return (
+        matchName ||
+        matchCity ||
+        matchEmail ||
+        matchWebsite ||
+        matchGst ||
+        matchPerson ||
+        matchPersonEmail ||
+        matchPersonMobile
+      );
     });
   }, [companies, searchQuery, statusFilter]);
 
@@ -92,7 +105,7 @@ export default function CompanyRegistrationPage() {
         size: 240,
         cell: (info) => {
           const row = info.row.original;
-          const person = [row.firstName, row.lastName].filter(Boolean).join(' ');
+          const person = row.contactPersonName;
           return (
             <div className="min-w-0">
               <Link
@@ -117,10 +130,11 @@ export default function CompanyRegistrationPage() {
         size: 150,
         cell: (info) => {
           const row = info.row.original;
+          const stateLabel = getStateName(row.country, row.state) || row.state;
           return (
             <div className="flex items-center gap-1 text-xs text-heading">
               <IconMapPin size={12} className="text-text-muted shrink-0" />
-              <span className="truncate">{[row.city, row.state].filter(Boolean).join(', ') || '—'}</span>
+              <span className="truncate">{[row.city, stateLabel].filter(Boolean).join(', ') || '—'}</span>
             </div>
           );
         },
@@ -207,17 +221,7 @@ export default function CompanyRegistrationPage() {
       <PageHeader
         title="Company Registration"
         icon={<IconBuilding2 className="h-6 w-6 text-primary" aria-hidden="true" />}
-        subtitle="Manage registered company master profiles, banking credentials, and contractual terms."
-        actions={
-          <Button
-            type="button"
-            variant="primary"
-            icon={IconAdd}
-            onClick={() => navigate('/company-registration/new')}
-          >
-            Register Company
-          </Button>
-        }
+        subtitle="Registered organization profile, legal identifiers, and official business details."
       />
 
       {/* ── Table Toolbar & Filters ── */}
@@ -269,7 +273,8 @@ export default function CompanyRegistrationPage() {
         entityName="companies"
         renderMobileCard={(row) => {
           const comp = row.original;
-          const person = [comp.firstName, comp.lastName].filter(Boolean).join(' ');
+          const person = comp.contactPersonName;
+          const stateLabel = getStateName(comp.country, comp.state) || comp.state;
 
           return (
             <div className="p-4 space-y-3 bg-bg border border-border rounded-xl shadow-2xs hover:border-primary/40 transition-colors">
@@ -303,7 +308,7 @@ export default function CompanyRegistrationPage() {
                     Location
                   </span>
                   <span className="text-heading truncate block">
-                    {[comp.city, comp.state].filter(Boolean).join(', ') || '—'}
+                    {[comp.city, stateLabel].filter(Boolean).join(', ') || '—'}
                   </span>
                 </div>
 
