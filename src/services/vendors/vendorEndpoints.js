@@ -20,6 +20,7 @@ export const VENDOR_ENDPOINTS = {
   DELETE_ATTACHMENT: (attachmentId) => `/api/vendor-attachments/${attachmentId}`,
 
   // Vendor Bank Details (Section 5.5)
+  ALL_VENDOR_BANK_DETAILS: '/api/vendor-bank-details',
   VENDOR_BANK_DETAILS: (vendorId) => `/api/vendors/${vendorId}/bank-details`,
   BANK_DETAIL_BY_ID: (id) => `/api/vendor-bank-details/${id}`,
   BANK_DETAIL_STATUS: (id) => `/api/vendor-bank-details/${id}/status`,

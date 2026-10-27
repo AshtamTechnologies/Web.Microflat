@@ -1,56 +1,48 @@
 /**
  * VendorBankDetailsPage.jsx — Dashboard and data table for Vendor Bank Details.
+ * Powered by GET /api/vendor-bank-details with server-side search, filtering, and pagination.
  */
 
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
-  getPaginationRowModel,
-  flexRender,
 } from '@tanstack/react-table';
 import {
   IconAdd,
   IconAttachment,
   IconBankDetails,
-  IconChevronDown,
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronUp,
   IconClose,
   IconDelete,
   IconDownload,
   IconEdit,
   IconFileText,
   IconImage,
-  IconReset,
-  IconSearch,
-  IconSearchEmpty,
   IconView,
 } from '../../constants/icons';
 import toast from 'react-hot-toast';
 
 import {
   Button,
-  Input,
   Badge,
   Card,
   Modal,
-  TableContainer,
-  Th,
   PageHeader,
   SearchableSelect,
   DataTable,
   TableToolbar,
-  TableActions,
   StatusBadge,
   IconButton,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { useVendorBankDetails } from '../../context/VendorBankDetailsContext';
-import { useVendorBankTable, STATUS_FILTER_OPTIONS } from './useVendorBankTable.jsx';
+import {
+  useVendorBankTable,
+  STATUS_FILTER_OPTIONS,
+  ACCOUNT_TYPE_FILTER_OPTIONS,
+} from './useVendorBankTable.jsx';
 import AuthVerificationModal from './components/AuthVerificationModal';
 import { vendorService } from '../../services';
 import { formatDate } from '../../utils/dateUtils';
@@ -74,11 +66,20 @@ function getFileIcon(fileName = '', fileType = '') {
 
 export default function VendorBankDetailsPage() {
   const navigate = useNavigate();
-  const { getAllBanks, toggleBankActive, deleteBankDetail, fetchBanksForVendor } = useVendorBankDetails();
+  const { deleteBankDetail } = useVendorBankDetails();
   const { allVendors = [] } = useVendorsContext();
 
-  // Simulated initial loading delay
+  // Grid API data state
+  const [bankData, setBankData] = useState({
+    items: [],
+    pageNumber: 1,
+    pageSize: 20,
+    totalCount: 0,
+    totalPages: 1,
+  });
   const [loading, setLoading] = useState(true);
+
+  // Attachments & Preview modal state
   const [viewingAttachmentsRow, setViewingAttachmentsRow] = useState(null);
   const [previewingFile, setPreviewingFile] = useState(null);
 
@@ -95,88 +96,16 @@ export default function VendorBankDetailsPage() {
     });
   };
 
-  const handleAuthDeleteSuccess = () => {
-    if (!authModalState.bank) return;
-    const bankId = authModalState.bank.bankDetailId || authModalState.bank.id;
-    if (deleteBankDetail) {
-      deleteBankDetail(bankId);
-    }
-    toast.success(`Bank account for ${authModalState.bank.bankName} deleted successfully`);
-    setAuthModalState({ isOpen: false, bank: null });
-  };
-
-  const vendorsFingerprint = useMemo(() => {
-    if (!allVendors || !allVendors.length) return '';
-    return allVendors.map((v) => v.id || v.vendorId).join(',');
-  }, [allVendors]);
-
-  const loadedFingerprintRef = useRef('');
-
-  useEffect(() => {
-    let isCancelled = false;
-    async function loadAllBanks() {
-      if (!vendorsFingerprint || loadedFingerprintRef.current === vendorsFingerprint) {
-        return;
-      }
-      loadedFingerprintRef.current = vendorsFingerprint;
-      setLoading(true);
-      try {
-        if (allVendors && allVendors.length > 0) {
-          await Promise.allSettled(
-            allVendors.map((v) => fetchBanksForVendor(v.id || v.vendorId))
-          );
-        }
-      } catch (err) {
-        console.warn('Could not load banks across all vendors:', err);
-      } finally {
-        if (!isCancelled) setLoading(false);
-      }
-    }
-    loadAllBanks();
-    return () => { isCancelled = true; };
-  }, [vendorsFingerprint, allVendors, fetchBanksForVendor]);
-
-  const allBanks = useMemo(() => getAllBanks(), [getAllBanks]);
-
-  // Options for Vendor filter dropdown
-  const vendorOptions = useMemo(() => {
-    const list = [{ value: 'ALL', label: 'All Vendors' }];
-    const seen = new Set();
-
-    if (Array.isArray(allVendors)) {
-      allVendors.forEach((v) => {
-        seen.add(String(v.id));
-        list.push({
-          value: String(v.id),
-          label: `${v.vendorCode} – ${v.vendorName}`,
-        });
-      });
-    }
-
-    if (Array.isArray(allBanks)) {
-      allBanks.forEach((b) => {
-        if (b.vendorId && !seen.has(String(b.vendorId))) {
-          seen.add(String(b.vendorId));
-          list.push({
-            value: String(b.vendorId),
-            label: `${b.vendorCode || b.vendorId} – ${b.vendorName || 'Vendor ' + b.vendorId}`,
-          });
-        }
-      });
-    }
-
-    return list;
-  }, [allVendors, allBanks]);
-
   const {
     columns,
-    filteredData,
     search,
     setSearch,
     statusFilter,
     setStatusFilter,
     vendorFilter,
     setVendorFilter,
+    accountTypeFilter,
+    setAccountTypeFilter,
     sorting,
     setSorting,
     columnSizing,
@@ -184,48 +113,116 @@ export default function VendorBankDetailsPage() {
     pagination,
     setPagination,
     resetFilters,
-    maskAccountNumber,
   } = useVendorBankTable({
-    allBanks,
-    toggleBankActive,
     onViewAttachments: setViewingAttachmentsRow,
     onDeleteBank: handleDeleteRequest,
   });
 
+  // Options for Vendor filter dropdown
+  const vendorOptions = useMemo(() => {
+    const list = [{ value: 'ALL', label: 'All Vendors' }];
+    if (Array.isArray(allVendors)) {
+      allVendors.forEach((v) => {
+        const id = v.id || v.vendorId;
+        list.push({
+          value: String(id),
+          label: `${v.vendorCode || id} – ${v.vendorName || 'Vendor ' + id}`,
+        });
+      });
+    }
+    return list;
+  }, [allVendors]);
+
+  // Fetch bank details from GET /api/vendor-bank-details
+  const fetchBankDetails = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await vendorService.listVendorBankDetails({
+        search,
+        vendorId: vendorFilter !== 'ALL' ? vendorFilter : undefined,
+        accountType: accountTypeFilter !== 'ALL' ? accountTypeFilter : undefined,
+        isActive:
+          statusFilter === 'ACTIVE'
+            ? true
+            : statusFilter === 'INACTIVE'
+            ? false
+            : undefined,
+        pageNumber: pagination.pageIndex + 1,
+        pageSize: pagination.pageSize,
+      });
+
+      if (res) {
+        setBankData({
+          items: Array.isArray(res.items) ? res.items : [],
+          pageNumber: res.pageNumber || 1,
+          pageSize: res.pageSize || pagination.pageSize,
+          totalCount: res.totalCount ?? 0,
+          totalPages: res.totalPages || 1,
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load vendor bank details from API:', err);
+      toast.error(err.message || 'Failed to load vendor bank details.');
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    search,
+    vendorFilter,
+    accountTypeFilter,
+    statusFilter,
+    pagination.pageIndex,
+    pagination.pageSize,
+  ]);
+
+  // Trigger API fetch when search, filters, or pagination change
+  useEffect(() => {
+    fetchBankDetails();
+  }, [fetchBankDetails]);
+
+  // Reset pagination to first page when filters change
+  useEffect(() => {
+    setPagination((prev) => (prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 }));
+  }, [search, vendorFilter, accountTypeFilter, statusFilter, setPagination]);
+
+  const handleAuthDeleteSuccess = async () => {
+    if (!authModalState.bank) return;
+    const bankId = authModalState.bank.bankDetailId || authModalState.bank.id;
+    if (deleteBankDetail) {
+      await deleteBankDetail(bankId);
+    }
+    toast.success(
+      `Bank account for ${authModalState.bank.bankName || 'vendor'} deleted successfully`
+    );
+    setAuthModalState({ isOpen: false, bank: null });
+    fetchBankDetails();
+  };
+
   const hasActiveFilters = Boolean(
     (search && search.trim() !== '') ||
-    (statusFilter && statusFilter !== 'ALL') ||
-    (vendorFilter && vendorFilter !== 'ALL')
+      (statusFilter && statusFilter !== 'ALL') ||
+      (vendorFilter && vendorFilter !== 'ALL') ||
+      (accountTypeFilter && accountTypeFilter !== 'ALL')
   );
 
-  useEffect(() => {
-    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-  }, [search, statusFilter, vendorFilter, setPagination]);
-
   const table = useReactTable({
-    data: filteredData,
+    data: bankData.items,
     columns,
+    pageCount: bankData.totalPages,
     state: {
       sorting,
       columnSizing,
       pagination,
     },
+    manualPagination: true,
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
   });
-
-  const totalRows = filteredData.length;
-  const pageIndex = pagination.pageIndex;
-  const pageSize = pagination.pageSize;
-  const pageCount = table.getPageCount();
-  const startRow = totalRows === 0 ? 0 : pageIndex * pageSize + 1;
-  const endRow = Math.min((pageIndex + 1) * pageSize, totalRows);
 
   return (
     <div className="space-y-6 pb-8">
@@ -247,7 +244,7 @@ export default function VendorBankDetailsPage() {
         }
       />
 
-      {/* ── Toolbar: IconSearch, Vendor Filter, Status Filter & Reset Filters ── */}
+      {/* ── Toolbar: Search, Vendor Filter, Account Type Filter, Status Filter & Reset Filters ── */}
       <TableToolbar
         searchValue={search}
         onSearchChange={setSearch}
@@ -270,8 +267,22 @@ export default function VendorBankDetailsPage() {
           />
         </div>
 
-        {/* Status Filter using SearchableSelect */}
+        {/* Account Type Filter using SearchableSelect */}
         <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="bank-account-type-filter"
+            value={accountTypeFilter}
+            onChange={(e) => setAccountTypeFilter(e.target.value)}
+            options={ACCOUNT_TYPE_FILTER_OPTIONS}
+            placeholder="All Account Types"
+            searchPlaceholder="Search account types..."
+            emptyText="No matching type"
+            aria-label="Filter bank details by account type"
+          />
+        </div>
+
+        {/* Status Filter using SearchableSelect */}
+        <div className="w-full sm:w-36">
           <SearchableSelect
             id="bank-status-filter"
             value={statusFilter}
@@ -290,7 +301,7 @@ export default function VendorBankDetailsPage() {
         table={table}
         columns={columns}
         isLoading={loading}
-        totalCount={filteredData.length}
+        totalCount={bankData.totalCount}
         entityName="bank accounts"
         emptyTitle="No bank accounts found"
         emptyDescription={
@@ -314,8 +325,9 @@ export default function VendorBankDetailsPage() {
         renderMobileCard={(row) => {
           const bank = row.original;
           const bankId = bank.bankDetailId || bank.id;
-          const dateVal = bank.updatedAt || bank.createdAt;
-          const userVal = bank.updatedBy || bank.createdBy || 'Ian Chesnut';
+          const dateVal =
+            bank.lastUpdatedOn || bank.updatedAt || bank.createdOn || bank.createdAt;
+          const userVal = bank.updatedBy || bank.createdBy;
 
           return (
             <Card
@@ -326,7 +338,7 @@ export default function VendorBankDetailsPage() {
               <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2">
                 <div className="min-w-0">
                   <span className="font-semibold text-xs text-heading truncate block">
-                    {bank.vendorName}
+                    {bank.vendorName || '—'}
                   </span>
                   <p className="text-2xs text-text-muted truncate mt-0.5">
                     {bank.bankName} • {bank.branchName || 'Main Branch'}
@@ -348,9 +360,11 @@ export default function VendorBankDetailsPage() {
                     <span className="text-text-muted font-medium">
                       {dateVal ? formatDate(dateVal) : '—'}
                     </span>
-                    <span className="text-2xs text-text-muted/80 font-sans mt-0.5 truncate">
-                      by {userVal}
-                    </span>
+                    {userVal && (
+                      <span className="text-2xs text-text-muted/80 font-sans mt-0.5 truncate">
+                        by {userVal}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -360,7 +374,9 @@ export default function VendorBankDetailsPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => navigate(`/vendor-bank-details/${bank.vendorId}/view?bank=${bankId}`)}
+                  onClick={() =>
+                    navigate(`/vendor-bank-details/${bank.vendorId}/view?bank=${bankId}`)
+                  }
                   className="flex-1 text-xs"
                 >
                   <IconView size={13} className="mr-1.5" aria-hidden="true" />
@@ -369,7 +385,9 @@ export default function VendorBankDetailsPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => navigate(`/vendor-bank-details/${bank.vendorId}/edit?bank=${bankId}`)}
+                  onClick={() =>
+                    navigate(`/vendor-bank-details/${bank.vendorId}/edit?bank=${bankId}`)
+                  }
                   className="flex-1 text-xs"
                 >
                   <IconEdit size={13} className="mr-1.5" aria-hidden="true" />
@@ -442,7 +460,8 @@ export default function VendorBankDetailsPage() {
                           </Badge>
                         </div>
                         <p className="text-2xs text-text-muted mt-0.5 font-mono">
-                          {att.fileSize || 'Standard file'} • Uploaded {att.uploadedAt ? formatDate(att.uploadedAt) : 'Recently'}
+                          {att.fileSize || 'Standard file'} • Uploaded{' '}
+                          {att.uploadedAt ? formatDate(att.uploadedAt) : 'Recently'}
                         </p>
                       </div>
                     </div>

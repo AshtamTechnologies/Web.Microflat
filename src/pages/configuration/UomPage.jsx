@@ -13,21 +13,17 @@ import {
   IconArrowUpDown,
   IconClose,
   IconEdit,
-  IconSave,
   IconSearch,
   IconUOM,
   IconView,
 } from '../../constants/icons';
-import toast from 'react-hot-toast';
 
 import {
-  Card,
   Button,
   SaveButton,
   CancelButton,
   Input,
   Modal,
-  ConfirmModal,
   TableContainer,
   Th,
   Td,
@@ -50,18 +46,14 @@ const INITIAL_FORM = {
 
 export default function UomPage() {
   const {
-    uomList,
+    uomList = [],
+    isLoading,
+    fetchUoms,
+    fetchUomById,
     addUom,
     updateUom,
-    deleteUom,
+    updateUomStatus,
   } = useUomContext();
-
-  // Simulated initial loading delay
-  const [initialLoading, setInitialLoading] = useState(true);
-  useEffect(() => {
-    const timer = setTimeout(() => setInitialLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,12 +67,21 @@ export default function UomPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUom, setEditingUom] = useState(null);
   const [viewingUom, setViewingUom] = useState(null); // View modal state
+  const [isFetchingDetail, setIsFetchingDetail] = useState(false);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Delete modal state
-  const [uomToDelete, setUomToDelete] = useState(null);
+  // Trigger backend API filter query when status filter changes
+  useEffect(() => {
+    const params = {};
+    if (statusFilter === 'ACTIVE') {
+      params.isActive = true;
+    } else if (statusFilter === 'INACTIVE') {
+      params.isActive = false;
+    }
+    fetchUoms(params);
+  }, [statusFilter, fetchUoms]);
 
   /* ── Form Validation ── */
   function validateField(name, value) {
@@ -96,7 +97,7 @@ export default function UomPage() {
         const duplicate = uomList.find((u) => {
           const currentId = u.uomId || u.id;
           if (editingUom && currentId === targetId) return false;
-          return u.uomName.toLowerCase() === str.toLowerCase();
+          return u.uomName?.toLowerCase() === str.toLowerCase();
         });
         if (duplicate) return 'A UOM with this name already exists.';
         return '';
@@ -121,7 +122,11 @@ export default function UomPage() {
     setIsModalOpen(true);
   }
 
-  function handleOpenEdit(uom) {
+  /**
+   * Fetches fresh UOM details by ID via GET /api/uoms/{id} and populates Edit form
+   */
+  async function handleOpenEdit(uom) {
+    const id = uom.id ?? uom.uomId;
     setEditingUom(uom);
     setFormData({
       uomName: uom.uomName || '',
@@ -130,6 +135,43 @@ export default function UomPage() {
     });
     setFormErrors({});
     setIsModalOpen(true);
+    setIsFetchingDetail(true);
+
+    try {
+      const fresh = await fetchUomById(id);
+      if (fresh) {
+        setEditingUom(fresh);
+        setFormData({
+          uomName: fresh.uomName || '',
+          description: fresh.description || '',
+          isActive: Boolean(fresh.isActive),
+        });
+      }
+    } catch {
+      // Toast notification is handled in context
+    } finally {
+      setIsFetchingDetail(false);
+    }
+  }
+
+  /**
+   * Fetches fresh UOM details by ID via GET /api/uoms/{id} and opens View modal
+   */
+  async function handleOpenView(uom) {
+    const id = uom.id ?? uom.uomId;
+    setViewingUom(uom);
+    setIsFetchingDetail(true);
+
+    try {
+      const fresh = await fetchUomById(id);
+      if (fresh) {
+        setViewingUom(fresh);
+      }
+    } catch {
+      // Toast notification is handled in context
+    } finally {
+      setIsFetchingDetail(false);
+    }
   }
 
   function handleCloseModal() {
@@ -138,8 +180,13 @@ export default function UomPage() {
     setEditingUom(null);
     setFormData(INITIAL_FORM);
     setFormErrors({});
+    setIsFetchingDetail(false);
   }
 
+  /**
+   * Handles creation (POST /api/uoms) and update (PUT /api/uoms/{id}).
+   * Status updates are sent via PATCH /api/uoms/{id}/status.
+   */
   async function handleFormSubmit(e) {
     if (e) e.preventDefault();
     const errors = validateAll(formData);
@@ -150,33 +197,42 @@ export default function UomPage() {
 
     setIsSubmitting(true);
     try {
+      const payload = {
+        uomName: formData.uomName.trim(),
+        description: formData.description.trim(),
+      };
+
       if (editingUom) {
-        const id = editingUom.uomId || editingUom.id;
-        await updateUom(id, formData);
+        const id = editingUom.id ?? editingUom.uomId;
+        // 1. Update UOM name & description via PUT /api/uoms/{id}
+        await updateUom(id, payload);
+
+        // 2. If status was modified, update via PATCH /api/uoms/{id}/status
+        if (Boolean(editingUom.isActive) !== Boolean(formData.isActive)) {
+          await updateUomStatus(id, formData.isActive);
+        }
       } else {
-        await addUom(formData);
+        // 1. Create new UOM via POST /api/uoms
+        const created = await addUom(payload);
+        const newId = created?.id ?? created?.uomId;
+
+        // 2. If user toggled status to inactive during creation, update via PATCH /api/uoms/{id}/status
+        if (newId && formData.isActive === false) {
+          await updateUomStatus(newId, false);
+        }
       }
+
       setIsModalOpen(false);
       setEditingUom(null);
       setFormData(INITIAL_FORM);
       setFormErrors({});
     } catch (err) {
-      toast.error('Failed to save UOM.');
+      if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        setFormErrors(err.fieldErrors);
+      }
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  /* ── Delete Handlers ── */
-  function handleDeleteClick(uom) {
-    setUomToDelete(uom);
-  }
-
-  function handleConfirmDelete() {
-    if (!uomToDelete) return;
-    const id = uomToDelete.uomId || uomToDelete.id;
-    deleteUom(id);
-    setUomToDelete(null);
   }
 
   /* ── Filtered Data Computation ── */
@@ -186,7 +242,7 @@ export default function UomPage() {
     return uomList.filter((uom) => {
       const matchesSearch =
         !q ||
-        uom.uomName.toLowerCase().includes(q) ||
+        uom.uomName?.toLowerCase().includes(q) ||
         (uom.description && uom.description.toLowerCase().includes(q));
 
       const matchesStatus =
@@ -214,8 +270,9 @@ export default function UomPage() {
                 <IconUOM size={15} />
               </div>
               <span
-                className={`text-sm font-semibold truncate ${uom.isActive ? 'text-heading' : 'text-text-muted line-through'
-                  }`}
+                className={`text-sm font-semibold truncate ${
+                  uom.isActive ? 'text-heading' : 'text-text-muted line-through'
+                }`}
               >
                 {uom.uomName}
               </span>
@@ -229,7 +286,10 @@ export default function UomPage() {
         size: 340,
         minSize: 220,
         cell: ({ row }) => (
-          <span className="text-xs text-text-muted truncate block" title={row.original.description || '—'}>
+          <span
+            className="text-xs text-text-muted truncate block"
+            title={row.original.description || '—'}
+          >
             {row.original.description || '—'}
           </span>
         ),
@@ -251,8 +311,9 @@ export default function UomPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-success' : 'bg-danger'
-                  }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  isActive ? 'bg-success' : 'bg-danger'
+                }`}
                 aria-hidden="true"
               />
               {isActive ? 'Active' : 'Inactive'}
@@ -267,7 +328,7 @@ export default function UomPage() {
         minSize: 110,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
-            {formatDate(row.original.createdOn)}
+            {formatDate(row.original.createdOn || row.original.createdAt)}
           </span>
         ),
       }),
@@ -280,7 +341,7 @@ export default function UomPage() {
         enableResizing: false,
         cell: ({ row }) => (
           <TableActions
-            onView={() => setViewingUom(row.original)}
+            onView={() => handleOpenView(row.original)}
             onEdit={() => handleOpenEdit(row.original)}
             viewTitle="View UOM"
             editTitle="Edit UOM"
@@ -288,7 +349,8 @@ export default function UomPage() {
         ),
       }),
     ],
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [uomList]
   );
 
   const table = useReactTable({
@@ -359,10 +421,11 @@ export default function UomPage() {
               key={status}
               type="button"
               onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${statusFilter === status
-                ? 'bg-bg text-heading shadow-2xs font-semibold'
-                : 'text-text-muted hover:text-text'
-                }`}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
+                statusFilter === status
+                  ? 'bg-bg text-heading shadow-2xs font-semibold'
+                  : 'text-text-muted hover:text-text'
+              }`}
             >
               {status.toLowerCase()}
             </button>
@@ -395,8 +458,11 @@ export default function UomPage() {
                       }
                     >
                       <div
-                        className={`flex items-center gap-1.5 ${header.column.getCanSort() ? 'cursor-pointer select-none' : ''
-                          }`}
+                        className={`flex items-center gap-1.5 ${
+                          header.column.getCanSort()
+                            ? 'cursor-pointer select-none'
+                            : ''
+                        }`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <span className="truncate">
@@ -410,7 +476,10 @@ export default function UomPage() {
                             {isSorted === 'asc' ? (
                               <IconArrowUp size={13} className="text-primary" />
                             ) : isSorted === 'desc' ? (
-                              <IconArrowDown size={13} className="text-primary" />
+                              <IconArrowDown
+                                size={13}
+                                className="text-primary"
+                              />
                             ) : (
                               <IconArrowUpDown
                                 size={12}
@@ -428,14 +497,24 @@ export default function UomPage() {
           </thead>
 
           <tbody className="divide-y divide-border bg-bg">
-            {initialLoading ? (
+            {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={`skeleton-${i}`} className="animate-pulse">
-                  <Td><div className="h-4 bg-surface rounded w-36" /></Td>
-                  <Td><div className="h-4 bg-surface rounded w-64" /></Td>
-                  <Td><div className="h-5 bg-surface rounded w-16" /></Td>
-                  <Td><div className="h-4 bg-surface rounded w-20" /></Td>
-                  <Td className="text-right"><div className="h-7 bg-surface rounded w-16 ml-auto" /></Td>
+                  <Td>
+                    <div className="h-4 bg-surface rounded w-36" />
+                  </Td>
+                  <Td>
+                    <div className="h-4 bg-surface rounded w-64" />
+                  </Td>
+                  <Td>
+                    <div className="h-5 bg-surface rounded w-16" />
+                  </Td>
+                  <Td>
+                    <div className="h-4 bg-surface rounded w-20" />
+                  </Td>
+                  <Td className="text-right">
+                    <div className="h-7 bg-surface rounded w-16 ml-auto" />
+                  </Td>
                 </tr>
               ))
             ) : table.getRowModel().rows.length > 0 ? (
@@ -445,10 +524,7 @@ export default function UomPage() {
                   className="hover:bg-surface/50 transition-colors duration-100"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <Td
-                      key={cell.id}
-                      style={{ width: cell.column.getSize() }}
-                    >
+                    <Td key={cell.id} style={{ width: cell.column.getSize() }}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -483,9 +559,12 @@ export default function UomPage() {
 
       {/* ── Mobile View (< md): Card List ── */}
       <div className="block md:hidden space-y-3">
-        {initialLoading ? (
+        {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={`uom-skel-${i}`} className="bg-bg border border-border rounded-xl p-4 animate-pulse space-y-3">
+            <div
+              key={`uom-skel-${i}`}
+              className="bg-bg border border-border rounded-xl p-4 animate-pulse space-y-3"
+            >
               <div className="flex justify-between items-center">
                 <div className="h-5 bg-surface rounded w-28" />
                 <div className="h-5 bg-surface rounded w-16" />
@@ -495,7 +574,7 @@ export default function UomPage() {
           ))
         ) : filteredData.length > 0 ? (
           filteredData.map((uom) => {
-            const id = uom.uomId || uom.id;
+            const id = uom.id ?? uom.uomId;
             return (
               <div
                 key={id}
@@ -503,7 +582,13 @@ export default function UomPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-1 min-w-0">
-                    <h3 className={`text-sm font-semibold ${uom.isActive ? 'text-heading' : 'text-text-muted line-through'}`}>
+                    <h3
+                      className={`text-sm font-semibold ${
+                        uom.isActive
+                          ? 'text-heading'
+                          : 'text-text-muted line-through'
+                      }`}
+                    >
                       {uom.uomName}
                     </h3>
                     {uom.description && (
@@ -522,8 +607,9 @@ export default function UomPage() {
                     ].join(' ')}
                   >
                     <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${uom.isActive ? 'bg-success' : 'bg-danger'
-                        }`}
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        uom.isActive ? 'bg-success' : 'bg-danger'
+                      }`}
                       aria-hidden="true"
                     />
                     {uom.isActive ? 'Active' : 'Inactive'}
@@ -531,13 +617,15 @@ export default function UomPage() {
                 </div>
 
                 <div className="flex items-center justify-between text-2xs text-text-muted pt-2 border-t border-border">
-                  <span className="font-mono">Created: {formatDate(uom.createdOn)}</span>
+                  <span className="font-mono">
+                    Created: {formatDate(uom.createdOn || uom.createdAt)}
+                  </span>
                   <div className="flex items-center gap-2">
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
-                      onClick={() => setViewingUom(uom)}
+                      onClick={() => handleOpenView(uom)}
                       className="text-xs"
                     >
                       <IconView size={13} className="mr-1.5" />
@@ -567,14 +655,25 @@ export default function UomPage() {
         )}
       </div>
 
-      {/* ── Add / Edit UOM Modal (Clean & Simple) ── */}
+      {/* ── Add / Edit UOM Modal ── */}
       <Modal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        title={editingUom ? 'Edit Unit of Measurement' : 'Add Unit of Measurement (UOM)'}
+        title={
+          editingUom
+            ? 'Edit Unit of Measurement'
+            : 'Add Unit of Measurement (UOM)'
+        }
         maxWidth="max-w-md"
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
+          {isFetchingDetail && (
+            <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 flex items-center gap-2 text-xs text-primary">
+              <span className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin shrink-0" />
+              Loading latest details...
+            </div>
+          )}
+
           {/* UOM Name */}
           <Input
             id="uomName"
@@ -584,6 +683,7 @@ export default function UomPage() {
             placeholder="e.g. Nos, Kg, Meter, Box, Litre, Set"
             required
             value={formData.uomName}
+            disabled={isSubmitting || isFetchingDetail}
             onChange={(e) => {
               const val = e.target.value;
               setFormData((prev) => ({ ...prev, uomName: val }));
@@ -606,13 +706,14 @@ export default function UomPage() {
             label="Description"
             placeholder="e.g. Numbers, Kilograms, Linear meters"
             value={formData.description}
+            disabled={isSubmitting || isFetchingDetail}
             onChange={(e) => {
               const val = e.target.value;
               setFormData((prev) => ({ ...prev, description: val }));
             }}
           />
 
-          {/* Status Toggle (Active / Inactive) */}
+          {/* Status Switch (Active / Inactive) */}
           <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
             <div>
               <span className="mf-label block">Status</span>
@@ -624,6 +725,7 @@ export default function UomPage() {
             <StatusSwitch
               id="uom-status-toggle"
               checked={formData.isActive}
+              disabled={isSubmitting || isFetchingDetail}
               onChange={(checked) =>
                 setFormData((prev) => ({ ...prev, isActive: checked }))
               }
@@ -640,7 +742,7 @@ export default function UomPage() {
             <SaveButton
               type="submit"
               loading={isSubmitting}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isFetchingDetail}
               className="justify-center font-semibold shadow-2xs"
             >
               {editingUom ? 'Save Changes' : 'Save UOM'}
@@ -658,6 +760,13 @@ export default function UomPage() {
       >
         {viewingUom && (
           <div className="space-y-4">
+            {isFetchingDetail && (
+              <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 flex items-center gap-2 text-xs text-primary">
+                <span className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin shrink-0" />
+                Refreshing details from server...
+              </div>
+            )}
+
             {/* Header banner */}
             <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -668,7 +777,9 @@ export default function UomPage() {
                   <h3 className="text-base font-bold text-heading break-words leading-snug">
                     {viewingUom.uomName}
                   </h3>
-                  <p className="text-xs text-text-muted mt-1">Unit Configuration</p>
+                  <p className="text-xs text-text-muted mt-1">
+                    Unit Configuration
+                  </p>
                 </div>
               </div>
               <span
@@ -680,8 +791,9 @@ export default function UomPage() {
                 ].join(' ')}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${viewingUom.isActive ? 'bg-success' : 'bg-danger'
-                    }`}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    viewingUom.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                   aria-hidden="true"
                 />
                 {viewingUom.isActive ? 'Active' : 'Inactive'}
@@ -691,7 +803,6 @@ export default function UomPage() {
             {/* Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
                 <span className="view-field-label mf-detail-label">
                   UOM Name
                 </span>
@@ -701,17 +812,26 @@ export default function UomPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
                 <span className="view-field-label mf-detail-label">
                   Created Date
                 </span>
                 <span className="font-mono text-xs text-text-muted">
-                  {formatDate(viewingUom.createdOn)}
+                  {formatDate(viewingUom.createdOn || viewingUom.createdAt)}
                 </span>
               </div>
 
+              {viewingUom.lastUpdatedOn && (
+                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                  <span className="view-field-label mf-detail-label">
+                    Last Updated
+                  </span>
+                  <span className="font-mono text-xs text-text-muted">
+                    {formatDate(viewingUom.lastUpdatedOn)}
+                  </span>
+                </div>
+              )}
+
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
                 <span className="view-field-label mf-detail-label">
                   Description
                 </span>
@@ -740,7 +860,11 @@ export default function UomPage() {
                 }}
                 className="justify-center font-semibold shadow-2xs"
               >
-                <IconEdit size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                <IconEdit
+                  size={15}
+                  className="mr-1.5 shrink-0"
+                  aria-hidden="true"
+                />
                 Edit
               </Button>
             </div>

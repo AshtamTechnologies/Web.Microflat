@@ -354,6 +354,8 @@ export function bankDetailFromApi(apiBank) {
     id,
     bankDetailId: id,
     vendorId: apiBank.vendorId,
+    vendorCode: apiBank.vendorCode || '',
+    vendorName: apiBank.vendorName || '',
     accountName: apiBank.accountName || apiBank.accountHolderName || apiBank.bankName || '',
     accountHolderName: apiBank.accountHolderName || '',
     bankName: apiBank.bankName || '',
@@ -370,7 +372,9 @@ export function bankDetailFromApi(apiBank) {
     attachmentCount: apiBank.attachmentCount ?? (Array.isArray(apiBank.attachments) ? apiBank.attachments.length : 0),
     attachments: Array.isArray(apiBank.attachments) ? apiBank.attachments : [],
     createdOn: apiBank.createdOn || '',
+    createdAt: apiBank.createdOn || '',
     lastUpdatedOn: apiBank.lastUpdatedOn || '',
+    updatedAt: apiBank.lastUpdatedOn || '',
   };
 }
 

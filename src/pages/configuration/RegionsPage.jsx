@@ -11,30 +11,19 @@ import {
   IconArrowDown,
   IconArrowUp,
   IconArrowUpDown,
-  IconChevronDown,
-  IconChevronRight,
   IconClose,
-  IconCompass,
   IconEdit,
-  IconGlobe,
-  IconLocation,
   IconRegions,
-  IconSave,
   IconSearch,
   IconView,
 } from '../../constants/icons';
-import toast from 'react-hot-toast';
 
 import {
-  Card,
   Button,
   SaveButton,
   CancelButton,
   Input,
-  Toggle,
-  SearchableSelect,
   Modal,
-  ConfirmModal,
   TableContainer,
   Th,
   Td,
@@ -45,177 +34,71 @@ import {
   IconButton,
 } from '../../components/ui';
 import { useRegionsContext } from '../../context/RegionsContext';
-import { useInquiriesContext } from '../../context/InquiriesContext';
 import { formatDate } from '../../utils/dateUtils';
-import {
-  buildTree,
-  flattenVisible,
-  getDescendantIds,
-  getDropdownOptions,
-} from '../../utils/treeUtils';
 
 const columnHelper = createColumnHelper();
 
 const INITIAL_FORM = {
-  regionCode: '',
   regionName: '',
-  parentRegionId: '',
   isActive: true,
 };
 
 export default function RegionsPage() {
   const {
-    regions,
+    regions = [],
+    isLoading,
+    fetchRegions,
+    fetchRegionById,
     addRegion,
     updateRegion,
-    deleteRegion,
-    toggleRegionActive,
+    updateRegionStatus,
   } = useRegionsContext();
 
-  const { inquiries = [] } = useInquiriesContext();
-
-  // Simulated initial loading delay
-  const [initialLoading, setInitialLoading] = useState(true);
-  useEffect(() => {
-    const timer = setTimeout(() => setInitialLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Filter and Search Toolbar state
+  // Search & Status Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
 
-  // Tree expansion state (start with all regions expanded)
-  const [expandedIds, setExpandedIds] = useState(() => {
-    return new Set(regions.map((r) => r.regionId));
-  });
-
-  // Ensure new regions get expanded when added
-  useEffect(() => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      regions.forEach((r) => next.add(r.regionId));
-      return next;
-    });
-  }, [regions]);
-
-  // TanStack table state for resizable columns and sorting
-  const [sorting, setSorting] = useState([]);
+  // TanStack table state for sorting and resizing
+  const [sorting, setSorting] = useState([{ id: 'regionName', desc: false }]);
   const [columnSizing, setColumnSizing] = useState({});
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRegion, setEditingRegion] = useState(null);
-  const [viewingRegion, setViewingRegion] = useState(null); // View modal state
+  const [viewingRegion, setViewingRegion] = useState(null);
+  const [isFetchingDetail, setIsFetchingDetail] = useState(false);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Delete modal state
-  const [regionToDelete, setRegionToDelete] = useState(null);
-
-  /* ── Expand / Collapse handler ── */
-  function toggleExpand(regionId) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(regionId)) {
-        next.delete(regionId);
-      } else {
-        next.add(regionId);
-      }
-      return next;
-    });
-  }
-
-  function expandAll() {
-    setExpandedIds(new Set(regions.map((r) => r.regionId)));
-  }
-
-  function collapseAll() {
-    setExpandedIds(new Set());
-  }
-
-  /* ── Filtered & Hierarchical Tree Computation ── */
-  const visibleRows = useMemo(() => {
-    const tree = buildTree(regions, {
-      idKey: 'regionId',
-      parentKey: 'parentRegionId',
-      nameKey: 'regionName',
-      codeKey: 'regionCode',
-    });
-
-    // If no search and no status filter, normal tree flattening
-    if (!searchQuery.trim() && statusFilter === 'ALL') {
-      return flattenVisible(tree, expandedIds, { idKey: 'regionId' });
+  // Trigger backend API filter query when status filter changes
+  useEffect(() => {
+    const params = {};
+    if (statusFilter === 'ACTIVE') {
+      params.isActive = true;
+    } else if (statusFilter === 'INACTIVE') {
+      params.isActive = false;
     }
-
-    const q = searchQuery.toLowerCase().trim();
-
-    // Find all matching region IDs
-    const matchingIds = new Set();
-    regions.forEach((reg) => {
-      const matchesSearch =
-        !q ||
-        reg.regionCode.toLowerCase().includes(q) ||
-        reg.regionName.toLowerCase().includes(q);
-
-      const matchesStatus =
-        statusFilter === 'ALL' ||
-        (statusFilter === 'ACTIVE' && reg.isActive) ||
-        (statusFilter === 'INACTIVE' && !reg.isActive);
-
-      if (matchesSearch && matchesStatus) {
-        matchingIds.add(reg.regionId);
-      }
-    });
-
-    // Also include all ancestors of matching nodes so hierarchy remains readable
-    const visibleIdsWithAncestors = new Set(matchingIds);
-    const regMap = new Map(regions.map((r) => [r.regionId, r]));
-
-    matchingIds.forEach((id) => {
-      let curr = regMap.get(id);
-      while (curr && curr.parentRegionId) {
-        visibleIdsWithAncestors.add(curr.parentRegionId);
-        curr = regMap.get(curr.parentRegionId);
-      }
-    });
-
-    // Flatten tree including visible nodes (ignore collapse state during search)
-    const alwaysExpandDuringSearch = Boolean(q);
-    const effectiveExpanded = alwaysExpandDuringSearch
-      ? new Set(regions.map((r) => r.regionId))
-      : expandedIds;
-
-    const flattened = flattenVisible(tree, effectiveExpanded, { idKey: 'regionId' });
-    return flattened.filter((row) => visibleIdsWithAncestors.has(row.regionId));
-  }, [regions, expandedIds, searchQuery, statusFilter]);
+    fetchRegions(params);
+  }, [statusFilter, fetchRegions]);
 
   /* ── Form Validation ── */
   function validateField(name, value) {
-    const targetId = editingRegion?.regionId;
+    const targetId = editingRegion?.regionId ?? editingRegion?.id;
 
     switch (name) {
-      case 'regionCode': {
-        const str = typeof value === 'string' ? value.trim().toUpperCase() : '';
-        if (!str) return 'Region code is required.';
-        if (str.length > 20) return 'Region code cannot exceed 20 characters.';
-        if (!/^[A-Z0-9-]+$/.test(str)) {
-          return 'Code must contain uppercase letters, numbers, and hyphens only.';
-        }
-
-        // Check unique code (case-insensitive)
-        const duplicate = regions.find((r) => {
-          if (editingRegion && r.regionId === targetId) return false;
-          return r.regionCode.toUpperCase() === str;
-        });
-        if (duplicate) return 'A region with this code already exists.';
-        return '';
-      }
       case 'regionName': {
         const str = typeof value === 'string' ? value.trim() : '';
         if (!str) return 'Region name is required.';
         if (str.length > 100) return 'Region name cannot exceed 100 characters.';
+
+        // Unique check (case-insensitive)
+        const duplicate = regions.find((r) => {
+          const currentId = r.regionId ?? r.id;
+          if (editingRegion && String(currentId) === String(targetId)) return false;
+          return r.regionName?.toLowerCase() === str.toLowerCase();
+        });
+        if (duplicate) return 'A region with this name already exists.';
         return '';
       }
       default:
@@ -225,41 +108,67 @@ export default function RegionsPage() {
 
   function validateAll(data) {
     const errors = {};
-    ['regionCode', 'regionName'].forEach((field) => {
-      const err = validateField(field, data[field]);
-      if (err) errors[field] = err;
-    });
+    const err = validateField('regionName', data.regionName);
+    if (err) errors.regionName = err;
     return errors;
   }
 
-  /* ── Modal Open Handlers ── */
-  function handleOpenAdd(parentRegId = null) {
-    // Only top-level regions can be chosen as parent
-    const targetParent = parentRegId
-      ? regions.find((r) => r.regionId === parentRegId && !r.parentRegionId)
-      : null;
-
+  /* ── Modal Open / Close Handlers ── */
+  function handleOpenAdd() {
     setEditingRegion(null);
-    setFormData({
-      regionCode: '',
-      regionName: '',
-      parentRegionId: targetParent ? targetParent.regionId : '',
-      isActive: true,
-    });
+    setFormData(INITIAL_FORM);
     setFormErrors({});
     setIsModalOpen(true);
   }
 
-  function handleOpenEdit(reg) {
+  /**
+   * Fetches fresh region details by ID via GET /api/regions/{id} and populates Edit form
+   */
+  async function handleOpenEdit(reg) {
+    const id = reg.id ?? reg.regionId;
     setEditingRegion(reg);
     setFormData({
-      regionCode: reg.regionCode || '',
       regionName: reg.regionName || '',
-      parentRegionId: reg.parentRegionId || '',
       isActive: Boolean(reg.isActive),
     });
     setFormErrors({});
     setIsModalOpen(true);
+    setIsFetchingDetail(true);
+
+    try {
+      const fresh = await fetchRegionById(id);
+      if (fresh) {
+        setEditingRegion(fresh);
+        setFormData({
+          regionName: fresh.regionName || '',
+          isActive: Boolean(fresh.isActive),
+        });
+      }
+    } catch {
+      // Toast notification is handled in context
+    } finally {
+      setIsFetchingDetail(false);
+    }
+  }
+
+  /**
+   * Fetches fresh region details by ID via GET /api/regions/{id} and opens View modal
+   */
+  async function handleOpenView(reg) {
+    const id = reg.id ?? reg.regionId;
+    setViewingRegion(reg);
+    setIsFetchingDetail(true);
+
+    try {
+      const fresh = await fetchRegionById(id);
+      if (fresh) {
+        setViewingRegion(fresh);
+      }
+    } catch {
+      // Toast notification is handled in context
+    } finally {
+      setIsFetchingDetail(false);
+    }
   }
 
   function handleCloseModal() {
@@ -268,8 +177,13 @@ export default function RegionsPage() {
     setEditingRegion(null);
     setFormData(INITIAL_FORM);
     setFormErrors({});
+    setIsFetchingDetail(false);
   }
 
+  /**
+   * Handles creation (POST /api/regions) and update (PUT /api/regions/{id}).
+   * Status updates are sent via PATCH /api/regions/{id}/status.
+   */
   async function handleFormSubmit(e) {
     if (e) e.preventDefault();
     const errors = validateAll(formData);
@@ -280,174 +194,91 @@ export default function RegionsPage() {
 
     setIsSubmitting(true);
     try {
+      const payload = {
+        regionName: formData.regionName.trim(),
+      };
+
       if (editingRegion) {
-        await updateRegion(editingRegion.regionId, formData);
+        const id = editingRegion.id ?? editingRegion.regionId;
+        // 1. Update region name via PUT /api/regions/{id}
+        await updateRegion(id, payload);
+
+        // 2. If status was modified, update via PATCH /api/regions/{id}/status
+        if (Boolean(editingRegion.isActive) !== Boolean(formData.isActive)) {
+          await updateRegionStatus(id, formData.isActive);
+        }
       } else {
-        await addRegion(formData);
+        // 1. Create new region via POST /api/regions
+        const created = await addRegion(payload);
+        const newId = created?.id ?? created?.regionId;
+
+        // 2. If user toggled status to inactive during creation, update via PATCH /api/regions/{id}/status
+        if (newId && formData.isActive === false) {
+          await updateRegionStatus(newId, false);
+        }
       }
+
       setIsModalOpen(false);
       setEditingRegion(null);
       setFormData(INITIAL_FORM);
       setFormErrors({});
     } catch (err) {
-      toast.error('Failed to save region.');
+      if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        setFormErrors(err.fieldErrors);
+      }
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  /* ── Delete Handlers with Safety Blocks ── */
-  function handleDeleteClick(reg) {
-    const id = reg.regionId;
+  /* ── Filtered Data Computation ── */
+  const filteredData = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
 
-    // 1. Block if region has child sub-regions
-    const hasChildren = regions.some((r) => r.parentRegionId === id);
-    if (hasChildren) {
-      toast.error('Cannot delete. It has sub-regions.');
-      return;
-    }
+    return regions.filter((reg) => {
+      const matchesSearch =
+        !q || reg.regionName?.toLowerCase().includes(q);
 
-    // 2. Block if region is used by any inquiry
-    const usedCount = inquiries.filter(
-      (inq) => inq.RegionId === id || inq.regionId === id
-    ).length;
+      const matchesStatus =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'ACTIVE' && reg.isActive) ||
+        (statusFilter === 'INACTIVE' && !reg.isActive);
 
-    if (usedCount > 0) {
-      toast.error(
-        `Cannot delete. Used by ${usedCount} ${usedCount === 1 ? 'inquiry' : 'inquiries'}. Deactivate it instead.`
-      );
-      return;
-    }
-
-    setRegionToDelete(reg);
-  }
-
-  function handleConfirmDelete() {
-    if (!regionToDelete) return;
-    deleteRegion(regionToDelete.regionId);
-    setRegionToDelete(null);
-  }
-
-  /* ── Parent Region Options for Add/Edit Modal (Strict 2-Level Limit: Root regions only) ── */
-  const parentSelectOptions = useMemo(() => {
-    // If editing a region that already has children, it cannot become a child of another region (must stay root)
-    const hasChildren = editingRegion
-      ? regions.some((r) => r.parentRegionId === editingRegion.regionId)
-      : false;
-
-    if (hasChildren) {
-      return [{ value: '', label: '— None (Top-Level Region — Contains Sub-Regions) —' }];
-    }
-
-    // Only Top-Level regions (where !parentRegionId) can be chosen as a parent
-    const rootRegions = regions.filter((r) => {
-      if (editingRegion && r.regionId === editingRegion.regionId) return false;
-      return !r.parentRegionId; // Only root regions
+      return matchesSearch && matchesStatus;
     });
+  }, [regions, searchQuery, statusFilter]);
 
-    const baseOptions = rootRegions.map((reg) => ({
-      value: reg.regionId,
-      label: `${reg.regionName} (${reg.regionCode})`,
-    }));
-
-    return [
-      { value: '', label: '— None (Top-Level Region) —' },
-      ...baseOptions,
-    ];
-  }, [regions, editingRegion]);
-
-  /* ── TanStack Columns with Resizing Support ── */
+  /* ── TanStack Table Columns ── */
   const columns = useMemo(
     () => [
-      /* 1. REGION CODE */
-      columnHelper.accessor('regionCode', {
-        id: 'regionCode',
-        header: 'REGION CODE',
-        size: 140,
-        minSize: 110,
-        cell: ({ row }) => (
-          <button
-            type="button"
-            onClick={() => setViewingRegion(row.original)}
-            className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
-          >
-            {row.original.regionCode}
-          </button>
-        ),
-      }),
       columnHelper.accessor('regionName', {
         id: 'regionName',
-        header: 'Region Name',
-        size: 340,
-        minSize: 240,
+        header: 'REGION NAME',
+        size: 380,
+        minSize: 220,
         cell: ({ row }) => {
           const reg = row.original;
-          const hasChildren = reg.hasChildren;
-          const isExpanded = reg.isExpanded;
-          const indentPx = (reg.depth || 0) * 24;
-
           return (
-            <div
-              className="flex items-center gap-1.5"
-              style={{ paddingLeft: `${indentPx}px` }}
-            >
-              {hasChildren ? (
-                <button
-                  type="button"
-                  onClick={() => toggleExpand(reg.regionId)}
-                  className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-heading hover:bg-surface transition-colors cursor-pointer"
-                  title={isExpanded ? 'Collapse sub-regions' : 'Expand sub-regions'}
-                >
-                  {isExpanded ? (
-                    <IconChevronDown size={14} className="text-primary" />
-                  ) : (
-                    <IconChevronRight size={14} />
-                  )}
-                </button>
-              ) : (
-                <span className="w-5 h-5 inline-block" />
-              )}
-
-              <div className="flex items-center gap-2 min-w-0">
-                {reg.depth === 0 ? (
-                  <IconGlobe
-                    size={16}
-                    className={reg.isActive ? 'text-primary shrink-0' : 'text-text-muted shrink-0'}
-                  />
-                ) : (
-                  <IconLocation
-                    size={15}
-                    className={reg.isActive ? 'text-primary/80 shrink-0' : 'text-text-muted shrink-0'}
-                  />
-                )}
-                <span
-                  className={`text-sm font-medium truncate ${reg.isActive ? 'text-heading' : 'text-text-muted line-through'
-                    }`}
-                  title={reg.regionName}
-                >
-                  {reg.regionName}
-                </span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <IconRegions size={15} />
               </div>
+              <span
+                className={`text-sm font-semibold truncate ${
+                  reg.isActive ? 'text-heading' : 'text-text-muted line-through'
+                }`}
+              >
+                {reg.regionName}
+              </span>
             </div>
           );
         },
       }),
-      columnHelper.accessor('parentName', {
-        id: 'parentName',
-        header: 'Parent Region',
-        size: 200,
-        minSize: 140,
-        cell: ({ row }) => (
-          <span className="text-xs text-text-muted truncate block" title={row.original.parentName || '—'}>
-            {row.original.parentName || '—'}
-          </span>
-        ),
-      }),
       columnHelper.accessor('isActive', {
         id: 'isActive',
-        header: 'Status',
-        size: 130,
-        minSize: 110,
+        header: 'STATUS',
+        size: 140,
+        minSize: 120,
         cell: ({ row }) => {
           const isActive = Boolean(row.original.isActive);
           return (
@@ -460,8 +291,9 @@ export default function RegionsPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-success' : 'bg-danger'
-                  }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  isActive ? 'bg-success' : 'bg-danger'
+                }`}
                 aria-hidden="true"
               />
               {isActive ? 'Active' : 'Inactive'}
@@ -471,51 +303,38 @@ export default function RegionsPage() {
       }),
       columnHelper.accessor('createdOn', {
         id: 'createdOn',
-        header: 'Created On',
-        size: 130,
-        minSize: 110,
+        header: 'CREATED ON',
+        size: 150,
+        minSize: 120,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
-            {formatDate(row.original.createdOn)}
+            {formatDate(row.original.createdOn || row.original.createdAt)}
           </span>
         ),
       }),
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        size: 130,
-        minSize: 110,
+        size: 100,
+        minSize: 90,
         enableSorting: false,
         enableResizing: false,
         cell: ({ row }) => (
           <TableActions
-            extraActions={
-              !row.original.parentRegionId && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleOpenAdd(row.original.regionId)}
-                  title="Add sub-region"
-                  className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface transition-colors"
-                >
-                  <IconAdd size={15} aria-hidden="true" />
-                </Button>
-              )
-            }
-            onView={() => setViewingRegion(row.original)}
+            onView={() => handleOpenView(row.original)}
             onEdit={() => handleOpenEdit(row.original)}
-            viewTitle="View region"
-            editTitle="Edit region"
+            viewTitle="View Region"
+            editTitle="Edit Region"
           />
         ),
       }),
     ],
-    [regions, expandedIds, inquiries]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [regions]
   );
 
   const table = useReactTable({
-    data: visibleRows,
+    data: filteredData,
     columns,
     state: {
       sorting,
@@ -533,14 +352,14 @@ export default function RegionsPage() {
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Header Bar ── */}
       <PageHeader
-        title="Regions"
+        title="Regions Setup"
         icon={IconRegions}
-        subtitle="Manage hierarchical sales territories, domestic zones, and export distribution regions."
+        subtitle="Manage sales and geographical business territories, territory codes, and active status."
         actions={
           <Button
             variant="primary"
             size="md"
-            onClick={() => handleOpenAdd()}
+            onClick={handleOpenAdd}
             className="self-start sm:self-auto shrink-0 shadow-xs"
           >
             <IconAdd size={16} className="mr-1.5" />
@@ -549,14 +368,14 @@ export default function RegionsPage() {
         }
       />
 
-      {/* ── Toolbar: IconSearch, Status Filter & Tree View Helpers ── */}
+      {/* ── Search & Status Filter Toolbar ── */}
       <FilterBar>
         {/* Search Input */}
         <div className="relative flex-1 max-w-md">
           <Input
             id="search-regions"
             type="text"
-            placeholder="Search by code or region name..."
+            placeholder="Search by region name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             leftIcon={<IconSearch size={15} />}
@@ -575,47 +394,26 @@ export default function RegionsPage() {
           />
         </div>
 
-        {/* Status Filter Chips & Expand Controls */}
-        <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5">
-          <div className="flex items-center p-1 bg-surface rounded-lg border border-border">
-            {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setStatusFilter(status)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${statusFilter === status
+        {/* Status Filter Chips */}
+        <div className="flex items-center p-1 bg-surface rounded-lg border border-border self-start sm:self-auto">
+          {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setStatusFilter(status)}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
+                statusFilter === status
                   ? 'bg-bg text-heading shadow-2xs font-semibold'
                   : 'text-text-muted hover:text-text'
-                  }`}
-              >
-                {status.toLowerCase()}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1.5 border-l border-border pl-2.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={expandAll}
+              }`}
             >
-              Expand All
-            </Button>
-            <span className="text-text-muted/40">•</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={collapseAll}
-            >
-              Collapse
-            </Button>
-          </div>
+              {status.toLowerCase()}
+            </button>
+          ))}
         </div>
       </FilterBar>
 
-      {/* ── Desktop View (md+): Hierarchical Resizable Table ── */}
+      {/* ── Desktop View (md+): Data Table ── */}
       <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden shadow-2xs">
         <TableContainer
           tableStyle={{
@@ -640,8 +438,11 @@ export default function RegionsPage() {
                       }
                     >
                       <div
-                        className={`flex items-center gap-1.5 ${header.column.getCanSort() ? 'cursor-pointer select-none' : ''
-                          }`}
+                        className={`flex items-center gap-1.5 ${
+                          header.column.getCanSort()
+                            ? 'cursor-pointer select-none'
+                            : ''
+                        }`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <span className="truncate">
@@ -655,7 +456,10 @@ export default function RegionsPage() {
                             {isSorted === 'asc' ? (
                               <IconArrowUp size={13} className="text-primary" />
                             ) : isSorted === 'desc' ? (
-                              <IconArrowDown size={13} className="text-primary" />
+                              <IconArrowDown
+                                size={13}
+                                className="text-primary"
+                              />
                             ) : (
                               <IconArrowUpDown
                                 size={12}
@@ -673,16 +477,21 @@ export default function RegionsPage() {
           </thead>
 
           <tbody className="divide-y divide-border bg-bg">
-            {initialLoading ? (
-              // Skeleton loading rows
-              Array.from({ length: 5 }).map((_, i) => (
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
                 <tr key={`skeleton-${i}`} className="animate-pulse">
-                  <Td><div className="h-4 bg-surface rounded w-24" /></Td>
-                  <Td><div className="h-4 bg-surface rounded w-52" /></Td>
-                  <Td><div className="h-4 bg-surface rounded w-32" /></Td>
-                  <Td><div className="h-5 bg-surface rounded w-16" /></Td>
-                  <Td><div className="h-4 bg-surface rounded w-24" /></Td>
-                  <Td className="text-right"><div className="h-7 bg-surface rounded w-24 ml-auto" /></Td>
+                  <Td>
+                    <div className="h-4 bg-surface rounded w-48" />
+                  </Td>
+                  <Td>
+                    <div className="h-5 bg-surface rounded w-16" />
+                  </Td>
+                  <Td>
+                    <div className="h-4 bg-surface rounded w-24" />
+                  </Td>
+                  <Td className="text-right">
+                    <div className="h-7 bg-surface rounded w-16 ml-auto" />
+                  </Td>
                 </tr>
               ))
             ) : table.getRowModel().rows.length > 0 ? (
@@ -692,10 +501,7 @@ export default function RegionsPage() {
                   className="hover:bg-surface/50 transition-colors duration-100"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <Td
-                      key={cell.id}
-                      style={{ width: cell.column.getSize() }}
-                    >
+                    <Td key={cell.id} style={{ width: cell.column.getSize() }}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -711,14 +517,14 @@ export default function RegionsPage() {
                   className="px-4 py-12 text-center text-text-muted text-sm"
                 >
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <IconLocation size={32} className="text-text-muted/50" />
+                    <IconRegions size={32} className="text-text-muted/50" />
                     <p className="font-semibold text-heading">
-                      No regions match your filters
+                      No regions found
                     </p>
                     <p className="text-xs">
                       {searchQuery || statusFilter !== 'ALL'
-                        ? 'Try resetting your search query or status filter.'
-                        : 'Click "+ Add Region" to set up your geographical hierarchy.'}
+                        ? 'Try resetting your search or status filter.'
+                        : 'Click "+ Add Region" to create your first region.'}
                     </p>
                   </div>
                 </td>
@@ -728,114 +534,95 @@ export default function RegionsPage() {
         </TableContainer>
       </div>
 
-      {/* ── Mobile View (< md): Touch-friendly Card List ── */}
+      {/* ── Mobile View (< md): Card List ── */}
       <div className="block md:hidden space-y-3">
-        {initialLoading ? (
+        {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={`m-skel-${i}`} className="bg-bg border border-border rounded-xl p-4 animate-pulse space-y-3">
+            <div
+              key={`reg-skel-${i}`}
+              className="bg-bg border border-border rounded-xl p-4 animate-pulse space-y-3"
+            >
               <div className="flex justify-between items-center">
-                <div className="h-5 bg-surface rounded w-24" />
+                <div className="h-5 bg-surface rounded w-36" />
                 <div className="h-5 bg-surface rounded w-16" />
               </div>
-              <div className="h-4 bg-surface rounded w-3/4" />
-              <div className="h-8 bg-surface rounded w-full" />
+              <div className="h-4 bg-surface rounded w-24" />
             </div>
           ))
-        ) : visibleRows.length > 0 ? (
-          visibleRows.map((reg) => (
-            <div
-              key={reg.regionId}
-              className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setViewingRegion(reg)}
-                      className="font-mono text-xs font-bold text-primary hover:underline text-left cursor-pointer"
+        ) : filteredData.length > 0 ? (
+          filteredData.map((reg) => {
+            const id = reg.id ?? reg.regionId;
+            return (
+              <div
+                key={id}
+                className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-1 min-w-0">
+                    <h3
+                      className={`text-sm font-semibold ${
+                        reg.isActive
+                          ? 'text-heading'
+                          : 'text-text-muted line-through'
+                      }`}
                     >
-                      {reg.regionCode}
-                    </button>
-                    {reg.depth > 0 && (
-                      <span className="text-2xs text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">
-                        Level {reg.depth + 1}
-                      </span>
-                    )}
+                      {reg.regionName}
+                    </h3>
                   </div>
-                  <h3 className={`text-sm font-semibold mt-1 ${reg.isActive ? 'text-heading' : 'text-text-muted line-through'}`}>
-                    {reg.regionName}
-                  </h3>
-                  {reg.parentName && (
-                    <p className="text-xs text-text-muted">
-                      Parent: <span className="font-medium text-text">{reg.parentName}</span>
-                    </p>
-                  )}
+
+                  <span
+                    className={[
+                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
+                      reg.isActive
+                        ? 'bg-success/10 text-success border border-success/20'
+                        : 'bg-danger/10 text-danger border border-danger/20',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        reg.isActive ? 'bg-success' : 'bg-danger'
+                      }`}
+                      aria-hidden="true"
+                    />
+                    {reg.isActive ? 'Active' : 'Inactive'}
+                  </span>
                 </div>
 
-                <span
-                  className={[
-                    'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-2xs font-medium select-none',
-                    reg.isActive
-                      ? 'bg-success/10 text-success border border-success/20'
-                      : 'bg-danger/10 text-danger border border-danger/20',
-                  ].join(' ')}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${reg.isActive ? 'bg-success' : 'bg-danger'
-                      }`}
-                    aria-hidden="true"
-                  />
-                  {reg.isActive ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-text-muted">
-                <span className="font-mono tabular-nums">{formatDate(reg.createdOn)}</span>
-
-                <div className="flex items-center gap-1.5">
-                  {!reg.parentRegionId && (
+                <div className="flex items-center justify-between text-2xs text-text-muted pt-2 border-t border-border">
+                  <span className="font-mono">
+                    Created: {formatDate(reg.createdOn || reg.createdAt)}
+                  </span>
+                  <div className="flex items-center gap-2">
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="secondary"
                       size="sm"
-                      onClick={() => handleOpenAdd(reg.regionId)}
-                      title="Add sub-region"
+                      onClick={() => handleOpenView(reg)}
                       className="text-xs"
                     >
-                      <IconAdd size={13} className="mr-1" />
-                      Add Sub
+                      <IconView size={13} className="mr-1.5" />
+                      View
                     </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setViewingRegion(reg)}
-                    className="text-xs"
-                  >
-                    <IconView size={13} className="mr-1.5" />
-                    View
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleOpenEdit(reg)}
-                    className="text-xs"
-                  >
-                    <IconEdit size={13} className="mr-1.5" />
-                    Edit
-                  </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleOpenEdit(reg)}
+                      className="text-xs"
+                    >
+                      <IconEdit size={13} className="mr-1.5" />
+                      Edit
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="bg-bg border border-border rounded-xl p-8 text-center text-text-muted">
-            <IconCompass size={28} className="mx-auto text-text-muted/50 mb-2" />
+            <IconRegions size={28} className="mx-auto text-text-muted/50 mb-2" />
             <p className="font-semibold text-heading text-sm">No regions found</p>
-            <p className="text-xs mt-1">Try adjusting your filters or add a new region.</p>
+            <p className="text-xs mt-1">Click &quot;+ Add Region&quot; to create one.</p>
           </div>
         )}
       </div>
@@ -844,34 +631,16 @@ export default function RegionsPage() {
       <Modal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        title={editingRegion ? 'Edit Region' : 'Add New Region'}
+        title={editingRegion ? 'Edit Region' : 'Add Region'}
         maxWidth="max-w-md"
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
-          {/* Region Code */}
-          <Input
-            id="regionCode"
-            name="regionCode"
-            type="text"
-            label="Region Code"
-            placeholder="e.g. REG-WEST-01"
-            required
-            value={formData.regionCode}
-            onChange={(e) => {
-              const val = e.target.value.toUpperCase();
-              setFormData((prev) => ({ ...prev, regionCode: val }));
-              if (formErrors.regionCode) {
-                setFormErrors((prev) => ({ ...prev, regionCode: '' }));
-              }
-            }}
-            onBlur={(e) => {
-              const err = validateField('regionCode', e.target.value);
-              if (err) setFormErrors((prev) => ({ ...prev, regionCode: err }));
-            }}
-            error={formErrors.regionCode}
-            className="font-mono uppercase text-sm"
-            hint="Unique identifier (letters, numbers, hyphens only)"
-          />
+          {isFetchingDetail && (
+            <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 flex items-center gap-2 text-xs text-primary">
+              <span className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin shrink-0" />
+              Loading latest details...
+            </div>
+          )}
 
           {/* Region Name */}
           <Input
@@ -879,9 +648,10 @@ export default function RegionsPage() {
             name="regionName"
             type="text"
             label="Region Name"
-            placeholder="e.g. West Region (Gujarat & Maharashtra)"
+            placeholder="e.g. West Region, North Region, Export Market"
             required
             value={formData.regionName}
+            disabled={isSubmitting || isFetchingDetail}
             onChange={(e) => {
               const val = e.target.value;
               setFormData((prev) => ({ ...prev, regionName: val }));
@@ -896,32 +666,6 @@ export default function RegionsPage() {
             error={formErrors.regionName}
           />
 
-          {/* Parent Region (SearchableSelect) */}
-          <SearchableSelect
-            id="parentRegionId"
-            name="parentRegionId"
-            label="Parent Region (Optional)"
-            placeholder="Search or select parent region..."
-            options={parentSelectOptions}
-            value={formData.parentRegionId}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                parentRegionId: e.target.value,
-              }))
-            }
-          />
-
-          {/* Created On (Read-only in edit mode) */}
-          {editingRegion && (
-            <div className="text-xs text-text-muted flex items-center justify-between p-2.5 bg-surface/60 rounded-lg border border-border">
-              <span>Created Timestamp:</span>
-              <span className="font-mono font-medium text-heading">
-                {formatDate(editingRegion.createdOn)}
-              </span>
-            </div>
-          )}
-
           {/* Status Switch (Active / Inactive) */}
           <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
             <div>
@@ -932,15 +676,16 @@ export default function RegionsPage() {
             </div>
 
             <StatusSwitch
-              id="region-modal-status"
+              id="region-status-toggle"
               checked={formData.isActive}
+              disabled={isSubmitting || isFetchingDetail}
               onChange={(checked) =>
                 setFormData((prev) => ({ ...prev, isActive: checked }))
               }
             />
           </div>
 
-          {/* Modal Actions */}
+          {/* Footer Actions */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
             <CancelButton
               onClick={handleCloseModal}
@@ -950,7 +695,7 @@ export default function RegionsPage() {
             <SaveButton
               type="submit"
               loading={isSubmitting}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isFetchingDetail}
               className="justify-center font-semibold shadow-2xs"
             >
               {editingRegion ? 'Save Changes' : 'Save Region'}
@@ -968,17 +713,26 @@ export default function RegionsPage() {
       >
         {viewingRegion && (
           <div className="space-y-4">
+            {isFetchingDetail && (
+              <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 flex items-center gap-2 text-xs text-primary">
+                <span className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin shrink-0" />
+                Refreshing details from server...
+              </div>
+            )}
+
             {/* Header banner */}
             <div className="p-4 rounded-xl bg-surface/50 border border-border flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0 flex-1">
                 <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                  {viewingRegion.depth === 0 ? <IconGlobe size={20} /> : <IconLocation size={20} />}
+                  <IconRegions size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="text-base font-bold text-heading break-words leading-snug">
                     {viewingRegion.regionName}
                   </h3>
-                  <p className="text-xs text-text-muted font-mono mt-1">{viewingRegion.regionCode}</p>
+                  <p className="text-xs text-text-muted mt-1">
+                    Territory Configuration
+                  </p>
                 </div>
               </div>
               <span
@@ -990,8 +744,9 @@ export default function RegionsPage() {
                 ].join(' ')}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${viewingRegion.isActive ? 'bg-success' : 'bg-danger'
-                    }`}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    viewingRegion.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                   aria-hidden="true"
                 />
                 {viewingRegion.isActive ? 'Active' : 'Inactive'}
@@ -1000,54 +755,34 @@ export default function RegionsPage() {
 
             {/* Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
                 <span className="view-field-label mf-detail-label">
-                  Region Code
+                  Region Name
                 </span>
-                <span className="font-mono text-sm font-semibold text-heading break-words">
-                  {viewingRegion.regionCode}
+                <span className="font-semibold text-sm text-heading">
+                  {viewingRegion.regionName}
                 </span>
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
                 <span className="view-field-label mf-detail-label">
-                  Hierarchy Level
-                </span>
-                <span className="text-xs font-medium text-heading">
-                  {viewingRegion.depth === 0 || !viewingRegion.parentRegionId ? 'Top-Level Region' : 'Sub-Region'}
-                </span>
-              </div>
-
-              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
-                <span className="view-field-label mf-detail-label">
-                  Parent Region
-                </span>
-                <span className="text-xs text-text break-words block leading-relaxed">
-                  {viewingRegion.parentName || '— (None / Top-Level)'}
-                </span>
-              </div>
-
-              {/* <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
-                  Sub-Regions
-                </span>
-                <span className="text-xs font-medium text-heading">
-                  {regions.filter(r => r.parentRegionId === viewingRegion.regionId).length} sub-regions
-                </span>
-              </div> */}
-
-              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
-                <span className="view-field-label mf-detail-label">
-                  Created On
+                  Created Date
                 </span>
                 <span className="font-mono text-xs text-text-muted">
-                  {formatDate(viewingRegion.createdOn)}
+                  {formatDate(viewingRegion.createdOn || viewingRegion.createdAt)}
                 </span>
               </div>
+
+              {viewingRegion.lastUpdatedOn && (
+                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                  <span className="view-field-label mf-detail-label">
+                    Last Updated
+                  </span>
+                  <span className="font-mono text-xs text-text-muted">
+                    {formatDate(viewingRegion.lastUpdatedOn)}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Footer Actions */}
@@ -1069,7 +804,11 @@ export default function RegionsPage() {
                 }}
                 className="justify-center font-semibold shadow-2xs"
               >
-                <IconEdit size={15} className="mr-1.5 shrink-0" aria-hidden="true" />
+                <IconEdit
+                  size={15}
+                  className="mr-1.5 shrink-0"
+                  aria-hidden="true"
+                />
                 Edit
               </Button>
             </div>

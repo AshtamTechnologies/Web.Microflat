@@ -28,6 +28,15 @@ import * as mockVendors from './vendors/vendorService.mock';
 import * as realApprovals from './approvals/approvalsService';
 import * as mockApprovals from './approvals/approvalsService.mock';
 
+import * as realUoms from './uom/uomService';
+import * as mockUoms from './uom/uomService.mock';
+
+import * as realRegions from './regions/regionService';
+import * as mockRegions from './regions/regionService.mock';
+
+import * as realPaymentTerms from './paymentTerms/paymentTermService';
+import * as mockPaymentTerms from './paymentTerms/paymentTermService.mock';
+
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 export const authService = useMock ? mockAuth : realAuth;
@@ -37,4 +46,7 @@ export const processFlowService = useMock ? mockProcessFlow : realProcessFlow;
 export const documentTypesService = useMock ? mockDocumentTypes : realDocumentTypes;
 export const vendorService = useMock ? mockVendors : realVendors;
 export const approvalsService = useMock ? mockApprovals : realApprovals;
+export const uomService = useMock ? mockUoms : realUoms;
+export const regionService = useMock ? mockRegions : realRegions;
+export const paymentTermService = useMock ? mockPaymentTerms : realPaymentTerms;
 export const isMockApi = useMock;

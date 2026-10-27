@@ -34,3 +34,4 @@ export { default as StatusBadge }       from './StatusBadge';
 export { default as FormActionsBar } from './FormActionsBar';
 export { default as CollapsibleCard } from './CollapsibleCard';
 export { default as IconPicker } from './IconPicker';
+export { default as GlobalTooltip, Tooltip } from './GlobalTooltip';

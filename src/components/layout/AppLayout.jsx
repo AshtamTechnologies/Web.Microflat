@@ -18,9 +18,29 @@ import {
 } from '../../constants/icons';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import Footer from './Footer';
 import navigation from '../../config/navigation';
 
+/** Set to false to instantly hide the footer across all pages in one place */
+export const SHOW_FOOTER = true;
+
 const COLLAPSED_KEY = 'mf-sidebar-collapsed';
+const SIDEBAR_WIDTH_KEY = 'mf-sidebar-width';
+export const DEFAULT_SIDEBAR_WIDTH = 240;
+export const MIN_SIDEBAR_WIDTH = 200;
+export const MAX_SIDEBAR_WIDTH = 480;
+
+function getInitialSidebarWidth() {
+  try {
+    const val = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    if (val && !isNaN(val) && val >= MIN_SIDEBAR_WIDTH && val <= MAX_SIDEBAR_WIDTH) {
+      return val;
+    }
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_SIDEBAR_WIDTH;
+}
 
 function getInitialCollapsed() {
   try {
@@ -55,6 +75,8 @@ function usePageTitle() {
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(getInitialCollapsed);
+  const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const title = usePageTitle();
   const location = useLocation();
   const mainRef = useRef(null);
@@ -87,7 +109,18 @@ export default function AppLayout() {
   }, []);
 
   // Desktop sidebar widths (must match Sidebar.jsx Tailwind classes: w-16 = 64px, w-60 = 240px)
-  const sidebarWidth = collapsed ? 64 : 240;
+  function handleSidebarWidthChange(newWidth) {
+    const clamped = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, newWidth));
+    setSidebarWidth(clamped);
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Desktop sidebar width: 64px in collapsed rail mode, dynamic custom width in expanded mode
+  const effectiveSidebarWidth = collapsed ? 64 : sidebarWidth;
 
   return (
     <div className="flex min-h-screen bg-bg">
@@ -96,6 +129,10 @@ export default function AppLayout() {
         onClose={() => setMobileOpen(false)}
         collapsed={collapsed}
         onCollapsedToggle={toggleCollapsed}
+        sidebarWidth={sidebarWidth}
+        onSidebarWidthChange={handleSidebarWidthChange}
+        isResizing={isResizingSidebar}
+        onResizingChange={setIsResizingSidebar}
       />
 
       {/*
@@ -111,7 +148,7 @@ export default function AppLayout() {
           /* Tailwind can't conditionally compute a pixel value, so we use inline style. */
           /* On mobile the sidebar is off-canvas so no margin needed. */
           /* The `lg:` prefix equivalent: only apply on >=1024px. */
-          '--sidebar-offset': `${sidebarWidth}px`,
+          '--sidebar-offset': `${effectiveSidebarWidth}px`,
         }}
       >
         {/*
@@ -123,7 +160,7 @@ export default function AppLayout() {
           @media (min-width: 1024px) {
             .app-layout-main {
               margin-left: var(--sidebar-offset);
-              transition: margin-left 200ms ease-in-out;
+              ${isResizingSidebar ? 'transition: none !important;' : 'transition: margin-left 200ms ease-in-out;'}
             }
           }
         `}</style>
@@ -189,8 +226,11 @@ export default function AppLayout() {
           </header>
 
           {/* ── Page content ── */}
-          <main ref={mainRef} className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
-            <Outlet />
+          <main ref={mainRef} className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 overflow-auto">
+            <div className="flex-1 min-w-0">
+              <Outlet />
+            </div>
+            {SHOW_FOOTER && <Footer />}
           </main>
         </div>
       </div>

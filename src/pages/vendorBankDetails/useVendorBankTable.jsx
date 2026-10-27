@@ -10,6 +10,14 @@ export const STATUS_FILTER_OPTIONS = [
   { value: 'INACTIVE', label: 'Inactive' },
 ];
 
+export const ACCOUNT_TYPE_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Account Types' },
+  { value: 'Current', label: 'Current' },
+  { value: 'Savings', label: 'Savings' },
+  { value: 'Cash Credit', label: 'Cash Credit' },
+  { value: 'Overdraft', label: 'Overdraft' },
+];
+
 const columnHelper = createColumnHelper();
 
 export function useVendorBankTable({
@@ -17,32 +25,47 @@ export function useVendorBankTable({
   toggleBankActive,
   onViewAttachments,
   onDeleteBank,
-}) {
+} = {}) {
   const navigate = useNavigate();
 
   // Search and Filter states
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
   const [vendorFilter, setVendorFilter] = useState('ALL'); // 'ALL' | vendorId
+  const [accountTypeFilter, setAccountTypeFilter] = useState('ALL'); // 'ALL' | accountType
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
   // Reset all filters and pagination back to page 1
   const resetFilters = useCallback(() => {
     setSearch('');
     setStatusFilter('ALL');
     setVendorFilter('ALL');
+    setAccountTypeFilter('ALL');
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
   }, []);
 
-  // Filtered dataset
+  // Filtered dataset for local fallback
   const filteredData = useMemo(() => {
     const q = search.trim().toLowerCase();
 
     return allBanks.filter((bank) => {
       // Vendor filter
-      if (vendorFilter && vendorFilter !== 'ALL' && String(bank.vendorId).trim() !== String(vendorFilter).trim()) {
+      if (
+        vendorFilter &&
+        vendorFilter !== 'ALL' &&
+        String(bank.vendorId).trim() !== String(vendorFilter).trim()
+      ) {
+        return false;
+      }
+
+      // Account Type filter
+      if (
+        accountTypeFilter &&
+        accountTypeFilter !== 'ALL' &&
+        bank.accountType?.toLowerCase() !== accountTypeFilter.toLowerCase()
+      ) {
         return false;
       }
 
@@ -68,7 +91,7 @@ export function useVendorBankTable({
 
       return matchesSearch;
     });
-  }, [allBanks, search, statusFilter, vendorFilter]);
+  }, [allBanks, search, statusFilter, vendorFilter, accountTypeFilter]);
 
   // Mask account number helper: "•••• 4821"
   const maskAccountNumber = (num) => {
@@ -78,7 +101,7 @@ export function useVendorBankTable({
     return `•••• ${last4}`;
   };
 
-  // Columns definition
+  // Columns definition (Unchanged: displays exact columns as requested)
   const columns = useMemo(
     () => [
       /* 1. Vendor (name only) */
@@ -97,7 +120,7 @@ export function useVendorBankTable({
               title={`View all bank details for ${row.vendorName}`}
             >
               <span className="font-semibold text-xs text-heading group-hover/vendor:text-primary truncate transition-colors">
-                {row.vendorName}
+                {row.vendorName || '—'}
               </span>
             </Link>
           );
@@ -125,9 +148,7 @@ export function useVendorBankTable({
         },
       }),
 
-
-
-      /* 6. Type (neutral Badge) */
+      /* 3. Type (neutral Badge) */
       columnHelper.accessor('accountType', {
         id: 'accountType',
         header: 'TYPE',
@@ -140,7 +161,7 @@ export function useVendorBankTable({
         ),
       }),
 
-      /* 8. Status Badge */
+      /* 4. Status Badge */
       columnHelper.accessor('isActive', {
         id: 'status',
         header: 'STATUS',
@@ -156,30 +177,32 @@ export function useVendorBankTable({
         },
       }),
 
-      /* 9. Last Updated (mono date + by <name> muted) */
-      columnHelper.accessor('updatedAt', {
+      /* 5. Last Updated (mono date + by <name> muted) */
+      columnHelper.accessor('lastUpdatedOn', {
         id: 'lastUpdated',
         header: 'LAST UPDATED',
         minSize: 140,
         size: 160,
         cell: (info) => {
           const row = info.row.original;
-          const dateVal = row.updatedAt || row.createdAt;
-          const userVal = row.updatedBy || row.createdBy || 'Ian Chesnut';
+          const dateVal = row.lastUpdatedOn || row.updatedAt || row.createdOn || row.createdAt;
+          const userVal = row.updatedBy || row.createdBy;
           return (
             <div className="flex flex-col font-mono tabular-nums text-xs">
               <span className="text-text-muted">
                 {dateVal ? formatDate(dateVal) : '—'}
               </span>
-              <span className="text-2xs text-text-muted/80 font-sans mt-0.5 truncate">
-                by {userVal}
-              </span>
+              {userVal && (
+                <span className="text-2xs text-text-muted/80 font-sans mt-0.5 truncate">
+                  by {userVal}
+                </span>
+              )}
             </div>
           );
         },
       }),
 
-      /* Actions (View, Edit, Delete) */
+      /* 6. Actions (View, Edit, Delete) */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
@@ -203,7 +226,7 @@ export function useVendorBankTable({
         },
       }),
     ],
-    [navigate, toggleBankActive, onViewAttachments, onDeleteBank]
+    [navigate, onDeleteBank]
   );
 
   return {
@@ -215,6 +238,8 @@ export function useVendorBankTable({
     setStatusFilter,
     vendorFilter,
     setVendorFilter,
+    accountTypeFilter,
+    setAccountTypeFilter,
     sorting,
     setSorting,
     columnSizing,

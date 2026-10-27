@@ -67,6 +67,7 @@ import CompanyBankDetailsFormPage from './pages/companyBankDetails/CompanyBankDe
 import CompanyBankDetailsViewPage from './pages/companyBankDetails/CompanyBankDetailsViewPage';
 import { CompanyBankDetailsProvider } from './context/CompanyBankDetailsContext';
 import ScrollToTop from './components/common/ScrollToTop';
+import { GlobalTooltip } from './components/ui';
 
 /**
  * Route guard: enforces authentication on protected routes.
@@ -99,6 +100,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <GlobalTooltip />
       <AuthProvider>
         <UserSessionsProvider>
           <Routes>

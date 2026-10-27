@@ -1,127 +1,234 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+/**
+ * src/context/RegionsContext.jsx — Regions context wired to backend APIs.
+ */
+
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { INITIAL_REGIONS } from '../mocks/regions';
-import { getTodayISO } from '../utils/dateUtils';
-import { getPathLabel, getDropdownOptions } from '../utils/treeUtils';
+import { regionService } from '../services';
 
 const RegionsContext = createContext(null);
 
 export function RegionsProvider({ children }) {
-  const [regions, setRegions] = useState(INITIAL_REGIONS);
+  const [regions, setRegions] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [lastFilters, setLastFilters] = useState({});
 
+  /**
+   * Fetches regions from GET /api/regions with optional query parameters.
+   */
+  const fetchRegions = useCallback(async (filters = {}) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await regionService.listRegions(filters);
+      setRegions(Array.isArray(data) ? data : []);
+      setLastFilters(filters);
+      return data;
+    } catch (err) {
+      const msg = err.message || 'Failed to load regions.';
+      setError(msg);
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    fetchRegions();
+  }, [fetchRegions]);
+
+  /**
+   * Synchronous helper to find a region by ID in current local state.
+   */
   const getRegionById = useCallback(
     (id) => {
-      return regions.find((r) => r.regionId === id || r.id === id) || null;
+      return (
+        regions.find(
+          (r) => String(r.id) === String(id) || String(r.regionId) === String(id)
+        ) || null
+      );
     },
     [regions]
   );
 
+  /**
+   * Returns region name for a given region ID.
+   */
   const getRegionName = useCallback(
-    (regionId) => {
-      if (!regionId) return '—';
-      const label = getPathLabel(regionId, regions, {
-        idKey: 'regionId',
-        parentKey: 'parentRegionId',
-        nameKey: 'regionName',
-      });
-      return label || regionId;
+    (id) => {
+      if (!id) return '—';
+      const found = regions.find(
+        (r) => String(r.id) === String(id) || String(r.regionId) === String(id)
+      );
+      return found ? found.regionName : String(id);
     },
     [regions]
   );
 
+  /**
+   * Formats regions as dropdown options for selectors.
+   */
   const getRegionOptions = useCallback(
     ({ activeOnly = true, currentSelectedId = null, excludeIds = [] } = {}) => {
-      return getDropdownOptions(regions, {
-        idKey: 'regionId',
-        parentKey: 'parentRegionId',
-        nameKey: 'regionName',
-        codeKey: 'regionCode',
-        activeOnly,
-        currentSelectedId,
-        excludeIds,
-      });
+      const excludeSet = new Set(excludeIds.map(String));
+      return regions
+        .filter((r) => {
+          if (excludeSet.has(String(r.id)) || excludeSet.has(String(r.regionId))) {
+            return false;
+          }
+          if (
+            currentSelectedId &&
+            (String(r.id) === String(currentSelectedId) ||
+              String(r.regionId) === String(currentSelectedId))
+          ) {
+            return true;
+          }
+          return activeOnly ? Boolean(r.isActive) : true;
+        })
+        .map((r) => ({
+          value: r.id,
+          label: r.regionName,
+          isActive: r.isActive,
+        }));
     },
     [regions]
   );
 
-  const addRegion = useCallback(async (data) => {
-    // Simulated network delay
-    await new Promise((r) => setTimeout(r, 500));
-
-    const newId = `reg_${Date.now()}`;
-    const today = getTodayISO();
-
-    const newRegion = {
-      regionId: newId,
-      regionCode: data.regionCode.trim().toUpperCase(),
-      regionName: data.regionName.trim(),
-      parentRegionId: data.parentRegionId ? data.parentRegionId : null,
-      isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
-      createdOn: today,
-    };
-
-    setRegions((prev) => [...prev, newRegion]);
-    toast.success('Region added');
-    return newRegion;
+  /**
+   * Fetches fresh single region from GET /api/regions/{id}.
+   */
+  const fetchRegionById = useCallback(async (id) => {
+    try {
+      const data = await regionService.getRegion(id);
+      return data;
+    } catch (err) {
+      const msg = err.message || 'Failed to fetch region details.';
+      toast.error(msg);
+      throw err;
+    }
   }, []);
 
-  const updateRegion = useCallback(async (id, data) => {
-    // Simulated network delay
-    await new Promise((r) => setTimeout(r, 500));
+  /**
+   * Creates a new region via POST /api/regions.
+   */
+  const addRegion = useCallback(
+    async (formData) => {
+      try {
+        const created = await regionService.createRegion(formData);
+        toast.success('Region added successfully');
+        await fetchRegions(lastFilters);
+        return created;
+      } catch (err) {
+        const msg = err.message || 'Failed to create region.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    [fetchRegions, lastFilters]
+  );
 
-    setRegions((prev) =>
-      prev.map((r) => {
-        if (r.regionId === id || r.id === id) {
-          return {
-            ...r,
-            regionCode: data.regionCode ? data.regionCode.trim().toUpperCase() : r.regionCode,
-            regionName: data.regionName ? data.regionName.trim() : r.regionName,
-            parentRegionId:
-              data.parentRegionId !== undefined
-                ? (data.parentRegionId || null)
-                : r.parentRegionId,
-            isActive: data.isActive !== undefined ? Boolean(data.isActive) : r.isActive,
-          };
-        }
-        return r;
-      })
-    );
-    toast.success('Region updated');
-    return { ok: true };
-  }, []);
+  /**
+   * Updates an existing region via PUT /api/regions/{id}.
+   */
+  const updateRegion = useCallback(
+    async (id, formData) => {
+      try {
+        const updated = await regionService.updateRegion(id, formData);
+        toast.success('Region updated successfully');
+        await fetchRegions(lastFilters);
+        return updated;
+      } catch (err) {
+        const msg = err.message || 'Failed to update region.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    [fetchRegions, lastFilters]
+  );
 
+  /**
+   * Updates region active status via PATCH /api/regions/{id}/status.
+   */
+  const updateRegionStatus = useCallback(
+    async (id, isActive) => {
+      const nextActive = Boolean(isActive);
+
+      // Optimistic state update
+      setRegions((prev) =>
+        prev.map((r) => {
+          if (String(r.id) === String(id) || String(r.regionId) === String(id)) {
+            return { ...r, isActive: nextActive };
+          }
+          return r;
+        })
+      );
+
+      try {
+        await regionService.updateRegionStatus(id, nextActive);
+        toast.success(nextActive ? 'Region activated' : 'Region deactivated');
+        await fetchRegions(lastFilters);
+      } catch (err) {
+        // Rollback on failure
+        setRegions((prev) =>
+          prev.map((r) => {
+            if (String(r.id) === String(id) || String(r.regionId) === String(id)) {
+              return { ...r, isActive: !nextActive };
+            }
+            return r;
+          })
+        );
+        const msg = err.message || 'Failed to update region status.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    [fetchRegions, lastFilters]
+  );
+
+  /**
+   * Toggles region active status.
+   */
+  const toggleRegionActive = useCallback(
+    async (id) => {
+      const current = regions.find(
+        (r) => String(r.id) === String(id) || String(r.regionId) === String(id)
+      );
+      if (!current) return;
+      await updateRegionStatus(id, !current.isActive);
+    },
+    [regions, updateRegionStatus]
+  );
+
+  /**
+   * Legacy delete helper (local removal fallback)
+   */
   const deleteRegion = useCallback((id) => {
-    setRegions((prev) => prev.filter((r) => r.regionId !== id && r.id !== id));
-    toast.success('Region deleted');
-  }, []);
-
-  const toggleRegionActive = useCallback((id) => {
     setRegions((prev) =>
-      prev.map((r) => {
-        if (r.regionId === id || r.id === id) {
-          const nextState = !r.isActive;
-          toast.success(nextState ? 'Region activated' : 'Region deactivated');
-          return {
-            ...r,
-            isActive: nextState,
-          };
-        }
-        return r;
-      })
+      prev.filter(
+        (r) => String(r.id) !== String(id) && String(r.regionId) !== String(id)
+      )
     );
+    toast.success('Region removed');
   }, []);
 
   return (
     <RegionsContext.Provider
       value={{
         regions,
+        isLoading,
+        error,
+        fetchRegions,
+        fetchRegionById,
         getRegionById,
         getRegionName,
         getRegionOptions,
         addRegion,
         updateRegion,
-        deleteRegion,
+        updateRegionStatus,
         toggleRegionActive,
+        deleteRegion,
       }}
     >
       {children}

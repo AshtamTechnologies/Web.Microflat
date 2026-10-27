@@ -253,6 +253,65 @@ export async function createVendorVersion(id, formData) {
   return { success: true };
 }
 
+export async function listVendorBankDetails(params = {}) {
+  await new Promise((r) => setTimeout(r, 150));
+  let filtered = [...inMemoryBankDetails];
+
+  // Join vendor details
+  filtered = filtered.map((b) => {
+    const v = inMemoryVendors.find((vend) => String(vend.id) === String(b.vendorId));
+    return {
+      ...b,
+      vendorCode: v?.vendorCode || 'VEN-0001',
+      vendorName: v?.vendorName || (b.vendorName || `Vendor ${b.vendorId}`),
+    };
+  });
+
+  if (params.search?.trim()) {
+    const q = params.search.trim().toLowerCase();
+    filtered = filtered.filter(
+      (b) =>
+        b.vendorName?.toLowerCase().includes(q) ||
+        b.vendorCode?.toLowerCase().includes(q) ||
+        b.bankName?.toLowerCase().includes(q) ||
+        b.branchName?.toLowerCase().includes(q) ||
+        b.accountHolderName?.toLowerCase().includes(q) ||
+        b.ifscCode?.toLowerCase().includes(q) ||
+        String(b.accountNumber).includes(q)
+    );
+  }
+
+  if (params.vendorId && params.vendorId !== 'ALL') {
+    filtered = filtered.filter((b) => String(b.vendorId) === String(params.vendorId));
+  }
+
+  if (params.accountType && params.accountType !== 'ALL') {
+    filtered = filtered.filter((b) => b.accountType?.toLowerCase() === params.accountType?.toLowerCase());
+  }
+
+  if (params.isActive !== undefined && params.isActive !== null && params.isActive !== 'ALL') {
+    const expected = typeof params.isActive === 'boolean'
+      ? params.isActive
+      : params.isActive === 'true' || params.isActive === 'ACTIVE';
+    filtered = filtered.filter((b) => Boolean(b.isActive) === expected);
+  }
+
+  const totalCount = filtered.length;
+  const pageNumber = Number(params.pageNumber) || 1;
+  const pageSize = Number(params.pageSize) || 20;
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const start = (pageNumber - 1) * pageSize;
+  const pagedItems = filtered.slice(start, start + pageSize).map(bankDetailFromApi);
+
+  return {
+    items: pagedItems,
+    pageNumber,
+    pageSize,
+    totalCount,
+    totalPages,
+  };
+}
+
 export async function getVendorBankDetails(vendorId) {
   await new Promise((r) => setTimeout(r, 150));
   return inMemoryBankDetails

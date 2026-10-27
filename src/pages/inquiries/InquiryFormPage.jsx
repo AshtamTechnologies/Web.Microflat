@@ -259,6 +259,24 @@ function validateAll(form) {
   return errors;
 }
 
+function getAllowedExtensionsArray(docType) {
+  if (!docType) return [];
+  if (Array.isArray(docType.allowedExtensionList) && docType.allowedExtensionList.length > 0) {
+    return docType.allowedExtensionList;
+  }
+  if (Array.isArray(docType.allowedExtensions)) {
+    return docType.allowedExtensions;
+  }
+  if (typeof docType.allowedExtensions === 'string' && docType.allowedExtensions.trim()) {
+    return docType.allowedExtensions.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function formatAllowedExtensions(docType, sep = ', ') {
+  return getAllowedExtensionsArray(docType).join(sep);
+}
+
 export default function InquiryFormPage() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -280,8 +298,14 @@ export default function InquiryFormPage() {
     return getDocumentTypeById(typeId) || getDocumentType(typeId);
   };
   const { categories = [] } = useProductCategoriesContext();
-  const { regions = [], getRegionOptions } = useRegions();
+  const { regions = [], fetchRegions } = useRegions();
   const { clients = [] } = useClientsContext();
+
+  useEffect(() => {
+    if (regions.length === 0 && fetchRegions) {
+      fetchRegions();
+    }
+  }, [regions.length, fetchRegions]);
 
   const userList = allUsers.length > 0 ? allUsers : users;
 
@@ -396,53 +420,18 @@ export default function InquiryFormPage() {
   const hasTab1Errors = useMemo(() => Object.keys(errors).some((k) => step1Fields.includes(k)), [errors, step1Fields]);
   const hasTab2Errors = useMemo(() => Object.keys(errors).some((k) => k === 'AssignedTo'), [errors]);
 
-  // 2-Level Parent and Sub-Region options
-  const parentRegionOptions = useMemo(() => {
-    const roots = regions.filter((r) => !r.parentRegionId && (r.isActive || r.regionId === form.parentRegionId));
+  // Single Region options from Regions API / RegionsPage
+  const regionOptions = useMemo(() => {
     return [
-      { value: '', label: '-- Select Parent Region --' },
-      ...roots.map((r) => ({
-        value: r.regionId,
-        label: `${r.regionName} (${r.regionCode})`,
-      })),
+      { value: '', label: '-- Select Region --' },
+      ...regions
+        .filter((r) => r.isActive || String(r.id) === String(form.RegionId) || String(r.regionId) === String(form.RegionId))
+        .map((r) => ({
+          value: r.id ?? r.regionId,
+          label: r.regionName,
+        })),
     ];
-  }, [regions, form.parentRegionId]);
-
-  const subRegionOptions = useMemo(() => {
-    if (!form.parentRegionId) return [];
-    const subs = regions.filter(
-      (r) => r.parentRegionId === form.parentRegionId && (r.isActive || r.regionId === form.RegionId)
-    );
-    return [
-      { value: '', label: '-- Select Sub-Region --' },
-      ...subs.map((r) => ({
-        value: r.regionId,
-        label: `${r.regionName} (${r.regionCode})`,
-      })),
-    ];
-  }, [regions, form.parentRegionId, form.RegionId]);
-
-  const handleParentRegionChange = (parentRegId) => {
-    const subs = regions.filter((r) => r.parentRegionId === parentRegId);
-    setForm((prev) => ({
-      ...prev,
-      parentRegionId: parentRegId,
-      RegionId: subs.length > 0 ? '' : parentRegId,
-    }));
-    if (errors.RegionId) {
-      setErrors((prev) => ({ ...prev, RegionId: '' }));
-    }
-  };
-
-  const handleSubRegionChange = (subRegId) => {
-    setForm((prev) => ({
-      ...prev,
-      RegionId: subRegId,
-    }));
-    if (errors.RegionId) {
-      setErrors((prev) => ({ ...prev, RegionId: '' }));
-    }
-  };
+  }, [regions, form.RegionId]);
 
   // Line item adding/editing form state
   const [itemFormState, setItemFormState] = useState({ ...INITIAL_ITEM_ENTRY });
@@ -766,7 +755,7 @@ export default function InquiryFormPage() {
   };
 
   // Attachment Staging State
-  const [stageDocTypeId, setStageDocTypeId] = useState('dt_rfq');
+  const [stageDocTypeId, setStageDocTypeId] = useState('');
   const [stageDocTitle, setStageDocTitle] = useState('');
   const [stageDocFile, setStageDocFile] = useState(null);
   const [stageDocRemarks, setStageDocRemarks] = useState('');
@@ -780,15 +769,29 @@ export default function InquiryFormPage() {
 
   // Active document type metadata for staging
   const activeStagedDocType = useMemo(() => {
-    return getDocumentTypeById(stageDocTypeId);
+    return resolveDocType(stageDocTypeId) || getDocumentTypeById(stageDocTypeId);
   }, [stageDocTypeId, getDocumentTypeById]);
+
+  // Ensure stageDocTypeId points to a valid loaded active document type
+  useEffect(() => {
+    const activeTypes = documentTypes.filter((dt) => dt.isActive !== false);
+    if (activeTypes.length > 0) {
+      const exists = activeTypes.some(
+        (dt) => String(dt.id) === String(stageDocTypeId) || String(dt.documentTypeId) === String(stageDocTypeId)
+      );
+      if (!exists) {
+        const firstId = activeTypes[0].documentTypeId ?? activeTypes[0].id;
+        if (firstId) setStageDocTypeId(firstId);
+      }
+    }
+  }, [documentTypes, stageDocTypeId]);
 
 
   // Build assignee options from UsersContext (No "Leave unassigned" option)
   const userOptions = useMemo(() => {
     return userList.map((u) => ({
       value: u.id,
-      label: `${u.firstName} ${u.lastName} (${Array.isArray(u.roles) ? u.roles.join(', ') : u.role || 'Staff'})`,
+      label: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'User',
     }));
   }, [userList]);
 
@@ -818,10 +821,7 @@ export default function InquiryFormPage() {
             ]
             : [];
 
-        const loadedRegion = existingInquiry.RegionId ? regions.find((r) => r.regionId === existingInquiry.RegionId) : null;
-        const resolvedParentRegId = loadedRegion && loadedRegion.parentRegionId
-          ? loadedRegion.parentRegionId
-          : (loadedRegion ? loadedRegion.regionId : '');
+        const loadedRegionId = existingInquiry.RegionId ?? existingInquiry.regionId ?? '';
 
         const matchedClient = clients.find((c) =>
           (existingInquiry.clientId && (c.clientId === existingInquiry.clientId || c.id === existingInquiry.clientId)) ||
@@ -854,8 +854,8 @@ export default function InquiryFormPage() {
           City: existingInquiry.City || '',
           State: existingInquiry.State || '',
           Country: existingInquiry.Country || 'India',
-          parentRegionId: resolvedParentRegId,
-          RegionId: existingInquiry.RegionId || '',
+          parentRegionId: '',
+          RegionId: loadedRegionId,
           CategoryId: existingInquiry.CategoryId || (mappedItems[0]?.categoryId || ''),
           Quantity: existingInquiry.Quantity !== undefined ? String(existingInquiry.Quantity) : '1',
           UOM: normalizeUom(existingInquiry.UOM || mappedItems[0]?.uom || 'PCS'),
@@ -891,16 +891,18 @@ export default function InquiryFormPage() {
     }
   }, [isEdit, id, existingInquiry, getNextInquiryNo, userList, regions, clients]);
 
-  // Document type options for Select
+  // Document type options for Select (active document types only)
   const docTypeOptions = useMemo(() => {
-    return documentTypes.map((dt) => {
-      const id = dt.documentTypeId || dt.id;
-      const exts = Array.isArray(dt.allowedExtensions) ? dt.allowedExtensions.join(', ') : '';
-      return {
-        value: id,
-        label: `${dt.typeName}${dt.isMandatory ? ' (Required)' : ''} [${exts}]`,
-      };
-    });
+    return documentTypes
+      .filter((dt) => dt.isActive !== false)
+      .map((dt) => {
+        const docId = dt.documentTypeId ?? dt.id;
+        const exts = formatAllowedExtensions(dt, ', ');
+        return {
+          value: docId,
+          label: `${dt.documentTypeName || dt.typeName}${dt.isMandatory ? ' (Required)' : ''}${exts ? ` [${exts}]` : ''}`,
+        };
+      });
   }, [documentTypes]);
 
   // Check if form is dirty
@@ -957,14 +959,14 @@ export default function InquiryFormPage() {
     const extIndex = fileName.lastIndexOf('.');
     const ext = extIndex >= 0 ? fileName.slice(extIndex).toLowerCase() : '';
 
-    const allowed = (docType?.allowedExtensions || []).map((e) => e.toLowerCase());
+    const allowed = getAllowedExtensionsArray(docType).map((e) => e.toLowerCase());
     if (allowed.length > 0 && !allowed.includes(ext)) {
-      return `Only ${allowed.join(', ')} files allowed for ${docType?.typeName || 'this document type'}.`;
+      return `Only ${allowed.join(', ')} files allowed for ${docType?.documentTypeName || docType?.typeName || 'this document type'}.`;
     }
 
-    const maxBytes = (docType?.maxSizeMB || 25) * 1024 * 1024;
+    const maxBytes = (docType?.maxFileSizeMB || docType?.maxSizeMB || 25) * 1024 * 1024;
     if (file.size > maxBytes) {
-      return `File exceeds ${docType?.maxSizeMB || 25}MB limit.`;
+      return `File exceeds ${docType?.maxFileSizeMB || docType?.maxSizeMB || 25}MB limit.`;
     }
 
     return '';
@@ -1255,39 +1257,19 @@ export default function InquiryFormPage() {
                   hint="Target estimated delivery date"
                 />
 
-                {/* Parent Sales Region */}
-                <SearchableSelect
-                  id="parentRegionId"
-                  name="parentRegionId"
-                  label="Parent Region"
-                  placeholder="-- Select Parent Region --"
-                  searchPlaceholder="Search parent regions..."
-                  required
-                  options={parentRegionOptions}
-                  value={form.parentRegionId}
-                  onChange={(e) => handleParentRegionChange(e.target.value)}
-                  error={!form.parentRegionId ? errors.RegionId : undefined}
-                />
-
-                {/* Sub-Region */}
+                {/* Sales Region */}
                 <SearchableSelect
                   id="RegionId"
                   name="RegionId"
-                  label="Sub-Region"
-                  placeholder={
-                    !form.parentRegionId
-                      ? 'Select parent region first'
-                      : subRegionOptions.length <= 1
-                        ? 'No sub-regions (Parent selected)'
-                        : '-- Select Sub-Region --'
-                  }
-                  searchPlaceholder="Search sub-regions..."
-                  disabled={!form.parentRegionId || subRegionOptions.length <= 1}
-                  required={subRegionOptions.length > 1}
-                  options={subRegionOptions}
+                  label="Region"
+                  placeholder="-- Select Region --"
+                  searchPlaceholder="Search regions..."
+                  required
+                  options={regionOptions}
                   value={form.RegionId}
-                  onChange={(e) => handleSubRegionChange(e.target.value)}
-                  error={form.parentRegionId && subRegionOptions.length > 1 && !form.RegionId ? errors.RegionId : undefined}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.RegionId}
                 />
 
                 {/* Source */}
@@ -2089,7 +2071,7 @@ export default function InquiryFormPage() {
                     />
                     {activeStagedDocType && (
                       <p className="text-2xs text-text-muted pt-0.5">
-                        Allowed: <strong className="font-mono text-heading">{activeStagedDocType.allowedExtensions.join(', ')}</strong> • Max: <strong className="font-mono text-heading">{activeStagedDocType.maxSizeMB}MB</strong>
+                        Allowed: <strong className="font-mono text-heading">{formatAllowedExtensions(activeStagedDocType, ', ')}</strong> • Max: <strong className="font-mono text-heading">{activeStagedDocType.maxFileSizeMB || activeStagedDocType.maxSizeMB || 25}MB</strong>
                       </p>
                     )}
                   </div>
@@ -2122,7 +2104,7 @@ export default function InquiryFormPage() {
                       const f = e.target.files?.[0];
                       if (f) handleFileSelected(f);
                     }}
-                    accept={activeStagedDocType?.allowedExtensions?.join(',') || undefined}
+                    accept={formatAllowedExtensions(activeStagedDocType, ',') || undefined}
                     className="hidden"
                     id="inquiry-form-file-picker"
                   />
@@ -2197,7 +2179,7 @@ export default function InquiryFormPage() {
                         </p>
                         <p className="text-2xs text-text-muted mt-0.5">
                           {activeStagedDocType
-                            ? `Allowed formats: ${activeStagedDocType.allowedExtensions.join(', ')} (Max ${activeStagedDocType.maxSizeMB}MB)`
+                            ? `Allowed formats: ${formatAllowedExtensions(activeStagedDocType, ', ')} (Max ${activeStagedDocType.maxFileSizeMB || activeStagedDocType.maxSizeMB || 25}MB)`
                             : 'Select document type above'}
                         </p>
                       </div>
@@ -2250,15 +2232,15 @@ export default function InquiryFormPage() {
                     </span>
                   </div>
 
-                  <table className="w-full min-w-[540px] text-xs text-left">
+                  <table className="w-full min-w-[700px] text-xs text-left">
                     <thead>
                       <tr className="bg-surface/30 border-b border-border/70 text-2xs font-semibold text-text-muted">
-                        <th className="py-2.5 px-4 w-28">TYPE</th>
-                        <th className="py-2.5 px-4 min-w-[140px]">DOCUMENT TITLE</th>
+                        <th className="py-2.5 px-4 min-w-[170px] whitespace-nowrap">DOCUMENT TYPE</th>
+                        <th className="py-2.5 px-4 min-w-[150px]">DOCUMENT TITLE</th>
                         <th className="py-2.5 px-4 min-w-[180px]">FILE NAME</th>
-                        <th className="py-2.5 px-4 w-24">SIZE</th>
+                        <th className="py-2.5 px-4 w-24 whitespace-nowrap">SIZE</th>
                         <th className="py-2.5 px-4 min-w-[140px]">REMARKS</th>
-                        <th className="py-2.5 px-4 w-24 text-center">ACTION</th>
+                        <th className="py-2.5 px-4 w-24 text-center whitespace-nowrap">ACTION</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
@@ -2266,11 +2248,9 @@ export default function InquiryFormPage() {
                         const docType = resolveDocType(att.documentTypeId);
                         return (
                           <tr key={att.id} className="hover:bg-surface/30 transition-colors">
-                            <td className="py-2.5 px-4">
-                              <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold border ${docType.badgeClass}`}
-                              >
-                                {docType.typeName}
+                            <td className="py-2.5 px-4 whitespace-nowrap">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
+                                {docType?.documentTypeName || docType?.typeName || 'Document'}
                               </span>
                             </td>
                             <td className="py-2.5 px-4 font-semibold text-heading">

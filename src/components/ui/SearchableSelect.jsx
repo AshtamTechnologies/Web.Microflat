@@ -83,7 +83,7 @@ export default function SearchableSelect({
   useEffect(() => {
     if (isOpen) {
       setSearchQuery('');
-      const selectedIdx = options.findIndex((opt) => opt.value === value);
+      const selectedIdx = options.findIndex((opt) => String(opt.value) === String(value));
       setHighlightedIndex(selectedIdx >= 0 ? selectedIdx : 0);
 
       const handleScrollResize = () => updateCoords();
@@ -298,12 +298,12 @@ export default function SearchableSelect({
                 </li>
               ) : (
                 filteredOptions.map((option, index) => {
-                  const isSelected = option.value === value;
+                  const isSelected = String(option.value) === String(value);
                   const isHighlighted = index === highlightedIndex;
 
                   return (
                     <li
-                      key={option.value}
+                      key={option.value !== undefined && option.value !== null && option.value !== '' ? `${option.value}-${index}` : `opt-${index}`}
                       role="option"
                       aria-selected={isSelected}
                       onClick={() => handleSelect(option.value)}

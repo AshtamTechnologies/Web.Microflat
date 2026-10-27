@@ -172,28 +172,37 @@ export function VendorBankDetailsProvider({ children }) {
           });
         } else {
           const bankId = row.bankDetailId || row.id;
+          // Call real PUT /api/vendor-bank-details/{id}
           try {
-            // Call real PUT /api/vendor-bank-details/{id}
             await vendorService.updateBankDetail(bankId, row);
+          } catch (err) {
+            console.warn('API updateBankDetail failed, updating locally:', err);
+          }
 
-            // Upload any pending file attachments if present
-            if (Array.isArray(row.attachments)) {
-              for (const att of row.attachments) {
-                if (att.file instanceof File) {
-                  try {
-                    await vendorService.uploadBankDetailAttachment(bankId, {
-                      documentTypeId: att.documentTypeId || 1,
-                      documentName: att.documentName || att.name,
-                      file: att.file,
-                    });
-                  } catch (attErr) {
-                    console.warn('Attachment upload failed:', attErr);
-                  }
+          // Sync active status via PATCH /api/vendor-bank-details/{id}/status
+          if (row.isActive !== undefined && !String(bankId).startsWith('temp_') && !String(bankId).startsWith('bd_')) {
+            try {
+              await vendorService.updateBankDetailStatus(bankId, Boolean(row.isActive));
+            } catch (stErr) {
+              console.warn('PATCH /api/vendor-bank-details/{id}/status failed:', stErr);
+            }
+          }
+
+          // Upload any pending file attachments if present
+          if (Array.isArray(row.attachments)) {
+            for (const att of row.attachments) {
+              if (att.file instanceof File) {
+                try {
+                  await vendorService.uploadBankDetailAttachment(bankId, {
+                    documentTypeId: att.documentTypeId || 1,
+                    documentName: att.documentName || att.name,
+                    file: att.file,
+                  });
+                } catch (attErr) {
+                  console.warn('Attachment upload failed:', attErr);
                 }
               }
             }
-          } catch (err) {
-            console.warn('API updateBankDetail failed, updating locally:', err);
           }
 
           processedRows.push({

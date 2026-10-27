@@ -45,7 +45,7 @@ export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
   const userOptions = useMemo(() => {
     return userList.map((u) => ({
       value: u.id,
-      label: `${u.firstName} ${u.lastName} (${Array.isArray(u.roles) ? u.roles.join(', ') : u.role || 'Staff'})`,
+      label: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'User',
     }));
   }, [userList]);
 

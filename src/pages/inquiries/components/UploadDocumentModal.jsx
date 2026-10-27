@@ -20,6 +20,24 @@ import { useInquiryDocumentsContext } from '../../../context/InquiryDocumentsCon
 import { useDocumentTypesContext } from '../../../context/DocumentTypesContext';
 import { formatFileSizeKB } from '../../../mocks/inquiryDocuments';
 
+function getAllowedExtensionsArray(docType) {
+  if (!docType) return [];
+  if (Array.isArray(docType.allowedExtensionList) && docType.allowedExtensionList.length > 0) {
+    return docType.allowedExtensionList;
+  }
+  if (Array.isArray(docType.allowedExtensions)) {
+    return docType.allowedExtensions;
+  }
+  if (typeof docType.allowedExtensions === 'string' && docType.allowedExtensions.trim()) {
+    return docType.allowedExtensions.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function formatAllowedExtensions(docType, sep = ', ') {
+  return getAllowedExtensionsArray(docType).join(sep);
+}
+
 export default function UploadDocumentModal({
   isOpen,
   onClose,
@@ -76,9 +94,9 @@ export default function UploadDocumentModal({
 
   // Document type options for Select
   const typeOptions = useMemo(() => {
-    return documentTypes.map((dt) => {
+    return documentTypes.filter((dt) => dt.isActive !== false).map((dt) => {
       const id = dt.documentTypeId || dt.id;
-      const exts = Array.isArray(dt.allowedExtensions) ? dt.allowedExtensions.join(', ') : '';
+      const exts = formatAllowedExtensions(dt, ', ');
       return {
         value: id,
         label: `${dt.typeName}${dt.isMandatory ? ' (Required)' : ''} [${exts}]`,
@@ -101,7 +119,7 @@ export default function UploadDocumentModal({
     const extIndex = fileName.lastIndexOf('.');
     const ext = extIndex >= 0 ? fileName.slice(extIndex).toLowerCase() : '';
 
-    const allowed = (docType.allowedExtensions || []).map((e) => e.toLowerCase());
+    const allowed = getAllowedExtensionsArray(docType).map((e) => e.toLowerCase());
     if (allowed.length > 0 && !allowed.includes(ext)) {
       return `Only ${allowed.join(', ')} files allowed for ${docType.typeName}.`;
     }
@@ -282,7 +300,7 @@ export default function UploadDocumentModal({
               <p className="text-xs text-text-muted flex items-center gap-1.5 pt-0.5">
                 <span>Allowed:</span>
                 <span className="font-mono text-heading font-semibold">
-                  {activeDocType.allowedExtensions.join(', ')}
+                  {formatAllowedExtensions(activeDocType, ', ')}
                 </span>
                 <span>• Max:</span>
                 <span className="font-mono text-heading font-semibold">
@@ -323,7 +341,7 @@ export default function UploadDocumentModal({
             ref={fileInputRef}
             type="file"
             onChange={handleFileChange}
-            accept={activeDocType?.allowedExtensions?.join(',') || undefined}
+            accept={formatAllowedExtensions(activeDocType, ',') || undefined}
             className="hidden"
             id="inquiry-file-upload-input"
           />
@@ -384,7 +402,7 @@ export default function UploadDocumentModal({
                 </p>
                 <p className="text-xs text-text-muted mt-1">
                   {activeDocType
-                    ? `Supported: ${activeDocType.allowedExtensions.join(', ')} • Max: ${activeDocType.maxSizeMB}MB`
+                    ? `Supported: ${formatAllowedExtensions(activeDocType, ', ')} • Max: ${activeDocType.maxFileSizeMB || activeDocType.maxSizeMB || 25}MB`
                     : 'Select a document type to view allowed file formats'}
                 </p>
               </div>

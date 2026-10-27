@@ -14,7 +14,7 @@
  *   - Rich user card with Role badge & live connection status
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   IconChevronDown,
   IconChevronRight,
@@ -77,6 +77,7 @@ function NavItem({ item, collapsed, onClick }) {
     >
       <NavLink
         to={item.path}
+        title={!collapsed ? item.label : undefined}
         end={item.path === '/dashboard' || item.path === '/'}
         onClick={onClick}
         className={({ isActive }) =>
@@ -206,6 +207,7 @@ function SubNavItem({ item, onClick }) {
 
       <Link
         to={item.path}
+        title={item.label}
         onClick={onClick}
         className={[
           'w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors select-none',
@@ -367,6 +369,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
                     <NavLink
                       key={child.path}
                       to={child.path}
+                      title={child.label}
                       onClick={() => {
                         setIsFlyoutOpen(false);
                         onChildClick?.();
@@ -398,6 +401,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
         type="button"
         onClick={handleToggle}
         aria-expanded={isAccordionOpen}
+        title={item.label}
         className={[
           'w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm font-medium',
           'transition-all duration-150 ease-in-out cursor-pointer select-none',
@@ -580,9 +584,14 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
   return (
     <div className="flex flex-col h-full bg-bg">
       {/* ── Top Header Bar (Brand Logo & Collapse Toggle) ── */}
-      <div className="border-b border-border p-3.5 shrink-0">
+      <div
+        className={[
+          'h-14 border-b border-border shrink-0 flex items-center',
+          collapsed ? 'justify-center px-2' : 'justify-between px-3.5',
+        ].join(' ')}
+      >
         {!collapsed ? (
-          <div className="flex items-center justify-between">
+          <>
             <Link
               to="/dashboard"
               onClick={onChildClick}
@@ -590,7 +599,7 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
               className="flex items-center gap-2 group/logo cursor-pointer"
             >
               <div
-                className="inline-flex items-center rounded-lg px-2 py-1 group-hover/logo:opacity-90 transition-opacity"
+                className="inline-flex items-center rounded-lg px-2 py-0.5 group-hover/logo:opacity-90 transition-opacity"
                 style={{ backgroundColor: 'rgba(255,255,255,0.96)' }}
               >
                 <img
@@ -614,31 +623,28 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
                 <IconPanelLeftClose size={16} aria-hidden="true" />
               </button>
             )}
-          </div>
+          </>
         ) : (
-          <div className="flex items-center justify-center">
-            {/* Collapsed Logo (microsidelogo.png) */}
-            <Link
-              to="/dashboard"
-              onClick={onChildClick}
-              title="Go to Dashboard"
-              aria-label="Go to Dashboard"
-              className="p-1 rounded-xl hover:bg-surface transition-all cursor-pointer group/logo flex items-center justify-center"
-            >
-              <img
-                src={SIDE_LOGO}
-                alt="Micro-Flat"
-                className="w-8 h-8 object-contain group-hover/logo:scale-105 transition-transform"
-                draggable={false}
-              />
-            </Link>
-          </div>
+          <Link
+            to="/dashboard"
+            onClick={onChildClick}
+            title="Go to Dashboard"
+            aria-label="Go to Dashboard"
+            className="p-1 rounded-xl hover:bg-surface transition-all cursor-pointer group/logo flex items-center justify-center"
+          >
+            <img
+              src={SIDE_LOGO}
+              alt="Micro-Flat"
+              className="w-8 h-8 object-contain group-hover/logo:scale-105 transition-transform"
+              draggable={false}
+            />
+          </Link>
         )}
       </div>
 
       {/* ── Quick Module Search (Expanded mode) ── */}
       {!collapsed && (
-        <div className="px-3 pt-3 pb-1 shrink-0">
+        <div className="px-3 pt-2.5 pb-1 shrink-0">
           <Input
               ref={searchInputRef}
               type="search"
@@ -665,7 +671,10 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
           <div key={sec.section || sIdx} className="space-y-1">
             {/* Section Category Title */}
             {!collapsed && sec.section && (
-              <div className="px-2 pt-2 pb-1 text-2xs font-bold tracking-wider text-text-muted/80 uppercase">
+              <div
+                title={sec.section}
+                className="px-2 pt-2 pb-1 text-2xs font-bold tracking-wider text-text-muted/80 uppercase truncate"
+              >
                 {sec.section}
               </div>
             )}
@@ -781,12 +790,52 @@ export default function Sidebar({
   onClose,
   collapsed = false,
   onCollapsedToggle,
+  sidebarWidth = 240,
+  onSidebarWidthChange,
+  isResizing = false,
+  onResizingChange,
 }) {
   const location = useLocation();
 
   useEffect(() => {
     if (onClose) onClose();
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startResizing = useCallback(
+    (e) => {
+      if (collapsed) return;
+      e.preventDefault();
+      onResizingChange?.(true);
+
+      const startX = e.clientX;
+      const startW = sidebarWidth;
+
+      function onMouseMove(moveEvent) {
+        const delta = moveEvent.clientX - startX;
+        const newWidth = Math.min(480, Math.max(200, startW + delta));
+        onSidebarWidthChange?.(newWidth);
+      }
+
+      function onMouseUp() {
+        onResizingChange?.(false);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    },
+    [collapsed, sidebarWidth, onResizingChange, onSidebarWidthChange]
+  );
+
+  const handleDoubleClickResize = () => {
+    if (collapsed) return;
+    onSidebarWidthChange?.(240);
+  };
 
   return (
     <>
@@ -795,9 +844,11 @@ export default function Sidebar({
         className={[
           'hidden lg:flex flex-col fixed inset-y-0 left-0 z-30',
           'bg-bg border-r border-border shadow-xs',
-          'transition-[width] duration-200 ease-in-out',
-          collapsed ? 'w-16' : 'w-60',
+          isResizing ? 'transition-none select-none' : 'transition-[width] duration-200 ease-in-out',
         ].join(' ')}
+        style={{
+          width: collapsed ? '64px' : `${sidebarWidth}px`,
+        }}
         aria-label="Sidebar"
       >
         <SidebarContent
@@ -805,6 +856,28 @@ export default function Sidebar({
           onCollapsedToggle={onCollapsedToggle}
           onChildClick={undefined}
         />
+
+        {/* Resizer Handle (Desktop only, when expanded) */}
+        {!collapsed && (
+          <div
+            onMouseDown={startResizing}
+            onDoubleClick={handleDoubleClickResize}
+            title="Drag to resize sidebar • Double-click to reset"
+            className={[
+              'absolute top-0 -right-1.5 bottom-0 w-3 cursor-col-resize z-40 group select-none',
+              'flex items-center justify-center',
+            ].join(' ')}
+          >
+            <div
+              className={[
+                'w-1 h-full transition-colors duration-150',
+                isResizing
+                  ? 'bg-primary'
+                  : 'group-hover:bg-primary/60 bg-transparent',
+              ].join(' ')}
+            />
+          </div>
+        )}
       </aside>
 
       {/* ── Mobile Off-Canvas Drawer ── */}

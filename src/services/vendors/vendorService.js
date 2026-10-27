@@ -453,6 +453,52 @@ export async function createVendorVersion(id, formData, copyAttachments = true, 
    ─────────────────────────────────────────────────────────────────────────── */
 
 /**
+ * Lists all vendor bank details for grid with server-side search, filtering, and paging.
+ * GET /api/vendor-bank-details
+ * @param {{ search?: string, vendorId?: number|string, accountType?: string, isActive?: boolean|string, pageNumber?: number, pageSize?: number }} [params]
+ */
+export async function listVendorBankDetails(params = {}) {
+  try {
+    const query = {};
+    if (params.search?.trim()) query.Search = params.search.trim();
+    if (params.vendorId && params.vendorId !== 'ALL') {
+      query.VendorId = cleanId(params.vendorId);
+    }
+    if (params.accountType && params.accountType !== 'ALL') {
+      query.AccountType = String(params.accountType).trim();
+    }
+    if (params.isActive !== undefined && params.isActive !== null && params.isActive !== 'ALL') {
+      query.IsActive = typeof params.isActive === 'boolean'
+        ? params.isActive
+        : params.isActive === 'true' || params.isActive === 'ACTIVE';
+    }
+    if (params.pageNumber) query.PageNumber = Number(params.pageNumber);
+    if (params.pageSize) query.PageSize = Number(params.pageSize);
+
+    const response = await axiosInstance.get(VENDOR_ENDPOINTS.ALL_VENDOR_BANK_DETAILS, {
+      params: query,
+    });
+    const data = response.data || {};
+    const rawItems = Array.isArray(data.items)
+      ? data.items
+      : Array.isArray(data)
+        ? data
+        : [];
+    const items = rawItems.map(bankDetailFromApi);
+
+    return {
+      items,
+      pageNumber: data.pageNumber || 1,
+      pageSize: data.pageSize || items.length,
+      totalCount: data.totalCount ?? items.length,
+      totalPages: data.totalPages || 1,
+    };
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
  * Lists bank accounts of a specific vendor.
  * @param {string|number} vendorId
  */
