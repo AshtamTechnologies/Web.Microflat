@@ -152,6 +152,7 @@ export function VendorBankDetailsProvider({ children }) {
             bankDetailId: newId,
             id: newId,
             vendorId,
+            accountName: (row.accountName || row.accountHolderName || '').trim(),
             accountHolderName: (row.accountHolderName || '').trim(),
             bankName: (row.bankName || '').trim(),
             branchName: (row.branchName || '').trim(),

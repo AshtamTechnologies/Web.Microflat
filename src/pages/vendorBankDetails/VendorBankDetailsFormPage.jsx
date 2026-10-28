@@ -63,10 +63,9 @@ import { useRowsEditor } from '../../hooks/useRowsEditor';
 import AuthVerificationModal from './components/AuthVerificationModal';
 import {
   ACCOUNT_TYPE_OPTIONS,
-  BANK_DOCUMENT_TYPE_OPTIONS,
 } from '../../mocks/vendorBankDetails';
 import { vendorService } from '../../services';
-import { getCountryName } from '../../mocks/vendors';
+import { useCountryState } from '../../context/CountryStateContext';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 
 const INITIAL_BANK_FORM = {
@@ -135,12 +134,13 @@ export default function VendorBankDetailsFormPage() {
 
   const { allVendors = [], getVendorById } = useVendorsContext();
   const { getBanksForVendor, fetchBanksForVendor, saveVendorBanks, deleteBankDetail, toggleBankActive } = useVendorBankDetails();
+  const { getCountryName } = useCountryState();
 
   const isEditMode = Boolean(routeVendorId);
 
   // Dynamic lookups from GET /api/vendors/lookups
   const [accountTypeOptions, setAccountTypeOptions] = useState(ACCOUNT_TYPE_OPTIONS);
-  const [documentTypeOptions, setDocumentTypeOptions] = useState(BANK_DOCUMENT_TYPE_OPTIONS);
+  const [documentTypeOptions, setDocumentTypeOptions] = useState([]);
   const [rawDocumentTypes, setRawDocumentTypes] = useState([]);
 
   // Selected vendor state (locked in edit mode, selectable in add mode; blank initially in add mode)
@@ -239,6 +239,20 @@ export default function VendorBankDetailsFormPage() {
     );
   }, [selectedVendorId, getVendorById, allVendors]);
 
+  // Determine if selected vendor is India-based (controls IFSC requirement)
+  const isIndiaVendor = useMemo(() => {
+    if (!currentVendor) return false;
+    const cid = currentVendor.countryId;
+    const cName = currentVendor.countryName || currentVendor.country;
+    if (cid === 'IN' || Number(cid) === 2 || String(cid).toUpperCase() === 'IN' || String(cid).toLowerCase() === 'india') {
+      return true;
+    }
+    if (cName && String(cName).toLowerCase() === 'india') {
+      return true;
+    }
+    return false;
+  }, [currentVendor]);
+
   // Load existing accounts when a vendor is selected or on mount
   useEffect(() => {
     let isCancelled = false;
@@ -295,6 +309,7 @@ export default function VendorBankDetailsFormPage() {
         errors.vendor = 'Please select a vendor';
       }
       const holder = (form.accountHolderName || '').trim();
+      const accName = (form.accountName || '').trim();
       const bank = (form.bankName || '').trim();
       const branch = (form.branchName || '').trim();
       const accNum = String(form.accountNumber || '').trim();
@@ -304,12 +319,15 @@ export default function VendorBankDetailsFormPage() {
       const iban = (form.iban || '').trim().toUpperCase();
       const branchAddr = (form.branchAddress || '').trim();
       const rem = (form.remarks || '').trim();
-      const isIndiaVendor = currentVendor?.countryId === 'IN';
 
       if (!holder) {
         errors.accountHolderName = 'Account holder name is required';
       } else if (holder.length > 150) {
         errors.accountHolderName = 'Max 150 characters';
+      }
+
+      if (accName && accName.length > 100) {
+        errors.accountName = 'Max 100 characters';
       }
 
       if (!bank) {
@@ -396,7 +414,7 @@ export default function VendorBankDetailsFormPage() {
 
       return errors;
     },
-    [currentVendor, draftRows, selectedVendorId]
+    [currentVendor, draftRows, isIndiaVendor, selectedVendorId]
   );
 
   // useRowsEditor state machine
@@ -918,34 +936,16 @@ export default function VendorBankDetailsFormPage() {
     }
   };
 
-  // Master submit
+  // Master submit — delegates directly to handleFormActionClick so top and bottom buttons work identically
   const handleSaveChanges = async (e) => {
-    if (e) e.preventDefault();
-    if (!selectedVendorId) {
-      toast.error('Please select a vendor first');
-      return;
-    }
-
-    // If in Add mode with form filled, delegate to handleFormActionClick
-    if (!isEditing && (formState.accountNumber || formState.bankName)) {
-      return handleFormActionClick();
-    }
-
-    setIsSubmitting(true);
-    try {
-      await saveVendorBanks(selectedVendorId, draftRows);
-      toast.success('Bank details saved');
-      navigate('/vendor-bank-details');
-    } catch (err) {
-      toast.error('Failed to save bank details');
-    } finally {
-      setIsSubmitting(false);
-    }
+    if (e?.preventDefault) e.preventDefault();
+    return handleFormActionClick();
   };
 
   // Back / Cancel handler
   const handleCancel = () => {
     const hasUnsavedInput = Boolean(
+      formState.accountName ||
       formState.accountNumber ||
       formState.bankName ||
       formState.branchName ||
@@ -999,10 +999,11 @@ export default function VendorBankDetailsFormPage() {
             <SaveButton
               onClick={handleSaveChanges}
               loading={isSubmitting}
+              loadingText="Saving..."
               disabled={isSubmitting || !selectedVendorId}
               size="sm"
             >
-              {isEditMode ? 'Save Changes' : 'Save Bank Account'}
+              Save Changes
             </SaveButton>
           </div>
         }
@@ -1133,7 +1134,7 @@ export default function VendorBankDetailsFormPage() {
           {/* Form Fields Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Account Holder Name */}
-            <div className="lg:col-span-2">
+            <div>
               <Input
                 label="Account Holder Name"
                 id="bank-accountHolderName"
@@ -1143,6 +1144,19 @@ export default function VendorBankDetailsFormPage() {
                 onChange={(e) => handleFieldChange('accountHolderName', e.target.value)}
                 placeholder="e.g. Apex Precision Castings Pvt Ltd"
                 error={fieldErrors.accountHolderName}
+              />
+            </div>
+
+            {/* Account Name */}
+            <div>
+              <Input
+                label="Account Name"
+                id="bank-accountName"
+                maxLength={100}
+                value={formState.accountName || ''}
+                onChange={(e) => handleFieldChange('accountName', e.target.value)}
+                placeholder="e.g. Primary Operations Account"
+                error={fieldErrors.accountName}
               />
             </div>
 
@@ -1253,9 +1267,9 @@ export default function VendorBankDetailsFormPage() {
             {/* IFSC Code */}
             <div>
               <Input
-                label={`IFSC Code ${currentVendor?.countryId === 'IN' ? '' : '(Optional)'}`}
+                label={`IFSC Code ${isIndiaVendor ? '' : '(Optional)'}`}
                 id="bank-ifscCode"
-                required={currentVendor?.countryId === 'IN'}
+                required={isIndiaVendor}
                 maxLength={11}
                 value={formState.ifscCode || ''}
                 onChange={(e) => handleFieldChange('ifscCode', e.target.value.toUpperCase())}
@@ -1610,9 +1624,14 @@ export default function VendorBankDetailsFormPage() {
 
                         {/* Account Holder */}
                         <Td className="py-2.5 px-3">
-                          <span className="text-xs text-text truncate block">
+                          <span className="text-xs text-text truncate block font-medium">
                             {row.accountHolderName || '—'}
                           </span>
+                          {row.accountName && row.accountName !== row.accountHolderName && (
+                            <span className="text-2xs text-text-muted truncate block mt-0.5">
+                              {row.accountName}
+                            </span>
+                          )}
                         </Td>
 
                         {/* Account Number with Eye Reveal Toggle */}

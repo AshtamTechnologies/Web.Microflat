@@ -274,436 +274,403 @@ export default function CompanyBankDetailsViewPage() {
         }
       />
 
-      {/* ── Metrics Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card padding="md" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <IconCreditCard size={20} />
+      {/* ── 2-Column Responsive Bank Console Layout (xl:grid-cols-12) ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* ── LEFT RAIL: Compact Metrics & Bank Account Navigator (xl:col-span-5) ── */}
+        <div className="xl:col-span-5 space-y-4">
+          {/* Metrics Pill Bar */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <Card padding="sm" className="bg-bg text-center space-y-0.5">
+              <span className="text-3xs text-text-muted uppercase font-semibold block">Total</span>
+              <span className="text-base font-bold text-heading font-mono">{bankAccounts.length}</span>
+            </Card>
+            <Card padding="sm" className="bg-bg text-center space-y-0.5">
+              <span className="text-3xs text-success uppercase font-semibold block">Active</span>
+              <span className="text-base font-bold text-success font-mono">{activeCount}</span>
+            </Card>
+            <Card padding="sm" className="bg-bg text-center space-y-0.5">
+              <span className="text-3xs text-info uppercase font-semibold block">Docs</span>
+              <span className="text-base font-bold text-info font-mono">{totalAttachments}</span>
+            </Card>
           </div>
-          <div>
-            <p className="text-2xs text-text-muted uppercase font-medium">Configured Accounts</p>
-            <p className="text-xl font-bold text-heading mt-0.5">{bankAccounts.length}</p>
-          </div>
-        </Card>
 
-        <Card padding="md" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-success/10 text-success flex items-center justify-center shrink-0">
-            <IconShieldCheck size={20} />
-          </div>
-          <div>
-            <p className="text-2xs text-text-muted uppercase font-medium">Active Accounts</p>
-            <p className="text-xl font-bold text-heading mt-0.5">{activeCount}</p>
-          </div>
-        </Card>
-
-        <Card padding="md" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-info/10 text-info flex items-center justify-center shrink-0">
-            <IconAttachment size={20} />
-          </div>
-          <div>
-            <p className="text-2xs text-text-muted uppercase font-medium">Attached Documents</p>
-            <p className="text-xl font-bold text-heading mt-0.5">{totalAttachments}</p>
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Configured Accounts Selection List ── */}
-      <Card padding="md" className="space-y-4">
-        <div className="flex items-center justify-between border-b border-border pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <IconBankDetails size={16} />
+          {/* Account Selection Cards List */}
+          <Card padding="md" className="space-y-3.5 shadow-xs border-border bg-bg">
+            <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <IconBankDetails size={17} className="text-primary shrink-0" />
+                <h3 className="text-sm font-bold text-heading">Configured Accounts</h3>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="xs"
+                icon={IconAdd}
+                onClick={() => navigate(`/company-bank-details/${companyId}/edit`)}
+                className="text-2xs font-semibold h-7 px-2"
+              >
+                Add Account
+              </Button>
             </div>
-            <h3 className="text-sm font-semibold text-heading">Registered Bank Accounts</h3>
-          </div>
-          <span className="text-2xs text-text-muted">Click an account to inspect details</span>
-        </div>
 
-        {bankAccounts.length === 0 ? (
-          <div className="py-8 text-center text-xs text-text-muted">
-            No bank accounts configured for this company.{' '}
-            <button
-              type="button"
-              onClick={() => navigate(`/company-bank-details/${companyId}/edit`)}
-              className="text-primary hover:underline font-semibold"
-            >
-              Add a bank account now
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-border bg-surface/50">
-                  <Th className="text-2xs uppercase">Bank & Branch</Th>
-                  <Th className="text-2xs uppercase">Account No.</Th>
-                  <Th className="text-2xs uppercase">Type</Th>
-                  <Th className="text-2xs uppercase">Status</Th>
-                  <Th className="text-2xs uppercase text-right">Actions</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
+            {bankAccounts.length === 0 ? (
+              <div className="py-8 text-center text-xs text-text-muted space-y-2">
+                <p>No bank accounts configured for this company.</p>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => navigate(`/company-bank-details/${companyId}/edit`)}
+                  className="text-xs"
+                >
+                  Configure Bank Account
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[580px] overflow-y-auto pr-0.5 overscroll-contain">
                 {bankAccounts.map((acc) => {
                   const accId = acc.bankDetailId || acc.id;
                   const isSelected =
                     (selectedAccount?.bankDetailId || selectedAccount?.id) === accId;
 
                   return (
-                    <tr
+                    <div
                       key={accId}
                       onClick={() => handleSelectAccount(accId)}
-                      className={`cursor-pointer transition-colors ${
+                      className={`p-3 rounded-xl border transition-all cursor-pointer relative ${
                         isSelected
-                          ? 'bg-primary/10 border-l-4 border-l-primary'
-                          : 'hover:bg-surface/50'
+                          ? 'bg-primary/10 border-primary ring-2 ring-primary/20 shadow-xs'
+                          : 'bg-surface/50 border-border hover:bg-surface hover:border-primary/40'
                       }`}
                     >
-                      <td className="px-3 py-2.5 text-xs">
-                        <span className="font-semibold text-heading block">{acc.bankName}</span>
-                        <span className="text-2xs text-text-muted block">{acc.branchName || '—'}</span>
-                      </td>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-xs text-heading truncate">
+                              {acc.bankName}
+                            </span>
+                            <Badge variant={acc.isActive ? 'active' : 'inactive'} size="sm">
+                              {acc.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </div>
+                          <span className="text-2xs text-text-muted block mt-0.5 truncate">
+                            {acc.branchName || 'Main Branch'}
+                          </span>
+                        </div>
 
-                      <td className="px-3 py-2.5 text-xs font-mono">
-                        {acc.accountNumber
-                          ? `•••• ${String(acc.accountNumber).slice(-4)}`
-                          : '—'}
-                      </td>
+                        <span className="font-mono text-xs font-semibold text-heading px-2 py-0.5 rounded bg-bg border border-border shrink-0">
+                          •••• {String(acc.accountNumber || '').slice(-4) || '—'}
+                        </span>
+                      </div>
 
-                      <td className="px-3 py-2.5 text-xs">
-                        <Badge variant="neutral" size="sm">
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 text-2xs">
+                        <Badge variant="neutral" size="sm" className="text-3xs">
                           {acc.accountType || 'Current'}
                         </Badge>
-                      </td>
-
-                      <td className="px-3 py-2.5 text-xs">
-                        <Badge variant={acc.isActive ? 'active' : 'inactive'} size="sm">
-                          {acc.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </td>
-
-                      <td className="px-3 py-2.5 text-xs text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/company-bank-details/${companyId}/edit?bank=${accId}`);
-                            }}
-                            title="Edit this account"
-                            className="h-7 w-7 text-text-muted hover:text-primary hover:bg-surface"
-                          >
-                            <IconEdit size={14} />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      {/* ── Active Selection Detail Panel ── */}
-      {selectedAccount && (
-        <div className="space-y-6">
-          {/* Card 1: Beneficiary & Account Information */}
-          <Card padding="md" className="space-y-5">
-            <div className="flex items-center justify-between border-b border-border pb-3.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <IconBankDetails size={17} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-heading">
-                    Beneficiary & Account Information
-                  </h3>
-                  <p className="text-2xs text-text-muted">
-                    Primary banking credentials for disbursement
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Badge variant={selectedAccount.isActive ? 'active' : 'inactive'}>
-                  {selectedAccount.isActive ? 'Active Account' : 'Inactive Account'}
-                </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-danger hover:bg-danger/10"
-                  onClick={handlePromptDelete}
-                  title="Delete account (requires authorization)"
-                >
-                  <IconDelete size={15} />
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-5 gap-x-6">
-              <DetailField
-                label="Account Holder Name"
-                value={selectedAccount.accountHolderName || '—'}
-              />
-              <DetailField label="Bank Name" value={selectedAccount.bankName || '—'} />
-              <DetailField label="Branch Name" value={selectedAccount.branchName || '—'} />
-
-              {/* Account Number with Reveal & Copy */}
-              <div>
-                <span className="block text-2xs font-semibold text-text-muted uppercase tracking-wider mb-1">
-                  Account Number
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-semibold text-heading tabular-nums">
-                    {maskedAccount}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsRevealed((prev) => !prev)}
-                    className="text-text-muted hover:text-heading p-1 rounded transition-colors"
-                    title={isRevealed ? 'Hide account number' : 'Reveal full account number'}
-                  >
-                    {isRevealed ? <IconEyeOff size={15} /> : <IconView size={15} />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleCopy(selectedAccount.accountNumber, 'Account Number')
-                    }
-                    className="text-text-muted hover:text-primary p-1 rounded transition-colors"
-                    title="Copy account number"
-                  >
-                    {copiedField === 'Account Number' ? (
-                      <IconCheck size={15} className="text-success" />
-                    ) : (
-                      <IconCopy size={15} />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <DetailField
-                label="Account Type"
-                value={
-                  <Badge variant="neutral" size="sm">
-                    {selectedAccount.accountType || 'Current'}
-                  </Badge>
-                }
-              />
-
-              <DetailField
-                label="Company ID"
-                value={
-                  <span className="font-mono text-xs font-semibold text-primary">
-                    {selectedAccount.companyId}
-                  </span>
-                }
-              />
-            </div>
-          </Card>
-
-          {/* Card 2: Branch & Routing Details */}
-          <Card padding="md" className="space-y-5">
-            <div className="flex items-center gap-2.5 border-b border-border pb-3.5">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <IconLocation size={17} />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-heading">Branch & Routing Details</h3>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-y-5 gap-x-6">
-              <div>
-                <span className="block text-2xs font-semibold text-text-muted uppercase tracking-wider mb-1">
-                  IFSC Code
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-semibold text-heading">
-                    {selectedAccount.ifscCode || '—'}
-                  </span>
-                  {selectedAccount.ifscCode && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(selectedAccount.ifscCode, 'IFSC Code')}
-                      className="text-text-muted hover:text-primary p-0.5 rounded"
-                      title="Copy IFSC"
-                    >
-                      {copiedField === 'IFSC Code' ? (
-                        <IconCheck size={14} className="text-success" />
-                      ) : (
-                        <IconCopy size={14} />
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <span className="block text-2xs font-semibold text-text-muted uppercase tracking-wider mb-1">
-                  SWIFT / BIC Code
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-semibold text-heading">
-                    {selectedAccount.swiftCode || '—'}
-                  </span>
-                  {selectedAccount.swiftCode && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(selectedAccount.swiftCode, 'SWIFT Code')}
-                      className="text-text-muted hover:text-primary p-0.5 rounded"
-                      title="Copy SWIFT"
-                    >
-                      {copiedField === 'SWIFT Code' ? (
-                        <IconCheck size={14} className="text-success" />
-                      ) : (
-                        <IconCopy size={14} />
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <DetailField
-                label="MICR Code"
-                value={
-                  selectedAccount.micrCode ? (
-                    <span className="font-mono text-xs font-medium text-heading">
-                      {selectedAccount.micrCode}
-                    </span>
-                  ) : (
-                    '—'
-                  )
-                }
-              />
-
-              <DetailField
-                label="IBAN"
-                value={
-                  selectedAccount.iban ? (
-                    <span className="font-mono text-xs font-medium text-heading">
-                      {selectedAccount.iban}
-                    </span>
-                  ) : (
-                    '—'
-                  )
-                }
-              />
-
-              <div className="md:col-span-2 lg:col-span-4">
-                <DetailField
-                  label="Branch Address"
-                  value={selectedAccount.branchAddress || '—'}
-                  icon={IconLocation}
-                />
-              </div>
-            </div>
-          </Card>
-
-          {/* Card 3: Disbursement Remarks & Audit Trail */}
-          <Card padding="md" className="space-y-5">
-            <div className="flex items-center gap-2.5 border-b border-border pb-3.5">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <IconClock size={17} />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-heading">
-                  Disbursement Remarks & Audit Information
-                </h3>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <span className="block text-2xs font-semibold text-text-muted uppercase tracking-wider mb-1">
-                  Disbursement Remarks
-                </span>
-                <p className="text-xs text-heading p-3 rounded-lg bg-surface/70 border border-border min-h-[60px]">
-                  {selectedAccount.remarks || 'No specific remarks entered for this account.'}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <DetailField
-                  label="Record Created"
-                  value={
-                    selectedAccount.createdAt
-                      ? `${formatDate(selectedAccount.createdAt)} by ${
-                          selectedAccount.createdBy || 'System'
-                        }`
-                      : '—'
-                  }
-                />
-                <DetailField
-                  label="Last Updated"
-                  value={
-                    selectedAccount.updatedAt
-                      ? `${formatDate(selectedAccount.updatedAt)} by ${
-                          selectedAccount.updatedBy || 'Admin'
-                        }`
-                      : 'Never modified'
-                  }
-                />
-              </div>
-            </div>
-          </Card>
-
-          {/* Card 4: Supporting Documents & Attachments */}
-          <Card padding="md" className="space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <IconAttachment size={17} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-heading">
-                    Attached Documents ({selectedAttachments.length})
-                  </h3>
-                </div>
-              </div>
-            </div>
-
-            {selectedAttachments.length === 0 ? (
-              <p className="text-xs text-text-muted py-4 text-center">
-                No supporting documents attached for this account.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {selectedAttachments.map((att) => (
-                  <div
-                    key={att.id}
-                    className="p-3 bg-surface rounded-xl border border-border flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {getFileIcon(att.fileName, att.fileType)}
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-heading truncate" title={att.fileName}>
-                          {att.fileName}
-                        </p>
-                        <p className="text-3xs text-text-muted">
-                          {att.documentName} • {att.fileSize}
-                        </p>
+                        <span className="font-mono text-text-muted">
+                          IFSC: <strong className="text-heading font-medium">{acc.ifscCode || '—'}</strong>
+                        </span>
                       </div>
                     </div>
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-primary shrink-0"
-                      onClick={() => setPreviewItem(att)}
-                      title="Preview attachment"
-                    >
-                      <IconView size={14} />
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>
         </div>
-      )}
+
+        {/* ── RIGHT STAGE: Active Account Details Console (xl:col-span-7) ── */}
+        <div className="xl:col-span-7 space-y-6">
+          {selectedAccount ? (
+            <>
+              {/* Card 1: Beneficiary & Account Information */}
+              <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
+                <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <IconCreditCard size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-heading">
+                        {selectedAccount.bankName}
+                      </h3>
+                      <p className="text-2xs text-text-muted">
+                        Primary banking credentials for disbursement
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Badge variant={selectedAccount.isActive ? 'active' : 'inactive'}>
+                      {selectedAccount.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-danger hover:bg-danger/10"
+                      onClick={handlePromptDelete}
+                      title="Delete account (requires authorization)"
+                    >
+                      <IconDelete size={15} />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-6 text-sm">
+                  <DetailField
+                    label="Account Holder Name"
+                    value={selectedAccount.accountHolderName || '—'}
+                    valueClassName="font-semibold text-heading"
+                  />
+                  <DetailField label="Bank Name" value={selectedAccount.bankName || '—'} />
+                  <DetailField label="Branch Name" value={selectedAccount.branchName || '—'} />
+
+                  {/* Account Number with Reveal & Copy */}
+                  <div>
+                    <span className="view-field-label">Account Number</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="font-mono text-sm font-bold text-heading tabular-nums">
+                        {maskedAccount}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsRevealed((prev) => !prev)}
+                        className="text-text-muted hover:text-heading p-1 rounded transition-colors"
+                        title={isRevealed ? 'Hide account number' : 'Reveal full account number'}
+                      >
+                        {isRevealed ? <IconEyeOff size={15} /> : <IconView size={15} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopy(selectedAccount.accountNumber, 'Account Number')
+                        }
+                        className="text-text-muted hover:text-primary p-1 rounded transition-colors"
+                        title="Copy account number"
+                      >
+                        {copiedField === 'Account Number' ? (
+                          <IconCheck size={15} className="text-success" />
+                        ) : (
+                          <IconCopy size={15} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <DetailField
+                    label="Account Type"
+                    value={
+                      <Badge variant="neutral" size="sm">
+                        {selectedAccount.accountType || 'Current'}
+                      </Badge>
+                    }
+                  />
+
+                  <DetailField
+                    label="Company ID"
+                    value={
+                      <span className="font-mono text-xs font-semibold text-primary">
+                        {selectedAccount.companyId}
+                      </span>
+                    }
+                  />
+                </div>
+              </Card>
+
+              {/* Card 2: Branch & Routing Details */}
+              <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
+                <div className="flex items-center gap-2 border-b border-border pb-3">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <IconLocation size={17} />
+                  </div>
+                  <h3 className="text-sm font-bold text-heading">Branch & Routing Details</h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-4 gap-x-6 text-sm">
+                  <div>
+                    <span className="view-field-label">IFSC Code</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
+                        {selectedAccount.ifscCode || '—'}
+                      </span>
+                      {selectedAccount.ifscCode && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(selectedAccount.ifscCode, 'IFSC Code')}
+                          className="text-text-muted hover:text-primary p-0.5 rounded transition-colors"
+                          title="Copy IFSC"
+                        >
+                          {copiedField === 'IFSC Code' ? (
+                            <IconCheck size={14} className="text-success" />
+                          ) : (
+                            <IconCopy size={14} />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="view-field-label">SWIFT / BIC Code</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
+                        {selectedAccount.swiftCode || '—'}
+                      </span>
+                      {selectedAccount.swiftCode && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(selectedAccount.swiftCode, 'SWIFT Code')}
+                          className="text-text-muted hover:text-primary p-0.5 rounded transition-colors"
+                          title="Copy SWIFT"
+                        >
+                          {copiedField === 'SWIFT Code' ? (
+                            <IconCheck size={14} className="text-success" />
+                          ) : (
+                            <IconCopy size={14} />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <DetailField
+                    label="MICR Code"
+                    value={
+                      selectedAccount.micrCode ? (
+                        <span className="font-mono text-xs font-semibold text-heading">
+                          {selectedAccount.micrCode}
+                        </span>
+                      ) : (
+                        '—'
+                      )
+                    }
+                  />
+
+                  <DetailField
+                    label="IBAN"
+                    value={
+                      selectedAccount.iban ? (
+                        <span className="font-mono text-xs font-semibold text-heading">
+                          {selectedAccount.iban}
+                        </span>
+                      ) : (
+                        '—'
+                      )
+                    }
+                  />
+
+                  <div className="sm:col-span-2 lg:col-span-4 pt-1 border-t border-border/50">
+                    <DetailField
+                      label="Branch Address"
+                      value={selectedAccount.branchAddress || '—'}
+                      icon={IconLocation}
+                    />
+                  </div>
+                </div>
+              </Card>
+
+              {/* Card 3: Disbursement Remarks & Audit Trail */}
+              <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
+                <div className="flex items-center gap-2 border-b border-border pb-3">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <IconClock size={17} />
+                  </div>
+                  <h3 className="text-sm font-bold text-heading">
+                    Disbursement & Audit Information
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <span className="view-field-label">Disbursement Remarks</span>
+                    <p className="text-xs text-heading p-3 rounded-lg bg-surface/50 border border-border min-h-[50px] mt-1">
+                      {selectedAccount.remarks || 'No specific remarks entered for this account.'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <DetailField
+                      label="Record Created"
+                      value={
+                        selectedAccount.createdAt
+                          ? `${formatDate(selectedAccount.createdAt)} by ${
+                              selectedAccount.createdBy || 'System'
+                            }`
+                          : '—'
+                      }
+                    />
+                    <DetailField
+                      label="Last Updated"
+                      value={
+                        selectedAccount.updatedAt
+                          ? `${formatDate(selectedAccount.updatedAt)} by ${
+                              selectedAccount.updatedBy || 'Admin'
+                            }`
+                          : 'Never modified'
+                      }
+                    />
+                  </div>
+                </div>
+              </Card>
+
+              {/* Card 4: Supporting Documents & Attachments */}
+              <Card padding="md" className="space-y-3.5 shadow-xs border-border bg-bg">
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <IconAttachment size={17} />
+                    </div>
+                    <h3 className="text-sm font-bold text-heading">
+                      Attached Documents ({selectedAttachments.length})
+                    </h3>
+                  </div>
+                </div>
+
+                {selectedAttachments.length === 0 ? (
+                  <p className="text-xs text-text-muted py-5 text-center italic">
+                    No supporting documents attached for this account.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {selectedAttachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="p-3 bg-surface/50 rounded-xl border border-border flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {getFileIcon(att.fileName, att.fileType)}
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-heading truncate" title={att.fileName}>
+                              {att.fileName}
+                            </p>
+                            <p className="text-3xs text-text-muted">
+                              {att.documentName} • {att.fileSize}
+                            </p>
+                          </div>
+                        </div>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-primary shrink-0"
+                          onClick={() => setPreviewItem(att)}
+                          title="Preview attachment"
+                        >
+                          <IconView size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </>
+          ) : (
+            <Card padding="lg" className="py-12 text-center text-text-muted">
+              Select a bank account from the left to view complete details.
+            </Card>
+          )}
+        </div>
+      </div>
 
       {/* ── Document Preview Modal ── */}
       <Modal

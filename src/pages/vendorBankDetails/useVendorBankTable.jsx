@@ -24,7 +24,6 @@ export function useVendorBankTable({
   allBanks = [],
   toggleBankActive,
   onViewAttachments,
-  onDeleteBank,
 } = {}) {
   const navigate = useNavigate();
 
@@ -202,12 +201,12 @@ export function useVendorBankTable({
         },
       }),
 
-      /* 6. Actions (View, Edit, Delete) */
+      /* 6. Actions (View, Edit) */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 100,
-        size: 110,
+        minSize: 80,
+        size: 90,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -217,16 +216,14 @@ export function useVendorBankTable({
             <TableActions
               onView={() => navigate(`/vendor-bank-details/${row.vendorId}/view?bank=${bankId}`)}
               onEdit={() => navigate(`/vendor-bank-details/${row.vendorId}/edit?bank=${bankId}`)}
-              onDelete={onDeleteBank ? () => onDeleteBank(row) : undefined}
               viewTitle={`View bank details for ${row.vendorName}`}
               editTitle={`Edit bank account for ${row.vendorName}`}
-              deleteTitle={`Delete bank account for ${row.vendorName}`}
             />
           );
         },
       }),
     ],
-    [navigate, onDeleteBank]
+    [navigate]
   );
 
   return {

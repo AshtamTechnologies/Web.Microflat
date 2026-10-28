@@ -150,11 +150,11 @@ export default function UploadDocumentModal({
   }
 
   function handleDocTypeChange(e) {
-    const newTypeId = e.target.value;
+    const newTypeId = typeof e === 'object' && e?.target ? e.target.value : e;
     setDocumentTypeId(newTypeId);
     setTypeError('');
 
-    const newDocType = getDocumentType(newTypeId);
+    const newDocType = newTypeId ? getDocumentTypeById(newTypeId) : null;
     if (selectedFile) {
       const errorMsg = validateSelectedFile(selectedFile, newDocType);
       setFileError(errorMsg);
@@ -420,7 +420,7 @@ export default function UploadDocumentModal({
 
         {/* Remarks / Change Notes */}
         <Textarea
-          id="upload-remarks"
+            id="upload-remarks"
           label={isNewVersion ? 'Version Change Remarks (Optional)' : 'Remarks / Notes (Optional)'}
           rows={2}
           value={remarks}

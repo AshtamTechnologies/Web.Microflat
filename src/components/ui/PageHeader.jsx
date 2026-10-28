@@ -14,6 +14,7 @@
 
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
+import ProcessFlowStepper from '../common/ProcessFlowStepper';
 
 export default function PageHeader({
   title,
@@ -24,6 +25,10 @@ export default function PageHeader({
   backButton,
   className = '',
   truncateTitle = false,
+  showProcessFlow = true,
+  processFlowMode = 'overview',
+  currentStep,
+  moduleCode,
   children,
 }) {
   const actionsContent = actions || children;
@@ -95,6 +100,14 @@ export default function PageHeader({
           </div>
         )}
       </div>
+
+      {showProcessFlow && (
+        <ProcessFlowStepper
+          mode={processFlowMode}
+          overrideStep={currentStep}
+          overrideModule={moduleCode}
+        />
+      )}
     </div>
   );
 }

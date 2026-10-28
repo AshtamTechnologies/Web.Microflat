@@ -5,7 +5,7 @@
  * Handles cascading Country -> State selection, active status switch, and responsive layout.
  */
 
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   IconAdd,
   IconBuilding,
@@ -33,12 +33,9 @@ import {
 import { useRowsEditor } from '../../../hooks/useRowsEditor';
 import {
   ADDRESS_TYPE_OPTIONS,
-  COUNTRY_OPTIONS,
-  STATE_OPTIONS,
-  getCountryName,
-  getStateName,
   getAddressTypeBadgeVariant,
 } from '../../../mocks/clients';
+import { useCountryState } from '../../../context/CountryStateContext';
 
 const INITIAL_ADDRESS_FORM = {
   clientAddressId: null,
@@ -46,7 +43,7 @@ const INITIAL_ADDRESS_FORM = {
   addressLabel: '',
   address1: '',
   address2: '',
-  countryId: 'IN',
+  countryId: '',
   stateId: '',
   city: '',
   zipCode: '',
@@ -104,20 +101,24 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
     setAddressToDelete(null);
   };
 
-  // Filter states based on selected country
-  const selectedCountryCode = useMemo(() => {
-    if (!formState.countryId) return '';
-    return typeof formState.countryId === 'object' && formState.countryId !== null
-      ? formState.countryId.value || ''
-      : String(formState.countryId);
-  }, [formState.countryId]);
+  const {
+    countryOptions,
+    getStateOptions,
+    fetchStatesForCountry,
+    getCountryName,
+    getStateName,
+  } = useCountryState();
+
+  useEffect(() => {
+    if (formState.countryId) {
+      fetchStatesForCountry(formState.countryId);
+    }
+  }, [formState.countryId, fetchStatesForCountry]);
 
   const stateOptions = useMemo(() => {
-    if (!selectedCountryCode || !STATE_OPTIONS[selectedCountryCode]) {
-      return [];
-    }
-    return STATE_OPTIONS[selectedCountryCode];
-  }, [selectedCountryCode]);
+    if (!formState.countryId) return [];
+    return getStateOptions(formState.countryId);
+  }, [formState.countryId, getStateOptions]);
 
   const handleCountryChange = (e) => {
     const val = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
@@ -205,7 +206,7 @@ export default function AddressesEditor({ rows, addresses, onChange }) {
               required
               value={formState.countryId}
               onChange={handleCountryChange}
-              options={COUNTRY_OPTIONS}
+              options={countryOptions}
               placeholder="Select country..."
               searchPlaceholder="Search countries..."
               error={fieldErrors.countryId}

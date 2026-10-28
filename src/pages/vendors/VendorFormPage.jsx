@@ -54,26 +54,12 @@ import {
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { vendorService } from '../../services';
-import {
-  COUNTRY_OPTIONS,
-  STATE_OPTIONS,
-} from '../../mocks/vendors';
+import { useCountryState } from '../../context/CountryStateContext';
 import {
   getTodayIsoDate,
 } from '../../utils/effectiveDateUtils';
 
-const DOCUMENT_TYPE_OPTIONS = [
-  { value: 'GST Registration Certificate', label: 'GST Registration Certificate' },
-  { value: 'PAN Card Copy', label: 'PAN Card Copy' },
-  { value: 'MSME / Udyam Certificate', label: 'MSME / Udyam Certificate' },
-  { value: 'ISO 9001 / Quality Certificate', label: 'ISO 9001 / Quality Certificate' },
-  { value: 'Bank Cancelled Cheque / Mandate', label: 'Bank Cancelled Cheque / Mandate' },
-  { value: 'Vendor Agreement / NDA', label: 'Vendor Agreement / NDA' },
-  { value: 'Company Profile & Brochure', label: 'Company Profile & Brochure' },
-  { value: 'Material Test / Calibration Report', label: 'Material Test / Calibration Report' },
-  { value: 'Purchase Terms & Conditions', label: 'Purchase Terms & Conditions' },
-  { value: 'Other Document', label: 'Other Document' },
-];
+
 
 const ALLOWED_FILE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
 
@@ -113,7 +99,7 @@ const INITIAL_FORM = {
   email: '',
   gstNo: '',
   website: '',
-  countryId: 'IN',
+  countryId: '',
   stateId: '',
   city: '',
   zipCode: '',
@@ -330,7 +316,7 @@ export default function VendorFormPage() {
         maxFileSizeMB: dt.maxFileSizeMB,
       }));
     }
-    return DOCUMENT_TYPE_OPTIONS;
+    return [];
   }, [apiDocTypes]);
 
   const currentDocTypeConfig = useMemo(() => {
@@ -374,7 +360,7 @@ export default function VendorFormPage() {
           email: existingVendor.email || '',
           gstNo: existingVendor.gstNo || '',
           website: existingVendor.website || '',
-          countryId: existingVendor.countryId || 'IN',
+          countryId: existingVendor.countryId || '',
           stateId: existingVendor.stateId || '',
           city: existingVendor.city || '',
           zipCode: existingVendor.zipCode || '',
@@ -406,11 +392,25 @@ export default function VendorFormPage() {
     }
   }, [isEdit, id, existingVendor, getNextVendorCode]);
 
-  // Cascading state options based on selected country
+  const {
+    countryOptions,
+    getStateOptions,
+    fetchStatesForCountry,
+    loadingStatesMap,
+  } = useCountryState();
+
+  // Fetch states whenever selected country changes
+  useEffect(() => {
+    if (form.countryId) {
+      fetchStatesForCountry(form.countryId);
+    }
+  }, [form.countryId, fetchStatesForCountry]);
+
+  // Cascading state options based on selected country from API
   const stateOptions = useMemo(() => {
     if (!form.countryId) return [];
-    return STATE_OPTIONS[form.countryId] || [];
-  }, [form.countryId]);
+    return getStateOptions(form.countryId);
+  }, [form.countryId, getStateOptions]);
 
   // Check if form is dirty
   const isDirty = useMemo(() => {
@@ -612,17 +612,56 @@ export default function VendorFormPage() {
     try {
       if (isEdit && existingVendor) {
         const res = await updateVendor(existingVendor.id, form);
-        if (res.ok) {
+        if (res?.ok) {
           navigate('/vendors');
+        } else {
+          // Server returned an error - stay on page and map field errors
+          if (res?.fieldErrors && Object.keys(res.fieldErrors).length > 0) {
+            setErrors((prev) => ({ ...prev, ...res.fieldErrors }));
+          }
+          if (res?.error) {
+            if (/gst/i.test(res.error)) {
+              setErrors((prev) => ({ ...prev, gstNo: res.error }));
+              document.getElementById('gstNo')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (/vendor\s*code/i.test(res.error)) {
+              setErrors((prev) => ({ ...prev, vendorCode: res.error }));
+              document.getElementById('vendorCode')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (/vendor\s*name/i.test(res.error)) {
+              setErrors((prev) => ({ ...prev, vendorName: res.error }));
+              document.getElementById('vendorName')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
         }
       } else {
         const res = await createVendor(form);
-        if (res.ok && res.vendor) {
+        if (res?.ok && res.vendor) {
           navigate('/vendors');
+        } else {
+          // Server returned an error - stay on page and map field errors
+          if (res?.fieldErrors && Object.keys(res.fieldErrors).length > 0) {
+            setErrors((prev) => ({ ...prev, ...res.fieldErrors }));
+          }
+          if (res?.error) {
+            if (/gst/i.test(res.error)) {
+              setErrors((prev) => ({ ...prev, gstNo: res.error }));
+              document.getElementById('gstNo')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (/vendor\s*code/i.test(res.error)) {
+              setErrors((prev) => ({ ...prev, vendorCode: res.error }));
+              document.getElementById('vendorCode')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (/vendor\s*name/i.test(res.error)) {
+              setErrors((prev) => ({ ...prev, vendorName: res.error }));
+              document.getElementById('vendorName')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
         }
       }
-    } catch {
-      // Handled via toast
+    } catch (err) {
+      const msg = err?.message || err?.detail || 'An error occurred while saving vendor.';
+      toast.error(msg);
+      if (/gst/i.test(msg)) {
+        setErrors((prev) => ({ ...prev, gstNo: msg }));
+        document.getElementById('gstNo')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     } finally {
       setLoading(false);
     }
@@ -946,7 +985,7 @@ export default function VendorFormPage() {
             searchPlaceholder="Search countries..."
             emptyText="No countries found"
             required
-            options={COUNTRY_OPTIONS}
+            options={countryOptions}
             value={form.countryId}
             onChange={handleCountryChange}
             onBlur={handleBlur}
@@ -961,9 +1000,11 @@ export default function VendorFormPage() {
             placeholder={
               !form.countryId
                 ? 'Select country first...'
+                : loadingStatesMap[form.countryId]
+                ? 'Loading states...'
                 : stateOptions.length === 0
-                  ? 'No states available'
-                  : 'Select state...'
+                ? 'No states available'
+                : 'Select state...'
             }
             searchPlaceholder="Search states..."
             emptyText="No states found"

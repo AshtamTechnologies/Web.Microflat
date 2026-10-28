@@ -135,7 +135,7 @@ export function useInquiries(usersList = mockUsers) {
         AddressLine2: formData.AddressLine2?.trim() || '',
         City: formData.City?.trim() || '',
         State: formData.State?.trim() || '',
-        Country: formData.Country?.trim() || 'India',
+        Country: formData.Country?.trim() || '',
         RegionId: formData.RegionId || '',
         CategoryId: formData.CategoryId || (formData.items?.[0]?.categoryId || ''),
         Subject: formData.Subject?.trim() || (formData.items?.[0]?.itemName || formData.items?.[0]?.itemCode || formData.CustomerName || 'Inquiry'),

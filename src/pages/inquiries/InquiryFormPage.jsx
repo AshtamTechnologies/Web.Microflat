@@ -75,6 +75,7 @@ import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
 import { useRegions } from '../../context/RegionsContext';
 import { useClientsContext } from '../../context/ClientsContext';
+import { useCountryState } from '../../context/CountryStateContext';
 import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/treeUtils';
 import { getTodayISO } from '../../utils/dateUtils';
 import {
@@ -147,7 +148,7 @@ const INITIAL_FORM = {
   AddressLine2: '',
   City: '',
   State: '',
-  Country: 'India',
+  Country: '',
   CategoryId: '',
   Quantity: '1',
   UOM: 'PCS',
@@ -853,7 +854,7 @@ export default function InquiryFormPage() {
           AddressLine2: existingInquiry.AddressLine2 || '',
           City: existingInquiry.City || '',
           State: existingInquiry.State || '',
-          Country: existingInquiry.Country || 'India',
+          Country: existingInquiry.Country || '',
           parentRegionId: '',
           RegionId: loadedRegionId,
           CategoryId: existingInquiry.CategoryId || (mappedItems[0]?.categoryId || ''),
@@ -904,6 +905,72 @@ export default function InquiryFormPage() {
         };
       });
   }, [documentTypes]);
+
+  const {
+    countries,
+    fetchStatesForCountry,
+    statesCache,
+    loadingStatesMap,
+  } = useCountryState();
+
+  // Find selected country object
+  const selectedCountryObj = useMemo(() => {
+    if (!form.Country) return null;
+    return (
+      countries.find(
+        (c) =>
+          String(c.id) === String(form.Country) ||
+          c.countryName?.toLowerCase() === String(form.Country).toLowerCase()
+      ) || null
+    );
+  }, [form.Country, countries]);
+
+  // Formatted options for Country SearchableSelect
+  const countryDropdownOptions = useMemo(() => {
+    return countries.map((c) => ({
+      value: c.countryName,
+      label: c.countryName,
+    }));
+  }, [countries]);
+
+  // Fetch states on demand when a country is selected
+  useEffect(() => {
+    if (selectedCountryObj?.id) {
+      fetchStatesForCountry(selectedCountryObj.id);
+    }
+  }, [selectedCountryObj, fetchStatesForCountry]);
+
+  // Formatted options for State SearchableSelect
+  const stateDropdownOptions = useMemo(() => {
+    if (!selectedCountryObj?.id) return [];
+    const list = statesCache[String(selectedCountryObj.id)] || [];
+    return list.map((s) => ({
+      value: s.stateName,
+      label: s.stateName,
+    }));
+  }, [selectedCountryObj, statesCache]);
+
+  const handleCountrySelect = (e) => {
+    const val = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
+    const nextVal = typeof val === 'object' && val !== null ? val.value || '' : String(val || '');
+    setForm((prev) => ({
+      ...prev,
+      Country: nextVal,
+      State: '', // reset state on country change
+    }));
+    if (errors.Country || errors.State) {
+      setErrors((prev) => ({ ...prev, Country: '', State: '' }));
+    }
+  };
+
+  const handleStateSelect = (e) => {
+    const val = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
+    const nextVal = typeof val === 'object' && val !== null ? val.value || '' : String(val || '');
+    setForm((prev) => ({ ...prev, State: nextVal }));
+    if (errors.State) {
+      setErrors((prev) => ({ ...prev, State: '' }));
+    }
+  };
 
   // Check if form is dirty
   const isDirty = useMemo(() => {
@@ -1458,30 +1525,41 @@ export default function InquiryFormPage() {
                   autoComplete="address-level2"
                 />
 
-                {/* 8. State / Province */}
-                <Input
-                  id="State"
-                  name="State"
-                  type="text"
-                  label="State"
-                  placeholder="e.g. Gujarat"
-                  value={form.State}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  autoComplete="address-level1"
-                />
-
-                {/* 9. Country */}
-                <Input
+                {/* 8. Country (SearchableSelect) */}
+                <SearchableSelect
                   id="Country"
                   name="Country"
-                  type="text"
                   label="Country"
-                  placeholder="e.g. India"
-                  value={form.Country}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  autoComplete="country-name"
+                  placeholder="Select country..."
+                  searchPlaceholder="Search countries..."
+                  emptyText="No countries found"
+                  options={countryDropdownOptions}
+                  value={form.Country || ''}
+                  onChange={handleCountrySelect}
+                  error={errors.Country}
+                />
+
+                {/* 9. State / Province (Cascading SearchableSelect) */}
+                <SearchableSelect
+                  id="State"
+                  name="State"
+                  label="State"
+                  placeholder={
+                    !form.Country
+                      ? 'Select country first...'
+                      : selectedCountryObj && loadingStatesMap[selectedCountryObj.id]
+                      ? 'Loading states...'
+                      : stateDropdownOptions.length === 0
+                      ? 'No states available'
+                      : 'Select state...'
+                  }
+                  searchPlaceholder="Search states..."
+                  emptyText="No states found"
+                  options={stateDropdownOptions}
+                  value={form.State || ''}
+                  onChange={handleStateSelect}
+                  error={errors.State}
+                  disabled={!form.Country || stateDropdownOptions.length === 0}
                 />
 
                 {/* 10. Address Line 1 */}

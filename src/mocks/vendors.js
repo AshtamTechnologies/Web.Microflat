@@ -72,9 +72,9 @@ export const APPROVER_USERS = [
 
 const STATE_ID_TO_CODE = {
   1: 'GJ',
+  3: 'GJ', // Live API ID for Gujarat
   2: 'MH',
-  3: 'KA',
-  4: 'TN',
+  4: 'MH',
   5: 'DL',
   6: 'HR',
   7: 'RJ',
@@ -85,7 +85,7 @@ const STATE_ID_TO_CODE = {
 
 const COUNTRY_ID_TO_CODE = {
   1: 'IN',
-  2: 'US',
+  2: 'IN', // Live API ID for India
   3: 'DE',
   4: 'JP',
   5: 'GB',

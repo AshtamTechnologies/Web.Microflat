@@ -15,6 +15,7 @@ import VendorBankDetailsPage from './pages/vendorBankDetails/VendorBankDetailsPa
 import VendorBankDetailsFormPage from './pages/vendorBankDetails/VendorBankDetailsFormPage';
 import VendorBankDetailsViewPage from './pages/vendorBankDetails/VendorBankDetailsViewPage';
 import { VendorBankDetailsProvider } from './context/VendorBankDetailsContext';
+import { CountryStateProvider } from './context/CountryStateContext';
 
 import PurchaseRequisition from './pages/PurchaseRequisition/PurchaseRequisition';
 import PurchaseRequisitionDashboardPage from './pages/PurchaseRequisition/PurchaseRequisitionDashboardPage';
@@ -66,6 +67,7 @@ import CompanyBankDetailsPage from './pages/companyBankDetails/CompanyBankDetail
 import CompanyBankDetailsFormPage from './pages/companyBankDetails/CompanyBankDetailsFormPage';
 import CompanyBankDetailsViewPage from './pages/companyBankDetails/CompanyBankDetailsViewPage';
 import { CompanyBankDetailsProvider } from './context/CompanyBankDetailsContext';
+import { ProcessFlowProvider } from './context/ProcessFlowContext';
 import ScrollToTop from './components/common/ScrollToTop';
 import { GlobalTooltip } from './components/ui';
 
@@ -113,37 +115,41 @@ export default function App() {
             <Route
               element={
                 <ProtectedRoute>
-                  <UsersProvider>
-                    <VendorsProvider>
-                      <VendorBankDetailsProvider>
-                        <ClientsProvider>
-                          <PurchaseRequisitionProvider>
-                            <InquiriesProvider>
-                              <InquiryDocumentsProvider>
-                                <DocumentTypesProvider>
-                                  <ProductCategoriesProvider>
-                                    <UomProvider>
-                                      <RegionsProvider>
-                                        <PaymentTermsProvider>
-                                          <SeriesProvider>
-                                            <CompanyProvider>
-                                              <CompanyBankDetailsProvider>
-                                                <AppLayout />
-                                              </CompanyBankDetailsProvider>
-                                            </CompanyProvider>
-                                          </SeriesProvider>
-                                        </PaymentTermsProvider>
-                                      </RegionsProvider>
-                                    </UomProvider>
-                                  </ProductCategoriesProvider>
-                                </DocumentTypesProvider>
-                              </InquiryDocumentsProvider>
-                            </InquiriesProvider>
-                          </PurchaseRequisitionProvider>
-                        </ClientsProvider>
-                      </VendorBankDetailsProvider>
-                    </VendorsProvider>
-                  </UsersProvider>
+                  <CountryStateProvider>
+                    <UsersProvider>
+                      <VendorsProvider>
+                        <VendorBankDetailsProvider>
+                          <ClientsProvider>
+                            <PurchaseRequisitionProvider>
+                              <InquiriesProvider>
+                                <InquiryDocumentsProvider>
+                                  <DocumentTypesProvider>
+                                    <ProductCategoriesProvider>
+                                      <UomProvider>
+                                        <RegionsProvider>
+                                          <PaymentTermsProvider>
+                                            <SeriesProvider>
+                                              <CompanyProvider>
+                                                <CompanyBankDetailsProvider>
+                                                  <ProcessFlowProvider>
+                                                    <AppLayout />
+                                                  </ProcessFlowProvider>
+                                                </CompanyBankDetailsProvider>
+                                              </CompanyProvider>
+                                            </SeriesProvider>
+                                          </PaymentTermsProvider>
+                                        </RegionsProvider>
+                                      </UomProvider>
+                                    </ProductCategoriesProvider>
+                                  </DocumentTypesProvider>
+                                </InquiryDocumentsProvider>
+                              </InquiriesProvider>
+                            </PurchaseRequisitionProvider>
+                          </ClientsProvider>
+                        </VendorBankDetailsProvider>
+                      </VendorsProvider>
+                    </UsersProvider>
+                  </CountryStateProvider>
                 </ProtectedRoute>
               }
             >

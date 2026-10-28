@@ -38,8 +38,8 @@ const INITIAL_FORM = {
   address1: '',
   address2: '',
   city: '',
-  state: 'GJ',
-  country: 'IN',
+  state: '',
+  country: '',
   pinCode: '',
   isActive: true,
 };
@@ -62,18 +62,11 @@ export default function CompanyFormPage() {
     if (isEdit) {
       const existing = getCompanyById(id);
       if (existing) {
-        // Normalize legacy country and state names if stored as full names
-        let normalizedCountry = existing.country || 'IN';
-        if (normalizedCountry === 'India') normalizedCountry = 'IN';
-
-        let normalizedState = existing.state || '';
-        if (normalizedState === 'Gujarat') normalizedState = 'GJ';
-
         setForm({
           ...INITIAL_FORM,
           ...existing,
-          country: normalizedCountry,
-          state: normalizedState,
+          country: existing.country || '',
+          state: existing.state || '',
           website: existing.website || '',
           contactPersonName:
             existing.contactPersonName ||
@@ -114,8 +107,8 @@ export default function CompanyFormPage() {
       errs.email = 'Please enter a valid email address';
     }
     if (!form.phone1?.trim()) errs.phone1 = 'Primary landline phone number is required';
-    if (!form.country?.trim()) errs.country = 'Country is required';
-    if (!form.state?.trim()) errs.state = 'State is required';
+    if (!String(form.country || '').trim()) errs.country = 'Country is required';
+    if (!String(form.state || '').trim()) errs.state = 'State is required';
     if (!form.city?.trim()) errs.city = 'City is required';
     if (!form.address1?.trim()) errs.address1 = 'Address line 1 is required';
     if (!form.pinCode?.trim()) errs.pinCode = 'PIN code is required';

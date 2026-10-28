@@ -55,33 +55,35 @@ const STATE_ID_TO_CODE = {
 export function normalizeCountryId(value) {
   if (typeof value === 'number' && !isNaN(value) && value > 0) return value;
   if (typeof value === 'string' && value.trim()) {
-    const upper = value.trim().toUpperCase();
-    if (COUNTRY_CODE_TO_ID[upper]) return COUNTRY_CODE_TO_ID[upper];
     const parsed = parseInt(value, 10);
     if (!isNaN(parsed) && parsed > 0) return parsed;
+    const upper = value.trim().toUpperCase();
+    if (upper === 'IN') return 2;
+    if (COUNTRY_CODE_TO_ID[upper]) return COUNTRY_CODE_TO_ID[upper];
   }
-  return 1; // Default to India (1)
+  return 2; // Default to India (2 in live API)
 }
 
 export function countryIdToCode(id) {
-  if (!id) return 'IN';
-  return COUNTRY_ID_TO_CODE[Number(id)] || String(id);
+  if (!id) return '';
+  return id;
 }
 
 export function normalizeStateId(value) {
   if (typeof value === 'number' && !isNaN(value) && value > 0) return value;
   if (typeof value === 'string' && value.trim()) {
-    const upper = value.trim().toUpperCase();
-    if (STATE_CODE_TO_ID[upper]) return STATE_CODE_TO_ID[upper];
     const parsed = parseInt(value, 10);
     if (!isNaN(parsed) && parsed > 0) return parsed;
+    const upper = value.trim().toUpperCase();
+    if (upper === 'GJ') return 3;
+    if (STATE_CODE_TO_ID[upper]) return STATE_CODE_TO_ID[upper];
   }
-  return 1; // Default to Gujarat (1)
+  return value || '';
 }
 
 export function stateIdToCode(id) {
   if (!id) return '';
-  return STATE_ID_TO_CODE[Number(id)] || String(id);
+  return id;
 }
 
 /**

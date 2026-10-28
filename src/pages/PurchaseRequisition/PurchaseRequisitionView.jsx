@@ -81,6 +81,12 @@ export default function PurchaseRequisitionView() {
     return getPRById(id);
   }, [id, getPRById]);
 
+  const [mobileItemsMode, setMobileItemsMode] = useState('cards');
+
+  const totalItemQty = useMemo(() => {
+    return (pr?.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+  }, [pr?.items]);
+
   function handleOpenApprove() {
     setApproveRemarks('');
     setIsApproveModalOpen(true);
@@ -302,255 +308,387 @@ export default function PurchaseRequisitionView() {
         }
       />
 
-      {/* ── Section 1: PR Information Card ── */}
-      <Card padding="md" className="space-y-4 shadow-xs border-border">
-        <div className="flex items-center gap-2 pb-3 border-b border-border">
-          <IconFileSpreadsheet size={18} className="text-primary" />
-          <h2 className="text-base font-bold text-heading">
-            Purchase Requisition Information
-          </h2>
-        </div>
+      {/* ── 2-Column Responsive Workspace Layout (xl:grid-cols-12) ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* ── LEFT COLUMN: Core Details & Line Items (xl:col-span-8) ── */}
+        <div className="xl:col-span-8 space-y-6">
+          {/* Section 1: PR Information Card */}
+          <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
+            <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <IconFileSpreadsheet size={18} className="text-primary shrink-0" />
+                <h2 className="text-base font-bold text-heading">
+                  Purchase Requisition Information
+                </h2>
+              </div>
+              <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
+                {pr.prNumber}
+              </span>
+            </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
-          {/* PR Number */}
-          <DetailField
-            label="PR Number"
-            value={pr.prNumber}
-            mono
-            valueClassName="text-primary font-semibold text-base"
-          />
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
+              <DetailField
+                label="PR Number"
+                value={pr.prNumber}
+                mono
+                valueClassName="text-primary font-semibold"
+              />
+              <DetailField
+                label="PR Date"
+                value={formatPRDate(pr.prDate)}
+                mono
+              />
+              <DetailField
+                label="Project ID"
+                value={
+                  pr.projectId ? (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono text-primary font-semibold">
+                        {pr.projectId}
+                      </span>
+                      <span className="text-text-muted text-xs">
+                        ({getProjectName(pr.projectId)})
+                      </span>
+                    </div>
+                  ) : (
+                    '—'
+                  )
+                }
+              />
+              <DetailField
+                label="Requested By"
+                value={pr.requestedBy}
+              />
+              <DetailField
+                label="Department"
+                value={pr.department}
+              />
+              <DetailField
+                label="Required Date"
+                value={formatPRDate(pr.requiredDate)}
+                mono
+              />
+              <DetailField label="Priority">
+                <Badge variant={priorityVariant}>
+                  {pr.priority || 'Normal'}
+                </Badge>
+              </DetailField>
 
-          {/* PR Date */}
-          <DetailField
-            label="PR Date"
-            value={formatPRDate(pr.prDate)}
-            mono
-          />
+              {/* Remarks / Justification across full width */}
+              <div className="sm:col-span-2 md:col-span-3 pt-2 border-t border-border/50">
+                <span className="view-field-label">Remarks / Justification</span>
+                {pr.remarks && pr.remarks.includes('<') ? (
+                  <div
+                    className="rich-text-content text-text bg-surface/40 p-3.5 rounded-lg border border-border leading-relaxed text-sm overflow-x-auto mt-1"
+                    dangerouslySetInnerHTML={{ __html: pr.remarks }}
+                  />
+                ) : (
+                  <p className="view-field-value font-medium text-text mt-1 bg-surface/30 p-2.5 rounded-lg border border-border/60 whitespace-pre-wrap text-xs sm:text-sm">
+                    {pr.remarks || 'No remarks provided.'}
+                  </p>
+                )}
+              </div>
+            </div>
+          </Card>
 
-          {/* Project ID */}
-          <DetailField
-            label="Project ID"
-            value={
-              pr.projectId ? (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-mono text-primary font-semibold">
-                    {pr.projectId}
-                  </span>
-                  <span className="text-text-muted text-xs">
-                    ({getProjectName(pr.projectId)})
-                  </span>
+          {/* Section 2: PR Items Card (Responsive Table + Mobile Cards Toggle) */}
+          <Card padding="none" className="overflow-hidden border border-border shadow-xs bg-bg">
+            <div className="p-3.5 sm:p-4 border-b border-border flex items-center justify-between bg-surface/60 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <IconPackage size={18} className="text-primary shrink-0" />
+                <h2 className="text-sm sm:text-base font-bold text-heading">
+                  Requisition Items
+                </h2>
+                <Badge variant="neutral" className="font-mono text-xs px-2 py-0.5">
+                  {pr.items?.length || 0} {pr.items?.length === 1 ? 'Item' : 'Items'}
+                </Badge>
+                <span className="text-xs text-text-muted hidden md:inline font-mono">
+                  Total Qty: <strong className="text-heading">{totalItemQty}</strong>
+                </span>
+              </div>
+
+              {/* Mobile View Switcher (< sm) */}
+              <div className="sm:hidden flex items-center bg-bg border border-border rounded-lg p-0.5 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setMobileItemsMode('cards')}
+                  className={`px-2 py-0.5 text-2xs font-medium rounded transition-colors ${
+                    mobileItemsMode === 'cards'
+                      ? 'bg-primary text-white shadow-2xs'
+                      : 'text-text-muted hover:text-heading'
+                  }`}
+                >
+                  Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileItemsMode('table')}
+                  className={`px-2 py-0.5 text-2xs font-medium rounded transition-colors ${
+                    mobileItemsMode === 'table'
+                      ? 'bg-primary text-white shadow-2xs'
+                      : 'text-text-muted hover:text-heading'
+                  }`}
+                >
+                  Table
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Card List View (< sm when mobileItemsMode === 'cards') */}
+            <div className={`${mobileItemsMode === 'cards' ? 'block sm:hidden' : 'hidden'} divide-y divide-border bg-bg`}>
+              {!pr.items || pr.items.length === 0 ? (
+                <div className="py-8 text-center text-xs text-text-muted">
+                  No items listed for this purchase requisition.
                 </div>
               ) : (
-                '—'
-              )
-            }
-          />
+                pr.items.map((item, index) => (
+                  <div key={item.prItemId || index} className="p-3.5 space-y-2 bg-surface/20">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-surface border border-border flex items-center justify-center text-2xs font-mono text-text-muted shrink-0 mt-0.5">
+                          {index + 1}
+                        </span>
+                        <div>
+                          <span className="font-semibold text-xs text-heading leading-snug">
+                            {item.itemName || '--'}
+                          </span>
+                          <span className="font-mono text-2xs text-text-muted block mt-0.5">
+                            {item.itemCode || '--'}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="font-mono font-bold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-xs shrink-0">
+                        {formatNumber(item.quantity)} {item.uom || 'Nos'}
+                      </span>
+                    </div>
 
-          {/* Requested By */}
-          <DetailField
-            label="Requested By"
-            value={pr.requestedBy}
-          />
-
-          {/* Department */}
-          <DetailField
-            label="Department"
-            value={pr.department}
-          />
-
-          {/* Required Date */}
-          <DetailField
-            label="Required Date"
-            value={formatPRDate(pr.requiredDate)}
-            mono
-          />
-
-          {/* Priority */}
-          <DetailField label="Priority">
-            <Badge variant={priorityVariant}>
-              {pr.priority || 'Normal'}
-            </Badge>
-          </DetailField>
-
-          {/* Remarks / Justification */}
-          <div className="sm:col-span-2 md:col-span-3">
-            <span className="view-field-label">Remarks / Justification</span>
-            {pr.remarks && pr.remarks.includes('<') ? (
-              <div
-                className="rich-text-content text-text bg-bg p-3.5 rounded-lg border border-border leading-relaxed text-sm overflow-x-auto mt-1"
-                dangerouslySetInnerHTML={{ __html: pr.remarks }}
-              />
-            ) : (
-              <p className="view-field-value font-medium text-text mt-0.5 whitespace-pre-wrap">
-                {pr.remarks || 'No remarks provided.'}
-              </p>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      {/* ── Section 2: PR Items Card ── */}
-      <Card padding="none" className="overflow-hidden border border-border shadow-xs">
-        <div className="p-4 border-b border-border flex items-center justify-between bg-surface">
-          <div className="flex items-center gap-2">
-            <IconPackage size={18} className="text-primary" />
-            <h2 className="text-base font-bold text-heading">
-              Purchase Requisition Items
-            </h2>
-            <Badge variant="role" className="ml-1 text-xs">
-              {pr.items?.length || 0} {pr.items?.length === 1 ? 'Item' : 'Items'}
-            </Badge>
-          </div>
-        </div>
-
-        <TableContainer>
-          <thead>
-            <tr className="bg-surface border-b border-border">
-              <Th className="w-[50px] text-center">#</Th>
-              <Th className="w-[160px]">Item Code</Th>
-              <Th className="w-[200px]">Item Name</Th>
-              <Th className="w-[260px]">Specification</Th>
-              <Th className="w-[120px] text-right">Quantity</Th>
-              <Th className="w-[100px]">UOM</Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-surface">
-            {!pr.items || pr.items.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-sm text-text-muted">
-                  No items listed for this purchase requisition.
-                </td>
-              </tr>
-            ) : (
-              pr.items.map((item, index) => (
-                <tr
-                  key={item.prItemId || index}
-                  className="hover:bg-bg/50 transition-colors"
-                >
-                  {/* Index */}
-                  <Td className="text-center font-semibold text-text-muted">
-                    {index + 1}
-                  </Td>
-
-                  {/* Item Code */}
-                  <Td className="font-medium text-text">
-                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-bg border border-border">
-                      {item.itemCode || '--'}
-                    </span>
-                  </Td>
-
-                  {/* Item Name */}
-                  <Td className="font-semibold text-heading">
-                    {item.itemName || '--'}
-                  </Td>
-
-                  {/* Specification */}
-                  <Td className="text-text-muted text-xs">
-                    {item.specification || '--'}
-                  </Td>
-
-                  {/* Quantity */}
-                  <Td className="text-right font-bold text-heading font-mono tabular-nums">
-                    {formatNumber(item.quantity)}
-                  </Td>
-
-                  {/* UOM */}
-                  <Td className="text-text-muted text-xs">
-                    {item.uom || 'Nos'}
-                  </Td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </TableContainer>
-      </Card>
-
-      {/* ── Section 3: Document Attachments Card ── */}
-      <Card padding="md" className="space-y-4 shadow-xs border-border bg-surface">
-        <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <IconAttachment size={18} className="text-primary" />
-            <h2 className="text-base font-bold text-heading">
-              Document Attachments
-            </h2>
-          </div>
-          <Badge variant="role" className="text-xs">
-            {pr.attachments?.length || 0} {pr.attachments?.length === 1 ? 'Attachment' : 'Attachments'}
-          </Badge>
-        </div>
-
-        {Array.isArray(pr.attachments) && pr.attachments.length > 0 ? (
-          <div className="rounded-xl border border-border overflow-hidden divide-y divide-border bg-bg/50">
-            {pr.attachments.map((att, idx) => (
-              <div
-                key={att.id || idx}
-                className="p-3.5 flex items-center justify-between gap-3 text-xs hover:bg-surface/60 transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <IconFileText size={16} />
+                    {item.specification && item.specification !== '--' && (
+                      <div className="text-2xs text-text-muted bg-surface/50 p-2 rounded-lg border border-border/60">
+                        <span className="font-semibold text-text-muted block text-3xs uppercase tracking-wider mb-0.5">Specification</span>
+                        <span>{item.specification}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-heading truncate">
-                      {att.fileName}
-                    </p>
-                    <p className="text-2xs text-text-muted font-mono mt-0.5">
-                      {att.fileSizeKB ? `${att.fileSizeKB} KB` : '150 KB'} • Uploaded by {att.uploadedBy || pr.requestedBy} {att.uploadedDate ? `• ${formatDateTime(att.uploadedDate)}` : ''}
-                    </p>
-                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Standard Desktop / Tablet Table View */}
+            <div className={`${mobileItemsMode === 'cards' ? 'hidden sm:block' : 'block'} overflow-x-auto`}>
+              <TableContainer variant="plain">
+                <thead>
+                  <tr className="bg-surface/80 border-b border-border text-xs">
+                    <Th className="w-[50px] text-center">#</Th>
+                    <Th className="w-[150px]">Item Code</Th>
+                    <Th className="w-[200px]">Item Name</Th>
+                    <Th className="min-w-[180px]">Specification</Th>
+                    <Th className="w-[110px] text-right">Quantity</Th>
+                    <Th className="w-[90px]">UOM</Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border bg-bg">
+                  {!pr.items || pr.items.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-xs text-text-muted italic">
+                        No items listed for this purchase requisition.
+                      </td>
+                    </tr>
+                  ) : (
+                    pr.items.map((item, index) => (
+                      <tr
+                        key={item.prItemId || index}
+                        className="hover:bg-surface/50 transition-colors"
+                      >
+                        <Td className="text-center font-semibold text-text-muted text-xs py-2.5">
+                          {index + 1}
+                        </Td>
+                        <Td className="font-medium text-text py-2.5">
+                          <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border">
+                            {item.itemCode || '--'}
+                          </span>
+                        </Td>
+                        <Td className="font-semibold text-heading text-xs py-2.5">
+                          {item.itemName || '--'}
+                        </Td>
+                        <Td className="text-text-muted text-xs py-2.5">
+                          {item.specification || '--'}
+                        </Td>
+                        <Td className="text-right font-bold text-heading font-mono tabular-nums text-xs py-2.5">
+                          {formatNumber(item.quantity)}
+                        </Td>
+                        <Td className="text-text-muted text-xs py-2.5">
+                          {item.uom || 'Nos'}
+                        </Td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </TableContainer>
+            </div>
+          </Card>
+        </div>
+
+        {/* ── RIGHT COLUMN: Workflow Status, Attachments & Audit (xl:col-span-4) ── */}
+        <div className="xl:col-span-4 space-y-6">
+          {/* Card 3: Requisition Lifecycle & Quick Actions */}
+          <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <IconUserCheck size={17} className="text-primary shrink-0" />
+                <h3 className="text-sm font-bold text-heading">Lifecycle & Status</h3>
+              </div>
+              <Badge variant={statusVariant} className="px-2 py-0.5 text-xs font-semibold">
+                {pr.status}
+              </Badge>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-surface/60 border border-border flex items-center justify-between">
+                <div>
+                  <span className="view-field-label">Department</span>
+                  <p className="text-xs font-bold text-heading mt-0.5">{pr.department || 'General'}</p>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleDownloadAttachment(att)}
-                    className="h-8 px-2.5 text-xs text-text hover:text-primary flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <IconDownload size={13} />
-                    <span>Download</span>
-                  </Button>
+                <div className="text-right">
+                  <span className="view-field-label">Priority</span>
+                  <Badge variant={priorityVariant} className="mt-0.5 text-2xs">
+                    {pr.priority || 'Normal'}
+                  </Badge>
                 </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="py-6 text-center text-xs text-text-muted italic bg-bg/40 rounded-xl border border-border/60">
-            No document attachments uploaded for this requisition.
-          </div>
-        )}
-      </Card>
 
-      {/* ── Section 4: Audit Information Card ── */}
-      <Card padding="md" className="space-y-4 shadow-xs border-border bg-surface">
-        <div className="flex items-center gap-2 pb-3 border-b border-border">
-          <IconClock size={18} className="text-text-muted" />
-          <h2 className="text-base font-bold text-heading">
-            Audit Information
-          </h2>
-        </div>
+              {/* Fast Executive Approval Actions if pending & from approvals */}
+              {isFromApproval && (pr.status || '').toLowerCase().includes('pending') && (
+                <div className="pt-2 border-t border-border/60 space-y-2">
+                  <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
+                    Action Required
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="success"
+                      size="sm"
+                      onClick={handleOpenApprove}
+                      className="w-full text-xs font-semibold justify-center shadow-2xs h-8"
+                    >
+                      <IconCheck size={14} className="mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger-soft"
+                      size="sm"
+                      onClick={handleOpenReject}
+                      className="w-full text-xs font-semibold justify-center shadow-2xs h-8"
+                    >
+                      <IconClose size={14} className="mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <DetailField
-            label="Created By"
-            value={pr.createdBy || '—'}
-          />
-          <DetailField
-            label="Created Date"
-            value={formatPRDateTime(pr.createdDate)}
-            mono
-          />
-          <DetailField
-            label="Modified By"
-            value={pr.modifiedBy || '—'}
-          />
-          <DetailField
-            label="Modified Date"
-            value={formatPRDateTime(pr.modifiedDate)}
-            mono
-          />
+              {!isReadOnly && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    navigate(`/purchase-requisition/${pr.prNumber || pr.prId}/edit`)
+                  }
+                  className="w-full text-xs font-semibold justify-center mt-1"
+                >
+                  <IconEdit size={14} className="mr-1.5" />
+                  Edit Requisition
+                </Button>
+              )}
+            </div>
+          </Card>
+
+          {/* Card 4: Document Attachments */}
+          <Card padding="md" className="space-y-3.5 shadow-xs border-border bg-bg">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <IconAttachment size={17} className="text-primary shrink-0" />
+                <h3 className="text-sm font-bold text-heading">
+                  Attachments
+                </h3>
+              </div>
+              <Badge variant="neutral" className="text-2xs font-mono px-2 py-0.5">
+                {pr.attachments?.length || 0}
+              </Badge>
+            </div>
+
+            {Array.isArray(pr.attachments) && pr.attachments.length > 0 ? (
+              <div className="space-y-2">
+                {pr.attachments.map((att, idx) => (
+                  <div
+                    key={att.id || idx}
+                    className="p-2.5 rounded-xl border border-border bg-surface/40 hover:bg-surface/70 transition-colors flex items-center justify-between gap-2.5 text-xs"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        <IconFileText size={14} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-heading truncate text-xs" title={att.fileName}>
+                          {att.fileName}
+                        </p>
+                        <p className="text-3xs text-text-muted font-mono mt-0.5">
+                          {att.fileSizeKB ? `${att.fileSizeKB} KB` : '150 KB'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => handleDownloadAttachment(att)}
+                      className="h-7 w-7 p-0 text-text-muted hover:text-primary shrink-0"
+                      title="Download"
+                    >
+                      <IconDownload size={13} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-xs text-text-muted italic bg-surface/30 rounded-xl border border-dashed border-border/70">
+                No attachments uploaded.
+              </div>
+            )}
+          </Card>
+
+          {/* Card 5: Audit Information Card */}
+          <Card padding="md" className="space-y-3 shadow-xs border-border bg-bg">
+            <div className="flex items-center gap-2 pb-2.5 border-b border-border">
+              <IconClock size={16} className="text-text-muted shrink-0" />
+              <h3 className="text-xs font-bold text-heading uppercase tracking-wider">
+                Audit Information
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <DetailField
+                label="Created By"
+                value={pr.createdBy || '—'}
+              />
+              <DetailField
+                label="Created Date"
+                value={formatPRDateTime(pr.createdDate)}
+                mono
+              />
+              <DetailField
+                label="Modified By"
+                value={pr.modifiedBy || '—'}
+              />
+              <DetailField
+                label="Modified Date"
+                value={formatPRDateTime(pr.modifiedDate)}
+                mono
+              />
+            </div>
+          </Card>
         </div>
-      </Card>
+      </div>
 
       {/* ── 1. APPROVE CONFIRMATION MODAL WITH REMARKS ── */}
       {isApproveModalOpen && pr && (

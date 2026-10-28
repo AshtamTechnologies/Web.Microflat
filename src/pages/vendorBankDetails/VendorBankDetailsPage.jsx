@@ -15,7 +15,6 @@ import {
   IconAttachment,
   IconBankDetails,
   IconClose,
-  IconDelete,
   IconDownload,
   IconEdit,
   IconFileText,
@@ -37,13 +36,11 @@ import {
   IconButton,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
-import { useVendorBankDetails } from '../../context/VendorBankDetailsContext';
 import {
   useVendorBankTable,
   STATUS_FILTER_OPTIONS,
   ACCOUNT_TYPE_FILTER_OPTIONS,
 } from './useVendorBankTable.jsx';
-import AuthVerificationModal from './components/AuthVerificationModal';
 import { vendorService } from '../../services';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -66,7 +63,6 @@ function getFileIcon(fileName = '', fileType = '') {
 
 export default function VendorBankDetailsPage() {
   const navigate = useNavigate();
-  const { deleteBankDetail } = useVendorBankDetails();
   const { allVendors = [] } = useVendorsContext();
 
   // Grid API data state
@@ -82,19 +78,6 @@ export default function VendorBankDetailsPage() {
   // Attachments & Preview modal state
   const [viewingAttachmentsRow, setViewingAttachmentsRow] = useState(null);
   const [previewingFile, setPreviewingFile] = useState(null);
-
-  // Security Auth Modal State for deletion
-  const [authModalState, setAuthModalState] = useState({
-    isOpen: false,
-    bank: null,
-  });
-
-  const handleDeleteRequest = (bankRow) => {
-    setAuthModalState({
-      isOpen: true,
-      bank: bankRow,
-    });
-  };
 
   const {
     columns,
@@ -115,7 +98,6 @@ export default function VendorBankDetailsPage() {
     resetFilters,
   } = useVendorBankTable({
     onViewAttachments: setViewingAttachmentsRow,
-    onDeleteBank: handleDeleteRequest,
   });
 
   // Options for Vendor filter dropdown
@@ -184,19 +166,6 @@ export default function VendorBankDetailsPage() {
   useEffect(() => {
     setPagination((prev) => (prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 }));
   }, [search, vendorFilter, accountTypeFilter, statusFilter, setPagination]);
-
-  const handleAuthDeleteSuccess = async () => {
-    if (!authModalState.bank) return;
-    const bankId = authModalState.bank.bankDetailId || authModalState.bank.id;
-    if (deleteBankDetail) {
-      await deleteBankDetail(bankId);
-    }
-    toast.success(
-      `Bank account for ${authModalState.bank.bankName || 'vendor'} deleted successfully`
-    );
-    setAuthModalState({ isOpen: false, bank: null });
-    fetchBankDetails();
-  };
 
   const hasActiveFilters = Boolean(
     (search && search.trim() !== '') ||
@@ -393,15 +362,6 @@ export default function VendorBankDetailsPage() {
                   <IconEdit size={13} className="mr-1.5" aria-hidden="true" />
                   Edit
                 </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleDeleteRequest(bank)}
-                  className="flex-1 text-xs"
-                >
-                  <IconDelete size={13} className="mr-1.5" aria-hidden="true" />
-                  Delete
-                </Button>
               </div>
             </Card>
           );
@@ -571,17 +531,6 @@ export default function VendorBankDetailsPage() {
           </div>
         </div>
       </Modal>
-
-      {/* ── Security Auth Verification Modal for Account Deletion ── */}
-      <AuthVerificationModal
-        isOpen={authModalState.isOpen}
-        onClose={() => setAuthModalState({ isOpen: false, bank: null })}
-        onSuccess={handleAuthDeleteSuccess}
-        action="delete"
-        bankAccount={authModalState.bank}
-        vendorId={authModalState.bank?.vendorId}
-        vendorName={authModalState.bank?.vendorName}
-      />
     </div>
   );
 }

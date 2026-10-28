@@ -149,11 +149,18 @@ export default function ActivityTimeline({
 
               {/* Remarks / Comments */}
               {item.remarks && (
-                <div className="pt-1.5 border-t border-border/60 flex items-start gap-1.5 text-xs text-text-muted bg-surface/30 p-2 rounded-lg">
+                <div className="pt-1.5 border-t border-border/60 flex items-start gap-1.5 text-xs text-text-muted bg-surface/30 p-2.5 rounded-lg">
                   <IconMessageSquare size={13} className="text-text-muted shrink-0 mt-0.5" />
-                  <p className="italic text-text break-words leading-relaxed">
-                    "{item.remarks}"
-                  </p>
+                  {item.remarks.includes('<') ? (
+                    <div
+                      className="rich-text-content text-text break-words leading-relaxed text-xs overflow-x-auto w-full min-w-0"
+                      dangerouslySetInnerHTML={{ __html: item.remarks }}
+                    />
+                  ) : (
+                    <p className="italic text-text break-words leading-relaxed">
+                      &quot;{item.remarks}&quot;
+                    </p>
+                  )}
                 </div>
               )}
             </div>

@@ -131,6 +131,8 @@ export default function ClientEffectiveDatesPage() {
 
   // Form tab for EDIT / ADD mode: 'company_terms' | 'addresses' | 'contacts'
   const [activeFormTab, setActiveFormTab] = useState('company_terms');
+  // View tab for VIEW mode: 'all' | 'company_terms' | 'addresses' | 'contacts'
+  const [activeViewTab, setActiveViewTab] = useState('all');
 
   // TanStack table state
   const [sorting, setSorting] = useState([]);
@@ -788,7 +790,6 @@ export default function ClientEffectiveDatesPage() {
           )
         }
       >
-
         {/* ── Mobile Card List (< md) ── */}
         <div className="block md:hidden p-3 space-y-2.5 bg-bg/50 max-h-[260px] overflow-y-auto overscroll-y-contain border-t border-border/60">
           {versions.length === 0 ? (
@@ -807,10 +808,11 @@ export default function ClientEffectiveDatesPage() {
                 <div
                   key={ver.id}
                   onClick={() => handleSelectView(ver)}
-                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${isSelected
-                    ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
-                    : 'bg-surface border-border hover:border-primary/40'
-                    }`}
+                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${
+                    isSelected
+                      ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
+                      : 'bg-surface border-border hover:border-primary/40'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -840,10 +842,11 @@ export default function ClientEffectiveDatesPage() {
                         size="icon"
                         onClick={() => handleSelectView(ver)}
                         title="View this version"
-                        className={`h-7 w-7 ${isSelected && mode === 'VIEW'
-                          ? 'bg-primary/15 text-primary'
-                          : 'text-text-muted hover:text-primary hover:bg-surface'
-                          }`}
+                        className={`h-7 w-7 ${
+                          isSelected && mode === 'VIEW'
+                            ? 'bg-primary/15 text-primary'
+                            : 'text-text-muted hover:text-primary hover:bg-surface'
+                        }`}
                       >
                         <IconView size={14} />
                       </Button>
@@ -854,10 +857,11 @@ export default function ClientEffectiveDatesPage() {
                           size="icon"
                           onClick={() => handleStartEdit(ver)}
                           title="Edit this version"
-                          className={`h-7 w-7 ${isSelected && mode === 'EDIT'
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-text-muted hover:text-primary hover:bg-surface'
-                            }`}
+                          className={`h-7 w-7 ${
+                            isSelected && mode === 'EDIT'
+                              ? 'bg-primary/15 text-primary'
+                              : 'text-text-muted hover:text-primary hover:bg-surface'
+                          }`}
                         >
                           <IconEdit size={14} />
                         </Button>
@@ -901,8 +905,9 @@ export default function ClientEffectiveDatesPage() {
                             ? header.getResizeHandler()
                             : undefined
                         }
-                        className={`relative py-3.5 px-6 select-none bg-surface ${canSort ? 'cursor-pointer hover:bg-surface/80' : ''
-                          }`}
+                        className={`relative py-2.5 px-4 select-none bg-surface ${
+                          canSort ? 'cursor-pointer hover:bg-surface/80' : ''
+                        }`}
                       >
                         {header.isPlaceholder ? null : canSort ? (
                           <button
@@ -940,8 +945,9 @@ export default function ClientEffectiveDatesPage() {
                           </button>
                         ) : (
                           <div
-                            className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''
-                              }`}
+                            className={`select-none ${
+                              header.id === 'actions' ? 'text-right w-full pr-1' : ''
+                            }`}
                           >
                             {flexRender(
                               header.column.columnDef.header,
@@ -972,16 +978,15 @@ export default function ClientEffectiveDatesPage() {
                     <tr
                       key={row.id}
                       onClick={() => handleSelectView(row.original)}
-                      className={`cursor-pointer transition-colors duration-120 ${isSelected
-                        ? 'bg-primary/[0.06]'
-                        : 'hover:bg-surface/50'
-                        }`}
+                      className={`cursor-pointer transition-colors duration-120 ${
+                        isSelected ? 'bg-primary/[0.06]' : 'hover:bg-surface/50'
+                      }`}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <Td
                           key={cell.id}
                           style={{ width: cell.column.getSize() }}
-                          className="py-3.5 px-6"
+                          className="py-2.5 px-4"
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
@@ -1075,9 +1080,44 @@ export default function ClientEffectiveDatesPage() {
 
         {/* ── MODE 1: VIEW MODE (MATCHING VENDOR VIEW PAGE ARCHITECTURE) ── */}
         {mode === 'VIEW' && selectedVersion && (
-          <div className="p-4 sm:p-6 space-y-6 divide-y divide-border/60">
+          <div className="p-4 sm:p-6 space-y-6">
+            {/* View Sub-Tabs for Fast Section Navigation */}
+            <div className="border-b border-border/60 pb-1">
+              <ScrollableTabs
+                variant="underline"
+                activeTab={activeViewTab}
+                onChange={setActiveViewTab}
+                tabs={[
+                  {
+                    id: 'all',
+                    label: 'All Sections',
+                    icon: IconFileText,
+                  },
+                  {
+                    id: 'company_terms',
+                    label: 'Company & Terms',
+                    icon: IconBuilding2,
+                  },
+                  {
+                    id: 'addresses',
+                    label: 'Client Addresses',
+                    icon: IconLocation,
+                    badge: (selectedVersion.addresses || []).length,
+                  },
+                  {
+                    id: 'contacts',
+                    label: 'Contact Persons',
+                    icon: IconUsers,
+                    badge: (selectedVersion.contacts || []).length,
+                  },
+                ]}
+              />
+            </div>
+
             {/* Section 1: Company & Contact Information */}
-            <div className="space-y-3">
+            {(activeViewTab === 'all' || activeViewTab === 'company_terms') && (
+              <>
+                <div className="space-y-3">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconBuilding2 size={15} className="text-primary" />
                 Company Details
@@ -1216,8 +1256,11 @@ export default function ClientEffectiveDatesPage() {
                 </div>
               </div>
             </div>
+          </>
+          )}
 
             {/* Section 3: Client Addresses */}
+            {(activeViewTab === 'all' || activeViewTab === 'addresses') && (
             <div className="space-y-3 pt-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
@@ -1294,8 +1337,10 @@ export default function ClientEffectiveDatesPage() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Section 4: Contact Persons */}
+            {(activeViewTab === 'all' || activeViewTab === 'contacts') && (
             <div className="space-y-3 pt-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
@@ -1374,8 +1419,10 @@ export default function ClientEffectiveDatesPage() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Section 5: Version Audit */}
+            {activeViewTab === 'all' && (
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconClock size={15} className="text-primary" />
@@ -1397,6 +1444,7 @@ export default function ClientEffectiveDatesPage() {
                 />
               </div>
             </div>
+            )}
           </div>
         )}
 

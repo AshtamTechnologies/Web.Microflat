@@ -2,7 +2,7 @@
  * src/pages/companyRegistration/components/CompanyDetailsTab.jsx — Tab 1 of Company Registration.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { CollapsibleCard, Input, StatusSwitch, SearchableSelect } from '../../../components/ui';
 import {
   IconBuilding2,
@@ -13,7 +13,7 @@ import {
   IconHash,
   IconWebsite,
 } from '../../../constants/icons';
-import { COUNTRY_OPTIONS, STATE_OPTIONS } from '../../../mocks/vendors';
+import { useCountryState } from '../../../context/CountryStateContext';
 
 export default function CompanyDetailsTab({ form, onChange, errors }) {
   const hasInfoErrors = Boolean(
@@ -37,11 +37,65 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
       errors.address2
   );
 
+  const {
+    countries,
+    countryOptions,
+    getStateOptions,
+    fetchStatesForCountry,
+    statesCache,
+    loadingStatesMap,
+  } = useCountryState();
+
+  // Resolve legacy country codes/names ('IN', 'India') to API ID
+  const resolvedCountryId = useMemo(() => {
+    if (!form.country) return '';
+    const match = countries.find(
+      (c) =>
+        String(c.id) === String(form.country) ||
+        c.countryName?.toLowerCase() === String(form.country).toLowerCase() ||
+        (String(form.country).toUpperCase() === 'IN' && (c.countryName?.toLowerCase() === 'india' || c.id === 2)) ||
+        (String(form.country).toUpperCase() === 'US' && (c.countryName?.toLowerCase().includes('united states') || c.id === 1))
+    );
+    return match ? match.id : form.country;
+  }, [form.country, countries]);
+
+  useEffect(() => {
+    if (resolvedCountryId) {
+      fetchStatesForCountry(resolvedCountryId);
+    }
+  }, [resolvedCountryId, fetchStatesForCountry]);
+
   // Cascading state options based on selected country
   const stateOptions = useMemo(() => {
-    if (!form.country) return [];
-    return STATE_OPTIONS[form.country] || [];
-  }, [form.country]);
+    if (!resolvedCountryId) return [];
+    return getStateOptions(resolvedCountryId);
+  }, [resolvedCountryId, getStateOptions]);
+
+  // Resolve legacy state codes/names ('GJ', 'Gujarat') to API ID
+  const resolvedStateId = useMemo(() => {
+    if (!form.state) return '';
+    const list = (statesCache && statesCache[String(resolvedCountryId)]) || [];
+    const match = list.find(
+      (s) =>
+        String(s.id) === String(form.state) ||
+        s.stateName?.toLowerCase() === String(form.state).toLowerCase() ||
+        (String(form.state).toUpperCase() === 'GJ' && s.stateName?.toLowerCase() === 'gujarat')
+    );
+    return match ? match.id : form.state;
+  }, [form.state, resolvedCountryId, statesCache]);
+
+  const handleCountryChange = (e) => {
+    const raw = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
+    const countryVal = typeof raw === 'object' && raw !== null ? raw.value || '' : raw || '';
+    onChange('country', countryVal);
+    onChange('state', '');
+  };
+
+  const handleStateChange = (e) => {
+    const raw = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
+    const stateVal = typeof raw === 'object' && raw !== null ? raw.value || '' : raw || '';
+    onChange('state', stateVal);
+  };
 
   return (
     <div className="space-y-6">
@@ -231,14 +285,13 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
               <SearchableSelect
                 id="country"
                 name="country"
-                options={COUNTRY_OPTIONS}
-                value={form.country || 'IN'}
-                onChange={(val) => {
-                  onChange('country', val);
-                  onChange('state', '');
-                }}
+                options={countryOptions}
+                value={resolvedCountryId || ''}
+                onChange={handleCountryChange}
                 error={errors.country}
-                placeholder="Select Country"
+                placeholder="Select country..."
+                searchPlaceholder="Search countries..."
+                emptyText="No countries found"
                 required
               />
             </div>
@@ -251,11 +304,21 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
                 id="state"
                 name="state"
                 options={stateOptions}
-                value={form.state || ''}
-                onChange={(val) => onChange('state', val)}
+                value={resolvedStateId || ''}
+                onChange={handleStateChange}
                 error={errors.state}
-                placeholder={form.country ? 'Select State' : 'Select Country first'}
-                disabled={!form.country}
+                placeholder={
+                  !resolvedCountryId
+                    ? 'Select Country first'
+                    : loadingStatesMap && loadingStatesMap[String(resolvedCountryId)]
+                    ? 'Loading states...'
+                    : stateOptions.length === 0
+                    ? 'No states available'
+                    : 'Select State'
+                }
+                searchPlaceholder="Search states..."
+                emptyText="No states found"
+                disabled={!resolvedCountryId || stateOptions.length === 0}
                 required
               />
             </div>

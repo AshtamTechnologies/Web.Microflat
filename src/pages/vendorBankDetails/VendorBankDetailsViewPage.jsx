@@ -12,8 +12,7 @@
  *       1. Beneficiary & Account Information (with Reveal/Mask & Copy)
  *       2. Branch & Routing Details
  *       3. Disbursement Remarks & Audit Trail
- *       4. Bank Proof Attachments & Supporting Documents
- *   - Interactive Document Screen Popup Modal with high-fidelity certificate/document preview & download
+ *       4. Bank Proof Attachments & Supporting Documents with direct download
  */
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -28,7 +27,6 @@ import {
   IconClock,
   IconCopy,
   IconCreditCard,
-  IconDocumentTypes,
   IconDownload,
   IconEdit,
   IconError,
@@ -36,8 +34,6 @@ import {
   IconFileText,
   IconImage,
   IconLocation,
-  IconMaximize2,
-  IconShieldCheck,
   IconView,
 } from '../../constants/icons';
 import toast from 'react-hot-toast';
@@ -47,14 +43,13 @@ import {
   Badge,
   Card,
   DetailField,
-  Modal,
   PageHeader,
 } from '../../components/ui';
 
 import { useVendorsContext } from '../../context/VendorsContext';
 import { useVendorBankDetails } from '../../context/VendorBankDetailsContext';
+import { useCountryState } from '../../context/CountryStateContext';
 import { vendorService } from '../../services';
-import { getCountryName } from '../../mocks/vendors';
 import { formatDate } from '../../utils/dateUtils';
 
 function getApprovalBadgeVariant(status) {
@@ -90,6 +85,7 @@ export default function VendorBankDetailsViewPage() {
 
   const { allVendors = [], getVendorById } = useVendorsContext();
   const { getBanksForVendor, fetchBanksForVendor } = useVendorBankDetails();
+  const { getCountryName } = useCountryState();
 
   // Resolve vendor
   const vendor = useMemo(() => {
@@ -127,9 +123,6 @@ export default function VendorBankDetailsViewPage() {
 
   // Selected account for view detail panel (initialized cleanly from query param or null)
   const [selectedBankId, setSelectedBankId] = useState(() => bankQueryId || null);
-
-  // Document preview modal
-  const [previewItem, setPreviewItem] = useState(null);
 
   // Status Filter for Master Bank Accounts list: 'ALL' | 'ACTIVE'
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -936,9 +929,6 @@ export default function VendorBankDetailsViewPage() {
                           {selectedAttachments.length}
                         </span>
                       </div>
-                      <span className="text-2xs text-text-muted hidden sm:inline">
-                        Click card to view
-                      </span>
                     </div>
 
                     {selectedAttachments.length === 0 ? (
@@ -954,16 +944,14 @@ export default function VendorBankDetailsViewPage() {
                         {selectedAttachments.map((att) => (
                           <div
                             key={att.id || att.attachmentId}
-                            onClick={() => setPreviewItem(att)}
-                            className="flex items-center justify-between p-3 rounded-xl border border-border bg-bg hover:border-primary/60 hover:bg-primary/[0.03] hover:shadow-2xs transition-all duration-150 cursor-pointer group select-none"
-                            title="Click to view document in popup"
+                            className="flex items-center justify-between p-3 rounded-xl border border-border bg-bg hover:border-primary/40 hover:bg-surface/50 hover:shadow-2xs transition-all duration-150 group"
                           >
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <div className="p-2 rounded-lg bg-surface border border-border group-hover:border-primary/30 group-hover:bg-primary/10 transition-colors shrink-0">
                                 {getFileIcon(att.fileName, att.fileType)}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="text-xs font-semibold text-heading truncate group-hover:text-primary transition-colors">
+                                <p className="text-xs font-semibold text-heading truncate">
                                   {att.documentName || att.fileName}
                                 </p>
                                 <p className="text-2xs text-text-muted truncate mt-0.5 font-mono">
@@ -975,24 +963,13 @@ export default function VendorBankDetailsViewPage() {
                             <div className="flex items-center gap-1 shrink-0 ml-2">
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPreviewItem(att);
-                                }}
-                                title="View preview"
-                                className="h-7 w-7 text-text-muted group-hover:text-primary hover:bg-primary/10"
-                              >
-                                <IconMaximize2 size={12} />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
+                                size="sm"
                                 onClick={(e) => handleDownloadAttachment(att, e)}
                                 title="Download document"
-                                className="h-7 w-7 text-text-muted hover:text-primary hover:bg-primary/10"
+                                className="h-8 px-2.5 text-xs text-text-muted hover:text-primary hover:bg-primary/10 flex items-center gap-1.5"
                               >
-                                <IconDownload size={12} />
+                                <IconDownload size={13} />
+                                <span className="hidden sm:inline font-medium">Download</span>
                               </Button>
                             </div>
                           </div>
@@ -1027,140 +1004,6 @@ export default function VendorBankDetailsViewPage() {
           )}
         </div>
       </div>
-
-      {/* ── 5. DOCUMENT SCREEN POPUP (MODAL) — MATCHING VENDOR EFFECTIVE DATES PAGE ── */}
-      {previewItem && (
-        <Modal
-          isOpen={Boolean(previewItem)}
-          onClose={() => setPreviewItem(null)}
-          title={previewItem.documentName || previewItem.fileName}
-          maxWidth="max-w-3xl"
-        >
-          <div className="space-y-4">
-            {/* Meta bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-surface/50 p-3 rounded-xl border border-border">
-              <div className="flex items-center gap-2">
-                <Badge variant="neutral" className="text-2xs font-mono">
-                  {previewItem.fileName?.split('.').pop()?.toUpperCase() || 'DOC'}
-                </Badge>
-                <span className="text-heading font-medium truncate max-w-xs sm:max-w-md">
-                  {previewItem.fileName}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-text-muted">
-                {previewItem.fileSize && (
-                  <span>
-                    Size: <strong className="text-heading">{previewItem.fileSize}</strong>
-                  </span>
-                )}
-                {previewItem.uploadedAt && (
-                  <span>
-                    Uploaded:{' '}
-                    <strong className="text-heading font-mono">{formatDate(previewItem.uploadedAt)}</strong>
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Screen Popup Preview Content */}
-            <div className="bg-bg rounded-2xl border border-border p-4 sm:p-6 flex items-center justify-center min-h-[320px] max-h-[65vh] overflow-auto shadow-inner">
-              {previewItem.fileUrl ? (
-                previewItem.fileType?.startsWith('image/') ? (
-                  <img
-                    src={previewItem.fileUrl}
-                    alt={previewItem.documentName}
-                    className="max-h-[55vh] max-w-full object-contain rounded-xl shadow-md"
-                  />
-                ) : (
-                  <iframe
-                    src={previewItem.fileUrl}
-                    title={previewItem.documentName}
-                    className="w-full h-[55vh] rounded-xl border border-border shadow-xs"
-                  />
-                )
-              ) : (
-                /* Enhanced visual certificate / document card presentation for mock documents */
-                <div className="w-full max-w-lg bg-surface border-2 border-border/80 rounded-2xl p-6 shadow-sm text-center space-y-4 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 transform translate-x-4 -translate-y-4 opacity-5 pointer-events-none">
-                    <IconShieldCheck size={180} />
-                  </div>
-
-                  <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto border border-primary/20 shadow-xs">
-                    {previewItem.fileName?.toLowerCase().endsWith('.pdf') ? (
-                      <IconFileText size={28} className="text-danger" />
-                    ) : (
-                      <IconDocumentTypes size={28} className="text-primary" />
-                    )}
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-2xs font-bold bg-success/10 text-success border border-success/20">
-                      <IconShieldCheck size={12} /> Verified Banking Document Proof
-                    </span>
-                    <h4 className="text-base font-bold text-heading mt-2">
-                      {previewItem.documentName || previewItem.fileName}
-                    </h4>
-                    <p className="text-xs text-text-muted font-mono">
-                      {previewItem.fileName}
-                    </p>
-                  </div>
-
-                  <div className="bg-bg rounded-xl p-3 border border-border text-left space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-text-muted">Vendor:</span>
-                      <span className="font-semibold text-heading">{vendor.vendorName}</span>
-                    </div>
-                    {selectedAccount && (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-text-muted">Bank Name:</span>
-                          <span className="font-semibold text-heading">
-                            {selectedAccount.bankName}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-text-muted">Account Number:</span>
-                          <span className="font-mono text-heading">
-                            •••• •••• •••• {String(selectedAccount.accountNumber || '').slice(-4)}
-                          </span>
-                        </div>
-                      </>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-text-muted">Document Type:</span>
-                      <span className="font-semibold text-heading">
-                        {previewItem.documentName || 'Banking Proof Document'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-text-muted">File Size:</span>
-                      <span className="font-mono text-heading">
-                        {previewItem.fileSize || 'Standard Document'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Popup Action Footer */}
-            <div className="flex items-center justify-between pt-2 border-t border-border">
-              <Button variant="secondary" size="sm" onClick={() => setPreviewItem(null)}>
-                Close
-              </Button>
-
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={(e) => handleDownloadAttachment(previewItem, e)}
-              >
-                <IconDownload size={14} className="mr-1.5" />
-                Download Document
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

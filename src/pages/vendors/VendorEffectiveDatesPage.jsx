@@ -76,6 +76,7 @@ import {
   getCountryName,
   getStateName,
 } from '../../mocks/vendors';
+import { useCountryState } from '../../context/CountryStateContext';
 import { getActiveVendorVersion } from '../../utils/vendorVersions';
 import { formatDateDisplay, getTodayIsoDate } from '../../utils/effectiveDateUtils';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
@@ -83,18 +84,7 @@ import { countryIdToCode, stateIdToCode } from '../../models/vendors/vendorModel
 
 const columnHelper = createColumnHelper();
 
-const DOCUMENT_TYPE_OPTIONS = [
-  { value: 'GST Registration Certificate', label: 'GST Registration Certificate' },
-  { value: 'PAN Card Copy', label: 'PAN Card Copy' },
-  { value: 'MSME / Udyam Certificate', label: 'MSME / Udyam Certificate' },
-  { value: 'ISO 9001 / Quality Certificate', label: 'ISO 9001 / Quality Certificate' },
-  { value: 'Bank Cancelled Cheque / Mandate', label: 'Bank Cancelled Cheque / Mandate' },
-  { value: 'Vendor Agreement / NDA', label: 'Vendor Agreement / NDA' },
-  { value: 'Company Profile & Brochure', label: 'Company Profile & Brochure' },
-  { value: 'Material Test / Calibration Report', label: 'Material Test / Calibration Report' },
-  { value: 'Purchase Terms & Conditions', label: 'Purchase Terms & Conditions' },
-  { value: 'Other Document', label: 'Other Document' },
-];
+
 
 const ALLOWED_FILE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
 
@@ -472,7 +462,7 @@ export default function VendorEffectiveDatesPage() {
     email: '',
     gstNo: '',
     website: '',
-    countryId: 'IN',
+    countryId: '',
     stateId: '',
     city: '',
     zipCode: '',
@@ -532,7 +522,7 @@ export default function VendorEffectiveDatesPage() {
         maxFileSizeMB: dt.maxFileSizeMB,
       }));
     }
-    return DOCUMENT_TYPE_OPTIONS;
+    return [];
   }, [apiDocTypes]);
 
   const currentDocTypeConfig = useMemo(() => {
@@ -689,11 +679,23 @@ export default function VendorEffectiveDatesPage() {
     }
   }, [mode, currentViewAttachments]);
 
+  const {
+    countryOptions,
+    getStateOptions,
+    fetchStatesForCountry,
+  } = useCountryState();
+
+  useEffect(() => {
+    if (formData.countryId) {
+      fetchStatesForCountry(formData.countryId);
+    }
+  }, [formData.countryId, fetchStatesForCountry]);
+
   // Cascading state options
   const stateOptions = useMemo(() => {
     if (!formData.countryId) return [];
-    return STATE_OPTIONS[formData.countryId] || [];
-  }, [formData.countryId]);
+    return getStateOptions(formData.countryId);
+  }, [formData.countryId, getStateOptions]);
 
   /* ── Handlers for switching modes ── */
   async function handleSelectView(ver) {
@@ -878,7 +880,7 @@ export default function VendorEffectiveDatesPage() {
         email: latestVersionRecord?.email || '',
         gstNo: latestVersionRecord?.gstNo || '',
         website: latestVersionRecord?.website || '',
-        countryId: latestVersionRecord?.countryId || 'IN',
+        countryId: latestVersionRecord?.countryId || '',
         stateId: latestVersionRecord?.stateId || '',
         city: latestVersionRecord?.city || '',
         zipCode: latestVersionRecord?.zipCode || '',
@@ -2430,7 +2432,7 @@ export default function VendorEffectiveDatesPage() {
                     name="countryId"
                     label="Country"
                     required
-                    options={COUNTRY_OPTIONS}
+                    options={countryOptions}
                     value={formData.countryId}
                     onChange={handleCountryChange}
                     placeholder="Select Country..."

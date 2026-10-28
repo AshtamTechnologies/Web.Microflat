@@ -177,15 +177,22 @@ export function useVendors() {
         return { ok: true, vendor: created };
       }
     } catch (err) {
-      // If server explicitly returned a validation error (400, 422), show it and reject
-      if (err?.status === 400 || err?.status === 422 || err?.statusCode === 400) {
-        const errorMsg = err.detail || err.message || 'Validation error from server.';
+      // If server returned any HTTP error response (400, 404, 409, 422, 500, etc.)
+      const status = err?.status || err?.statusCode || (err?.response && err.response.status);
+      const errorMsg = err?.message || err?.detail || 'Validation error from server.';
+
+      if (status && status > 0) {
         toast.error(errorMsg);
-        throw err;
+        return {
+          ok: false,
+          error: errorMsg,
+          status,
+          fieldErrors: err?.fieldErrors || {},
+        };
       }
 
-      console.warn('POST /api/vendors failed or offline, saving locally:', err);
-      // Fallback local creation so app never crashes
+      console.warn('POST /api/vendors network error or offline, saving locally:', err);
+      // Fallback local creation only when completely offline
       const initialVersion = {
         id: `ver_${Date.now()}`,
         effectiveDate: formData.effectiveDate || getTodayISO(),
@@ -268,7 +275,20 @@ export function useVendors() {
       toast.success('Vendor updated successfully.');
       return { ok: true };
     } catch (err) {
-      console.warn('API update failed, updating local state:', err);
+      const status = err?.status || err?.statusCode || (err?.response && err.response.status);
+      const errorMsg = err?.message || err?.detail || 'Failed to update vendor on server.';
+
+      if (status && status > 0) {
+        toast.error(errorMsg);
+        return {
+          ok: false,
+          error: errorMsg,
+          status,
+          fieldErrors: err?.fieldErrors || {},
+        };
+      }
+
+      console.warn('API update network error, updating local state:', err);
       setVendors((prev) =>
         prev.map((v) => {
           if (String(v.id) !== String(id) && String(v.vendorId) !== String(id)) return v;

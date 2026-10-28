@@ -37,6 +37,8 @@ import * as mockRegions from './regions/regionService.mock';
 import * as realPaymentTerms from './paymentTerms/paymentTermService';
 import * as mockPaymentTerms from './paymentTerms/paymentTermService.mock';
 
+import * as geographyService from './geography/geographyService';
+
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 export const authService = useMock ? mockAuth : realAuth;
@@ -49,4 +51,5 @@ export const approvalsService = useMock ? mockApprovals : realApprovals;
 export const uomService = useMock ? mockUoms : realUoms;
 export const regionService = useMock ? mockRegions : realRegions;
 export const paymentTermService = useMock ? mockPaymentTerms : realPaymentTerms;
+export { geographyService };
 export const isMockApi = useMock;
