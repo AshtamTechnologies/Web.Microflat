@@ -77,11 +77,17 @@ export default function DelegationFormPage() {
     handleSubmit,
   } = useDelegationForm({
     id,
-    onSuccess: () =>
-      navigate(isEdit ? `/delegation/${id}` : '/delegation?tab=given', {
+    onSuccess: () => {
+      const destination = returnPath.startsWith('/delegation/all')
+        ? '/delegation/all'
+        : isEdit
+        ? `/delegation/${id}`
+        : '/delegation?tab=given';
+      navigate(destination, {
         replace: isEdit,
         state: isEdit ? { from: returnPath } : undefined,
-      }),
+      });
+    },
     onClose: () =>
       navigate(isEdit ? `/delegation/${id}` : returnPath, {
         replace: isEdit,
@@ -139,12 +145,13 @@ export default function DelegationFormPage() {
       ? firstRole
       : 'User';
 
-  // Active colleague options excluding the current user
+  // Active colleague options excluding the selected delegating user
   const delegateOptions = useMemo(() => {
+    const selectedDelegator = String(formData.delegatorId || currentUserId).trim();
     return userOptions.filter(
-      (opt) => String(opt.value).trim() !== String(currentUserId).trim()
+      (opt) => String(opt.value).trim() !== selectedDelegator
     );
-  }, [userOptions, currentUserId]);
+  }, [userOptions, formData.delegatorId, currentUserId]);
 
   const handleCancel = () => {
     navigate(isEdit ? `/delegation/${id}` : returnPath, {
@@ -232,16 +239,19 @@ export default function DelegationFormPage() {
         hasError={Boolean(errors.fromDate || errors.toDate || errors.reason)}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Col 1: Current User — Read-only inline with other fields */}
+          {/* Col 1: Delegating User (From) */}
           <div>
-            <Input
-              id="delegator"
-              label="Current User"
-              value={`${currentUserName} (${currentUserRole})`}
-              disabled
-              leftIcon={<IconUser size={15} />}
-              hint="Current logged-in user"
-              className="bg-border/30 font-medium text-text cursor-not-allowed"
+            <SearchableSelect
+              id="delegatorId"
+              name="delegatorId"
+              label="Delegating User (From)"
+              value={formData.delegatorId || currentUserId}
+              onChange={(e) => setFieldValue('delegatorId', e.target.value)}
+              options={userOptions}
+              disabled={usersLoading}
+              placeholder={usersLoading ? 'Loading users…' : 'Select delegating user'}
+              error={errors.delegatorId}
+              required
             />
           </div>
 
@@ -535,18 +545,13 @@ export default function DelegationFormPage() {
 
                               {/* Colleague */}
                               <Td style={{ width: `${columnWidths.delegate}px` }} className="align-middle">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-2xs shrink-0">
-                                    {delegateName.charAt(0).toUpperCase()}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <span className="font-semibold text-heading truncate block">
-                                      {delegateName}
-                                    </span>
-                                    <span className="text-2xs text-text-muted font-mono block">
-                                      ID: {item.delegateId}
-                                    </span>
-                                  </div>
+                                <div className="min-w-0">
+                                  <span className="font-semibold text-heading truncate block">
+                                    {delegateName}
+                                  </span>
+                                  <span className="text-2xs text-text-muted font-mono block">
+                                    ID: {item.delegateId}
+                                  </span>
                                 </div>
                               </Td>
 
@@ -652,14 +657,9 @@ export default function DelegationFormPage() {
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-2xs text-text-muted block">Delegate</span>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-2xs shrink-0">
-                                  {delegateName.charAt(0).toUpperCase()}
-                                </div>
-                                <span className="font-semibold text-heading truncate">
-                                  {delegateName}
-                                </span>
-                              </div>
+                              <span className="font-semibold text-heading truncate block mt-0.5">
+                                {delegateName}
+                              </span>
                             </div>
 
                             <div>

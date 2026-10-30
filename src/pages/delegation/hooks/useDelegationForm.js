@@ -321,7 +321,7 @@ export function useDelegationForm({ id, onSuccess, onClose } = {}) {
         } else {
           await createDelegation(
             {
-              delegatorId: currentUserId,
+              delegatorId: formData.delegatorId || currentUserId,
               fromDate: formData.fromDate,
               toDate: formData.toDate,
               reason: formData.reason,

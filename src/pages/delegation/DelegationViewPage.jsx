@@ -125,7 +125,7 @@ export default function DelegationViewPage() {
 
   const canEdit =
     !hideEdit &&
-    isGivenByMe &&
+    (isGivenByMe || isAdmin) &&
     (statusKey === 'Active' || statusKey === 'Scheduled');
 
   const canCancel =

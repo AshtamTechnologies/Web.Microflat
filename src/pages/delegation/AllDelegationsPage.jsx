@@ -23,6 +23,8 @@ import {
 } from '../../components/ui';
 import {
   IconDelegation,
+  IconAdd,
+  IconEdit,
   IconView,
   IconClose,
   IconWarning,
@@ -128,18 +130,13 @@ export default function AllDelegationsPage() {
         cell: ({ getValue, row }) => {
           const name = getValue();
           return (
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
-                {name.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <span className="font-semibold text-heading truncate block" title={name}>
-                  {name}
-                </span>
-                <span className="text-2xs text-text-muted font-mono block">
-                  ID: {row.original.delegatorId}
-                </span>
-              </div>
+            <div className="min-w-0">
+              <span className="font-semibold text-heading truncate block" title={name}>
+                {name}
+              </span>
+              <span className="text-2xs text-text-muted font-mono block">
+                ID: {row.original.delegatorId}
+              </span>
             </div>
           );
         },
@@ -152,18 +149,13 @@ export default function AllDelegationsPage() {
         cell: ({ getValue, row }) => {
           const name = getValue();
           return (
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-full bg-surface text-heading border border-border flex items-center justify-center font-bold text-xs shrink-0">
-                {name.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <span className="font-semibold text-heading truncate block" title={name}>
-                  {name}
-                </span>
-                <span className="text-2xs text-text-muted font-mono block">
-                  ID: {row.original.delegateId}
-                </span>
-              </div>
+            <div className="min-w-0">
+              <span className="font-semibold text-heading truncate block" title={name}>
+                {name}
+              </span>
+              <span className="text-2xs text-text-muted font-mono block">
+                ID: {row.original.delegateId}
+              </span>
             </div>
           );
         },
@@ -197,15 +189,6 @@ export default function AllDelegationsPage() {
         size: 190,
       },
       {
-        id: 'reason',
-        header: 'REASON',
-        accessorKey: 'reason',
-        cell: ({ getValue }) => (
-          <span className="text-xs text-text font-medium">{getValue() || '—'}</span>
-        ),
-        size: 110,
-      },
-      {
         id: 'status',
         header: 'STATUS',
         cell: ({ row }) => {
@@ -220,23 +203,6 @@ export default function AllDelegationsPage() {
         size: 110,
       },
       {
-        id: 'note',
-        header: 'NOTE',
-        accessorKey: 'note',
-        cell: ({ getValue }) => {
-          const noteText = getValue() || '—';
-          return (
-            <span
-              className="text-xs text-text-muted truncate block max-w-xs"
-              title={noteText !== '—' ? noteText : undefined}
-            >
-              {noteText}
-            </span>
-          );
-        },
-        size: 160,
-      },
-      {
         id: 'actions',
         header: 'ACTIONS',
         cell: ({ row }) => {
@@ -247,7 +213,7 @@ export default function AllDelegationsPage() {
             (status === 'Active' || status === 'Scheduled');
 
           return (
-            <div className="flex items-center justify-end gap-1">
+            <div className="flex items-center justify-start gap-1">
               <IconButton
                 type="button"
                 size="sm"
@@ -255,10 +221,20 @@ export default function AllDelegationsPage() {
                 icon={IconView}
                 title="View delegation details"
                 aria-label="View delegation details"
-                onClick={() => navigate(`/delegation/${d.id}`, { state: { hideEdit: true } })}
+                onClick={() => navigate(`/delegation/${d.id}`, { state: { from: '/delegation/all' } })}
                 className="text-text-muted hover:text-primary hover:bg-primary/10"
               />
-              {canCancel && (
+              <IconButton
+                type="button"
+                size="sm"
+                variant="ghost"
+                icon={IconEdit}
+                title="Edit delegation"
+                aria-label="Edit delegation"
+                onClick={() => navigate(`/delegation/${d.id}/edit`, { state: { from: '/delegation/all' } })}
+                className="text-text-muted hover:text-primary hover:bg-primary/10"
+              />
+              {canCancel ? (
                 <IconButton
                   type="button"
                   size="sm"
@@ -269,11 +245,13 @@ export default function AllDelegationsPage() {
                   onClick={() => setSelectedForCancel(d)}
                   className="text-text-muted hover:text-danger hover:bg-danger/10"
                 />
+              ) : (
+                <div className="w-7 h-7" aria-hidden="true" />
               )}
             </div>
           );
         },
-        size: 70,
+        size: 100,
       },
     ];
   }, [today, user, isAdmin, navigate]);
@@ -367,10 +345,20 @@ export default function AllDelegationsPage() {
             variant="secondary"
             size="sm"
             icon={IconView}
-            onClick={() => navigate(`/delegation/${d.id}`, { state: { hideEdit: true } })}
+            onClick={() => navigate(`/delegation/${d.id}`, { state: { from: '/delegation/all' } })}
             className="text-xs"
           >
             Details
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            icon={IconEdit}
+            onClick={() => navigate(`/delegation/${d.id}/edit`, { state: { from: '/delegation/all' } })}
+            className="text-xs"
+          >
+            Edit
           </Button>
           {canCancel && (
             <Button
@@ -396,6 +384,18 @@ export default function AllDelegationsPage() {
         title="All Delegations"
         subtitle={<span className="hidden sm:inline">System-wide administration of all employee approval handovers and active delegations.</span>}
         icon={<IconDelegation className="h-6 w-6 text-primary" aria-hidden="true" />}
+        actions={
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            icon={IconAdd}
+            onClick={() => navigate('/delegation/new', { state: { from: '/delegation/all' } })}
+            className="shadow-2xs text-xs font-semibold"
+          >
+            Add New Delegation
+          </Button>
+        }
       />
 
       {/* ── Standard Table Toolbar ── */}

@@ -9,6 +9,7 @@ export { default as Select }          from './Select';
 export { default as Toggle }          from './Toggle';
 export { default as Badge }           from './Badge';
 export { default as Modal }           from './Modal';
+export { default as Drawer }          from './Drawer';
 export { default as StatusSwitch }    from './StatusSwitch';
 export { default as SearchableSelect } from './SearchableSelect';
 export { default as SearchableMultiSelect } from './SearchableMultiSelect';

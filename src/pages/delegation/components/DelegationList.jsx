@@ -73,42 +73,17 @@ export default function DelegationList({
           const targetId =
             activeTab === 'given' ? row.original.delegateId : row.original.delegatorId;
           return (
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
-                {name.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <span className="font-semibold text-heading truncate block" title={name}>
-                  {name}
-                </span>
-                <span className="text-2xs text-text-muted font-mono block">
-                  ID: {targetId}
-                </span>
-              </div>
+            <div className="min-w-0">
+              <span className="font-semibold text-heading truncate block" title={name}>
+                {name}
+              </span>
+              <span className="text-2xs text-text-muted font-mono block">
+                ID: {targetId}
+              </span>
             </div>
           );
         },
         size: 190,
-      },
-      {
-        id: 'period',
-        header: 'PERIOD',
-        accessorFn: (row) => `${row.fromDate} to ${row.toDate}`,
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-heading whitespace-nowrap">
-            {formatDate(row.original.fromDate)} to {formatDate(row.original.toDate)}
-          </span>
-        ),
-        size: 200,
-      },
-      {
-        id: 'reason',
-        header: 'REASON',
-        accessorKey: 'reason',
-        cell: ({ getValue }) => (
-          <span className="text-xs text-text font-medium">{getValue() || '—'}</span>
-        ),
-        size: 110,
       },
       {
         id: 'scope',
@@ -128,6 +103,17 @@ export default function DelegationList({
         size: 190,
       },
       {
+        id: 'period',
+        header: 'PERIOD',
+        accessorFn: (row) => `${row.fromDate} to ${row.toDate}`,
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-heading whitespace-nowrap">
+            {formatDate(row.original.fromDate)} to {formatDate(row.original.toDate)}
+          </span>
+        ),
+        size: 200,
+      },
+      {
         id: 'status',
         header: 'STATUS',
         cell: ({ row }) => {
@@ -142,23 +128,6 @@ export default function DelegationList({
         size: 100,
       },
       {
-        id: 'note',
-        header: 'NOTE',
-        accessorKey: 'note',
-        cell: ({ getValue }) => {
-          const noteText = getValue() || '—';
-          return (
-            <span
-              className="text-xs text-text-muted truncate block max-w-xs"
-              title={noteText !== '—' ? noteText : undefined}
-            >
-              {noteText}
-            </span>
-          );
-        },
-        size: 160,
-      },
-      {
         id: 'actions',
         header: 'ACTIONS',
         cell: ({ row }) => {
@@ -169,7 +138,7 @@ export default function DelegationList({
             (status === 'Active' || status === 'Scheduled');
 
           return (
-            <div className="flex items-center justify-end gap-1">
+            <div className="flex items-center justify-start gap-1">
               <IconButton
                 type="button"
                 size="sm"
@@ -192,7 +161,7 @@ export default function DelegationList({
                   className="text-text-muted hover:text-primary hover:bg-primary/10"
                 />
               )}
-              {canCancel && (
+              {canCancel ? (
                 <IconButton
                   type="button"
                   size="sm"
@@ -203,14 +172,16 @@ export default function DelegationList({
                   onClick={() => onCancel?.(d)}
                   className="text-text-muted hover:text-danger hover:bg-danger/10"
                 />
+              ) : (
+                <div className="w-7 h-7" aria-hidden="true" />
               )}
             </div>
           );
         },
-        size: 85,
+        size: 100,
       },
     ];
-  }, [activeTab, today, isAdmin, onView, onCancel]);
+  }, [activeTab, today, isAdmin, onView, onEdit, onCancel]);
 
   const table = useReactTable({
     data: delegations,

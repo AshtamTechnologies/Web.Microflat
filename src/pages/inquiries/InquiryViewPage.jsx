@@ -80,21 +80,21 @@ import UploadDocumentModal from './components/UploadDocumentModal';
 import { formatDate, formatDateTime } from '../../utils/dateUtils';
 
 const INITIAL_ITEM_WIDTHS = {
-  index: 50,
-  product: 220,
-  variant: 180,
-  quantity: 85,
-
-  notes: 240,
+  index: 48,
+  itemCode: 130,
+  product: 200,
+  materialFinish: 170,
+  options: 160,
+  quantity: 75,
 };
 
 const MIN_ITEM_WIDTHS = {
   index: 40,
-  product: 120,
-  variant: 100,
+  itemCode: 90,
+  product: 130,
+  materialFinish: 120,
+  options: 110,
   quantity: 60,
-
-  notes: 120,
 };
 
 const INITIAL_DOC_WIDTHS = {
@@ -269,7 +269,14 @@ export default function InquiryViewPage() {
         ...it,
         prItemId: it.prItemId || it.id || idx + 1,
         itemCode: it.itemCode || it.ItemCode || `MAT-CAT-${String(idx + 1).padStart(3, '0')}`,
-        specification: it.specification || it.Specification || '—',
+        productName: it.productName || it.itemName || it.ItemName || '—',
+        variantName: it.variantName || it.size || (it.customSize ? `${it.customSize} (Custom)` : '—'),
+        material: it.material || 'Indian Black Granite',
+        finish: it.finish || 'Hand Lapped',
+        standards: it.standards || 'IS-7327-2003',
+        options: Array.isArray(it.options) ? it.options : [],
+        specification: it.specification || it.Specification || it.notes || '—',
+        notes: it.notes || '',
         quantity: it.quantity !== undefined && it.quantity !== null && it.quantity !== '' ? it.quantity : (it.Quantity || 1),
         uom: it.uom || it.UOM || 'PCS',
         categoryName: it.categoryName || (it.categoryId ? getCategoryPathName(it.categoryId, categories) : getCategoryPathName(inquiry.CategoryId, categories)) || '—',
@@ -280,8 +287,15 @@ export default function InquiryViewPage() {
         {
           prItemId: 1,
           itemCode: inquiry.ItemCode || 'MAT-CAT-001',
+          productName: inquiry.Subject || 'Main Product Requirement',
           itemName: inquiry.Subject || 'Main Product Requirement',
+          variantName: inquiry.Size || inquiry.variantName || '—',
+          material: inquiry.Material || 'Indian Black Granite',
+          finish: inquiry.Finish || 'Hand Lapped',
+          standards: inquiry.Standards || 'IS-7327-2003',
+          options: Array.isArray(inquiry.Options) ? inquiry.Options : [],
           specification: inquiry.Specification || '—',
+          notes: '',
           quantity: inquiry.Quantity !== undefined && inquiry.Quantity !== null && inquiry.Quantity !== '' ? inquiry.Quantity : 1,
           uom: inquiry.UOM || 'PCS',
           categoryId: inquiry.CategoryId || '',
@@ -1002,34 +1016,48 @@ export default function InquiryViewPage() {
               <div className={`${mobileViewMode === 'cards' ? 'block sm:hidden' : 'hidden'} divide-y divide-border`}>
                 {inquiryItems.length > 0 ? (
                   inquiryItems.map((item, idx) => (
-                    <div key={item.prItemId || item.id || idx} className="p-3.5 space-y-2.5 bg-surface/20">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-2 min-w-0">
-                          <span className="w-5 h-5 rounded-full bg-surface border border-border flex items-center justify-center text-2xs font-mono text-text-muted shrink-0 mt-0.5">
-                            {idx + 1}
+                    <div key={item.prItemId || item.id || idx} className="p-3.5 space-y-2.5 bg-surface/20 transition-colors hover:bg-surface/40">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="font-mono text-2xs text-text-muted">#{idx + 1}</span>
+                          <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md truncate">
+                            {item.itemCode || '—'}
                           </span>
-                          <div>
-                            <span className="text-2xs uppercase font-semibold text-text-muted block">Product</span>
-                            <span className="font-semibold text-xs text-heading leading-snug">
-                              {item.productName || item.itemName || '—'}
-                            </span>
-                          </div>
                         </div>
-                        <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-2xs shrink-0">
-                          {item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '—')}
-                        </span>
                       </div>
 
-                      {item.specification && item.specification !== '—' && (
-                        <div className="text-xs text-text-muted bg-surface/50 p-2.5 rounded-lg border border-border/60 pl-3">
-                          <span className="text-2xs uppercase font-semibold text-text-muted block mb-0.5">Notes</span>
-                          <span className="leading-relaxed">{item.notes || item.specification}</span>
+                      <div className="text-xs space-y-1">
+                        <div className="font-bold text-heading text-sm">
+                          {item.productName || item.itemName || '—'}
                         </div>
-                      )}
+                        <div className="text-text-muted">
+                          Size / Variant: <span className="font-medium text-heading">{item.variantName || '—'}</span>
+                        </div>
+                        <div className="text-text-muted text-2xs">
+                          Material: {item.material || 'Indian Black Granite'} · {[item.finish || 'Hand Lapped', item.standards || 'IS-7327-2003'].filter(Boolean).join(' · ')}
+                        </div>
+                        {Array.isArray(item.options) && item.options.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {item.options.map((opt, oIdx) => (
+                              <span
+                                key={oIdx}
+                                className="px-1.5 py-0.5 rounded text-3xs font-medium bg-surface text-text-muted border border-border"
+                              >
+                                {opt.replace(' (Standard)', '')}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {item.specification && item.specification !== '—' && (
+                          <div className="text-text-muted text-2xs bg-surface/60 p-2 rounded border border-border/60 break-words mt-1">
+                            Spec / Notes: {item.notes || item.specification}
+                          </div>
+                        )}
+                      </div>
 
-                      <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40">
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-border/60 font-mono">
                         <span className="text-text-muted">Quantity:</span>
-                        <span className="font-mono font-bold text-heading bg-surface px-2.5 py-0.5 rounded border border-border">
+                        <span className="font-bold text-heading text-sm">
                           {item.quantity}
                         </span>
                       </div>
@@ -1050,74 +1078,73 @@ export default function InquiryViewPage() {
                 >
                   <colgroup>
                     <col style={{ width: itemWidths.index }} />
+                    <col style={{ width: itemWidths.itemCode }} />
                     <col style={{ width: itemWidths.product }} />
-                    <col style={{ width: itemWidths.variant }} />
+                    <col style={{ width: itemWidths.materialFinish }} />
+                    <col style={{ width: itemWidths.options }} />
                     <col style={{ width: itemWidths.quantity }} />
-
-                    <col style={{ width: itemWidths.notes }} />
                   </colgroup>
                   <thead>
                     <tr>
                       <Th {...getItemResizeProps('index')} className="text-center text-xs py-2.5">#</Th>
-                      <Th {...getItemResizeProps('product')} className="text-xs py-2.5">PRODUCT</Th>
-                      <Th {...getItemResizeProps('variant')} className="text-xs py-2.5">SIZE / VARIANT</Th>
+                      <Th {...getItemResizeProps('itemCode')} className="text-xs py-2.5">ITEM CODE</Th>
+                      <Th {...getItemResizeProps('product')} className="text-xs py-2.5">PRODUCT / VARIANT</Th>
+                      <Th {...getItemResizeProps('materialFinish')} className="text-xs py-2.5">MATERIAL · FINISH</Th>
+                      <Th {...getItemResizeProps('options')} className="text-xs py-2.5">OPTIONS</Th>
                       <Th {...getItemResizeProps('quantity')} className="text-center text-xs py-2.5">QTY</Th>
-
-                      <Th {...getItemResizeProps('notes')} className="text-xs py-2.5">NOTES</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border text-xs">
                     {inquiryItems.length > 0 ? (
                       inquiryItems.map((item, idx) => (
                         <tr key={item.prItemId || item.id || idx} className="hover:bg-surface/60 transition-colors">
-                          <Td style={{ width: itemWidths.index }} className="text-center font-mono text-text-muted py-2.5 whitespace-nowrap">{idx + 1}</Td>
-                          <Td style={{ width: itemWidths.product }} className="font-bold text-heading text-xs py-2.5">
-                            <span className="block truncate w-full min-w-0" title={item.productName || item.itemName}>
+                          <Td style={{ width: itemWidths.index }} className="text-center font-mono text-text-muted py-2.5 whitespace-nowrap">
+                            {idx + 1}
+                          </Td>
+                          <Td style={{ width: itemWidths.itemCode }} className="text-xs font-mono font-medium text-primary truncate py-2.5" title={item.itemCode || '—'}>
+                            {item.itemCode || '—'}
+                          </Td>
+                          <Td style={{ width: itemWidths.product }} className="text-xs py-2.5">
+                            <div className="font-bold text-heading truncate" title={item.productName || item.itemName || ''}>
                               {item.productName || item.itemName || '—'}
-                            </span>
-                            {item.technicalDetails && (
-                              <span className="text-2xs text-text-muted font-normal block truncate" title={item.technicalDetails}>
-                                {item.technicalDetails}
-                              </span>
+                            </div>
+                            <div className="text-2xs text-text-muted truncate" title={item.variantName || ''}>
+                              {item.variantName || '—'}
+                            </div>
+                          </Td>
+                          <Td style={{ width: itemWidths.materialFinish }} className="text-xs py-2.5">
+                            <div className="font-medium text-text truncate" title={item.material || 'Indian Black Granite'}>
+                              {item.material || 'Indian Black Granite'}
+                            </div>
+                            <div className="text-2xs text-text-muted truncate">
+                              {[item.finish || 'Hand Lapped', item.standards || 'IS-7327-2003'].filter(Boolean).join(' · ')}
+                            </div>
+                          </Td>
+                          <Td style={{ width: itemWidths.options }} className="text-xs py-2.5">
+                            {Array.isArray(item.options) && item.options.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 max-w-full">
+                                {item.options.map((opt, oIdx) => (
+                                  <span
+                                    key={oIdx}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-3xs font-medium bg-surface-hover text-text-muted border border-border truncate max-w-[130px]"
+                                    title={opt}
+                                  >
+                                    {opt.replace(' (Standard)', '')}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-text-muted/60 text-2xs italic">None</span>
                             )}
                           </Td>
-                          <Td style={{ width: itemWidths.variant }} className="text-xs text-text py-2.5">
-                            <span className="block truncate w-full min-w-0">
-                              {item.isCustomSize
-                                ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size')
-                                : (item.variantName || item.size || '—')}
-                            </span>
+                          <Td style={{ width: itemWidths.quantity }} className="text-center font-mono tabular-nums text-xs font-bold text-heading py-2.5 whitespace-nowrap">
+                            {item.quantity}
                           </Td>
-                          <Td style={{ width: itemWidths.quantity }} className="text-center font-mono font-bold text-heading text-xs py-2.5 whitespace-nowrap">{item.quantity}</Td>
-
-                          <Td style={{ width: itemWidths.notes }} className="text-text-muted py-2.5">
-                            <span className="block truncate w-full min-w-0" title={item.notes || item.specification || '—'}>
-                              {item.notes || item.specification || '—'}
-                            </span>
-                          </Td>
-                          {false && (<>
-                          <Td className="hidden">
-                            <span className="block truncate w-full min-w-0" title={item.categoryName || getCategoryPathName(item.categoryId || inquiry.CategoryId, categories)}>
-                              {item.productName || item.itemName || '—'}
-                            </span>
-                          </Td>
-                          <Td style={{ width: itemWidths.itemCode }} className="py-2.5 whitespace-nowrap">
-                            <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-xs">
-                              {item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '—')}
-                            </span>
-                          </Td>
-                          <Td style={{ width: itemWidths.specification }} className="text-text-muted py-2.5">
-                            <span className="block truncate w-full min-w-0" title={item.specification || '—'}>
-                              {item.specification || '—'}
-                            </span>
-                          </Td>
-                          <Td style={{ width: itemWidths.quantity }} className="text-right font-mono font-bold text-heading text-xs py-2.5 whitespace-nowrap">{item.quantity}</Td>
-                          </>)}
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <Td colSpan={5} className="text-center py-6 text-text-muted italic">
+                        <Td colSpan={6} className="text-center py-6 text-text-muted italic">
                           No items added to inquiry yet.
                         </Td>
                       </tr>
