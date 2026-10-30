@@ -49,6 +49,7 @@ import {
   CancelButton,
   Badge,
   Card,
+  CollapsibleCard,
   DetailField,
   ErrorBanner,
   TableContainer,
@@ -80,20 +81,20 @@ import { formatDate, formatDateTime } from '../../utils/dateUtils';
 
 const INITIAL_ITEM_WIDTHS = {
   index: 50,
-  category: 220,
-  itemCode: 140,
-  specification: 260,
+  product: 220,
+  variant: 180,
   quantity: 85,
-  uom: 85,
+
+  notes: 240,
 };
 
 const MIN_ITEM_WIDTHS = {
   index: 40,
-  category: 120,
-  itemCode: 100,
-  specification: 120,
+  product: 120,
+  variant: 100,
   quantity: 60,
-  uom: 60,
+
+  notes: 120,
 };
 
 const INITIAL_DOC_WIDTHS = {
@@ -1008,28 +1009,28 @@ export default function InquiryViewPage() {
                             {idx + 1}
                           </span>
                           <div>
-                            <span className="text-2xs uppercase font-semibold text-text-muted block">Product Category</span>
+                            <span className="text-2xs uppercase font-semibold text-text-muted block">Product</span>
                             <span className="font-semibold text-xs text-heading leading-snug">
-                              {item.categoryName || getCategoryPathName(item.categoryId || inquiry.CategoryId, categories) || '—'}
+                              {item.productName || item.itemName || '—'}
                             </span>
                           </div>
                         </div>
                         <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-2xs shrink-0">
-                          {item.itemCode || 'MAT-CAT-001'}
+                          {item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '—')}
                         </span>
                       </div>
 
                       {item.specification && item.specification !== '—' && (
                         <div className="text-xs text-text-muted bg-surface/50 p-2.5 rounded-lg border border-border/60 pl-3">
-                          <span className="text-2xs uppercase font-semibold text-text-muted block mb-0.5">Specification</span>
-                          <span className="leading-relaxed">{item.specification}</span>
+                          <span className="text-2xs uppercase font-semibold text-text-muted block mb-0.5">Notes</span>
+                          <span className="leading-relaxed">{item.notes || item.specification}</span>
                         </div>
                       )}
 
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40">
-                        <span className="text-text-muted">Quantity & UOM:</span>
+                        <span className="text-text-muted">Quantity:</span>
                         <span className="font-mono font-bold text-heading bg-surface px-2.5 py-0.5 rounded border border-border">
-                          {item.quantity} <span className="font-medium text-text-muted">{item.uom}</span>
+                          {item.quantity}
                         </span>
                       </div>
                     </div>
@@ -1049,20 +1050,20 @@ export default function InquiryViewPage() {
                 >
                   <colgroup>
                     <col style={{ width: itemWidths.index }} />
-                    <col style={{ width: itemWidths.category }} />
-                    <col style={{ width: itemWidths.itemCode }} />
-                    <col style={{ width: itemWidths.specification }} />
+                    <col style={{ width: itemWidths.product }} />
+                    <col style={{ width: itemWidths.variant }} />
                     <col style={{ width: itemWidths.quantity }} />
-                    <col style={{ width: itemWidths.uom }} />
+
+                    <col style={{ width: itemWidths.notes }} />
                   </colgroup>
                   <thead>
                     <tr>
                       <Th {...getItemResizeProps('index')} className="text-center text-xs py-2.5">#</Th>
-                      <Th {...getItemResizeProps('category')} className="text-xs py-2.5">PRODUCT CATEGORY</Th>
-                      <Th {...getItemResizeProps('itemCode')} className="text-xs py-2.5">ITEM CODE</Th>
-                      <Th {...getItemResizeProps('specification')} className="text-xs py-2.5">SPECIFICATION</Th>
-                      <Th {...getItemResizeProps('quantity')} className="text-right text-xs py-2.5">QTY</Th>
-                      <Th {...getItemResizeProps('uom')} className="text-xs py-2.5">UOM</Th>
+                      <Th {...getItemResizeProps('product')} className="text-xs py-2.5">PRODUCT</Th>
+                      <Th {...getItemResizeProps('variant')} className="text-xs py-2.5">SIZE / VARIANT</Th>
+                      <Th {...getItemResizeProps('quantity')} className="text-center text-xs py-2.5">QTY</Th>
+
+                      <Th {...getItemResizeProps('notes')} className="text-xs py-2.5">NOTES</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border text-xs">
@@ -1070,14 +1071,39 @@ export default function InquiryViewPage() {
                       inquiryItems.map((item, idx) => (
                         <tr key={item.prItemId || item.id || idx} className="hover:bg-surface/60 transition-colors">
                           <Td style={{ width: itemWidths.index }} className="text-center font-mono text-text-muted py-2.5 whitespace-nowrap">{idx + 1}</Td>
-                          <Td style={{ width: itemWidths.category }} className="font-medium text-heading text-xs py-2.5">
+                          <Td style={{ width: itemWidths.product }} className="font-bold text-heading text-xs py-2.5">
+                            <span className="block truncate w-full min-w-0" title={item.productName || item.itemName}>
+                              {item.productName || item.itemName || '—'}
+                            </span>
+                            {item.technicalDetails && (
+                              <span className="text-2xs text-text-muted font-normal block truncate" title={item.technicalDetails}>
+                                {item.technicalDetails}
+                              </span>
+                            )}
+                          </Td>
+                          <Td style={{ width: itemWidths.variant }} className="text-xs text-text py-2.5">
+                            <span className="block truncate w-full min-w-0">
+                              {item.isCustomSize
+                                ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size')
+                                : (item.variantName || item.size || '—')}
+                            </span>
+                          </Td>
+                          <Td style={{ width: itemWidths.quantity }} className="text-center font-mono font-bold text-heading text-xs py-2.5 whitespace-nowrap">{item.quantity}</Td>
+
+                          <Td style={{ width: itemWidths.notes }} className="text-text-muted py-2.5">
+                            <span className="block truncate w-full min-w-0" title={item.notes || item.specification || '—'}>
+                              {item.notes || item.specification || '—'}
+                            </span>
+                          </Td>
+                          {false && (<>
+                          <Td className="hidden">
                             <span className="block truncate w-full min-w-0" title={item.categoryName || getCategoryPathName(item.categoryId || inquiry.CategoryId, categories)}>
-                              {item.categoryName || getCategoryPathName(item.categoryId || inquiry.CategoryId, categories) || '—'}
+                              {item.productName || item.itemName || '—'}
                             </span>
                           </Td>
                           <Td style={{ width: itemWidths.itemCode }} className="py-2.5 whitespace-nowrap">
                             <span className="font-mono font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md text-xs">
-                              {item.itemCode || 'MAT-CAT-001'}
+                              {item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '—')}
                             </span>
                           </Td>
                           <Td style={{ width: itemWidths.specification }} className="text-text-muted py-2.5">
@@ -1086,12 +1112,12 @@ export default function InquiryViewPage() {
                             </span>
                           </Td>
                           <Td style={{ width: itemWidths.quantity }} className="text-right font-mono font-bold text-heading text-xs py-2.5 whitespace-nowrap">{item.quantity}</Td>
-                          <Td style={{ width: itemWidths.uom }} className="text-text-muted font-mono text-xs py-2.5 whitespace-nowrap">{item.uom}</Td>
+                          </>)}
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <Td colSpan={6} className="text-center py-6 text-text-muted italic">
+                        <Td colSpan={5} className="text-center py-6 text-text-muted italic">
                           No items added to inquiry yet.
                         </Td>
                       </tr>
@@ -1151,17 +1177,14 @@ export default function InquiryViewPage() {
               </div>
             </div>
           </Card>
-        </div>
 
-        {/* ── RIGHT COLUMN: Assignment, Documents & Attachments, Activity Timeline (xl:col-span-6) ── */}
-        <div className="xl:col-span-6 space-y-6">
-          {/* Assignment & Lifecycle Card */}
-          <Card padding="md" className="bg-bg shadow-2xs">
-            <div className="border-b border-border pb-3 mb-4 flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-sm">
-                <IconUserCheck size={17} className="text-primary shrink-0" />
-                <span>Assignment & Lifecycle</span>
-              </div>
+          {/* 4. Assignment & Lifecycle Card (Collapsible, collapsed by default) */}
+          <CollapsibleCard
+            title="Assignment & Lifecycle"
+            icon={<IconUserCheck size={17} />}
+            defaultOpen={false}
+            className="bg-bg shadow-2xs"
+            actions={
               <button
                 type="button"
                 onClick={() => setIsAssignModalOpen(true)}
@@ -1169,8 +1192,8 @@ export default function InquiryViewPage() {
               >
                 {isAssigned ? 'Reassign' : 'Assign User'}
               </button>
-            </div>
-
+            }
+          >
             <div className="space-y-4">
               {/* Current Assignee Box */}
               <div className="p-3 bg-surface rounded-xl border border-border flex items-center justify-between">
@@ -1217,8 +1240,11 @@ export default function InquiryViewPage() {
                 />
               </div>
             </div>
-          </Card>
+          </CollapsibleCard>
+        </div>
 
+        {/* ── RIGHT COLUMN: Documents & Attachments, Activity Timeline (xl:col-span-6) ── */}
+        <div className="xl:col-span-6 space-y-6">
           {/* Desktop Only: Documents & Attachments (shown here on screens >= xl) */}
           <div className="hidden xl:block">
             {renderDocumentsSection()}

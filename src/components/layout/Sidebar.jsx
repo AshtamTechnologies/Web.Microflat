@@ -177,25 +177,40 @@ function NavItem({ item, collapsed, onClick }) {
 }
 
 /* ── Submenu Item Active Resolver ────────────────────────────── */
-function isSubNavActive(itemPath, currentPath) {
+function isSubNavActive(itemPath, currentPath, allSiblingPaths = []) {
   if (!itemPath || !currentPath) return false;
+  // Exact match
+  if (currentPath === itemPath) return true;
+
+  // If another sibling in the same group has an exact match or a longer/more-specific prefix match,
+  // this item should not be marked active.
+  if (Array.isArray(allSiblingPaths) && allSiblingPaths.length > 0) {
+    const hasMoreSpecificSiblingMatch = allSiblingPaths.some(
+      (siblingPath) =>
+        siblingPath !== itemPath &&
+        (currentPath === siblingPath ||
+          (currentPath.startsWith(siblingPath + '/') && siblingPath.length > itemPath.length))
+    );
+    if (hasMoreSpecificSiblingMatch) {
+      return false;
+    }
+  }
+
   // Dashboard routes require exact match
   if (itemPath.endsWith('/dashboard')) {
     return currentPath === itemPath;
   }
-  // Exact match
-  if (currentPath === itemPath) return true;
   // Sub-routes under this section (e.g. /purchase-requisition/create, /purchase-requisition/PR-123)
   // should activate the main list link, but NOT if navigating to the dashboard sibling
   return currentPath.startsWith(itemPath + '/') && !currentPath.startsWith(itemPath + '/dashboard');
 }
 
 /* ── Submenu Item (Tree-branch hierarchy) ──────────────────────── */
-function SubNavItem({ item, onClick }) {
+function SubNavItem({ item, allSiblingPaths, onClick }) {
   const navigate = useNavigate();
   const location = useLocation();
   const Icon = item.icon;
-  const isActive = isSubNavActive(item.path, location.pathname);
+  const isActive = isSubNavActive(item.path, location.pathname, allSiblingPaths);
 
   return (
     <div className="relative group/subnav-item flex items-center">
@@ -248,7 +263,8 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
   const location = useLocation();
   const Icon = item.icon;
 
-  const isChildActive = item.children?.some((c) => isSubNavActive(c.path, location.pathname));
+  const childPaths = useMemo(() => item.children?.map((c) => c.path) || [], [item.children]);
+  const isChildActive = item.children?.some((c) => isSubNavActive(c.path, location.pathname, childPaths));
   const [open, setOpen] = useState(isChildActive);
   const [isFlyoutOpen, setIsFlyoutOpen] = useState(false);
   const [flyoutCoords, setFlyoutCoords] = useState(null);
@@ -363,7 +379,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
               <div className="p-1.5 space-y-0.5">
                 {item.children?.map((child) => {
                   const ChildIcon = child.icon;
-                  const isLinkActive = isSubNavActive(child.path, location.pathname);
+                  const isLinkActive = isSubNavActive(child.path, location.pathname, childPaths);
 
                   return (
                     <NavLink
@@ -451,7 +467,12 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
       {isAccordionOpen && (
         <div className="relative mt-1 ml-5 pl-3 border-l border-border/80 space-y-1">
           {item.children.map((child) => (
-            <SubNavItem key={child.path} item={child} onClick={onChildClick} />
+            <SubNavItem
+              key={child.path}
+              item={child}
+              allSiblingPaths={childPaths}
+              onClick={onChildClick}
+            />
           ))}
         </div>
       )}

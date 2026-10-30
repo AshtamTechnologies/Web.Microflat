@@ -1,6 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import DelegationPage from './pages/delegation/DelegationPage';
+import AllDelegationsPage from './pages/delegation/AllDelegationsPage';
+import DelegationFormPage from './pages/delegation/DelegationFormPage';
+import DelegationViewPage from './pages/delegation/DelegationViewPage';
 import AppLayout from './components/layout/AppLayout';
 import UsersPage from './pages/users/UsersPage';
 import { UsersProvider } from './context/UsersContext';
@@ -154,6 +158,11 @@ export default function App() {
               }
             >
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/delegation" element={<DelegationPage />} />
+              <Route path="/delegation/all" element={<AllDelegationsPage />} />
+              <Route path="/delegation/new" element={<DelegationFormPage />} />
+              <Route path="/delegation/:id" element={<DelegationViewPage />} />
+              <Route path="/delegation/:id/edit" element={<DelegationFormPage />} />
               <Route path="/users" element={<UsersPage />} />
               <Route path="/users/:id" element={<UserViewPage />} />
               <Route path="/vendors" element={<VendorsPage />} />

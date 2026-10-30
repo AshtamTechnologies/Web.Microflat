@@ -46,6 +46,7 @@ import {
   Ban,
   ArrowLeft,
   ArrowRight,
+  ArrowLeftRight,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -171,6 +172,7 @@ export const IconDashboard = LayoutDashboard;
 export const IconDashboardImage = createImageIcon(DashboardIconImg, 'Dashboard');
 export const IconUsers = Users;
 export const IconUsersImage = createImageIcon(UserIconImg, 'Users');
+export const IconDelegation = ArrowLeftRight;
 export const IconConfig = Settings;
 
 // Approvals

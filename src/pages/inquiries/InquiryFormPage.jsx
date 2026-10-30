@@ -67,6 +67,7 @@ import {
   Textarea,
   IconButton,
   FormActionsBar,
+  TableActions,
 } from '../../components/ui';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useUsersContext } from '../../context/UsersContext';
@@ -86,6 +87,11 @@ import {
 } from '../../mocks/inquiries';
 import { MOCK_MATERIALS } from '../../mocks/purchaseRequisitions';
 import { formatFileSizeKB, getDocumentType } from '../../mocks/inquiryDocuments';
+import {
+  INQUIRY_CATALOG_CATEGORIES,
+  INQUIRY_CATALOG_PRODUCTS,
+  CUSTOM_SIZE_VARIANT_VALUE,
+} from '../../mocks/inquiryCatalog';
 
 const CLIENT_TYPE_OPTIONS = [
   { value: 'New', label: 'New Client' },
@@ -116,13 +122,22 @@ function normalizeUom(val) {
 
 const INITIAL_ITEM_ENTRY = {
   prItemId: null,
-  itemId: '',
+  productId: '',
   itemCode: '',
-  itemName: '',
+
   specification: '',
   quantity: '',
   uom: 'NOS',
-  parentCategoryId: '',
+  categoryId: '',
+  categoryName: '',
+  productId: '',
+  productName: '',
+  variantId: '',
+  variantName: '',
+  isCustomSize: false,
+  customSize: '',
+  technicalDetails: '',
+  notes: '',
   categoryId: '',
   categoryName: '',
 };
@@ -440,7 +455,41 @@ export default function InquiryFormPage() {
   const [itemFieldErrors, setItemFieldErrors] = useState({});
   const inquiryItemErrorCountRef = useRef(0);
 
-  // 2-Level Parent and Sub-Category options
+  // Product Catalog Options for Section 3
+  const catalogCategoryOptions = useMemo(() => {
+    return [
+      { value: '', label: 'Select Category...' },
+      ...INQUIRY_CATALOG_CATEGORIES,
+    ];
+  }, []);
+
+  const catalogProductOptions = useMemo(() => {
+    let list = INQUIRY_CATALOG_PRODUCTS;
+    if (itemFormState.categoryId) {
+      list = list.filter((p) => p.categoryId === itemFormState.categoryId);
+    }
+    return [
+      { value: '', label: 'Select Product...' },
+      ...list.map((p) => ({
+        value: p.id,
+        label: p.productName,
+      })),
+    ];
+  }, [itemFormState.categoryId]);
+
+  const catalogVariantOptions = useMemo(() => {
+    if (!itemFormState.productId) return [];
+    const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === itemFormState.productId);
+    if (!prod) return [];
+    return [
+      { value: '', label: 'Select Size / Variant...' },
+      ...prod.variants.map((v) => ({
+        value: v.id,
+        label: v.variantName,
+      })),
+      { value: CUSTOM_SIZE_VARIANT_VALUE, label: 'Custom Size' },
+    ];
+  }, [itemFormState.productId]);
   const parentCategoryOptions = useMemo(() => {
     const roots = categories.filter(
       (c) => !c.parentCategoryId && (c.isActive || c.categoryId === itemFormState.parentCategoryId)
@@ -488,7 +537,277 @@ export default function InquiryFormPage() {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
+  // Selected Inquiry Products grid column widths and resizing
+  const MIN_ITEM_COL_WIDTHS = useMemo(() => ({
+    select: 40,
+    index: 40,
+    product: 120,
+    variant: 100,
+    quantity: 60,
+    notes: 100,
+    actions: 84,
+  }), []);
+
+  const [colWidths, setColWidths] = useState({
+    select: 48,
+    index: 48,
+    product: 220,
+    variant: 180,
+    quantity: 80,
+    notes: 220,
+    actions: 96,
+  });
+  const [resizingCol, setResizingCol] = useState(null);
+
+  const handleStartResize = (e, colKey) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const thElement = e.currentTarget.closest('th');
+    const startWidth = thElement
+      ? Math.round(thElement.getBoundingClientRect().width)
+      : (colWidths[colKey] || 100);
+
+    const startX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+
+    setResizingCol(colKey);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (moveEvent) => {
+      const currentX =
+        moveEvent.clientX ??
+        (moveEvent.touches && moveEvent.touches[0] ? moveEvent.touches[0].clientX : startX);
+      const delta = currentX - startX;
+      const minW = MIN_ITEM_COL_WIDTHS[colKey] || 50;
+      const newWidth = Math.max(minW, Math.round(startWidth + delta));
+
+      setColWidths((prev) => ({
+        ...prev,
+        [colKey]: newWidth,
+      }));
+    };
+
+    const onMouseUp = () => {
+      setResizingCol(null);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('touchmove', onMouseMove);
+      window.removeEventListener('touchend', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('touchmove', onMouseMove, { passive: false });
+    window.addEventListener('touchend', onMouseUp);
+  };
+
+  const totalTableWidth = useMemo(() => {
+    return Object.values(colWidths).reduce((sum, w) => sum + (Number(w) || 0), 0);
+  }, [colWidths]);
+
   const handleItemFieldChange = (field, value) => {
+    if (field === 'categoryId') {
+      const catObj = INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === value);
+      setItemFormState((prev) => ({
+        ...prev,
+        categoryId: value,
+        categoryName: catObj ? catObj.label : '',
+        productId: '',
+        productName: '',
+        variantId: '',
+        variantName: '',
+        isCustomSize: false,
+        customSize: '',
+        technicalDetails: '',
+        itemCode: '',
+      }));
+    } else if (field === 'productId') {
+      const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === value);
+      setItemFormState((prev) => ({
+        ...prev,
+        productId: value,
+        productName: prod ? prod.productName : '',
+        categoryId: prod ? prod.categoryId : prev.categoryId,
+        categoryName: prod ? (INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === prod.categoryId)?.label || prev.categoryName) : prev.categoryName,
+        variantId: '',
+        variantName: '',
+        isCustomSize: false,
+        customSize: '',
+        technicalDetails: prod ? prod.standardInfo : '',
+        itemCode: prod ? prod.itemCodePrefix : '',
+        uom: prod ? prod.defaultUom : 'Nos',
+      }));
+    } else if (field === 'variantId') {
+      if (value === CUSTOM_SIZE_VARIANT_VALUE) {
+        setItemFormState((prev) => ({
+          ...prev,
+          variantId: CUSTOM_SIZE_VARIANT_VALUE,
+          variantName: 'Custom Size',
+          isCustomSize: true,
+          technicalDetails: 'Custom size · Technical specs can be detailed in Notes',
+        }));
+      } else {
+        const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === itemFormState.productId);
+        const variant = prod ? prod.variants.find((v) => v.id === value) : null;
+        setItemFormState((prev) => ({
+          ...prev,
+          variantId: value,
+          variantName: variant ? variant.variantName : '',
+          isCustomSize: false,
+          customSize: '',
+          technicalDetails: variant ? variant.technicalDetails : (prod ? prod.standardInfo : ''),
+          itemCode: variant ? variant.itemCode : (prod ? prod.itemCodePrefix : ''),
+        }));
+      }
+    } else {
+      setItemFormState((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    }
+
+    if (itemFieldErrors[field]) {
+      setItemFieldErrors((prev) => ({ ...prev, [field]: null }));
+    }
+    inquiryItemErrorCountRef.current = 0;
+  };
+
+  const validateItemForm = () => {
+    const errs = {};
+    if (!itemFormState.productName || !itemFormState.productName.trim()) {
+      errs.productName = 'Please select a product';
+    }
+    if (!itemFormState.variantId) {
+      errs.variantId = 'Please select a size / variant';
+    }
+    if (itemFormState.isCustomSize && (!itemFormState.customSize || !itemFormState.customSize.trim())) {
+      errs.customSize = 'Please enter custom size / dimensions';
+    }
+    if (
+      itemFormState.quantity === '' ||
+      itemFormState.quantity === null ||
+      itemFormState.quantity === undefined ||
+      Number(itemFormState.quantity) <= 0 ||
+      isNaN(Number(itemFormState.quantity))
+    ) {
+      errs.quantity = 'Quantity must be greater than 0';
+    }
+
+    setItemFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const resetItemForm = () => {
+    setEditingItemId(null);
+    setItemFieldErrors({});
+    setItemFormState({ ...INITIAL_ITEM_ENTRY });
+    inquiryItemErrorCountRef.current = 0;
+  };
+
+  const handleAddOrUpdateItem = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    if (!validateItemForm()) {
+      inquiryItemErrorCountRef.current += 1;
+      toast.error('Please select product, size/variant and enter valid quantity', {
+        id: 'inquiry-item-validation-error',
+      });
+      return;
+    }
+
+    inquiryItemErrorCountRef.current = 0;
+
+    const resolvedQty = Number(itemFormState.quantity) || 1;
+    const resolvedUom = itemFormState.uom || 'Nos';
+    const resolvedNotes = itemFormState.notes?.trim() || '';
+
+    const itemPayload = {
+      prItemId: isEditingItem
+        ? (form.items[editingItemIndex]?.prItemId || Date.now())
+        : (Date.now() + Math.floor(Math.random() * 1000)),
+      categoryId: itemFormState.categoryId || '',
+      categoryName: itemFormState.categoryName || '',
+      productId: itemFormState.productId || '',
+      productName: itemFormState.productName || '',
+      variantId: itemFormState.variantId || '',
+      variantName: itemFormState.isCustomSize
+        ? (itemFormState.customSize ? `${itemFormState.customSize} (Custom)` : 'Custom Size')
+        : (itemFormState.variantName || '—'),
+      isCustomSize: Boolean(itemFormState.isCustomSize),
+      customSize: itemFormState.customSize || '',
+      technicalDetails: itemFormState.technicalDetails || '',
+      itemCode: itemFormState.itemCode || '—',
+      quantity: resolvedQty,
+      uom: resolvedUom,
+      notes: resolvedNotes,
+      specification: resolvedNotes || itemFormState.technicalDetails || '',
+    };
+
+    if (isEditingItem) {
+      const updated = (form.items || []).map((it, idx) => {
+        if (idx === editingItemIndex) {
+          return {
+            ...it,
+            ...itemPayload,
+          };
+        }
+        return it;
+      });
+      const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+      setForm((prev) => ({
+        ...prev,
+        items: updated,
+        Quantity: String(totalQty || 1),
+        UOM: updated[0]?.uom || prev.UOM || 'Nos',
+      }));
+      toast.success('Item updated');
+      resetItemForm();
+    } else {
+      const nextItems = [...(form.items || []), itemPayload];
+      const totalQty = nextItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+      setForm((prev) => ({
+        ...prev,
+        items: nextItems,
+        Quantity: String(totalQty || 1),
+        UOM: nextItems[0]?.uom || prev.UOM || 'Nos',
+      }));
+      toast.success('Item added to inquiry');
+      resetItemForm();
+    }
+  };
+
+  const handleStartEditItem = (item, index) => {
+    const id = item.prItemId !== undefined && item.prItemId !== null
+      ? item.prItemId
+      : item.id !== undefined && item.id !== null
+        ? item.id
+        : index;
+
+    setEditingItemId(id);
+    setItemFieldErrors({});
+    setItemFormState({
+      prItemId: id,
+      categoryId: item.categoryId || '',
+      categoryName: item.categoryName || '',
+      productId: item.productId || '',
+      productName: item.productName || item.itemName || '',
+      variantId: item.variantId || (item.isCustomSize ? CUSTOM_SIZE_VARIANT_VALUE : ''),
+      variantName: item.variantName || '',
+      isCustomSize: Boolean(item.isCustomSize),
+      customSize: item.customSize || '',
+      technicalDetails: item.technicalDetails || '',
+      itemCode: item.itemCode || '',
+      quantity: item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? String(item.quantity) : '1',
+      uom: item.uom || 'Nos',
+      notes: item.notes || item.specification || '',
+      specification: item.specification || item.notes || '',
+    });
+  };
+
+  const _OLD_handleItemFieldChange = (field, value) => {
     if (field === 'parentCategoryId') {
       const subs = categories.filter((c) => c.parentCategoryId === value);
       setItemFormState((prev) => ({
@@ -512,9 +831,9 @@ export default function InquiryFormPage() {
       } else {
         setItemFormState((prev) => ({
           ...prev,
-          itemId: '',
+          productId: '',
           itemCode: '',
-          itemName: '',
+        
           specification: '',
         }));
       }
@@ -531,7 +850,7 @@ export default function InquiryFormPage() {
     inquiryItemErrorCountRef.current = 0;
   };
 
-  const validateItemForm = () => {
+  const _OLD_validateItemForm = () => {
     const errs = {};
     if (!itemFormState.itemCode || !itemFormState.itemCode.trim()) {
       errs.itemCode = 'Please select a product from the catalog';
@@ -550,25 +869,34 @@ export default function InquiryFormPage() {
     return Object.keys(errs).length === 0;
   };
 
-  const resetItemForm = () => {
+  const _OLD_resetItemForm = () => {
     setEditingItemId(null);
     setItemFieldErrors({});
     setItemFormState({
       prItemId: null,
-      itemId: '',
+      productId: '',
       itemCode: '',
-      itemName: '',
+    
       specification: '',
       quantity: '',
       uom: 'NOS',
-      parentCategoryId: '',
+      categoryId: '',
+  categoryName: '',
+  productId: '',
+  productName: '',
+  variantId: '',
+  variantName: '',
+  isCustomSize: false,
+  customSize: '',
+  technicalDetails: '',
+  notes: '',
       categoryId: '',
       categoryName: '',
     });
     inquiryItemErrorCountRef.current = 0;
   };
 
-  const handleAddOrUpdateItem = (e) => {
+  const _OLD_handleAddOrUpdateItem = (e) => {
     if (e && e.preventDefault) e.preventDefault();
 
     if (!validateItemForm()) {
@@ -647,7 +975,7 @@ export default function InquiryFormPage() {
     }
   };
 
-  const handleStartEditItem = (item, index) => {
+  const _OLD_handleStartEditItem = (item, index) => {
     const id = item.prItemId !== undefined && item.prItemId !== null
       ? item.prItemId
       : item.id !== undefined && item.id !== null
@@ -1594,19 +1922,159 @@ export default function InquiryFormPage() {
           {/* ── SECTION 3: PRODUCT SELECTION ── */}
           <CollapsibleCard
             title="3. Product Selection"
-            subtitle="Category classification & optional item specifications (can be specified later)"
+            subtitle="Pick a product and size, enter the quantity. Can be specified later."
             icon={<IconPackage size={18} />}
             className="bg-bg"
             bodyClassName="space-y-6"
             defaultOpen={true}
             badge={
               <span className="text-2xs font-medium text-text-muted bg-surface border border-border px-2 py-0.5 rounded-full">
-                {form.items?.length > 0 ? `${form.items.length} ${form.items.length === 1 ? 'Item' : 'Items'}` : 'Optional'}
+                Optional
               </span>
             }
           >
 
-            {/* ── Sub-Card: Add Item to Inquiry ── */}
+            {/* ── Product Selection Form (Matching Mockup & Image) ── */}
+            <div
+              className={`p-4 sm:p-5 rounded-xl border bg-surface/50 space-y-3.5 transition-all duration-200 ${
+                editingItemId
+                  ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
+                  : 'border-border'
+              }`}
+            >
+              {/* Row 1: Category, Product Name *, Size / Variant *, (Custom Size if chosen), Qty * */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3.5 items-end">
+                {/* Category */}
+                <div className={itemFormState.isCustomSize ? 'lg:col-span-3' : 'lg:col-span-3'}>
+                  <SearchableSelect
+                    id="item-catalog-category"
+                    label="Category"
+                    options={catalogCategoryOptions}
+                    value={itemFormState.categoryId || ''}
+                    placeholder="Surface Plates"
+                    searchPlaceholder="Search categories..."
+                    onChange={(e) => handleItemFieldChange('categoryId', e.target.value)}
+                  />
+                </div>
+
+                {/* Product Name * */}
+                <div className={itemFormState.isCustomSize ? 'lg:col-span-3' : 'lg:col-span-4'}>
+                  <SearchableSelect
+                    id="item-catalog-product"
+                    label="Product Name"
+                    required
+                    options={catalogProductOptions}
+                    value={itemFormState.productId || ''}
+                    placeholder="Select product..."
+                    searchPlaceholder="Search products..."
+                    error={itemFieldErrors.productName}
+                    onChange={(e) => handleItemFieldChange('productId', e.target.value)}
+                  />
+                </div>
+
+                {/* Size / Variant * */}
+                <div className={itemFormState.isCustomSize ? 'lg:col-span-2' : 'lg:col-span-3'}>
+                  <SearchableSelect
+                    id="item-catalog-variant"
+                    label="Size / Variant"
+                    required
+                    options={catalogVariantOptions}
+                    value={itemFormState.variantId || ''}
+                    placeholder={!itemFormState.productId ? 'Select product first' : 'Select size / variant...'}
+                    searchPlaceholder="Search size / variant..."
+                    disabled={!itemFormState.productId}
+                    error={itemFieldErrors.variantId}
+                    onChange={(e) => handleItemFieldChange('variantId', e.target.value)}
+                  />
+                </div>
+
+                {/* Custom Size / Dimensions * (Dynamic text box shown when Custom Size is chosen) */}
+                {itemFormState.isCustomSize && (
+                  <div className="lg:col-span-2 animate-in fade-in duration-150">
+                    <Input
+                      id="item-custom-size-input"
+                      label="Custom Size *"
+                      placeholder="e.g. 350 × 280 mm"
+                      value={itemFormState.customSize || ''}
+                      error={itemFieldErrors.customSize}
+                      onChange={(e) => handleItemFieldChange('customSize', e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {/* Qty * */}
+                <div className="lg:col-span-2">
+                  <Input
+                    id="item-catalog-qty"
+                    label="Qty *"
+                    type="number"
+                    min="1"
+                    placeholder="1"
+                    value={itemFormState.quantity !== undefined && itemFormState.quantity !== null ? itemFormState.quantity : ''}
+                    error={itemFieldErrors.quantity}
+                    onChange={(e) => handleItemFieldChange('quantity', e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Auto-Filled Technical Strip */}
+              <div className="w-full px-3.5 py-2.5 rounded-lg bg-surface/80 border border-border/80 text-xs text-text-muted flex items-center justify-between overflow-hidden">
+                <span className="truncate">
+                  {itemFormState.technicalDetails || 'Indian Black Granite · Hand Lapped · IS-7327-2003 · Flatness 3.5 µm'}
+                </span>
+                <span className="text-2xs text-text-muted/60 italic shrink-0 ml-2">(filled automatically)</span>
+              </div>
+
+              {/* Row 3: Notes & + Add Item button */}
+              <div className="flex flex-col sm:flex-row items-end gap-3 pt-0.5">
+                <div className="flex-1 w-full">
+                  <Input
+                    id="item-catalog-notes"
+                    label="Notes"
+                    placeholder="Optional: options, drawing no. or special requirement"
+                    value={itemFormState.notes || ''}
+                    onChange={(e) => handleItemFieldChange('notes', e.target.value)}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end">
+                  {editingItemId && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="md"
+                      onClick={resetItemForm}
+                      className="h-10 text-xs px-3"
+                    >
+                      <IconClose size={14} className="mr-1" />
+                      Cancel
+                    </Button>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    onClick={handleAddOrUpdateItem}
+                    className="h-10 font-semibold shadow-xs text-xs px-5 whitespace-nowrap"
+                  >
+                    {editingItemId ? (
+                      <>
+                        <IconCheck size={14} className="mr-1.5" />
+                        Update Item
+                      </>
+                    ) : (
+                      <>
+                        <IconAdd size={14} className="mr-1.5" />
+                        Add Item
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Legacy Sub-Card ── */}{false && (
             <div
               className={`p-4 sm:p-5 rounded-xl border bg-surface/50 space-y-4 transition-all duration-200 ${editingItemId
                 ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
@@ -1791,6 +2259,7 @@ export default function InquiryFormPage() {
               </div>
             </div>
 
+            )}
             {/* ── Sub-Card: Items Grid Table ── */}
             <div className="rounded-xl border border-border overflow-hidden bg-bg">
               <div className="p-3.5 bg-surface/80 border-b border-border flex items-center justify-between gap-3 flex-wrap">
@@ -1832,10 +2301,22 @@ export default function InquiryFormPage() {
                 <>
                   {/* Desktop / Tablet Table View (md+) */}
                   <div className="hidden md:block">
-                    <TableContainer tableClassName="w-full min-w-[760px] text-left border-collapse text-xs">
+                    <TableContainer
+                      tableStyle={{ width: `${totalTableWidth}px`, minWidth: '100%' }}
+                      tableClassName="w-full text-left border-collapse text-xs table-fixed"
+                    >
+                      <colgroup>
+                        <col style={{ width: `${colWidths.select}px` }} />
+                        <col style={{ width: `${colWidths.index}px` }} />
+                        <col style={{ width: `${colWidths.product}px` }} />
+                        <col style={{ width: `${colWidths.variant}px` }} />
+                        <col style={{ width: `${colWidths.quantity}px` }} />
+                        <col style={{ width: `${colWidths.notes}px` }} />
+                        <col style={{ width: `${colWidths.actions}px` }} />
+                      </colgroup>
                       <thead>
                         <tr>
-                          <Th className="w-10 text-center">
+                          <Th style={{ width: `${colWidths.select}px` }} className="text-center px-2">
                             <Checkbox
                               checked={
                                 (form.items || []).length > 0 &&
@@ -1845,13 +2326,47 @@ export default function InquiryFormPage() {
                               aria-label="Select all products"
                             />
                           </Th>
-                          <Th className="w-10 text-center">#</Th>
-                          <Th className="min-w-[140px]">PRODUCT CATEGORY</Th>
-                          <Th className="w-32">ITEM CODE</Th>
-                          <Th className="min-w-[160px]">SPECIFICATION</Th>
-                          <Th className="text-right w-20">QTY</Th>
-                          <Th className="w-20">UOM</Th>
-                          <Th className="text-right w-24">ACTIONS</Th>
+                          <Th style={{ width: `${colWidths.index}px` }} className="text-center px-2">#</Th>
+                          <Th
+                            style={{ width: `${colWidths.product}px` }}
+                            isResizing={resizingCol === 'product'}
+                            resizeHandler={(e) => handleStartResize(e, 'product')}
+                          >
+                            PRODUCT
+                          </Th>
+                          <Th
+                            style={{ width: `${colWidths.variant}px` }}
+                            isResizing={resizingCol === 'variant'}
+                            resizeHandler={(e) => handleStartResize(e, 'variant')}
+                          >
+                            SIZE / VARIANT
+                          </Th>
+
+
+                          <Th
+                            style={{ width: `${colWidths.quantity}px` }}
+                            isResizing={resizingCol === 'quantity'}
+                            resizeHandler={(e) => handleStartResize(e, 'quantity')}
+                            className="text-center"
+                          >
+                            QTY
+                          </Th>
+
+                          <Th
+                            style={{ width: `${colWidths.notes}px` }}
+                            isResizing={resizingCol === 'notes'}
+                            resizeHandler={(e) => handleStartResize(e, 'notes')}
+                          >
+                            NOTES
+                          </Th>
+                          <Th
+                            style={{ width: `${colWidths.actions}px` }}
+                            isResizing={resizingCol === 'actions'}
+                            resizeHandler={(e) => handleStartResize(e, 'actions')}
+                            className="text-right"
+                          >
+                            ACTIONS
+                          </Th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
@@ -1874,25 +2389,57 @@ export default function InquiryFormPage() {
                               <Td className="text-center font-mono text-xs text-text-muted">
                                 {idx + 1}
                               </Td>
-                              <Td className="text-xs font-medium text-heading">
-                                {item.categoryName || getCategoryPathName(item.categoryId || form.CategoryId, categories) || '—'}
+                              <Td className="text-xs font-bold text-heading truncate" title={item.productName || item.itemName || ''}>
+                                {item.productName || item.itemName || '—'}
                               </Td>
-                              <Td>
-                                <span className="font-mono text-xs font-semibold text-heading bg-surface border border-border px-2 py-0.5 rounded-md">
-                                  {item.itemCode || '—'}
-                                </span>
+                              <Td className="text-xs text-text truncate" title={item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '')}>
+                                {item.isCustomSize
+                                  ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size')
+                                  : (item.variantName || '—')}
                               </Td>
-                              <Td className="text-xs text-text-muted max-w-xs truncate" title={item.specification}>
-                                {item.specification || '—'}
-                              </Td>
-                              <Td className="text-right font-mono tabular-nums text-xs font-bold text-heading">
+                              <Td className="text-center font-mono tabular-nums text-xs font-bold text-heading">
                                 {item.quantity}
                               </Td>
-                              <Td className="text-xs text-text-muted font-mono">
+
+                              <Td className="hidden">
+                              </Td>
+                              <Td className="text-xs text-text-muted truncate" title={item.notes || item.specification || ''}>
+                                {item.notes || item.specification || '—'}
+                              </Td>
+                              <Td className="text-right whitespace-nowrap">
+                                <TableActions
+                                  onEdit={() => handleStartEditItem(item, idx)}
+                                  onDelete={() => setItemToDelete({ item, index: idx })}
+                                  editTooltip="Edit Product"
+                                  deleteTooltip="Remove Product"
+                                  className="justify-end shrink-0"
+                                />
+                              </Td>
+
+                              <Td className="hidden">
+
+                              </Td>
+                              <Td className="hidden">
+
+                                  {item.productName || item.itemName || '—'}
+                              <Td className="hidden">
+                              <Td className="hidden">
+
+                              </Td>
+
+
+                              </Td>
+
+                                {item.quantity}
+                              </Td>
+
+                              <Td className="hidden">
                                 {item.uom}
                               </Td>
-                              <Td className="text-right">
-                                <div className="flex items-center justify-end gap-1.5">
+
+
+                              <Td className="hidden">
+
                                   <IconButton
                                     icon={IconEdit}
                                     size="sm"
@@ -1910,7 +2457,7 @@ export default function InquiryFormPage() {
                                     onClick={() => setItemToDelete({ item, index: idx })}
                                     className="hover:text-danger hover:bg-danger/10"
                                   />
-                                </div>
+
                               </Td>
                             </tr>
                           );
@@ -1939,7 +2486,7 @@ export default function InquiryFormPage() {
                               />
                               <span className="font-mono text-2xs text-text-muted">#{idx + 1}</span>
                               <span className="font-mono text-xs font-bold text-heading bg-surface border border-border px-2 py-0.5 rounded-md truncate">
-                                {item.itemCode || '—'}
+                                {item.productName || item.itemName || '—'}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
@@ -1965,11 +2512,11 @@ export default function InquiryFormPage() {
 
                           <div className="text-xs space-y-1">
                             <div className="text-text-muted">
-                              Category: <span className="font-medium text-heading">{item.categoryName || getCategoryPathName(item.categoryId || form.CategoryId, categories) || '—'}</span>
+                              Size / Variant: <span className="font-medium text-heading">{item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '—')}</span>
                             </div>
                             {item.specification && (
                               <div className="text-text-muted text-2xs bg-surface/60 p-2 rounded border border-border/60 break-words">
-                                {item.specification}
+                                Notes: {item.notes || item.specification}
                               </div>
                             )}
                           </div>
@@ -1977,7 +2524,7 @@ export default function InquiryFormPage() {
                           <div className="flex items-center justify-between text-xs pt-1 border-t border-border/60 font-mono">
                             <span className="text-text-muted">Quantity:</span>
                             <span className="font-bold text-heading text-sm">
-                              {item.quantity} <span className="text-xs font-normal text-text-muted">{item.uom}</span>
+                              {item.quantity}
                             </span>
                           </div>
                         </div>

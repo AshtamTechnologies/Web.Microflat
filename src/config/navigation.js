@@ -18,6 +18,7 @@ import {
   IconBankDetails,
   IconPR,
   IconInquiry,
+  IconDelegation,
   IconDashboard,
   IconCompany,
   IconUsers,
@@ -45,6 +46,30 @@ export const navigation = [
         icon: IconDashboard,
         path: '/dashboard',
         roles: ['ADMIN', 'MANAGER', 'USER'],
+      },
+      {
+        label: 'Delegation',
+        icon: IconDelegation,
+        roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+        children: [
+          {
+            label: 'All Delegation',
+            icon: IconList,
+            path: '/delegation/all',
+            roles: ['ADMIN'],
+          },
+          {
+            label: 'My Delegation',
+            icon: IconDelegation,
+            path: '/delegation',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+            quickAction: {
+              icon: IconAdd,
+              title: 'New Delegation',
+              path: '/delegation/new',
+            },
+          },
+        ],
       },
       {
         label: 'Inquiry',
