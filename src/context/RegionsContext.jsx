@@ -3,14 +3,27 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { regionService } from '../services';
 
 const RegionsContext = createContext(null);
 
 export function RegionsProvider({ children }) {
+  const location = useLocation();
+  const [hasRequested, setHasRequested] = useState(false);
+  const isRelevantRoute = Boolean(
+    location?.pathname?.startsWith('/configuration/regions') ||
+    location?.pathname?.startsWith('/inquiries')
+  );
+  const shouldFetch = isRelevantRoute || hasRequested;
+
+  const ensureRegionsLoaded = useCallback(() => {
+    setHasRequested(true);
+  }, []);
+
   const [regions, setRegions] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
 
@@ -34,10 +47,13 @@ export function RegionsProvider({ children }) {
     }
   }, []);
 
-  // Initial load
+  // Initial load only when relevant route is visited or explicitly requested
   useEffect(() => {
-    fetchRegions();
-  }, [fetchRegions]);
+    if (!shouldFetch) return;
+    if (regions.length === 0) {
+      fetchRegions();
+    }
+  }, [shouldFetch, regions.length, fetchRegions]);
 
   /**
    * Synchronous helper to find a region by ID in current local state.
@@ -229,6 +245,7 @@ export function RegionsProvider({ children }) {
         updateRegionStatus,
         toggleRegionActive,
         deleteRegion,
+        ensureRegionsLoaded,
       }}
     >
       {children}

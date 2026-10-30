@@ -5,12 +5,22 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { clientService, isMockApi } from '../../services';
 import { mockClients } from '../../mocks/clients';
 import { getActiveClientVersion, toIntegerVersionId } from '../../utils/clientVersions';
 
 export function useClients() {
+  const location = useLocation();
+  const [hasRequestedClients, setHasRequestedClients] = useState(false);
+  const isClientsRoute = Boolean(location?.pathname?.startsWith('/clients'));
+  const shouldFetch = isClientsRoute || hasRequestedClients;
+
+  const ensureClientsLoaded = useCallback(() => {
+    setHasRequestedClients(true);
+  }, []);
+
   const [clients, setClients] = useState(isMockApi ? mockClients : []);
   const [summary, setSummary] = useState({ total: 0, active: 0, inactive: 0, notYetEffective: 0, scheduledChanges: 0 });
   const [lookups, setLookups] = useState({
@@ -29,7 +39,7 @@ export function useClients() {
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(!isMockApi);
 
-  /* ── Load Lookups on mount ── */
+  /* ── Load Lookups lazily ── */
   const loadLookups = useCallback(async () => {
     try {
       const data = await clientService.getClientLookups();
@@ -42,10 +52,11 @@ export function useClients() {
   }, []);
 
   useEffect(() => {
+    if (!shouldFetch) return;
     loadLookups();
-  }, [loadLookups]);
+  }, [shouldFetch, loadLookups]);
 
-  /* ── Load Paged Clients & Summary from API ── */
+  /* ── Load Paged Clients & Summary lazily from API ── */
   const loadClients = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -79,8 +90,9 @@ export function useClients() {
   }, [search, contactTypeFilter, statusFilter, pageNumber, pageSize]);
 
   useEffect(() => {
+    if (!shouldFetch) return;
     loadClients();
-  }, [loadClients]);
+  }, [shouldFetch, loadClients]);
 
   /* ── Reset filters helper ── */
   const resetFilters = useCallback(() => {
@@ -336,6 +348,7 @@ export function useClients() {
     isLoading,
     loadClients,
     loadLookups,
+    ensureClientsLoaded,
     resetFilters,
     getClientById,
     fetchClientDetail,

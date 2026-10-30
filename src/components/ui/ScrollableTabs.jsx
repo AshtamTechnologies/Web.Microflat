@@ -16,11 +16,13 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 export default function ScrollableTabs({
   tabs = [],
   activeTab,
+  value,
   onChange,
   variant = 'underline', // 'underline' | 'pills'
   className = '',
   children,
 }) {
+  const currentActiveTab = activeTab ?? value;
   const containerRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -61,7 +63,7 @@ export default function ScrollableTabs({
     };
   }, [updateScrollState, tabs]);
 
-  // Auto-scroll active tab into view whenever activeTab changes
+  // Auto-scroll active tab into view whenever active tab changes
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -73,7 +75,7 @@ export default function ScrollableTabs({
         block: 'nearest',
       });
     }
-  }, [activeTab]);
+  }, [currentActiveTab]);
 
   // Arrow button click handlers
   const handleScroll = (direction) => {
@@ -161,7 +163,7 @@ export default function ScrollableTabs({
           children
         ) : (
           tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
+            const isActive = currentActiveTab === tab.id;
             const Icon = tab.icon;
 
             if (variant === 'pills') {

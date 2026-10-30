@@ -459,6 +459,7 @@ export default function ClientFormPage() {
 
       {/* ── Tabs Navigation ── */}
       <ScrollableTabs
+        activeTab={activeTab}
         value={activeTab}
         onChange={setActiveTab}
         tabs={[

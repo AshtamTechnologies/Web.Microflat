@@ -3,15 +3,28 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { documentTypesService } from '../services';
 
 const DocumentTypesContext = createContext(null);
 
 export function DocumentTypesProvider({ children }) {
+  const location = useLocation();
+  const [hasRequested, setHasRequested] = useState(false);
+  const isRelevantRoute = Boolean(
+    location?.pathname?.startsWith('/configuration/document-types') ||
+    location?.pathname?.startsWith('/inquiries')
+  );
+  const shouldFetch = isRelevantRoute || hasRequested;
+
+  const ensureDocumentTypesLoaded = useCallback(() => {
+    setHasRequested(true);
+  }, []);
+
   const [documentTypes, setDocumentTypes] = useState([]);
   const [modules, setModules] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
 
@@ -44,10 +57,14 @@ export function DocumentTypesProvider({ children }) {
     }
   }, []);
 
+  // Lazy load only on relevant routes or when requested
   useEffect(() => {
-    fetchDocumentTypes();
-    fetchModules();
-  }, [fetchDocumentTypes, fetchModules]);
+    if (!shouldFetch) return;
+    if (documentTypes.length === 0) {
+      fetchDocumentTypes();
+      fetchModules();
+    }
+  }, [shouldFetch, documentTypes.length, fetchDocumentTypes, fetchModules]);
 
   const getDocumentTypeById = useCallback(
     (id) => {
@@ -180,6 +197,7 @@ export function DocumentTypesProvider({ children }) {
         updateDocumentTypeStatus: toggleDocumentTypeActive,
         deleteDocumentType,
         toggleDocumentTypeActive,
+        ensureDocumentTypesLoaded,
       }}
     >
       {children}

@@ -41,6 +41,9 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'INACTIVE', label: 'Inactive' },
 ];
 
+/** Toggle to true whenever KPI summary cards should be displayed */
+const SHOW_KPI_SUMMARY_CARDS = false;
+
 export default function ClientsPage() {
   const navigate = useNavigate();
 
@@ -146,7 +149,7 @@ export default function ClientsPage() {
       />
 
       {/* ── KPI Summary Cards ── */}
-      {summary && summary.total > 0 && (
+      {SHOW_KPI_SUMMARY_CARDS && summary && summary.total > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Card padding="none" className="p-3 bg-surface border border-border rounded-xl">
             <span className="text-2xs text-text-muted font-medium uppercase tracking-wider">Total Clients</span>

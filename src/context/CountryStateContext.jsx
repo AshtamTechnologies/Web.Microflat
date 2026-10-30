@@ -9,17 +9,31 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { geographyService } from '../services';
 
 const CountryStateContext = createContext(null);
 
 export function CountryStateProvider({ children }) {
+  const location = useLocation();
+  const [hasRequested, setHasRequested] = useState(false);
+  const isRelevantRoute = Boolean(
+    location?.pathname?.startsWith('/clients') ||
+    location?.pathname?.startsWith('/vendors') ||
+    location?.pathname?.startsWith('/company')
+  );
+  const shouldFetch = isRelevantRoute || hasRequested;
+
+  const ensureCountriesLoaded = useCallback(() => {
+    setHasRequested(true);
+  }, []);
+
   const [countries, setCountries] = useState([]);
   const [statesCache, setStatesCache] = useState({}); // { [countryId]: Array<State> }
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
   const [loadingStatesMap, setLoadingStatesMap] = useState({}); // { [countryId]: boolean }
 
-  // Load countries once on mount
+  // Load countries once when on a relevant route or explicitly requested
   const loadCountries = useCallback(async () => {
     setIsLoadingCountries(true);
     try {
@@ -33,8 +47,11 @@ export function CountryStateProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    loadCountries();
-  }, [loadCountries]);
+    if (!shouldFetch) return;
+    if (countries.length === 0) {
+      loadCountries();
+    }
+  }, [shouldFetch, countries.length, loadCountries]);
 
   // Formatted dropdown options for countries: { value: c.id, label: c.countryName }
   const countryOptions = useMemo(() => {
@@ -154,6 +171,7 @@ export function CountryStateProvider({ children }) {
       getStateOptions,
       getCountryName,
       getStateName,
+      ensureCountriesLoaded,
       reloadCountries: loadCountries,
     }),
     [
@@ -166,6 +184,7 @@ export function CountryStateProvider({ children }) {
       getStateOptions,
       getCountryName,
       getStateName,
+      ensureCountriesLoaded,
       loadCountries,
     ]
   );

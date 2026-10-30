@@ -3,14 +3,28 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { paymentTermService } from '../services';
 
 const PaymentTermsContext = createContext(null);
 
 export function PaymentTermsProvider({ children }) {
+  const location = useLocation();
+  const [hasRequested, setHasRequested] = useState(false);
+  const isRelevantRoute = Boolean(
+    location?.pathname?.startsWith('/configuration/payment-terms') ||
+    location?.pathname?.startsWith('/clients') ||
+    location?.pathname?.startsWith('/vendors')
+  );
+  const shouldFetch = isRelevantRoute || hasRequested;
+
+  const ensurePaymentTermsLoaded = useCallback(() => {
+    setHasRequested(true);
+  }, []);
+
   const [paymentTerms, setPaymentTerms] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
 
@@ -35,10 +49,13 @@ export function PaymentTermsProvider({ children }) {
     }
   }, []);
 
-  // Initial load
+  // Lazy load only on relevant routes or when requested
   useEffect(() => {
-    fetchPaymentTerms();
-  }, [fetchPaymentTerms]);
+    if (!shouldFetch) return;
+    if (paymentTerms.length === 0) {
+      fetchPaymentTerms();
+    }
+  }, [shouldFetch, paymentTerms.length, fetchPaymentTerms]);
 
   /**
    * Synchronous helper to find a payment term in current local state.
@@ -209,6 +226,7 @@ export function PaymentTermsProvider({ children }) {
         togglePaymentTermActive,
         deletePaymentTerm,
         getPaymentTermOptions,
+        ensurePaymentTermsLoaded,
       }}
     >
       {children}

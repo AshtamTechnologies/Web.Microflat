@@ -496,6 +496,7 @@ export default function VendorEffectiveDatesPage() {
 
   // Deletion confirmation and deferred deletion on Save
   const [attachmentToDelete, setAttachmentToDelete] = useState(null);
+  const [versionToDelete, setVersionToDelete] = useState(null);
   const [pendingDeleteAttachmentIds, setPendingDeleteAttachmentIds] = useState([]);
 
   const [formErrors, setFormErrors] = useState({});
@@ -1431,13 +1432,24 @@ export default function VendorEffectiveDatesPage() {
   }
 
   /* ── Delete Draft or Rejected Version ── */
-  async function handleDeleteVersion(verId) {
+  function handleRequestDeleteVersion(ver) {
+    if (!ver) return;
+    if (versions.length <= 1) {
+      toast.error("Cannot delete the vendor's only version.");
+      return;
+    }
+    setVersionToDelete(ver);
+  }
+
+  async function handleConfirmDeleteVersion() {
+    if (!versionToDelete) return;
+    const verId = versionToDelete.vendorDetailId || versionToDelete.id;
     if (!verId) return;
     if (versions.length <= 1) {
       toast.error("Cannot delete the vendor's only version.");
       return;
     }
-    if (!window.confirm('Are you sure you want to delete this version?')) return;
+
 
     try {
       setIsSaving(true);
@@ -1448,6 +1460,10 @@ export default function VendorEffectiveDatesPage() {
       );
       await updateVendorVersions(vendor.id, remaining);
       setSelectedVersionId(remaining[0]?.id || null);
+      if (vendor?.id || id) {
+        await loadVendorVersions(vendor?.id || id);
+      }
+      setVersionToDelete(null);
     } catch (err) {
       toast.error(err?.detail || err?.message || 'Failed to delete version.');
     } finally {
@@ -2129,7 +2145,7 @@ export default function VendorEffectiveDatesPage() {
                   <Button
                     variant="danger-soft"
                     size="sm"
-                    onClick={() => handleDeleteVersion(selectedVersion.id || selectedVersion.vendorDetailId)}
+                    onClick={() => handleRequestDeleteVersion(selectedVersion)}
                     disabled={isSaving}
                     className="text-xs w-full sm:w-auto justify-center text-danger hover:bg-danger/10"
                     title="Delete this draft version"
@@ -3285,6 +3301,27 @@ export default function VendorEffectiveDatesPage() {
           ) : null
         }
         onConfirm={handleConfirmDeleteAttachment}
+      />
+
+      {/* ── Delete Version Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={Boolean(versionToDelete)}
+        onClose={() => setVersionToDelete(null)}
+        onConfirm={handleConfirmDeleteVersion}
+        title="Delete Version"
+        message={
+          <span>
+            Are you sure you want to delete the version effective on{' '}
+            <strong className="text-heading font-semibold">
+              {formatDateDisplay(versionToDelete?.effectiveDate)}
+            </strong>?
+            This will permanently remove this version and all associated information and attachments. This action cannot be undone.
+          </span>
+        }
+        confirmText="Delete Version"
+        cancelText="Cancel"
+        variant="danger"
+        loading={isSaving}
       />
     </div>
   );

@@ -9,8 +9,18 @@ export function ProcessFlowProvider({ children }) {
   const location = useLocation();
   const [flows, setFlows] = useState([]);
   const [flowDetailsMap, setFlowDetailsMap] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [stepOverride, setStepOverride] = useState(null);
+
+  // Current route configuration
+  const currentRouteConfig = useMemo(() => {
+    return getFlowConfigForPath(location.pathname);
+  }, [location.pathname]);
+
+  const isRelevantRoute = Boolean(
+    location?.pathname?.startsWith('/configuration/process-flows') ||
+    currentRouteConfig?.moduleCode
+  );
 
   // Clear step override whenever navigation occurs
   useEffect(() => {
@@ -31,8 +41,11 @@ export function ProcessFlowProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    loadFlowSummaries();
-  }, [loadFlowSummaries]);
+    if (!isRelevantRoute) return;
+    if (flows.length === 0) {
+      loadFlowSummaries();
+    }
+  }, [isRelevantRoute, flows.length, loadFlowSummaries]);
 
   // Fetch and cache detailed steps for a specific module
   const loadFlowDetails = useCallback(
@@ -65,11 +78,6 @@ export function ProcessFlowProvider({ children }) {
     },
     [flows, flowDetailsMap]
   );
-
-  // Current route configuration
-  const currentRouteConfig = useMemo(() => {
-    return getFlowConfigForPath(location.pathname);
-  }, [location.pathname]);
 
   // Auto-load details if current route has a moduleCode
   useEffect(() => {

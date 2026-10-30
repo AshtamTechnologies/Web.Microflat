@@ -12,9 +12,9 @@ export function useClientsTable({ onEditClick, onViewClick }) {
     /* 1. COMPANY */
     columnHelper.accessor('companyName', {
       id: 'company',
-      header: 'CLIENT / COMPANY',
-      minSize: 240,
-      size: 280,
+      header: 'CLIENT',
+      minSize: 220,
+      size: 260,
       cell: (info) => {
         const row = info.row.original;
         const id = row.clientId || row.id;
@@ -23,19 +23,14 @@ export function useClientsTable({ onEditClick, onViewClick }) {
           <Link
             to={`/clients/${id}`}
             state={{ readOnly: true }}
-            className="flex flex-col py-0.5 max-w-xs group cursor-pointer"
+            className="flex items-center gap-1.5 py-0.5 max-w-xs group cursor-pointer"
             title={`View ${row.companyName || row.clientName}`}
           >
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-mono text-2xs font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded">
-                {code}
-              </span>
-              <span className="font-semibold text-heading text-xs sm:text-sm leading-snug truncate group-hover:text-primary transition-colors">
-                {row.companyName || row.clientName}
-              </span>
-            </div>
-            <span className="text-text-muted text-xs truncate mt-0.5">
-              {row.email || row.officialEmail || row.billingName || '—'}
+            <span className="font-mono text-2xs font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded shrink-0">
+              {code}
+            </span>
+            <span className="font-semibold text-heading text-xs sm:text-sm leading-snug truncate group-hover:text-primary transition-colors">
+              {row.companyName || row.clientName}
             </span>
           </Link>
         );

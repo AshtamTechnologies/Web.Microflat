@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { mockVendors } from '../../mocks/vendors';
 import { getActiveVendorVersion } from '../../utils/vendorVersions';
@@ -23,6 +24,18 @@ function formatAuditTimestamp(date = new Date()) {
 }
 
 export function useVendors() {
+  const location = useLocation();
+  const [hasRequestedVendors, setHasRequestedVendors] = useState(false);
+  const isVendorsRoute = Boolean(
+    location?.pathname?.startsWith('/vendors') ||
+    location?.pathname?.startsWith('/approvals/vendors')
+  );
+  const shouldFetch = isVendorsRoute || hasRequestedVendors;
+
+  const ensureVendorsLoaded = useCallback(() => {
+    setHasRequestedVendors(true);
+  }, []);
+
   const [vendors, setVendors] = useState(isMockApi ? mockVendors : []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -51,8 +64,9 @@ export function useVendors() {
   }, [search, approvalFilter, statusFilter]);
 
   useEffect(() => {
+    if (!shouldFetch) return;
     loadVendors();
-  }, [loadVendors]);
+  }, [shouldFetch, loadVendors]);
 
   /* ── Augmented vendors list with activeVersion spread ── */
   const augmentedVendors = useMemo(() => {
@@ -409,5 +423,6 @@ export function useVendors() {
     loading: isLoading,
     totalCount,
     refreshVendors: loadVendors,
+    ensureVendorsLoaded,
   };
 }

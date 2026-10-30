@@ -315,7 +315,13 @@ export default function InquiryFormPage() {
   };
   const { categories = [] } = useProductCategoriesContext();
   const { regions = [], fetchRegions } = useRegions();
-  const { clients = [] } = useClientsContext();
+  const { clients = [], ensureClientsLoaded } = useClientsContext();
+
+  useEffect(() => {
+    if (clients.length === 0 && ensureClientsLoaded) {
+      ensureClientsLoaded();
+    }
+  }, [clients.length, ensureClientsLoaded]);
 
   useEffect(() => {
     if (regions.length === 0 && fetchRegions) {

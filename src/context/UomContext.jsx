@@ -3,14 +3,28 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { uomService } from '../services';
 
 const UomContext = createContext(null);
 
 export function UomProvider({ children }) {
+  const location = useLocation();
+  const [hasRequested, setHasRequested] = useState(false);
+  const isRelevantRoute = Boolean(
+    location?.pathname?.startsWith('/configuration/uom') ||
+    location?.pathname?.startsWith('/inquiries') ||
+    location?.pathname?.startsWith('/purchase-requisition')
+  );
+  const shouldFetch = isRelevantRoute || hasRequested;
+
+  const ensureUomsLoaded = useCallback(() => {
+    setHasRequested(true);
+  }, []);
+
   const [uomList, setUomList] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
 
@@ -34,10 +48,13 @@ export function UomProvider({ children }) {
     }
   }, []);
 
-  // Initial load
+  // Lazy load only on relevant routes or when requested
   useEffect(() => {
-    fetchUoms();
-  }, [fetchUoms]);
+    if (!shouldFetch) return;
+    if (uomList.length === 0) {
+      fetchUoms();
+    }
+  }, [shouldFetch, uomList.length, fetchUoms]);
 
   /**
    * Synchronous helper to find a UOM by id in current local state.
@@ -184,6 +201,7 @@ export function UomProvider({ children }) {
         updateUomStatus,
         toggleUomActive,
         deleteUom,
+        ensureUomsLoaded,
       }}
     >
       {children}
