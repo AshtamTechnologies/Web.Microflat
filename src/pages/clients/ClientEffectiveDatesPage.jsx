@@ -13,19 +13,21 @@
  *            - Client Addresses (responsive cards)
  *            - Contact Persons (responsive cards)
  *            - Version Audit information
- *            - "Edit this version" button in header
+ *            - "Edit this version" button in header (disabled on History versions)
+ *            - "Delete Version" button for Scheduled revisions where canDelete is true
  *       2. EDIT MODE: In-line editable form where:
- *            - Effective Date DatePicker is DISABLED (cannot change date of existing revision)
- *            - Tabbed editor: Company Details & Terms (with RichTextEditor for Delivery Terms & Comments),
- *              AddressesEditor, ContactsEditor
- *            - Save Changes & Cancel buttons
+ *            - Effective Date DatePicker is DISABLED for existing revisions
+ *            - Tabbed editor: Company Details & Terms, AddressesEditor, ContactsEditor
+ *            - Save Changes & Cancel buttons (PUT /api/client-versions/{versionId})
  *       3. ADD MODE: In-line editable form where:
- *            - Effective Date DatePicker is ENABLED for picking a new future/past date
+ *            - Effective Date DatePicker is ENABLED for picking a new future date
  *            - Clones forward from current active revision
- *            - Save Changes & Cancel buttons
+ *            - Save Changes & Cancel buttons (POST /api/clients/{id}/versions)
+ *
+ * Integrated with real Client API endpoints per integration guide (Oct 30, 2026).
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   useReactTable,
@@ -43,40 +45,37 @@ import {
   IconChevronUp,
   IconClient,
   IconClock,
-  IconClose,
+  IconDelete,
   IconEdit,
-  IconError,
-  IconExternalLink,
   IconFileText,
+  IconInquiry,
   IconLocation,
   IconMail,
   IconPhone,
-  IconSave,
-  IconShieldCheck,
-  IconSuccess,
   IconUsers,
   IconView,
 } from '../../constants/icons';
+import { formatDateTime } from '../../utils/dateUtils';
 import toast from 'react-hot-toast';
 
 import {
   Button,
   SaveButton,
   CancelButton,
+  Badge,
+  PageHeader,
+  CollapsibleCard,
   Input,
   Checkbox,
   DatePicker,
-  Badge,
-  Card,
-  CollapsibleCard,
   DetailField,
   TableContainer,
   Th,
   Td,
-  PageHeader,
   SearchableSelect,
   SearchableMultiSelect,
   ScrollableTabs,
+  ConfirmModal,
 } from '../../components/ui';
 import StatusSwitch from '../../components/ui/StatusSwitch';
 import RichTextEditor from '../../components/ui/RichTextEditor';
@@ -84,14 +83,14 @@ import AddressesEditor from './components/AddressesEditor';
 import ContactsEditor from './components/ContactsEditor';
 import { useClientsContext } from '../../context/ClientsContext';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
+import { useAuthContext } from '../../context/AuthContext';
 import {
-  CONTACT_TYPE_OPTIONS,
   getContactTypeBadgeVariant,
   getCountryName,
   getStateName,
   getAddressTypeBadgeVariant,
 } from '../../mocks/clients';
-import { getClientRevisions, getActiveClientVersion } from '../../utils/clientVersions';
+import { getClientRevisions, getActiveClientVersion, toIntegerVersionId } from '../../utils/clientVersions';
 import {
   formatDateDisplay,
   getTodayIsoDate,
@@ -100,20 +99,135 @@ import {
 
 const columnHelper = createColumnHelper();
 
+/**
+ * Safely decodes HTML entities (e.g. &lt;p&gt; -> <p>, &amp; -> &, &quot; -> ")
+ * and cleans up pre-encoded or double-encoded HTML strings from the API.
+ */
+function decodeHtmlString(str) {
+  if (!str || typeof str !== 'string') return '';
+  let res = str.trim();
+
+  // If the string starts and ends with JSON quotes
+  if (res.startsWith('"') && res.endsWith('"') && res.length >= 2) {
+    try {
+      res = JSON.parse(res);
+    } catch {
+      // ignore
+    }
+  }
+
+  // If the string contains HTML entities (like &lt;, &gt;, &amp;, &quot;, &#39;, &nbsp;)
+  if (/&(?:lt|gt|amp|quot|#39|#x27|nbsp);/i.test(res)) {
+    try {
+      const txt = document.createElement('textarea');
+      txt.innerHTML = res;
+      res = txt.value;
+      // Handle potential double-encoding (e.g. &amp;lt;p&amp;gt;)
+      if (/&lt;[a-z/!]/i.test(res)) {
+        txt.innerHTML = res;
+        res = txt.value;
+      }
+    } catch {
+      res = res
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&');
+    }
+  }
+
+  return res;
+}
+
+/**
+ * Renders formatted HTML or fallback plain text cleanly with typography styling.
+ */
+function FormattedHtmlBlock({ content, emptyText = 'None specified.', className = '' }) {
+  const decoded = useMemo(() => decodeHtmlString(content), [content]);
+
+  if (!decoded) {
+    return <span className="text-text-muted italic">{emptyText}</span>;
+  }
+
+  const hasHtmlTags = /<[a-z][\s\S]*>/i.test(decoded);
+
+  if (hasHtmlTags) {
+    return (
+      <div
+        className={`text-xs text-text leading-relaxed max-w-none prose prose-xs [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:my-1.5 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:my-1.5 [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-heading [&_em]:italic [&_a]:text-primary [&_a]:underline ${className}`}
+        dangerouslySetInnerHTML={{ __html: decoded }}
+      />
+    );
+  }
+
+  return (
+    <p className={`text-xs text-text whitespace-pre-line leading-relaxed ${className}`}>
+      {decoded}
+    </p>
+  );
+}
+
 export default function ClientEffectiveDatesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { getClientById, updateClientVersions, updateClient } = useClientsContext();
+  const { user } = useAuthContext();
+  const isAdmin = user?.role === 'Admin' || user?.roles?.includes('Admin') || user?.isAdmin;
+
+  const {
+    getClientById,
+    fetchClientDetail,
+    fetchVersionDetail,
+    addClientVersion,
+    updateClientVersion,
+    deleteClientVersion,
+    deleteClient,
+    toggleClientActive,
+    lookups,
+  } = useClientsContext();
+
   const { paymentTerms = [] } = usePaymentTermsContext();
 
   const backPath = location.state?.from || '/clients';
   const backLabel = location.state?.backLabel || 'Clients';
-
   const isReadOnly = Boolean(location.state?.readOnly);
 
-  const client = getClientById(id);
+  const [client, setClient] = useState(() => getClientById(id));
+  const [isLoadingClient, setIsLoadingClient] = useState(!client);
+  const [versionToDelete, setVersionToDelete] = useState(null);
+  const [showDeleteClientModal, setShowDeleteClientModal] = useState(false);
+
+  // Dynamic Contact Type options from Lookups
+  const contactTypeOptions = useMemo(() => {
+    const list = Array.isArray(lookups?.contactTypes) && lookups.contactTypes.length > 0
+      ? lookups.contactTypes
+      : ['Customer', 'Distributor', 'Dealer', 'Agency'];
+
+    return list.map((t) => ({ value: t, label: t }));
+  }, [lookups]);
+
+  // Load client from API on mount
+  const refreshClient = useCallback(async () => {
+    if (!id) return null;
+    try {
+      const data = await fetchClientDetail(id);
+      if (data) {
+        setClient(data);
+      }
+      return data;
+    } catch (err) {
+      console.warn('Could not fetch client detail from API:', err);
+      return null;
+    } finally {
+      setIsLoadingClient(false);
+    }
+  }, [id, fetchClientDetail]);
+
+  useEffect(() => {
+    refreshClient();
+  }, [refreshClient]);
 
   // All versions computed with live temporal statuses
   const versions = useMemo(() => {
@@ -125,9 +239,10 @@ export default function ClientEffectiveDatesPage() {
     return client ? getActiveClientVersion(client) : null;
   }, [client]);
 
-  // UI state: mode is 'VIEW' | 'EDIT' | 'ADD' — defaults to VIEW mode exactly like VendorEffectiveDatesPage
+  // UI state: mode is 'VIEW' | 'EDIT' | 'ADD'
   const [mode, setMode] = useState('VIEW');
   const [selectedVersionId, setSelectedVersionId] = useState(null);
+  const [detailedVersion, setDetailedVersion] = useState(null);
 
   // Form tab for EDIT / ADD mode: 'company_terms' | 'addresses' | 'contacts'
   const [activeFormTab, setActiveFormTab] = useState('company_terms');
@@ -138,20 +253,12 @@ export default function ClientEffectiveDatesPage() {
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
 
-  // Latest previous effective date that new revisions cannot precede (same as VendorEffectiveDatesPage)
-  const minAllowedEffectiveDate = useMemo(() => {
-    const dates = versions
-      .map((v) => (v.effectiveDate || '').slice(0, 10))
-      .filter(Boolean);
-    if (dates.length === 0) return null;
-    return [...dates].sort().reverse()[0];
-  }, [versions]);
-
   // Form State for EDIT or ADD
   const [formData, setFormData] = useState({
     effectiveDate: '',
     companyName: '',
     billingName: '',
+    billingNameSameAsClientName: false,
     contactTypeId: 'Customer',
     email: '',
     gstNo: '',
@@ -170,20 +277,57 @@ export default function ClientEffectiveDatesPage() {
   // Default selection on mount: select active version or first version
   useEffect(() => {
     if (versions.length > 0 && !selectedVersionId) {
-      const initialVer = activeVersion?.id ? activeVersion : versions[0];
-      if (initialVer) {
-        setSelectedVersionId(initialVer.id);
+      const initialVer = activeVersion || versions[0];
+      const rawId = initialVer?.clientDetailId ?? initialVer?.id;
+      const numId = toIntegerVersionId(rawId, null);
+      if (numId !== null) {
+        setSelectedVersionId(numId);
       }
     }
   }, [versions, activeVersion, selectedVersionId]);
 
+  // Load detailed version data whenever selectedVersionId changes
+  useEffect(() => {
+    let isMounted = true;
+    async function loadVersion() {
+      if (!selectedVersionId) return;
+      try {
+        const fullVer = await fetchVersionDetail(selectedVersionId);
+        if (isMounted && fullVer) {
+          setDetailedVersion(fullVer);
+        }
+      } catch (err) {
+        console.warn('Could not load version details:', err);
+      }
+    }
+
+    loadVersion();
+    return () => { isMounted = false; };
+  }, [selectedVersionId, fetchVersionDetail]);
+
   // The currently viewed / selected version object
   const selectedVersion = useMemo(() => {
+    if (
+      detailedVersion &&
+      (String(detailedVersion.id) === String(selectedVersionId) ||
+        String(detailedVersion.clientDetailId) === String(selectedVersionId))
+    ) {
+      return detailedVersion;
+    }
     if (!selectedVersionId && versions.length > 0) {
       return activeVersion || versions[0];
     }
-    return versions.find((v) => v.id === selectedVersionId) || activeVersion || versions[0] || null;
-  }, [versions, selectedVersionId, activeVersion]);
+    return (
+      versions.find(
+        (v) =>
+          String(v.id) === String(selectedVersionId) ||
+          String(v.clientDetailId) === String(selectedVersionId)
+      ) ||
+      activeVersion ||
+      versions[0] ||
+      null
+    );
+  }, [detailedVersion, versions, selectedVersionId, activeVersion]);
 
   // Resolve payment terms for selected version (VIEW mode)
   const selectedPaymentTermsList = useMemo(() => {
@@ -195,40 +339,74 @@ export default function ClientEffectiveDatesPage() {
         ? raw.split(',').map((s) => s.trim()).filter(Boolean)
         : [];
 
+    const source = (lookups?.paymentTerms && lookups.paymentTerms.length > 0)
+      ? lookups.paymentTerms
+      : paymentTerms;
+
     return items.map((val) => {
-      const match = paymentTerms.find(
+      const termIdOrCode = typeof val === 'object' && val !== null
+        ? (val.paymentTermId ?? val.id ?? val.termCode)
+        : val;
+
+      const match = source.find(
         (pt) =>
-          pt.termCode?.toUpperCase() === String(val).toUpperCase() ||
-          pt.paymentTermId === val
+          pt.id === termIdOrCode ||
+          pt.paymentTermId === termIdOrCode ||
+          String(pt.id) === String(termIdOrCode) ||
+          String(pt.paymentTermId) === String(termIdOrCode) ||
+          pt.termCode?.toUpperCase() === String(termIdOrCode).toUpperCase()
       );
-      if (match) return match;
+
+      if (typeof val === 'object' && val !== null) {
+        return {
+          ...val,
+          termCode: val.termCode || match?.termCode || String(termIdOrCode),
+          termName: val.termName || match?.termName || match?.name || match?.description || '',
+          description: val.description || match?.description || '',
+        };
+      }
+
+      if (match) {
+        return {
+          ...match,
+          termCode: match.termCode || match.code || String(termIdOrCode),
+          termName: match.termName || match.name || match.description || String(termIdOrCode),
+          description: match.description || '',
+        };
+      }
+
       return {
         paymentTermId: val,
-        termCode: val,
+        termCode: String(val),
+        termName: String(val),
         description: '',
       };
     });
-  }, [selectedVersion?.paymentTerms, paymentTerms]);
+  }, [selectedVersion?.paymentTerms, paymentTerms, lookups?.paymentTerms]);
 
-  // Payment Terms options from Configuration (identical to ClientFormPage)
+  // Payment Terms options from Configuration or lookups
   const paymentTermOptions = useMemo(() => {
     const stripHtml = (html) => {
       if (!html) return '';
       return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     };
 
-    return (paymentTerms || [])
+    const source = (lookups?.paymentTerms && lookups.paymentTerms.length > 0)
+      ? lookups.paymentTerms
+      : paymentTerms;
+
+    return (source || [])
       .filter((pt) => pt.isActive !== false)
       .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
       .map((pt) => ({
-        value: pt.termCode || pt.paymentTermId,
-        label: pt.termCode,
-        chipLabel: pt.termCode,
-        subtitle: stripHtml(pt.description || ''),
+        value: pt.id || pt.paymentTermId || pt.termCode,
+        label: pt.termCode || pt.termName,
+        chipLabel: pt.termCode || pt.termName,
+        subtitle: stripHtml(pt.description || pt.termName || ''),
         termCode: pt.termCode,
-        description: pt.description || '',
+        description: pt.description || pt.termName || '',
       }));
-  }, [paymentTerms]);
+  }, [paymentTerms, lookups]);
 
   // Resolve selected payment terms objects for preview cards in EDIT/ADD form
   const formSelectedPaymentTermsList = useMemo(() => {
@@ -238,59 +416,104 @@ export default function ClientEffectiveDatesPage() {
         ? [formData.paymentTerms]
         : [];
 
+    const source = (lookups?.paymentTerms && lookups.paymentTerms.length > 0)
+      ? lookups.paymentTerms
+      : paymentTerms;
+
     return selected.map((val) => {
-      const match = paymentTerms.find(
+      const termIdOrCode = typeof val === 'object' && val !== null ? (val.paymentTermId ?? val.id ?? val.termCode) : val;
+      const match = source.find(
         (pt) =>
-          pt.termCode?.toUpperCase() === String(val).toUpperCase() ||
-          pt.paymentTermId === val
+          pt.id === termIdOrCode ||
+          pt.paymentTermId === termIdOrCode ||
+          String(pt.id) === String(termIdOrCode) ||
+          String(pt.paymentTermId) === String(termIdOrCode) ||
+          pt.termCode?.toUpperCase() === String(termIdOrCode).toUpperCase()
       );
       if (match) return match;
+      if (typeof val === 'object' && val !== null) return val;
       return {
-        paymentTermId: val,
-        termCode: val,
+        paymentTermId: termIdOrCode,
+        termCode: String(termIdOrCode),
+        termName: String(termIdOrCode),
         description: '',
       };
     });
-  }, [formData.paymentTerms, paymentTerms]);
+  }, [formData.paymentTerms, paymentTerms, lookups]);
 
   const handleRemovePaymentTerm = (termValue) => {
     const current = Array.isArray(formData.paymentTerms) ? formData.paymentTerms : [];
-    handleFieldChange('paymentTerms', current.filter((t) => t !== termValue));
+    handleFieldChange(
+      'paymentTerms',
+      current.filter((t) => {
+        const val = typeof t === 'object' && t !== null ? (t.paymentTermId ?? t.id ?? t.termCode) : t;
+        return val !== termValue && String(val) !== String(termValue);
+      })
+    );
   };
 
-  /* ── Mode Switching Handlers ── */
+  /* ── Mode Transitions ── */
   function handleSelectView(ver) {
-    setSelectedVersionId(ver.id);
+    const rawId = ver.clientDetailId ?? ver.id;
+    const numId = toIntegerVersionId(rawId, 1);
+    if (numId !== selectedVersionId) {
+      setSelectedVersionId(numId);
+    } else {
+      fetchVersionDetail(numId).then((fullVer) => {
+        if (fullVer) setDetailedVersion(fullVer);
+      });
+    }
     setMode('VIEW');
-    setFormErrors({});
   }
 
-  function handleStartEdit(ver) {
-    setSelectedVersionId(ver.id);
+  async function handleStartEdit(ver) {
+    if (ver.isEditable === false || ver.versionState === 'History') {
+      toast.error('This version is History and read-only. Add a new version instead.');
+      return;
+    }
 
-    const sourceAddresses = Array.isArray(ver.addresses) && ver.addresses.length > 0
-      ? ver.addresses
-      : (Array.isArray(client?.addresses) ? client.addresses : []);
+    const rawId = ver.clientDetailId ?? ver.id;
+    const numId = toIntegerVersionId(rawId, 1);
+    setSelectedVersionId(numId);
 
-    const sourceContacts = Array.isArray(ver.contacts) && ver.contacts.length > 0
-      ? ver.contacts
-      : (Array.isArray(client?.contacts) ? client.contacts : []);
+    // Ensure we have full version detail including addresses and contacts
+    let detailSource = ver;
+    if (detailedVersion && (detailedVersion.id === numId || detailedVersion.clientDetailId === numId)) {
+      detailSource = detailedVersion;
+    } else {
+      const fetched = await fetchVersionDetail(numId);
+      if (fetched) {
+        detailSource = fetched;
+        setDetailedVersion(fetched);
+      }
+    }
 
-    const cName = ver.companyName || client?.companyName || '';
-    const bName = ver.billingName || client?.billingName || '';
-    setSameAsCompany(Boolean(cName && cName === bName));
+    const sourceAddresses = Array.isArray(detailSource.addresses) ? detailSource.addresses : (Array.isArray(ver.addresses) ? ver.addresses : []);
+    const sourceContacts = Array.isArray(detailSource.contacts) ? detailSource.contacts : (Array.isArray(ver.contacts) ? ver.contacts : []);
+
+    const cName = detailSource.clientName || detailSource.companyName || client?.companyName || '';
+    const bName = detailSource.billingName || client?.billingName || '';
+    const isSame = Boolean(detailSource.billingNameSameAsClientName || (cName && cName === bName));
+    setSameAsCompany(isSame);
+
+    const rawTerms = Array.isArray(detailSource.paymentTerms) ? detailSource.paymentTerms : (Array.isArray(ver.paymentTerms) ? ver.paymentTerms : []);
+    const normalizedPaymentTerms = rawTerms.map((pt) =>
+      typeof pt === 'object' && pt !== null ? (pt.paymentTermId ?? pt.id ?? pt.termCode) : pt
+    );
 
     setFormData({
-      effectiveDate: ver.effectiveDate || '',
+      clientDetailId: detailSource.clientDetailId || detailSource.id || numId,
+      effectiveDate: detailSource.effectiveDate ? String(detailSource.effectiveDate).slice(0, 10) : '',
       companyName: cName,
-      billingName: bName,
-      contactTypeId: ver.contactTypeId || client?.contactTypeId || 'Customer',
-      email: ver.email || client?.email || '',
-      gstNo: ver.gstNo || client?.gstNo || '',
-      isActive: ver.isActive !== false,
-      paymentTerms: Array.isArray(ver.paymentTerms) ? [...ver.paymentTerms] : (Array.isArray(client?.paymentTerms) ? [...client.paymentTerms] : []),
-      deliveryTerms: ver.deliveryTerms || client?.deliveryTerms || '',
-      comments: ver.comments || client?.comments || '',
+      billingName: isSame ? cName : bName,
+      billingNameSameAsClientName: isSame,
+      contactTypeId: detailSource.contactType || detailSource.contactTypeId || client?.contactTypeId || 'Customer',
+      email: detailSource.officialEmail || detailSource.email || client?.email || '',
+      gstNo: detailSource.gstNo || client?.gstNo || '',
+      isActive: detailSource.isActive !== false,
+      paymentTerms: normalizedPaymentTerms,
+      deliveryTerms: decodeHtmlString(detailSource.deliveryTerms || client?.deliveryTerms || ''),
+      comments: decodeHtmlString(detailSource.internalComments || detailSource.comments || client?.comments || ''),
       addresses: sourceAddresses.map((a) => ({ ...a })),
       contacts: sourceContacts.map((c) => ({ ...c })),
     });
@@ -300,42 +523,43 @@ export default function ClientEffectiveDatesPage() {
   }
 
   function handleStartAdd() {
-    const base = activeVersion || selectedVersion || client || {};
+    const base = detailedVersion || activeVersion || selectedVersion || client || {};
     const today = getTodayIsoDate();
-    const initialDate = minAllowedEffectiveDate && minAllowedEffectiveDate > today
-      ? minAllowedEffectiveDate
-      : today;
 
-    const sourceAddresses = Array.isArray(base.addresses) && base.addresses.length > 0
-      ? base.addresses
-      : (Array.isArray(client?.addresses) ? client.addresses : []);
+    const sourceAddresses = Array.isArray(base.addresses) ? base.addresses : [];
+    const sourceContacts = Array.isArray(base.contacts) ? base.contacts : [];
 
-    const sourceContacts = Array.isArray(base.contacts) && base.contacts.length > 0
-      ? base.contacts
-      : (Array.isArray(client?.contacts) ? client.contacts : []);
-
-    const cName = base.companyName || client?.companyName || '';
+    const cName = base.clientName || base.companyName || client?.companyName || '';
     const bName = base.billingName || client?.billingName || '';
-    setSameAsCompany(Boolean(cName && cName === bName));
+    const isSame = Boolean(base.billingNameSameAsClientName || (cName && cName === bName));
+    setSameAsCompany(isSame);
+
+    const rawTerms = Array.isArray(base.paymentTerms) ? base.paymentTerms : [];
+    const normalizedPaymentTerms = rawTerms.map((pt) =>
+      typeof pt === 'object' && pt !== null ? (pt.paymentTermId ?? pt.id ?? pt.termCode) : pt
+    );
 
     setFormData({
-      effectiveDate: initialDate,
+      effectiveDate: today,
       companyName: cName,
-      billingName: bName,
-      contactTypeId: base.contactTypeId || client?.contactTypeId || 'Customer',
-      email: base.email || client?.email || '',
+      billingName: isSame ? cName : bName,
+      billingNameSameAsClientName: isSame,
+      contactTypeId: base.contactType || base.contactTypeId || client?.contactTypeId || 'Customer',
+      email: base.officialEmail || base.email || client?.email || '',
       gstNo: base.gstNo || client?.gstNo || '',
       isActive: base.isActive !== false,
-      paymentTerms: Array.isArray(base.paymentTerms) ? [...base.paymentTerms] : (Array.isArray(client?.paymentTerms) ? [...client.paymentTerms] : []),
-      deliveryTerms: base.deliveryTerms || client?.deliveryTerms || '',
-      comments: base.comments || client?.comments || '',
-      addresses: sourceAddresses.map((a, idx) => ({
+      paymentTerms: normalizedPaymentTerms,
+      deliveryTerms: decodeHtmlString(base.deliveryTerms || client?.deliveryTerms || ''),
+      comments: decodeHtmlString(base.internalComments || base.comments || client?.comments || ''),
+      addresses: sourceAddresses.map((a) => ({
         ...a,
-        clientAddressId: a.clientAddressId || `addr_${Date.now()}_${idx}`,
+        clientAddressId: null,
+        id: null,
       })),
-      contacts: sourceContacts.map((c, idx) => ({
+      contacts: sourceContacts.map((c) => ({
         ...c,
-        clientContactPersonId: c.clientContactPersonId || `con_${Date.now()}_${idx}`,
+        clientContactId: null,
+        id: null,
       })),
     });
 
@@ -366,9 +590,11 @@ export default function ClientEffectiveDatesPage() {
   const handleSameAsCompanyToggle = (e) => {
     const checked = typeof e === 'boolean' ? e : Boolean(e?.target?.checked);
     setSameAsCompany(checked);
-    if (checked) {
-      setFormData((prev) => ({ ...prev, billingName: prev.companyName }));
-    }
+    setFormData((prev) => ({
+      ...prev,
+      billingNameSameAsClientName: checked,
+      billingName: checked ? prev.companyName : '',
+    }));
   };
 
   function handleFieldChange(name, value) {
@@ -388,17 +614,6 @@ export default function ClientEffectiveDatesPage() {
 
     if (!formData.effectiveDate?.trim()) {
       errors.effectiveDate = 'Effective date is required.';
-    } else {
-      const enteredDate = formData.effectiveDate.trim();
-      const collision = versions.find((v) => {
-        if (mode === 'EDIT' && v.id === selectedVersionId) return false;
-        return (v.effectiveDate || '').slice(0, 10) === enteredDate;
-      });
-      if (collision) {
-        errors.effectiveDate = `A revision with effective date ${formatDateDisplay(enteredDate)} already exists.`;
-      } else if (mode === 'ADD' && minAllowedEffectiveDate && enteredDate < minAllowedEffectiveDate) {
-        errors.effectiveDate = `Effective date cannot be earlier than previous effective date (${formatDateDisplay(minAllowedEffectiveDate)}).`;
-      }
     }
 
     if (!formData.companyName?.trim()) {
@@ -427,107 +642,93 @@ export default function ClientEffectiveDatesPage() {
     }
 
     setIsSaving(true);
-    const now = new Date().toISOString();
-
     try {
-      const existingVersions = (Array.isArray(client.effectiveVersions) && client.effectiveVersions.length > 0)
-        ? client.effectiveVersions
-        : versions.map((v) => ({
-          id: v.id,
-          effectiveDate: v.effectiveDate,
-          companyName: v.companyName,
-          billingName: v.billingName,
-          contactTypeId: v.contactTypeId,
-          email: v.email,
-          gstNo: v.gstNo,
-          isActive: v.isActive,
-          paymentTerms: v.paymentTerms,
-          deliveryTerms: v.deliveryTerms,
-          comments: v.comments,
-          addresses: Array.isArray(v.addresses) ? [...v.addresses] : [],
-          contacts: Array.isArray(v.contacts) ? [...v.contacts] : [],
-          createdOn: v.createdOn || v.createdAt,
-          createdBy: v.createdBy || 'System',
-        }));
-
       if (mode === 'EDIT') {
-        // Update existing version entry
-        const updatedVersions = existingVersions.map((v) => {
-          if (v.id !== selectedVersionId) return v;
-          return {
-            ...v,
-            effectiveDate: formData.effectiveDate.trim(),
-            companyName: formData.companyName.trim(),
-            billingName: formData.billingName?.trim() || '',
-            contactTypeId: formData.contactTypeId,
-            email: formData.email?.trim() || '',
-            gstNo: formData.gstNo?.trim().toUpperCase() || '',
-            isActive: formData.isActive,
-            paymentTerms: formData.paymentTerms,
-            deliveryTerms: formData.deliveryTerms,
-            comments: formData.comments,
-            addresses: [...formData.addresses],
-            contacts: [...formData.contacts],
-          };
-        });
+        const rawVerId = selectedVersion?.clientDetailId || selectedVersion?.id || selectedVersionId;
+        const verId = toIntegerVersionId(rawVerId, 1);
+        const updatedVer = await updateClientVersion(verId, formData);
+        await refreshClient();
 
-        await updateClientVersions(client.clientId || id, updatedVersions);
-
-        // If the edited version is the active version, synchronize client master
-        if (selectedVersionId === activeVersion?.id) {
-          await updateClient(client.clientId || id, {
-            companyName: formData.companyName.trim(),
-            billingName: formData.billingName?.trim() || '',
-            contactTypeId: formData.contactTypeId,
-            email: formData.email?.trim() || '',
-            gstNo: formData.gstNo?.trim().toUpperCase() || '',
-            isActive: formData.isActive,
-            paymentTerms: formData.paymentTerms,
-            deliveryTerms: formData.deliveryTerms,
-            comments: formData.comments,
-            addresses: [...formData.addresses],
-            contacts: [...formData.contacts],
-          });
+        if (updatedVer) {
+          setDetailedVersion(updatedVer);
         }
-
-        toast.success('Effective date revision updated');
+        const freshVer = await fetchVersionDetail(verId);
+        if (freshVer) {
+          setDetailedVersion(freshVer);
+        }
         setMode('VIEW');
       } else if (mode === 'ADD') {
-        // Create new version entry
-        const newVersionId = `ver_${client.clientId || id}_${Date.now()}`;
-        const newVersion = {
-          id: newVersionId,
-          effectiveDate: formData.effectiveDate.trim(),
-          companyName: formData.companyName.trim(),
-          billingName: formData.billingName?.trim() || '',
-          contactTypeId: formData.contactTypeId,
-          email: formData.email?.trim() || '',
-          gstNo: formData.gstNo?.trim().toUpperCase() || '',
-          isActive: formData.isActive,
-          paymentTerms: formData.paymentTerms,
-          deliveryTerms: formData.deliveryTerms,
-          comments: formData.comments,
-          addresses: [...formData.addresses],
-          contacts: [...formData.contacts],
-          createdOn: now,
-          createdBy: 'Ian Chesnut',
-        };
-
-        const updatedVersions = [newVersion, ...existingVersions];
-        await updateClientVersions(client.clientId || id, updatedVersions);
-
-        toast.success('New effective date added');
-        setSelectedVersionId(newVersionId);
+        const newVer = await addClientVersion(id, formData);
+        await refreshClient();
+        const newId = newVer?.clientDetailId ? toIntegerVersionId(newVer.clientDetailId, 1) : null;
+        if (newId) {
+          setSelectedVersionId(newId);
+          if (newVer) {
+            setDetailedVersion(newVer);
+          }
+          const freshVer = await fetchVersionDetail(newId);
+          if (freshVer) {
+            setDetailedVersion(freshVer);
+          }
+        }
         setMode('VIEW');
       }
-    } catch {
-      toast.error('Failed to save client revision.');
+    } catch (err) {
+      if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        setFormErrors(err.fieldErrors);
+      }
     } finally {
       setIsSaving(false);
     }
   }
 
-  /* ── TanStack Table Columns with Resizing and Badges ── */
+  /* ── Delete Scheduled Revision ── */
+  async function handleConfirmDeleteVersion() {
+    if (!versionToDelete) return;
+    try {
+      const rawVerId = versionToDelete.clientDetailId || versionToDelete.id;
+      const verId = toIntegerVersionId(rawVerId, 1);
+      await deleteClientVersion(verId);
+      setVersionToDelete(null);
+      setDetailedVersion(null);
+      setSelectedVersionId(null);
+      await refreshClient();
+      setMode('VIEW');
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  /* ── Delete Entire Client ── */
+  async function handleConfirmDeleteClient() {
+    try {
+      await deleteClient(id);
+      setShowDeleteClientModal(false);
+      navigate('/clients');
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  /* ── Toggle Client Status (PATCH /api/clients/{id}/status) ── */
+  async function handleToggleStatus() {
+    if (!client) return;
+    try {
+      setIsSaving(true);
+      await toggleClientActive(id, client.isActive);
+      await refreshClient();
+      if (selectedVersionId) {
+        const freshVer = await fetchVersionDetail(selectedVersionId);
+        if (freshVer) setDetailedVersion(freshVer);
+      }
+    } catch (err) {
+      console.error('Failed to toggle client status:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  /* ── TanStack Table Columns ── */
   const columns = useMemo(
     () => [
       /* 1. EFFECTIVE DATE */
@@ -537,7 +738,7 @@ export default function ClientEffectiveDatesPage() {
         size: 240,
         cell: (info) => {
           const row = info.row.original;
-          const isCurrent = activeVersion?.id === row.id;
+          const isCurrent = activeVersion?.id === row.id || row.versionState === 'Current';
           const liveStatus = row.liveStatusInfo || getEffectiveDateStatus(row.effectiveDate);
 
           return (
@@ -566,7 +767,7 @@ export default function ClientEffectiveDatesPage() {
         minSize: 140,
         size: 160,
         cell: (info) => {
-          const type = info.getValue() || 'Customer';
+          const type = info.getValue() || info.row.original.contactType || 'Customer';
           return (
             <Badge variant={getContactTypeBadgeVariant(type)} className="text-2xs px-2 py-0.5">
               {type}
@@ -576,56 +777,43 @@ export default function ClientEffectiveDatesPage() {
       }),
 
       /* 3. PRIMARY CONTACT */
-      columnHelper.accessor((row) => row.contacts, {
+      columnHelper.accessor((row) => row.contacts || row.primaryContactName, {
         id: 'primaryContact',
         header: 'PRIMARY CONTACT',
         minSize: 180,
         size: 240,
         cell: (info) => {
-          const contacts = info.getValue() || [];
-          const primary = contacts.find((c) => c.isPrimary) || contacts[0];
-          if (!primary) return <span className="text-text-muted text-xs">—</span>;
-          const name = `${primary.firstName || ''} ${primary.lastName || ''}`.trim();
+          const row = info.row.original;
+          const name = row.primaryContactName || (Array.isArray(row.contacts) && row.contacts[0] ? `${row.contacts[0].firstName || ''} ${row.contacts[0].lastName || ''}`.trim() : '');
+          const phone = row.primaryContactPhoneNo || (Array.isArray(row.contacts) && row.contacts[0] ? (row.contacts[0].phoneNo || row.contacts[0].mobile1) : '');
+
+          if (!name) return <span className="text-text-muted text-xs">—</span>;
           return (
             <div className="flex flex-col py-0.5 max-w-[220px]">
-              <span className="font-medium text-heading text-xs truncate">{name || '—'}</span>
-              <span className="font-mono text-2xs text-text-muted truncate">
-                {primary.mobile1 || primary.email || '—'}
-              </span>
+              <span className="font-medium text-heading text-xs truncate">{name}</span>
+              {phone && <span className="font-mono text-2xs text-text-muted truncate">{phone}</span>}
             </div>
           );
         },
       }),
 
-      /* 4. ADDRESSES */
-      columnHelper.accessor((row) => row.addresses, {
-        id: 'addressesCount',
-        header: 'ADDRESSES',
-        minSize: 130,
-        size: 150,
+      /* 4. STATUS */
+      columnHelper.accessor('isActive', {
+        id: 'status',
+        header: 'STATUS',
+        minSize: 110,
+        size: 130,
         cell: (info) => {
-          const addrs = info.getValue() || [];
+          const isActive = info.getValue() !== false;
           return (
-            <span className="font-mono text-xs text-text-muted">
-              {addrs.length} {addrs.length === 1 ? 'address' : 'addresses'}
-            </span>
+            <Badge variant={isActive ? 'active' : 'inactive'} className="text-2xs px-2 py-0.5">
+              {isActive ? 'Active' : 'Inactive'}
+            </Badge>
           );
         },
       }),
 
-      /* 5. CREATED ON */
-      columnHelper.accessor('createdOn', {
-        header: 'CREATED ON',
-        minSize: 150,
-        size: 180,
-        cell: (info) => (
-          <span className="font-mono text-xs text-text-muted py-0.5 block">
-            {formatDateDisplay(info.getValue())}
-          </span>
-        ),
-      }),
-
-      /* 6. ACTIONS */
+      /* 5. ACTIONS */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
@@ -635,7 +823,8 @@ export default function ClientEffectiveDatesPage() {
         enableResizing: false,
         cell: (info) => {
           const row = info.row.original;
-          const isSelected = selectedVersion?.id === row.id;
+          const isSelected = selectedVersion?.id === row.id || selectedVersion?.clientDetailId === row.clientDetailId;
+          const isEditable = row.isEditable !== false && row.versionState !== 'History';
 
           return (
             <div
@@ -656,7 +845,7 @@ export default function ClientEffectiveDatesPage() {
                 <IconView size={15} />
               </Button>
 
-              {!isReadOnly && (
+              {!isReadOnly && isEditable && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -682,78 +871,82 @@ export default function ClientEffectiveDatesPage() {
   const table = useReactTable({
     data: versions,
     columns,
-    state: {
-      sorting,
-      columnSizing,
-    },
-    enableColumnResizing: true,
-    columnResizeMode: 'onChange',
+    state: { sorting, columnSizing },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
   });
 
-  // Client not found fallback
-  if (!client) {
+  if (isLoadingClient && !client) {
     return (
-      <div className="w-full py-12 px-4 sm:px-6">
-        <div className="bg-surface border border-border rounded-2xl p-8 text-center space-y-4 max-w-xl mx-auto shadow-xs">
-          <IconError size={40} className="text-warning mx-auto" />
-          <h2 className="text-xl font-bold text-heading">Client Not Found</h2>
-          <p className="text-sm text-text-muted">
-            The client record you are trying to view does not exist or has been removed.
-          </p>
-          <Button variant="primary" onClick={() => navigate('/clients')}>
-            <IconBack size={16} className="mr-2" />
-            Back to Clients List
-          </Button>
-        </div>
+      <div className="py-20 flex flex-col items-center justify-center gap-3">
+        <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs text-text-muted">Loading client details...</p>
       </div>
     );
   }
 
-  const selectedStatus = getEffectiveDateStatus(selectedVersion?.effectiveDate);
+  if (!client) {
+    return (
+      <div className="py-12 text-center space-y-3">
+        <p className="text-sm text-text-muted">Client record not found</p>
+        <Button variant="secondary" size="sm" onClick={() => navigate('/clients')}>
+          Back to Clients
+        </Button>
+      </div>
+    );
+  }
+
+  const clientCode = client.clientCode || (typeof client.clientId === 'number' ? `CLI-${String(client.clientId).padStart(3, '0')}` : client.clientId || id);
 
   return (
-    <div className="w-full space-y-6 pb-20">
-      {/* ── 1. PAGE HEADER (MATCHES VENDOR EFFECTIVE DATES PAGE) ── */}
+    <div className="space-y-6 pb-16">
+      {/* ── 1. PAGE HEADER ── */}
       <PageHeader
-        title={client?.companyName || 'Client Master'}
-        subtitle="Effective-dated version history, master details, addresses, and commercial terms"
+        title={client.companyName || client.clientName || 'Client Details'}
+        subtitle={`Client Code: ${clientCode} • Master profile with revision lifecycle`}
         icon={<IconClient className="h-6 w-6 text-primary" aria-hidden="true" />}
-        badge={
-          <span className="font-mono text-xs font-bold px-2.5 py-0.5 bg-primary/10 text-primary rounded-md border border-primary/20">
-            {client.clientId || id}
-          </span>
-        }
         backButton={{
           onClick: () => navigate(backPath),
           label: backLabel,
         }}
         actions={
           <div className="flex items-center gap-2.5 flex-wrap">
-            <span
-              className={[
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none',
-                client.isActive
-                  ? 'bg-success/10 text-success border border-success/20'
-                  : 'bg-danger/10 text-danger border border-danger/20',
-              ].join(' ')}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${client.isActive ? 'bg-success' : 'bg-danger'
-                  }`}
-                aria-hidden="true"
+            {/* Status Switch (Updates client header and all current/scheduled versions via PATCH /api/clients/{id}/status) */}
+            <div className="flex items-center gap-2 bg-surface/80 border border-border px-2.5 py-1 rounded-full shadow-2xs">
+              <StatusSwitch
+                checked={client.isActive !== false}
+                onChange={handleToggleStatus}
+                size="sm"
+                activeLabel="Active"
+                inactiveLabel="Inactive"
+                disabled={isSaving}
               />
-              {client.isActive ? 'Active' : 'Inactive'}
-            </span>
+              <span
+                className={`text-xs font-semibold select-none ${
+                  client.isActive !== false ? 'text-success' : 'text-danger'
+                }`}
+              >
+                {client.isActive !== false ? 'Active' : 'Inactive'}
+              </span>
+            </div>
 
-            <Badge variant={getContactTypeBadgeVariant(client.contactTypeId)}>
-              {client.contactTypeId || 'Customer'}
+            <Badge variant={getContactTypeBadgeVariant(client.contactTypeId || client.contactType)}>
+              {client.contactTypeId || client.contactType || 'Customer'}
             </Badge>
 
-            {!isReadOnly && mode === 'VIEW' && selectedVersion && (
+            {/* Linked Inquiries Pill */}
+            {client.inquiryCount !== undefined && client.inquiryCount !== null && (
+              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                <IconInquiry size={13} className="shrink-0" />
+                <span>{client.inquiryCount} {client.inquiryCount === 1 ? 'Inquiry' : 'Inquiries'}</span>
+              </span>
+            )}
+
+            {!isReadOnly && mode === 'VIEW' && selectedVersion && selectedVersion.isEditable !== false && (
               <Button
                 type="button"
                 variant="secondary"
@@ -762,17 +955,31 @@ export default function ClientEffectiveDatesPage() {
                 className="text-xs font-semibold shadow-2xs"
               >
                 <IconEdit size={13} className="mr-1.5" />
-                Edit Client
+                Edit Revision
+              </Button>
+            )}
+
+            {/* Admin Delete Client Button */}
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="danger-soft"
+                size="sm"
+                onClick={() => setShowDeleteClientModal(true)}
+                className="text-xs font-semibold text-danger"
+              >
+                <IconDelete size={13} className="mr-1.5" />
+                Delete Client
               </Button>
             )}
           </div>
         }
       />
 
-      {/* ── 2. EFFECTIVE DATES GRID (TOP CARD WITH RESIZABLE COLUMNS) ── */}
+      {/* ── 2. EFFECTIVE DATES TIMELINE CARD ── */}
       <CollapsibleCard
         title="Effective Dates"
-        subtitle="Timeline of version records for this client. Drag column borders to resize columns."
+        subtitle="Timeline of version records for this client. Click a row to view its full snapshot."
         icon={<IconCalendar size={17} />}
         defaultOpen={true}
         className="overflow-hidden shadow-xs border-border"
@@ -790,7 +997,7 @@ export default function ClientEffectiveDatesPage() {
           )
         }
       >
-        {/* ── Mobile Card List (< md) ── */}
+        {/* Mobile Card List (< md) */}
         <div className="block md:hidden p-3 space-y-2.5 bg-bg/50 max-h-[260px] overflow-y-auto overscroll-y-contain border-t border-border/60">
           {versions.length === 0 ? (
             <div className="py-8 text-center text-xs text-text-muted">
@@ -798,24 +1005,22 @@ export default function ClientEffectiveDatesPage() {
             </div>
           ) : (
             versions.map((ver) => {
-              const isCurrent = activeVersion?.id === ver.id;
               const isSelected = selectedVersion?.id === ver.id;
-              const contacts = ver.contacts || [];
-              const primary = contacts.find((c) => c.isPrimary) || contacts[0];
-              const primaryName = primary ? `${primary.firstName || ''} ${primary.lastName || ''}`.trim() : '';
+              const isCurrent = activeVersion?.id === ver.id || ver.versionState === 'Current';
+              const liveStatus = ver.liveStatusInfo || getEffectiveDateStatus(ver.effectiveDate);
 
               return (
                 <div
-                  key={ver.id}
+                  key={ver.id || ver.clientDetailId}
                   onClick={() => handleSelectView(ver)}
-                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${
+                  className={`p-3 rounded-xl border transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
-                      : 'bg-surface border-border hover:border-primary/40'
+                      ? 'border-primary ring-1 ring-primary/30 bg-primary/5'
+                      : 'border-border bg-surface hover:border-primary/30'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
+                    <div className="space-y-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-mono text-xs font-bold text-heading">
                           {formatDateDisplay(ver.effectiveDate)}
@@ -825,18 +1030,21 @@ export default function ClientEffectiveDatesPage() {
                             Current
                           </span>
                         )}
-                        {isSelected && (
-                          <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-semibold bg-primary/15 text-primary">
-                            Selected
-                          </span>
+                        {!isCurrent && liveStatus && (
+                          <Badge variant={liveStatus.badgeVariant} className="text-2xs px-1.5 py-0.2">
+                            {liveStatus.label}
+                          </Badge>
                         )}
+                        <Badge variant={ver.isActive !== false ? 'active' : 'inactive'} className="text-2xs px-1.5 py-0.2">
+                          {ver.isActive !== false ? 'Active' : 'Inactive'}
+                        </Badge>
                       </div>
+                      <p className="text-2xs text-text-muted">
+                        {ver.clientName || ver.companyName || '—'}
+                      </p>
                     </div>
 
-                    <div
-                      className="flex items-center gap-1 shrink-0 -mt-1 -mr-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -850,8 +1058,7 @@ export default function ClientEffectiveDatesPage() {
                       >
                         <IconView size={14} />
                       </Button>
-
-                      {!isReadOnly && (
+                      {!isReadOnly && ver.isEditable !== false && ver.versionState !== 'History' && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -868,256 +1075,140 @@ export default function ClientEffectiveDatesPage() {
                       )}
                     </div>
                   </div>
-
-                  <div className="mt-2 pt-2 border-t border-border/60 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-2xs text-text-muted">
-                    <div className="truncate">
-                      <span className="font-medium text-heading">{primaryName || 'No contact'}</span>
-                      {ver.contactTypeId && ` • ${ver.contactTypeId}`}
-                    </div>
-                    <div className="flex items-center justify-between sm:justify-end gap-2 font-mono">
-                      <span>{(ver.addresses || []).length} addrs</span>
-                      <span>{formatDateDisplay(ver.createdOn)}</span>
-                    </div>
-                  </div>
                 </div>
               );
             })
           )}
         </div>
 
-        {/* ── Desktop TanStack Table Grid (md+) ── */}
-        <div className="hidden md:block max-h-[230px] overflow-y-auto overscroll-y-contain border-t border-border/60">
-          <TableContainer>
-            <thead>
+        {/* Desktop / Tablet Table */}
+        <div className="hidden md:block">
+          <div className="max-h-[280px] overflow-y-auto overscroll-y-contain border-t border-border/60">
+            <TableContainer
+              className="border-none rounded-none"
+              tableClassName="min-w-full divide-y divide-border text-left text-xs table-auto"
+            >
+              <thead className="bg-surface/95 sticky top-0 z-10 backdrop-blur-xs shadow-2xs">
               {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} className="bg-surface border-b border-border sticky top-0 z-10 shadow-2xs">
-                  {headerGroup.headers.map((header) => {
-                    const canSort = header.column.getCanSort();
-                    const sorted = header.column.getIsSorted();
-
-                    return (
-                      <Th
-                        key={header.id}
-                        style={{ width: header.getSize() }}
-                        isResizing={header.column.getIsResizing()}
-                        resizeHandler={
-                          header.column.getCanResize()
-                            ? header.getResizeHandler()
-                            : undefined
-                        }
-                        className={`relative py-2.5 px-4 select-none bg-surface ${
-                          canSort ? 'cursor-pointer hover:bg-surface/80' : ''
-                        }`}
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <Th
+                      key={header.id}
+                      style={{ width: header.getSize() }}
+                      className="relative group select-none py-2.5 px-3.5"
+                    >
+                      <div
+                        className={`flex items-center gap-1.5 ${header.column.getCanSort() ? 'cursor-pointer' : ''}`}
+                        onClick={header.column.getToggleSortingHandler()}
                       >
-                        {header.isPlaceholder ? null : canSort ? (
-                          <button
-                            type="button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            className="group/th-btn flex items-center gap-1.5 w-full text-left select-none cursor-pointer hover:text-heading transition-colors"
-                          >
-                            <span className="truncate">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                            </span>
-
-                            <span className="shrink-0 ml-1 inline-flex items-center">
-                              {sorted === 'asc' ? (
-                                <IconChevronUp
-                                  size={14}
-                                  className="text-primary"
-                                  aria-hidden="true"
-                                />
-                              ) : sorted === 'desc' ? (
-                                <IconChevronDown
-                                  size={14}
-                                  className="text-primary"
-                                  aria-hidden="true"
-                                />
-                              ) : (
-                                <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <IconChevronUp size={11} />
-                                  <IconChevronDown size={11} />
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        ) : (
-                          <div
-                            className={`select-none ${
-                              header.id === 'actions' ? 'text-right w-full pr-1' : ''
-                            }`}
-                          >
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                          </div>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {header.column.getIsSorted() && (
+                          header.column.getIsSorted() === 'asc' ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />
                         )}
-                      </Th>
-                    );
-                  })}
+                      </div>
+                    </Th>
+                  ))}
                 </tr>
               ))}
             </thead>
             <tbody className="divide-y divide-border bg-bg">
-              {table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="py-8 text-center text-xs text-text-muted"
+              {table.getRowModel().rows.map((row) => {
+                const isSelected = selectedVersion?.id === row.original.id;
+                return (
+                  <tr
+                    key={row.id}
+                    onClick={() => handleSelectView(row.original)}
+                    className={`cursor-pointer transition-colors hover:bg-surface/60 ${
+                      isSelected ? 'bg-primary/5 ring-1 ring-primary/20' : ''
+                    }`}
                   >
-                    No effective date records found for this client.
-                  </td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map((row) => {
-                  const isSelected = selectedVersion?.id === row.original.id;
-                  return (
-                    <tr
-                      key={row.id}
-                      onClick={() => handleSelectView(row.original)}
-                      className={`cursor-pointer transition-colors duration-120 ${
-                        isSelected ? 'bg-primary/[0.06]' : 'hover:bg-surface/50'
-                      }`}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <Td
-                          key={cell.id}
-                          style={{ width: cell.column.getSize() }}
-                          className="py-2.5 px-4"
-                        >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
-                        </Td>
-                      ))}
-                    </tr>
-                  );
-                })
-              )}
+                    {row.getVisibleCells().map((cell) => (
+                      <Td key={cell.id} className="py-2.5 px-3.5">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </Td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </TableContainer>
+          </div>
         </div>
       </CollapsibleCard>
 
-      {/* ── 3. DETAIL / FORM PANEL (CARD MATCHING VENDOR PAGE) ── */}
+      {/* ── 3. DETAIL / FORM PANEL (CARD 2) ── */}
       <CollapsibleCard
         title={
           mode === 'VIEW' ? (
-            <>
-              Viewing version — Effective{' '}
-              <span className="font-mono text-primary">
-                {formatDateDisplay(selectedVersion?.effectiveDate)}
-              </span>
-              {selectedStatus && (
-                <Badge variant={selectedStatus.badgeVariant} className="text-2xs px-2 py-0.5">
-                  {selectedStatus.label}
-                </Badge>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span>Version: {formatDateDisplay(selectedVersion?.effectiveDate)}</span>
+              {selectedVersion?.versionState && (
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold border ${
+                    selectedVersion.versionState === 'Current'
+                      ? 'bg-success/15 text-success border-success/30'
+                      : selectedVersion.versionState === 'Scheduled'
+                        ? 'bg-warning/15 text-warning border-warning/30'
+                        : 'bg-surface border-border text-text-muted'
+                  }`}
+                >
+                  {selectedVersion.versionState}
+                </span>
               )}
-            </>
+            </div>
           ) : mode === 'EDIT' ? (
-            <>
-              Editing version — Effective{' '}
-              <span className="font-mono text-primary">
-                {formatDateDisplay(formData.effectiveDate || selectedVersion?.effectiveDate)}
-              </span>
-            </>
+            `Editing Revision: ${formatDateDisplay(selectedVersion?.effectiveDate)}`
           ) : (
-            'Add new effective date'
+            'Add New Client Revision'
           )
         }
         subtitle={
           mode === 'VIEW'
-            ? 'Read-only view of client profile, commercial terms, addresses, and contacts effective from this date.'
+            ? 'Complete snapshot of client profile, operational terms, addresses, and contacts.'
             : mode === 'EDIT'
-              ? 'Modify versioned client profile, terms, addresses, and contacts.'
-              : 'Clone-forward from current active version with a new unique effective date.'
+              ? 'Update details for this version. Changes take effect on the specified date.'
+              : 'Specify an effective date to schedule upcoming company changes forward.'
         }
-        icon={<IconClient size={17} />}
+        icon={mode === 'VIEW' ? <IconBuilding2 size={17} /> : <IconEdit size={17} />}
         defaultOpen={true}
         className="overflow-hidden shadow-xs border-border"
         actions={
-          <div className="flex items-center gap-2 self-start sm:self-auto w-full sm:w-auto justify-end">
-            {!isReadOnly && mode === 'VIEW' && selectedVersion && (
+          <div className="flex items-center gap-2">
+            {mode === 'VIEW' && selectedVersion?.canDelete && !isReadOnly && (
               <Button
-                variant="secondary"
+                type="button"
+                variant="danger-soft"
                 size="sm"
-                onClick={() => handleStartEdit(selectedVersion)}
-                className="text-xs w-full sm:w-auto justify-center"
+                onClick={() => setVersionToDelete(selectedVersion)}
+                className="text-xs text-danger"
               >
-                <IconEdit size={13} className="mr-1.5" />
-                Edit this version
+                <IconDelete size={13} className="mr-1.5" />
+                Delete Revision
               </Button>
             )}
-
+            {mode === 'VIEW' && selectedVersion?.isEditable !== false && !isReadOnly && (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => handleStartEdit(selectedVersion)}
+                className="text-xs font-semibold shadow-2xs"
+              >
+                <IconEdit size={13} className="mr-1.5" />
+                Edit This Version
+              </Button>
+            )}
             {(mode === 'EDIT' || mode === 'ADD') && (
-              <>
-                <CancelButton
-                  size="sm"
-                  onClick={handleCancel}
-                  disabled={isSaving}
-                  className="text-xs shadow-2xs font-medium"
-                />
-                <SaveButton
-                  type="button"
-                  size="sm"
-                  onClick={handleSubmit}
-                  loading={isSaving}
-                  loadingText="Saving..."
-                  disabled={isSaving}
-                  className="text-xs font-semibold shadow-2xs"
-                >
-                  Save Changes
-                </SaveButton>
-              </>
+              <CancelButton size="sm" onClick={handleCancel} className="text-xs shadow-2xs" />
             )}
           </div>
         }
       >
-
-        {/* ── MODE 1: VIEW MODE (MATCHING VENDOR VIEW PAGE ARCHITECTURE) ── */}
+        {/* ── MODE 1: VIEW SNAPSHOT ── */}
         {mode === 'VIEW' && selectedVersion && (
           <div className="p-4 sm:p-6 space-y-6">
-            {/* View Sub-Tabs for Fast Section Navigation */}
-            <div className="border-b border-border/60 pb-1">
-              <ScrollableTabs
-                variant="underline"
-                activeTab={activeViewTab}
-                onChange={setActiveViewTab}
-                tabs={[
-                  {
-                    id: 'all',
-                    label: 'All Sections',
-                    icon: IconFileText,
-                  },
-                  {
-                    id: 'company_terms',
-                    label: 'Company & Terms',
-                    icon: IconBuilding2,
-                  },
-                  {
-                    id: 'addresses',
-                    label: 'Client Addresses',
-                    icon: IconLocation,
-                    badge: (selectedVersion.addresses || []).length,
-                  },
-                  {
-                    id: 'contacts',
-                    label: 'Contact Persons',
-                    icon: IconUsers,
-                    badge: (selectedVersion.contacts || []).length,
-                  },
-                ]}
-              />
-            </div>
-
-            {/* Section 1: Company & Contact Information */}
-            {(activeViewTab === 'all' || activeViewTab === 'company_terms') && (
-              <>
-                <div className="space-y-3">
+            {/* Section 1: Company Details */}
+            <div className="space-y-3">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconBuilding2 size={15} className="text-primary" />
                 Company Details
@@ -1130,76 +1221,106 @@ export default function ClientEffectiveDatesPage() {
                 />
                 <DetailField
                   label="Company Name"
-                  value={selectedVersion.companyName}
+                  value={selectedVersion.clientName || selectedVersion.companyName}
                 />
-                <DetailField
-                  label="Billing Name"
-                  value={selectedVersion.billingName}
-                />
+                <div className="space-y-1">
+                  <span className="view-field-label mf-detail-label">Billing Name</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-medium text-heading">
+                      {selectedVersion.billingName || selectedVersion.clientName || selectedVersion.companyName || '—'}
+                    </span>
+                    {Boolean(selectedVersion.billingNameSameAsClientName) && (
+                      <span className="inline-flex items-center rounded px-1.5 py-0.2 text-2xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                        Same as Company
+                      </span>
+                    )}
+                  </div>
+                </div>
                 <DetailField
                   label="Contact Type"
-                  value={selectedVersion.contactTypeId || 'Customer'}
+                  value={selectedVersion.contactType || selectedVersion.contactTypeId || 'Customer'}
                 />
                 <DetailField
-                  label="Email Address"
-                  value={selectedVersion.email}
-                  isLink={Boolean(selectedVersion.email)}
-                  href={selectedVersion.email ? `mailto:${selectedVersion.email}` : undefined}
+                  label="Official Email"
+                  value={selectedVersion.officialEmail || selectedVersion.email}
+                  isLink={Boolean(selectedVersion.officialEmail || selectedVersion.email)}
+                  href={`mailto:${selectedVersion.officialEmail || selectedVersion.email}`}
                 />
                 <DetailField
                   label="GST / Tax ID"
                   value={selectedVersion.gstNo}
                   mono
                 />
-                <DetailField
-                  label="Record Status"
-                  value={selectedVersion.isActive !== false ? 'Active' : 'Inactive'}
-                />
+                <div className="space-y-1">
+                  <span className="view-field-label mf-detail-label">Record Status</span>
+                  <div>
+                    <Badge
+                      variant={selectedVersion.isActive !== false ? 'active' : 'inactive'}
+                      className="text-2xs px-2 py-0.5 font-bold"
+                    >
+                      {selectedVersion.isActive !== false ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="view-field-label mf-detail-label">Revision State</span>
+                  <div>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold border ${
+                        selectedVersion.versionState === 'Current'
+                          ? 'bg-success/15 text-success border-success/30'
+                          : selectedVersion.versionState === 'Scheduled'
+                            ? 'bg-warning/15 text-warning border-warning/30'
+                            : 'bg-surface border-border text-text-muted'
+                      }`}
+                    >
+                      {selectedVersion.versionState || 'Current'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Section 2: Terms & Commercial Notes */}
-            <div className="space-y-3 pt-6">
+            {/* Section 2: Terms & Notes */}
+            <div className="space-y-3 pt-6 border-t border-border">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconFileText size={15} className="text-primary" />
                 Terms & Operational Notes
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-1">
-                {/* Payment Terms */}
                 <div className="space-y-1.5">
-                  {/* <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block"> */}
-                  <span className="view-field-label mf-detail-label">
-                    Payment Terms
-                  </span>
+                  <span className="view-field-label mf-detail-label">Payment Terms</span>
                   {selectedPaymentTermsList.length === 0 ? (
                     <div className="p-3 rounded-lg bg-surface/50 border border-border/60 text-xs text-text-muted italic">
                       No payment terms recorded for this revision.
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {selectedPaymentTermsList.map((term) => {
-                        const desc = term.description || '';
-                        const isHtml = /<[a-z][\s\S]*>/i.test(desc);
-
+                      {selectedPaymentTermsList.map((term, idx) => {
+                        const code = term.termCode || term.code || 'TERM';
+                        const name = term.termName || term.name || '';
                         return (
                           <div
-                            key={term.paymentTermId || term.termCode}
-                            className="p-3 rounded-lg bg-surface/50 border border-border/60 space-y-1 text-xs shadow-2xs"
+                            key={term.paymentTermId || term.clientPaymentTermId || term.termCode || idx}
+                            className="p-3 rounded-lg bg-surface/50 border border-border/60 space-y-1.5 text-xs shadow-2xs"
                           >
-                            <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5">
-                              {term.termCode}
-                            </Badge>
-                            {desc ? (
-                              isHtml ? (
-                                <div
-                                  className="text-2xs text-text leading-relaxed prose prose-xs max-w-none"
-                                  dangerouslySetInnerHTML={{ __html: desc }}
-                                />
-                              ) : (
-                                <p className="text-2xs text-text whitespace-pre-line leading-relaxed">{desc}</p>
-                              )
-                            ) : null}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5 font-bold">
+                                {code}
+                              </Badge>
+                              {name && (
+                                <span className="font-medium text-heading text-xs">
+                                  {name}
+                                </span>
+                              )}
+                            </div>
+                            {term.description && term.description !== name && (
+                              <FormattedHtmlBlock
+                                content={term.description}
+                                className="text-2xs text-text-muted mt-0.5"
+                              />
+                            )}
                           </div>
                         );
                       })}
@@ -1207,149 +1328,79 @@ export default function ClientEffectiveDatesPage() {
                   )}
                 </div>
 
-                {/* Delivery Terms */}
                 <div className="space-y-1.5">
-                  {/* <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block"> */}
-                  <span className="view-field-label mf-detail-label">
-                    Delivery Terms
-                  </span>
-                  {selectedVersion.deliveryTerms ? (
-                    /<[a-z][\s\S]*>/i.test(selectedVersion.deliveryTerms) ? (
-                      <div
-                        className="p-3.5 rounded-lg bg-surface/50 border border-border/60 text-xs text-text leading-relaxed prose prose-xs max-w-none shadow-2xs"
-                        dangerouslySetInnerHTML={{ __html: selectedVersion.deliveryTerms }}
-                      />
-                    ) : (
-                      <p className="text-xs text-heading font-medium whitespace-pre-line leading-relaxed p-3.5 rounded-lg bg-surface/50 border border-border/60 shadow-2xs">
-                        {selectedVersion.deliveryTerms}
-                      </p>
-                    )
-                  ) : (
-                    <div className="p-3.5 rounded-lg bg-surface/50 border border-border/60 text-xs text-text-muted italic">
-                      No delivery terms recorded for this revision.
-                    </div>
-                  )}
+                  <span className="view-field-label mf-detail-label">Delivery Terms</span>
+                  <div className="p-3 rounded-lg bg-surface/50 border border-border/60 min-h-[50px] text-xs">
+                    <FormattedHtmlBlock
+                      content={selectedVersion.deliveryTerms}
+                      emptyText="No delivery terms specified."
+                    />
+                  </div>
                 </div>
 
-                {/* Internal Comments */}
                 <div className="space-y-1.5">
-                  {/* <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block"> */}
-                  <span className="view-field-label mf-detail-label">
-                    Internal Comments
-                  </span>
-                  {selectedVersion.comments ? (
-                    /<[a-z][\s\S]*>/i.test(selectedVersion.comments) ? (
-                      <div
-                        className="p-3.5 rounded-lg bg-surface/50 border border-border/60 text-xs text-text leading-relaxed prose prose-xs max-w-none shadow-2xs"
-                        dangerouslySetInnerHTML={{ __html: selectedVersion.comments }}
-                      />
-                    ) : (
-                      <p className="text-xs text-heading font-medium whitespace-pre-line leading-relaxed p-3.5 rounded-lg bg-surface/50 border border-border/60 shadow-2xs">
-                        {selectedVersion.comments}
-                      </p>
-                    )
-                  ) : (
-                    <div className="p-3.5 rounded-lg bg-surface/50 border border-border/60 text-xs text-text-muted italic">
-                      No internal comments recorded for this revision.
-                    </div>
-                  )}
+                  <span className="view-field-label mf-detail-label">Internal Comments & Remarks</span>
+                  <div className="p-3 rounded-lg bg-surface/50 border border-border/60 min-h-[50px] text-xs">
+                    <FormattedHtmlBlock
+                      content={selectedVersion.internalComments || selectedVersion.comments}
+                      emptyText="No internal comments recorded."
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </>
-          )}
 
-            {/* Section 3: Client Addresses */}
-            {(activeViewTab === 'all' || activeViewTab === 'addresses') && (
-            <div className="space-y-3 pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                  <IconLocation size={15} className="text-primary" />
-                  Client Addresses
-                  <span className="text-2xs font-normal text-text-muted ml-1">
-                    ({(selectedVersion.addresses || []).length})
-                  </span>
-                </div>
+            {/* Section 3: Addresses Cards */}
+            <div className="space-y-3 pt-6 border-t border-border">
+              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                <IconLocation size={15} className="text-primary" />
+                Client Addresses ({(selectedVersion.addresses || []).length})
               </div>
 
               {(selectedVersion.addresses || []).length === 0 ? (
                 <div className="p-6 text-center bg-surface/30 rounded-xl border border-dashed border-border text-xs text-text-muted">
-                  No address records registered under this effective date revision.
+                  No addresses registered under this effective date revision.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
-                  {(selectedVersion.addresses || []).map((addr, idx) => {
-                    const countryName = getCountryName(addr.countryId);
-                    const stateName = getStateName(addr.countryId, addr.stateId);
-
-                    return (
-                      <div
-                        key={addr.clientAddressId || idx}
-                        className="p-4 rounded-xl border border-border bg-bg hover:border-primary/40 hover:shadow-xs transition-all duration-150 space-y-2.5"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <Badge variant={getAddressTypeBadgeVariant(addr.addressType)} className="text-2xs px-2 py-0.5">
-                              {addr.addressType}
-                            </Badge>
-                            {addr.addressLabel && (
-                              <span className="text-xs font-bold text-heading">
-                                {addr.addressLabel}
-                              </span>
-                            )}
-                            {addr.isDefaultBilling && (
-                              <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                                Default Bill
-                              </span>
-                            )}
-                            {addr.isDefaultShipping && (
-                              <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-semibold bg-success/10 text-success border border-success/20">
-                                Default Ship
-                              </span>
-                            )}
-                          </div>
-                          <Badge variant={addr.isActive !== false ? 'active' : 'inactive'} className="text-2xs px-1.5 py-0.2">
-                            {addr.isActive !== false ? 'Active' : 'Inactive'}
+                  {(selectedVersion.addresses || []).map((addr, idx) => (
+                    <div
+                      key={addr.clientAddressId || idx}
+                      className="p-4 rounded-xl border border-border bg-bg space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                          <Badge variant={getAddressTypeBadgeVariant(addr.addressType)}>
+                            {addr.addressType}
                           </Badge>
-                        </div>
-
-                        <div>
-                          <p className="font-semibold text-heading text-xs">{addr.address1}</p>
-                          {addr.address2 && <p className="text-2xs text-text-muted mt-0.5">{addr.address2}</p>}
-                        </div>
-
-                        <div className="text-2xs text-text-muted pt-2 border-t border-border/60 space-y-0.5">
-                          <div>
-                            <span className="font-medium text-heading">{addr.city}</span>
-                            {stateName && <span>, {stateName}</span>}
-                            {addr.zipCode && <span className="font-mono ml-1.5">({addr.zipCode})</span>}
-                          </div>
-                          <div>{countryName}</div>
-                          {addr.gstNo && (
-                            <div className="font-mono text-2xs pt-0.5 text-heading font-medium">
-                              GSTIN: {addr.gstNo}
-                            </div>
+                          {addr.addressLabel && (
+                            <span className="text-xs font-semibold text-heading truncate" title={addr.addressLabel}>
+                              {addr.addressLabel}
+                            </span>
                           )}
                         </div>
+                        <Badge variant={addr.isActive !== false ? 'active' : 'inactive'} className="text-2xs shrink-0">
+                          {addr.isActive !== false ? 'Active' : 'Inactive'}
+                        </Badge>
                       </div>
-                    );
-                  })}
+                      <p className="text-xs text-heading font-medium">
+                        {addr.address1}
+                        {addr.address2 ? `, ${addr.address2}` : ''}
+                      </p>
+                      <p className="text-2xs text-text-muted">
+                        {[addr.city, addr.stateName || addr.stateId, addr.countryName || addr.countryId, addr.zipCode].filter(Boolean).join(', ')}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-            )}
 
-            {/* Section 4: Contact Persons */}
-            {(activeViewTab === 'all' || activeViewTab === 'contacts') && (
-            <div className="space-y-3 pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                  <IconUsers size={15} className="text-primary" />
-                  Contact Persons
-                  <span className="text-2xs font-normal text-text-muted ml-1">
-                    ({(selectedVersion.contacts || []).length})
-                  </span>
-                </div>
+            {/* Section 4: Contact Persons Cards */}
+            <div className="space-y-3 pt-6 border-t border-border">
+              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                <IconUsers size={15} className="text-primary" />
+                Contact Persons ({(selectedVersion.contacts || []).length})
               </div>
 
               {(selectedVersion.contacts || []).length === 0 ? (
@@ -1359,55 +1410,51 @@ export default function ClientEffectiveDatesPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
                   {(selectedVersion.contacts || []).map((con, idx) => {
-                    const fullName = `${con.firstName || ''} ${con.lastName || ''}`.trim() || '—';
+                    const fullName = con.fullName || `${con.firstName || ''} ${con.lastName || ''}`.trim() || '—';
+                    const phone = con.phoneNo || con.mobile1;
+                    const altPhone = con.alternatePhoneNo || con.mobile2;
 
                     return (
                       <div
-                        key={con.clientContactPersonId || idx}
-                        className="p-4 rounded-xl border border-border bg-bg hover:border-primary/40 hover:shadow-xs transition-all duration-150 space-y-2.5"
+                        key={con.clientContactId || con.clientContactPersonId || idx}
+                        className="p-4 rounded-xl border border-border bg-bg space-y-2.5"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
-                              {con.firstName ? con.firstName[0].toUpperCase() : 'C'}
-                            </div>
-                            <div className="min-w-0">
-                              <span className="font-semibold text-heading text-xs block truncate">{fullName}</span>
-                              {(con.designation || con.department) && (
-                                <span className="text-2xs text-text-muted block truncate">
-                                  {[con.designation, con.department].filter(Boolean).join(' • ')}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                          <span className="font-semibold text-heading text-xs truncate">{fullName}</span>
                           <div className="flex items-center gap-1 shrink-0">
                             {con.isPrimary && (
-                              <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-bold bg-primary/15 text-primary">
+                              <span className="rounded-full px-1.5 py-0.5 text-2xs font-bold bg-primary/15 text-primary">
                                 Primary
                               </span>
                             )}
-                            <Badge variant={con.isActive !== false ? 'active' : 'inactive'} className="text-2xs px-1.5 py-0.2">
+                            <Badge variant={con.isActive !== false ? 'active' : 'inactive'} className="text-2xs">
                               {con.isActive !== false ? 'Active' : 'Inactive'}
                             </Badge>
                           </div>
                         </div>
 
-                        <div className="text-2xs text-text space-y-1.5 pt-2 border-t border-border/60">
-                          {con.mobile1 && (
-                            <div className="flex items-center gap-2">
-                              <IconPhone size={12} className="text-text-muted shrink-0" />
-                              <a href={`tel:${con.mobile1}`} className="font-mono text-heading hover:text-primary">
-                                {con.mobile1}
+                        <div className="text-2xs text-text space-y-1 pt-1 border-t border-border/60">
+                          {phone && (
+                            <div className="flex items-center gap-1.5 font-mono">
+                              <IconPhone size={11} className="text-text-muted shrink-0" />
+                              <a href={`tel:${phone}`} className="text-heading hover:text-primary">
+                                {phone}
                               </a>
-                              {con.mobile2 && (
-                                <span className="font-mono text-text-muted text-2xs truncate">/ {con.mobile2}</span>
-                              )}
+                            </div>
+                          )}
+                          {altPhone && (
+                            <div className="flex items-center gap-1.5 font-mono">
+                              <IconPhone size={11} className="text-text-muted shrink-0" />
+                              <a href={`tel:${altPhone}`} className="text-heading hover:text-primary">
+                                {altPhone}
+                              </a>
+                              <span className="text-text-muted text-2xs">(Alt)</span>
                             </div>
                           )}
                           {con.email && (
-                            <div className="flex items-center gap-2">
-                              <IconMail size={12} className="text-text-muted shrink-0" />
-                              <a href={`mailto:${con.email}`} className="text-primary truncate hover:underline">
+                            <div className="flex items-center gap-1.5">
+                              <IconMail size={11} className="text-text-muted shrink-0" />
+                              <a href={`mailto:${con.email}`} className="text-primary hover:underline truncate">
                                 {con.email}
                               </a>
                             </div>
@@ -1419,31 +1466,34 @@ export default function ClientEffectiveDatesPage() {
                 </div>
               )}
             </div>
-            )}
 
-            {/* Section 5: Version Audit */}
-            {activeViewTab === 'all' && (
-            <div className="space-y-3 pt-6">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <IconClock size={15} className="text-primary" />
-                Version Audit & Timeline
+            {/* Section 5: Revision Metadata & Audit */}
+            {(selectedVersion.createdOn || selectedVersion.lastUpdatedOn || selectedVersion.lastUpdatedByName) && (
+              <div className="pt-4 border-t border-border flex items-center justify-between gap-3 flex-wrap text-2xs text-text-muted">
+                <div className="flex items-center gap-3.5 flex-wrap">
+                  {selectedVersion.createdOn && (
+                    <div className="flex items-center gap-1">
+                      <IconCalendar size={12} className="text-text-muted" />
+                      <span>Created: {formatDateTime(selectedVersion.createdOn)}</span>
+                    </div>
+                  )}
+                  {selectedVersion.lastUpdatedOn && (
+                    <div className="flex items-center gap-1">
+                      <IconClock size={12} className="text-text-muted" />
+                      <span>
+                        Last updated:{' '}
+                        {selectedVersion.lastUpdatedByName ? (
+                          <strong className="text-heading font-medium">{selectedVersion.lastUpdatedByName}</strong>
+                        ) : null}{' '}
+                        on {formatDateTime(selectedVersion.lastUpdatedOn)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="text-2xs font-mono text-text-muted">
+                  Revision ID: #{selectedVersion.clientDetailId || selectedVersion.id}
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
-                <DetailField
-                  label="Version Created On"
-                  value={formatDateDisplay(selectedVersion.createdOn)}
-                  mono
-                />
-                <DetailField
-                  label="Version Created By"
-                  value={selectedVersion.createdBy || 'Ian Chesnut'}
-                />
-                <DetailField
-                  label="Current ERP Status"
-                  value={selectedVersion.id === activeVersion?.id ? 'Active Version' : 'Historical Snapshot'}
-                />
-              </div>
-            </div>
             )}
           </div>
         )}
@@ -1451,7 +1501,6 @@ export default function ClientEffectiveDatesPage() {
         {/* ── MODE 2 & 3: EDIT & ADD FORM ── */}
         {(mode === 'EDIT' || mode === 'ADD') && (
           <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
-            {/* Common Effective Date Field */}
             <div className="p-3.5 sm:p-4 rounded-xl bg-surface/60 border border-border shadow-2xs space-y-2">
               <div className="w-full sm:max-w-md">
                 <DatePicker
@@ -1459,21 +1508,19 @@ export default function ClientEffectiveDatesPage() {
                   label="Effective Date"
                   required
                   name="effectiveDate"
-                  min={mode === 'ADD' ? (minAllowedEffectiveDate || undefined) : undefined}
                   value={formData.effectiveDate}
-                  onChange={(e) => handleFieldChange('effectiveDate', e.target ? e.target.value : e)}
+                  onChange={(val) => handleFieldChange('effectiveDate', val)}
                   error={formErrors.effectiveDate}
                   disabled={mode === 'EDIT'}
                   hint={
                     mode === 'EDIT'
                       ? 'Effective date cannot be changed for an existing revision.'
-                      : (minAllowedEffectiveDate ? `Must be on or after ${formatDateDisplay(minAllowedEffectiveDate)}` : 'The date from which this new client version becomes active.')
+                      : 'The date from which this new client version becomes active (today or later).'
                   }
                 />
               </div>
             </div>
 
-            {/* Sub-Navigation Tabs within Form (Fully touch & mouse scrollable on mobile) */}
             <ScrollableTabs
               variant="underline"
               activeTab={activeFormTab}
@@ -1499,11 +1546,10 @@ export default function ClientEffectiveDatesPage() {
               ]}
             />
 
-            {/* ── Form Tab 1: Client Details & Terms ── */}
+            {/* Form Tab 1: Company Details & Terms */}
             {activeFormTab === 'company_terms' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* Company Name */}
                   <Input
                     id="companyName"
                     name="companyName"
@@ -1515,7 +1561,6 @@ export default function ClientEffectiveDatesPage() {
                     placeholder="e.g. Acme Industrial Solutions"
                   />
 
-                  {/* Billing Name with Same as company name toggle */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="mf-label text-xs">Billing Name</span>
@@ -1533,36 +1578,32 @@ export default function ClientEffectiveDatesPage() {
                       disabled={sameAsCompany}
                       onChange={(e) => handleFieldChange('billingName', e.target.value)}
                       placeholder="e.g. Acme Solutions Pvt Ltd"
-                      hint="Official registered name for invoices"
                       error={formErrors.billingName}
                     />
                   </div>
 
-                  {/* Contact Type */}
                   <SearchableSelect
                     id="contactTypeId"
                     name="contactTypeId"
                     label="Contact Type"
                     required
-                    options={CONTACT_TYPE_OPTIONS}
+                    options={contactTypeOptions}
                     value={formData.contactTypeId}
                     onChange={(e) => handleFieldChange('contactTypeId', e.target.value)}
                     placeholder="Select Type..."
                   />
 
-                  {/* Email */}
                   <Input
                     id="email"
                     name="email"
                     type="email"
-                    label="Email Address"
+                    label="Official Email"
                     value={formData.email}
                     onChange={(e) => handleFieldChange('email', e.target.value)}
                     error={formErrors.email}
                     placeholder="e.g. billing@acme.com"
                   />
 
-                  {/* GST No */}
                   <Input
                     id="gstNo"
                     name="gstNo"
@@ -1572,7 +1613,6 @@ export default function ClientEffectiveDatesPage() {
                     placeholder="e.g. 24AABCA1234F1Z5"
                   />
 
-                  {/* Status Switch */}
                   <div className="flex flex-col justify-between pt-1">
                     <span className="mf-label block mb-2">Account Status</span>
                     <div className="flex items-center gap-3 h-10">
@@ -1587,145 +1627,98 @@ export default function ClientEffectiveDatesPage() {
                   </div>
                 </div>
 
-                {/* Terms & Notes Section */}
+                {/* Terms Section */}
                 <div className="space-y-4 pt-4 border-t border-border">
-                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                    <IconFileText size={15} className="text-primary" />
-                    Commercial Terms & Notes
-                  </div>
+                  <SearchableMultiSelect
+                    label="Payment Terms"
+                    id="paymentTerms"
+                    name="paymentTerms"
+                    options={paymentTermOptions}
+                    value={Array.isArray(formData.paymentTerms) ? formData.paymentTerms : []}
+                    onChange={(e) => handleFieldChange('paymentTerms', e.target.value)}
+                    placeholder="Select payment terms..."
+                    searchPlaceholder="Search payment terms..."
+                  />
 
-                  {/* Payment Terms Multi-Select Dropdown */}
-                  <div className="space-y-2.5">
-                    <SearchableMultiSelect
-                      label="Payment Terms"
-                      id="paymentTerms"
-                      name="paymentTerms"
-                      options={paymentTermOptions}
-                      value={Array.isArray(formData.paymentTerms) ? formData.paymentTerms : formData.paymentTerms ? [formData.paymentTerms] : []}
-                      onChange={(e) => handleFieldChange('paymentTerms', e.target.value)}
-                      placeholder="Select payment terms..."
-                      searchPlaceholder="Search payment terms..."
-                      emptyText="No payment terms found in Configuration"
-                      hint="Multiple terms can be selected from Configuration"
-                    />
-
-                    {/* Selected Terms Cards */}
-                    {formSelectedPaymentTermsList.length > 0 && (
-                      <div className="space-y-2 pt-1">
-                        <div className="flex items-center justify-between text-2xs font-semibold text-text-muted uppercase tracking-wider">
-                          <span>Selected Terms ({formSelectedPaymentTermsList.length})</span>
-                          <button
-                            type="button"
-                            onClick={() => handleFieldChange('paymentTerms', [])}
-                            className="text-text-muted hover:text-danger cursor-pointer transition-colors"
+                  {formSelectedPaymentTermsList.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {formSelectedPaymentTermsList.map((term, idx) => {
+                        const code = term.termCode || term.code || 'TERM';
+                        const name = term.termName || term.name || '';
+                        return (
+                          <div
+                            key={term.paymentTermId || term.termCode || idx}
+                            className="flex items-center justify-between p-2 rounded-lg border border-border bg-surface/50 text-xs"
                           >
-                            Clear All
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
-                          {formSelectedPaymentTermsList.map((term) => {
-                            const desc = term.description || '';
-                            const isHtml = /<[a-z][\s\S]*>/i.test(desc);
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-semibold text-heading font-mono">{code}</span>
+                              {name && (
+                                <span className="text-text-muted text-2xs truncate">
+                                  — {name}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePaymentTerm(term.id || term.paymentTermId || term.termCode)}
+                              className="text-text-muted hover:text-danger cursor-pointer ml-1 p-0.5"
+                              title="Remove term"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                            return (
-                              <div
-                                key={term.paymentTermId || term.termCode}
-                                className="p-3 rounded-lg bg-surface/70 border border-border space-y-1.5 text-xs group hover:border-primary/30 transition-colors shadow-2xs"
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <Badge variant="role" className="font-mono text-xs px-2 py-0.5 shrink-0">
-                                    {term.termCode}
-                                  </Badge>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemovePaymentTerm(term.termCode || term.paymentTermId)}
-                                    className="text-text-muted hover:text-danger p-0.5 rounded cursor-pointer transition-colors shrink-0"
-                                    title={`Remove ${term.termCode}`}
-                                    aria-label={`Remove ${term.termCode}`}
-                                  >
-                                    <IconClose size={14} />
-                                  </button>
-                                </div>
-                                {desc ? (
-                                  isHtml ? (
-                                    <div
-                                      className="text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
-                                      dangerouslySetInnerHTML={{ __html: desc }}
-                                    />
-                                  ) : (
-                                    <p className="text-xs text-text whitespace-pre-line leading-relaxed">
-                                      {desc}
-                                    </p>
-                                  )
-                                ) : (
-                                  <p className="text-2xs text-text-muted italic">No terms description specified</p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Delivery Terms Rich Text */}
-                  <div className="space-y-1.5">
-                    <span className="mf-label block">Delivery Terms</span>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                     <RichTextEditor
                       id="deliveryTerms"
                       name="deliveryTerms"
+                      label="Delivery Terms"
                       value={formData.deliveryTerms}
                       onChange={(e) => handleFieldChange('deliveryTerms', e.target ? e.target.value : e)}
-                      placeholder="Specify logistics, incoterms, freight & delivery conditions..."
-                      minHeight="140px"
+                      placeholder="Specify shipping and freight clauses..."
                     />
-                  </div>
 
-                  {/* Internal Comments Rich Text */}
-                  <div className="space-y-1.5">
-                    <span className="mf-label block">Internal Comments</span>
                     <RichTextEditor
                       id="comments"
                       name="comments"
+                      label="Internal Comments"
                       value={formData.comments}
                       onChange={(e) => handleFieldChange('comments', e.target ? e.target.value : e)}
-                      placeholder="Add confidential notes or account background..."
-                      minHeight="140px"
+                      placeholder="Add internal notes..."
                     />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* ── Form Tab 2: Addresses ── */}
+            {/* Form Tab 2: Addresses */}
             {activeFormTab === 'addresses' && (
-              <div className="space-y-4">
-                <AddressesEditor
-                  rows={formData.addresses}
-                  addresses={formData.addresses}
-                  onChange={(addrs) => handleFieldChange('addresses', addrs)}
-                />
-              </div>
+              <AddressesEditor
+                rows={formData.addresses}
+                addresses={formData.addresses}
+                onChange={(addrs) => handleFieldChange('addresses', addrs)}
+              />
             )}
 
-            {/* ── Form Tab 3: Contacts ── */}
+            {/* Form Tab 3: Contacts */}
             {activeFormTab === 'contacts' && (
-              <div className="space-y-4">
-                <ContactsEditor
-                  rows={formData.contacts}
-                  contacts={formData.contacts}
-                  onChange={(cons) => handleFieldChange('contacts', cons)}
-                />
-              </div>
+              <ContactsEditor
+                rows={formData.contacts}
+                contacts={formData.contacts}
+                onChange={(cons) => handleFieldChange('contacts', cons)}
+              />
             )}
 
-            {/* Bottom Actions Bar */}
-            <div className="pt-4 border-t border-border flex items-center justify-end gap-2.5 w-full sm:w-auto">
+            <div className="pt-4 border-t border-border flex items-center justify-end gap-2.5">
               <CancelButton
                 size="sm"
                 onClick={handleCancel}
                 disabled={isSaving}
-                className="text-xs flex-1 sm:flex-none justify-center shadow-2xs font-medium"
+                className="text-xs font-medium"
               />
               <SaveButton
                 type="submit"
@@ -1733,14 +1726,50 @@ export default function ClientEffectiveDatesPage() {
                 loading={isSaving}
                 loadingText="Saving..."
                 disabled={isSaving}
-                className="text-xs flex-1 sm:flex-none justify-center font-semibold shadow-2xs"
+                className="text-xs font-semibold shadow-2xs"
               >
-                Save Changes
+                {mode === 'EDIT' ? 'Save Changes' : 'Create Revision'}
               </SaveButton>
             </div>
           </form>
         )}
       </CollapsibleCard>
+
+      {/* ── Single Version Delete Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={Boolean(versionToDelete)}
+        onClose={() => setVersionToDelete(null)}
+        onConfirm={handleConfirmDeleteVersion}
+        title="Delete Scheduled Revision"
+        message={
+          <span>
+            Are you sure you want to delete the scheduled revision effective on{' '}
+            <strong>{formatDateDisplay(versionToDelete?.effectiveDate)}</strong>?
+            This will permanently remove all associated addresses and contact records for this version.
+          </span>
+        }
+        confirmText="Delete Revision"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* ── Delete Client Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={showDeleteClientModal}
+        onClose={() => setShowDeleteClientModal(false)}
+        onConfirm={handleConfirmDeleteClient}
+        title="Delete Client"
+        message={
+          <span>
+            Are you sure you want to delete client{' '}
+            <strong>&quot;{client.companyName || client.clientName}&quot;</strong>?
+            This will permanently delete the client and all its versions. If inquiries reference this client, the server will reject deletion.
+          </span>
+        }
+        confirmText="Delete Client"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }

@@ -25,6 +25,9 @@ import * as mockDocumentTypes from './documentTypes/documentTypesService.mock';
 import * as realVendors from './vendors/vendorService';
 import * as mockVendors from './vendors/vendorService.mock';
 
+import * as realClients from './clients/clientService';
+import * as mockClients from './clients/clientService.mock';
+
 import * as realApprovals from './approvals/approvalsService';
 import * as mockApprovals from './approvals/approvalsService.mock';
 
@@ -49,6 +52,7 @@ export const roleService = useMock ? mockRoles : realRoles;
 export const processFlowService = useMock ? mockProcessFlow : realProcessFlow;
 export const documentTypesService = useMock ? mockDocumentTypes : realDocumentTypes;
 export const vendorService = useMock ? mockVendors : realVendors;
+export const clientService = useMock ? mockClients : realClients;
 export const approvalsService = useMock ? mockApprovals : realApprovals;
 export const uomService = useMock ? mockUoms : realUoms;
 export const regionService = useMock ? mockRegions : realRegions;

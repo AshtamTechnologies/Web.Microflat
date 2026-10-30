@@ -1,40 +1,113 @@
 /**
  * useClients.js — Core state management and CRUD operations for the Clients module.
- *
  * MicroFlat ERP: Client registration with nested addresses and contacts.
+ * Integrated with real backend Client APIs (Oct 30, 2026).
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { clientService, isMockApi } from '../../services';
 import { mockClients } from '../../mocks/clients';
-import { getActiveClientVersion } from '../../utils/clientVersions';
-
-let nextClientNumber = mockClients.length + 1;
+import { getActiveClientVersion, toIntegerVersionId } from '../../utils/clientVersions';
 
 export function useClients() {
-  const [clients, setClients] = useState(mockClients);
+  const [clients, setClients] = useState(isMockApi ? mockClients : []);
+  const [summary, setSummary] = useState({ total: 0, active: 0, inactive: 0, notYetEffective: 0, scheduledChanges: 0 });
+  const [lookups, setLookups] = useState({
+    contactTypes: ['Customer', 'Distributor', 'Dealer', 'Agency'],
+    addressTypes: ['Billing', 'Shipping', 'Registered Office', 'Works'],
+    paymentTerms: [],
+    countries: [],
+  });
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
   const [contactTypeFilter, setContactTypeFilter] = useState('ALL'); // 'ALL' | 'Customer' | ...
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(!isMockApi);
 
-  /* ── Augmented clients list with activeVersion spread ── */
+  /* ── Load Lookups on mount ── */
+  const loadLookups = useCallback(async () => {
+    try {
+      const data = await clientService.getClientLookups();
+      if (data) {
+        setLookups(data);
+      }
+    } catch (err) {
+      console.warn('Could not load client lookups:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLookups();
+  }, [loadLookups]);
+
+  /* ── Load Paged Clients & Summary from API ── */
+  const loadClients = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [listRes, summaryRes] = await Promise.allSettled([
+        clientService.listClients({
+          search,
+          contactType: contactTypeFilter,
+          isActive: statusFilter,
+          pageNumber,
+          pageSize,
+        }),
+        clientService.getClientSummary(),
+      ]);
+
+      if (listRes.status === 'fulfilled' && listRes.value) {
+        setClients(listRes.value.items || []);
+        setTotalCount(listRes.value.totalCount ?? 0);
+        setTotalPages(listRes.value.totalPages ?? 1);
+      } else if (listRes.status === 'rejected') {
+        console.warn('Could not fetch clients from API:', listRes.reason);
+      }
+
+      if (summaryRes.status === 'fulfilled' && summaryRes.value) {
+        setSummary(summaryRes.value);
+      }
+    } catch (err) {
+      console.warn('Error loading clients/summary:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [search, contactTypeFilter, statusFilter, pageNumber, pageSize]);
+
+  useEffect(() => {
+    loadClients();
+  }, [loadClients]);
+
+  /* ── Reset filters helper ── */
+  const resetFilters = useCallback(() => {
+    setSearch('');
+    setStatusFilter('ALL');
+    setContactTypeFilter('ALL');
+    setPageNumber(1);
+  }, []);
+
+  /* ── Augmented clients list with activeVersion spread for UI compatibility ── */
   const augmentedClients = useMemo(() => {
     return clients.map((c) => {
       const activeVersion = getActiveClientVersion(c);
       const effDate =
         c.effectiveDate ||
         activeVersion?.effectiveDate ||
-        (c.createdAt ? c.createdAt.slice(0, 10) : '');
+        (c.createdAt ? String(c.createdAt).slice(0, 10) : '');
 
       return {
         ...c,
         ...(activeVersion
           ? {
               effectiveDate: effDate,
-              companyName: activeVersion.companyName || c.companyName,
+              companyName: activeVersion.companyName || c.clientName || c.companyName,
               billingName: activeVersion.billingName || c.billingName,
-              contactTypeId: activeVersion.contactTypeId || c.contactTypeId,
-              email: activeVersion.email || c.email,
+              contactTypeId: activeVersion.contactTypeId || c.contactType || c.contactTypeId,
+              email: activeVersion.email || c.officialEmail || c.email,
               gstNo: activeVersion.gstNo || c.gstNo,
               paymentTerms: activeVersion.paymentTerms || c.paymentTerms,
               deliveryTerms: activeVersion.deliveryTerms || c.deliveryTerms,
@@ -44,258 +117,234 @@ export function useClients() {
             }
           : {
               effectiveDate: effDate,
+              companyName: c.clientName || c.companyName,
+              contactTypeId: c.contactType || c.contactTypeId,
+              email: c.officialEmail || c.email,
             }),
         activeVersion,
         effectiveDate: effDate,
-        effectiveVersions: c.effectiveVersions || (activeVersion ? [activeVersion] : []),
+        effectiveVersions: c.effectiveVersions || c.versions || (activeVersion ? [activeVersion] : []),
         id: c.clientId || c.id,
       };
     });
   }, [clients]);
 
-  /* ── Filtered clients list ── */
-  const filteredClients = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  /* ── Filtered clients (for in-memory search fallback if needed) ── */
+  const filteredClients = augmentedClients;
 
-    return augmentedClients.filter((client) => {
-      // 1. Text Search across company, billing, email, GST, city, and contacts
-      if (q) {
-        const matchesCompany = client.companyName?.toLowerCase().includes(q);
-        const matchesBilling = client.billingName?.toLowerCase().includes(q);
-        const matchesEmail = client.email?.toLowerCase().includes(q);
-        const matchesGst = client.gstNo?.toLowerCase().includes(q);
-
-        // Search address cities
-        const matchesCity = (client.addresses || []).some((a) =>
-          a.city?.toLowerCase().includes(q)
-        );
-
-        // Search contact persons (names or mobile numbers)
-        const matchesContact = (client.contacts || []).some((c) => {
-          const fullName = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase();
-          return (
-            fullName.includes(q) ||
-            c.department?.toLowerCase().includes(q) ||
-            c.designation?.toLowerCase().includes(q) ||
-            c.mobile1?.toLowerCase().includes(q) ||
-            c.mobile2?.toLowerCase().includes(q)
-          );
-        });
-
-        if (!matchesCompany && !matchesBilling && !matchesEmail && !matchesGst && !matchesCity && !matchesContact) {
-          return false;
-        }
-      }
-
-      // 2. Status Filter
-      if (statusFilter === 'ACTIVE' && !client.isActive) return false;
-      if (statusFilter === 'INACTIVE' && client.isActive) return false;
-
-      // 3. Contact Type Filter
-      if (contactTypeFilter !== 'ALL' && client.contactTypeId !== contactTypeFilter) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [augmentedClients, search, statusFilter, contactTypeFilter]);
-
-  /* ── Reset filters helper ── */
-  const resetFilters = useCallback(() => {
-    setSearch('');
-    setStatusFilter('ALL');
-    setContactTypeFilter('ALL');
-  }, []);
-
-  /* ── Find single client by ID ── */
+  /* ── Find single client by ID (Local cache or helper) ── */
   const getClientById = useCallback(
     (id) => {
       if (!id) return null;
-      return augmentedClients.find((c) => c.clientId === id || c.id === id) || null;
+      return augmentedClients.find((c) => String(c.clientId) === String(id) || String(c.id) === String(id)) || null;
     },
     [augmentedClients]
   );
 
-  /* ── Add new client ── */
-  const addClient = useCallback((formData) => {
-    const padded = String(nextClientNumber++).padStart(3, '0');
-    const newClientId = `cli-${padded}`;
-    const now = new Date().toISOString();
-    const effectiveDate = formData.effectiveDate || now.slice(0, 10);
-
-    const initialVersion = {
-      id: `ver_${newClientId}_1`,
-      effectiveDate,
-      companyName: formData.companyName || '',
-      billingName: formData.billingName || '',
-      contactTypeId: formData.contactTypeId || 'Customer',
-      email: formData.email || '',
-      gstNo: formData.gstNo || '',
-      isActive: formData.isActive !== false,
-      paymentTerms: Array.isArray(formData.paymentTerms) ? formData.paymentTerms : [],
-      deliveryTerms: formData.deliveryTerms || '',
-      comments: formData.comments || '',
-      addresses: Array.isArray(formData.addresses) ? formData.addresses : [],
-      contacts: Array.isArray(formData.contacts) ? formData.contacts : [],
-      createdOn: now,
-    };
-
-    const newRecord = {
-      ...formData,
-      clientId: newClientId,
-      id: newClientId,
-      effectiveDate,
-      effectiveVersions: Array.isArray(formData.effectiveVersions) && formData.effectiveVersions.length > 0
-        ? formData.effectiveVersions
-        : [initialVersion],
-      createdAt: now,
-      updatedAt: null,
-      addresses: Array.isArray(formData.addresses) ? formData.addresses : [],
-      contacts: Array.isArray(formData.contacts) ? formData.contacts : [],
-    };
-
-    setClients((prev) => [newRecord, ...prev]);
-    toast.success('Client created successfully');
-    return newRecord;
+  /* ── Fetch single client with full details & timeline from API ── */
+  const fetchClientDetail = useCallback(async (id) => {
+    if (!id) return null;
+    try {
+      const data = await clientService.getClientById(id);
+      return data;
+    } catch (err) {
+      console.error('Failed to fetch client detail:', err);
+      toast.error(err?.message || 'Could not load client details');
+      return null;
+    }
   }, []);
 
-  /* ── Update existing client ── */
-  const updateClient = useCallback((id, formData) => {
-    const now = new Date().toISOString();
-    let updatedRecord = null;
+  /* ── Fetch one version in full ── */
+  const fetchVersionDetail = useCallback(async (versionId) => {
+    if (!versionId) return null;
+    const numId = toIntegerVersionId(versionId, null);
+    if (!numId) {
+      console.warn('Skipping fetchVersionDetail: invalid versionId', versionId);
+      return null;
+    }
+    try {
+      const data = await clientService.getClientVersionById(numId);
+      return data;
+    } catch (err) {
+      console.error('Failed to fetch client version detail:', err);
+      toast.error(err?.message || 'Could not load client version');
+      return null;
+    }
+  }, []);
 
-    setClients((prev) =>
-      prev.map((c) => {
-        if (c.clientId === id || c.id === id) {
-          const effectiveDate = formData.effectiveDate || c.effectiveDate || now.slice(0, 10);
-          const currentVersions = Array.isArray(c.effectiveVersions) && c.effectiveVersions.length > 0
-            ? [...c.effectiveVersions]
-            : [
-                {
-                  id: `ver_${id}_orig`,
-                  effectiveDate: c.effectiveDate || (c.createdAt ? c.createdAt.slice(0, 10) : now.slice(0, 10)),
-                  companyName: c.companyName || '',
-                  billingName: c.billingName || '',
-                  contactTypeId: c.contactTypeId || 'Customer',
-                  email: c.email || '',
-                  gstNo: c.gstNo || '',
-                  isActive: c.isActive !== false,
-                  paymentTerms: c.paymentTerms || [],
-                  deliveryTerms: c.deliveryTerms || '',
-                  comments: c.comments || '',
-                  addresses: c.addresses || [],
-                  contacts: c.contacts || [],
-                  createdOn: c.createdAt || now,
-                },
-              ];
+  /* ── Add new client (Register first version) ── */
+  const addClient = useCallback(async (formData) => {
+    setIsLoading(true);
+    try {
+      const created = await clientService.createClient(formData);
+      toast.success('Client registered successfully');
+      await loadClients();
+      return created;
+    } catch (err) {
+      const errorMsg = err?.message || 'Failed to create client';
+      toast.error(errorMsg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadClients]);
 
-          // Check if version with this effectiveDate already exists
-          const existingIdx = currentVersions.findIndex(
-            (v) => (v.effectiveDate || '').slice(0, 10) === effectiveDate
-          );
-
-          const updatedVersionPayload = {
-            id: existingIdx >= 0 ? currentVersions[existingIdx].id : `ver_${id}_${Date.now()}`,
-            effectiveDate,
-            companyName: formData.companyName !== undefined ? formData.companyName : c.companyName,
-            billingName: formData.billingName !== undefined ? formData.billingName : c.billingName,
-            contactTypeId: formData.contactTypeId !== undefined ? formData.contactTypeId : c.contactTypeId,
-            email: formData.email !== undefined ? formData.email : c.email,
-            gstNo: formData.gstNo !== undefined ? formData.gstNo : c.gstNo,
-            isActive: formData.isActive !== undefined ? formData.isActive : c.isActive,
-            paymentTerms: formData.paymentTerms !== undefined ? formData.paymentTerms : c.paymentTerms,
-            deliveryTerms: formData.deliveryTerms !== undefined ? formData.deliveryTerms : c.deliveryTerms,
-            comments: formData.comments !== undefined ? formData.comments : c.comments,
-            addresses: Array.isArray(formData.addresses) ? formData.addresses : c.addresses || [],
-            contacts: Array.isArray(formData.contacts) ? formData.contacts : c.contacts || [],
-            updatedAt: now,
-          };
-
-          let newVersions;
-          if (existingIdx >= 0) {
-            newVersions = [...currentVersions];
-            newVersions[existingIdx] = { ...currentVersions[existingIdx], ...updatedVersionPayload };
-          } else {
-            newVersions = [updatedVersionPayload, ...currentVersions];
-          }
-
-          updatedRecord = {
-            ...c,
-            ...formData,
-            clientId: c.clientId || id,
-            id: c.id || id,
-            effectiveDate,
-            effectiveVersions: formData.effectiveVersions || newVersions,
-            updatedAt: now,
-            addresses: Array.isArray(formData.addresses) ? formData.addresses : c.addresses || [],
-            contacts: Array.isArray(formData.contacts) ? formData.contacts : c.contacts || [],
-          };
-          return updatedRecord;
+  /* ── Update existing client / version ── */
+  const updateClient = useCallback(async (id, formData) => {
+    setIsLoading(true);
+    try {
+      // If versionId is provided, call PUT /api/client-versions/{versionId}
+      const rawVersionId = formData.clientDetailId || formData.versionId;
+      const versionId = rawVersionId ? toIntegerVersionId(rawVersionId, null) : null;
+      let result;
+      if (versionId) {
+        result = await clientService.updateClientVersion(versionId, formData);
+      } else {
+        // Fallback: update status if only status changed
+        if (formData.isActive !== undefined) {
+          result = await clientService.updateClientStatus(id, formData.isActive);
         }
-        return c;
-      })
-    );
+      }
+      toast.success('Client updated successfully');
+      await loadClients();
+      return result;
+    } catch (err) {
+      const errorMsg = err?.message || 'Failed to update client';
+      toast.error(errorMsg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadClients]);
 
-    toast.success('Client updated successfully');
-    return updatedRecord;
-  }, []);
+  /* ── Add a new version (Today or future) ── */
+  const addClientVersion = useCallback(async (clientId, formData) => {
+    setIsLoading(true);
+    try {
+      const res = await clientService.addClientVersion(clientId, formData);
+      toast.success('New client version created successfully');
+      await loadClients();
+      return res;
+    } catch (err) {
+      const errorMsg = err?.message || 'Failed to create client version';
+      toast.error(errorMsg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadClients]);
 
-  /* ── Update Client Versions directly ── */
-  const updateClientVersions = useCallback((clientId, newVersionsArray) => {
-    const now = new Date().toISOString();
+  /* ── Update an existing version ── */
+  const updateClientVersion = useCallback(async (versionId, formData) => {
+    setIsLoading(true);
+    try {
+      const numId = toIntegerVersionId(versionId) || Number(versionId);
+      const res = await clientService.updateClientVersion(numId, formData);
+      toast.success('Client revision updated successfully');
+      await loadClients();
+      return res;
+    } catch (err) {
+      const errorMsg = err?.message || 'Failed to update client revision';
+      toast.error(errorMsg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadClients]);
+
+  /* ── Delete a scheduled version ── */
+  const deleteClientVersion = useCallback(async (versionId) => {
+    setIsLoading(true);
+    try {
+      const numId = toIntegerVersionId(versionId) || Number(versionId);
+      await clientService.deleteClientVersion(numId);
+      toast.success('Scheduled revision deleted successfully');
+      await loadClients();
+      return true;
+    } catch (err) {
+      const errorMsg = err?.message || 'Failed to delete client revision';
+      toast.error(errorMsg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadClients]);
+
+  /* ── Update Client Versions directly (Backwards compatibility) ── */
+  const updateClientVersions = useCallback(async (clientId, newVersionsArray) => {
     setClients((prev) =>
       prev.map((c) => {
-        if (c.clientId !== clientId && c.id !== clientId) return c;
+        if (String(c.clientId) !== String(clientId) && String(c.id) !== String(clientId)) return c;
         return {
           ...c,
           effectiveVersions: newVersionsArray,
-          updatedAt: now,
+          updatedAt: new Date().toISOString(),
         };
       })
     );
-    toast.success('Revisions updated successfully');
   }, []);
 
-  /* ── Delete client ── */
-  const deleteClient = useCallback((id) => {
-    // Note: In real system, verify if client has active Inquiries or Sales Orders before deletion
-    setClients((prev) => prev.filter((c) => c.clientId !== id && c.id !== id));
-    toast.success('Client deleted');
-  }, []);
+  /* ── Delete client and all versions (Admin only) ── */
+  const deleteClient = useCallback(async (id) => {
+    setIsLoading(true);
+    try {
+      await clientService.deleteClient(id);
+      toast.success('Client deleted successfully');
+      await loadClients();
+      return true;
+    } catch (err) {
+      const errorMsg = err?.message || 'Failed to delete client';
+      toast.error(errorMsg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadClients]);
 
-  /* ── Toggle client active status ── */
-  const toggleClientActive = useCallback((id) => {
-    const now = new Date().toISOString();
-
-    setClients((prev) =>
-      prev.map((c) => {
-        if (c.clientId === id || c.id === id) {
-          const nextActive = !c.isActive;
-          toast.success(`Client marked as ${nextActive ? 'Active' : 'Inactive'}`);
-          return {
-            ...c,
-            isActive: nextActive,
-            updatedAt: now,
-          };
-        }
-        return c;
-      })
-    );
-  }, []);
+  /* ── Toggle client active status (Admin only) ── */
+  const toggleClientActive = useCallback(async (id, currentIsActive) => {
+    const nextActive = currentIsActive !== undefined ? !currentIsActive : true;
+    try {
+      await clientService.updateClientStatus(id, nextActive);
+      toast.success(`Client marked as ${nextActive ? 'Active' : 'Inactive'}`);
+      await loadClients();
+      return true;
+    } catch (err) {
+      const errorMsg = err?.message || 'Failed to change client status';
+      toast.error(errorMsg);
+      throw err;
+    }
+  }, [loadClients]);
 
   return {
     clients: augmentedClients,
     filteredClients,
+    summary,
+    lookups,
     search,
     setSearch,
     statusFilter,
     setStatusFilter,
     contactTypeFilter,
     setContactTypeFilter,
+    pageNumber,
+    setPageNumber,
+    pageSize,
+    setPageSize,
+    totalCount,
+    totalPages,
+    isLoading,
+    loadClients,
+    loadLookups,
     resetFilters,
     getClientById,
+    fetchClientDetail,
+    fetchVersionDetail,
     addClient,
     updateClient,
+    addClientVersion,
+    updateClientVersion,
+    deleteClientVersion,
     updateClientVersions,
     deleteClient,
     toggleClientActive,

@@ -1,45 +1,77 @@
 /**
  * clientVersions.js — Utilities for effective-dated client version history.
  *
- * Implements temporal version resolution matching the Vendor module pattern.
+ * Implements temporal version resolution matching the Client API Integration Guide.
+ * Version IDs are strictly integers (e.g. 1, 2, 3...) matching clientDetailId.
  */
 
 import { computeRevisionStatuses } from './effectiveDateUtils';
 import { getTodayISO, toISODate } from './dateUtils';
 
+export function toIntegerVersionId(idVal, fallback = 1) {
+  if (typeof idVal === 'number' && !isNaN(idVal) && idVal > 0) {
+    return Math.floor(idVal);
+  }
+  if (typeof idVal === 'string') {
+    if (/^\d+$/.test(idVal.trim())) {
+      const parsed = parseInt(idVal.trim(), 10);
+      if (parsed > 0) return parsed;
+    }
+    // Handle legacy formats like 'ver_1_0', 'ver_2', 'ver_cli_001_3'
+    if (idVal.startsWith('ver_')) {
+      const digits = idVal.match(/\d+/g);
+      if (digits && digits.length > 0) {
+        for (const d of digits) {
+          const num = parseInt(d, 10);
+          if (num > 0) return num;
+        }
+      }
+    }
+  }
+  return typeof fallback === 'number' && fallback > 0 ? fallback : 1;
+}
+
 /**
  * Returns the version with the latest EffectiveDate <= asOfDate;
  * if none qualify (all versions are future-dated), fall back to the earliest future version.
  *
- * @param {Object} client - The client object containing effectiveVersions array
+ * @param {Object} client - The client object containing effectiveVersions or versions array
  * @param {Date|string} asOfDate - Date reference (default: today)
  * @returns {Object|null} The active version object
  */
 export function getActiveClientVersion(client, asOfDate = new Date()) {
   if (!client) return null;
 
-  const versions = Array.isArray(client.effectiveVersions)
+  const versions = (Array.isArray(client.effectiveVersions) && client.effectiveVersions.length > 0)
     ? client.effectiveVersions
-    : [];
+    : ((Array.isArray(client.versions) && client.versions.length > 0)
+        ? client.versions
+        : (client.currentDetail ? [client.currentDetail] : []));
 
   if (versions.length === 0) {
-    // If effectiveVersions is not yet present, construct fallback from client top-level properties
+    const rawId = client.clientDetailId || client.currentDetail?.clientDetailId || client.clientId || client.id || 1;
+    const numId = toIntegerVersionId(rawId, 1);
+
     return {
-      id: client.clientId ? `ver_${client.clientId}_0` : 'ver_0',
-      effectiveDate: client.effectiveDate || (client.createdAt ? client.createdAt.slice(0, 10) : getTodayISO()),
-      companyName: client.companyName || '',
+      id: numId,
+      clientDetailId: numId,
+      effectiveDate: client.effectiveDate || (client.createdAt ? String(client.createdAt).slice(0, 10) : getTodayISO()),
+      companyName: client.companyName || client.clientName || '',
+      clientName: client.clientName || client.companyName || '',
       billingName: client.billingName || '',
-      contactTypeId: client.contactTypeId || 'Customer',
-      email: client.email || '',
+      contactTypeId: client.contactTypeId || client.contactType || 'Customer',
+      contactType: client.contactType || client.contactTypeId || 'Customer',
+      email: client.email || client.officialEmail || '',
+      officialEmail: client.officialEmail || client.email || '',
       gstNo: client.gstNo || '',
       isActive: client.isActive !== false,
       paymentTerms: client.paymentTerms || [],
       deliveryTerms: client.deliveryTerms || '',
-      comments: client.comments || '',
+      comments: client.comments || client.internalComments || '',
       addresses: Array.isArray(client.addresses) ? client.addresses : [],
       contacts: Array.isArray(client.contacts) ? client.contacts : [],
-      createdAt: client.createdAt || new Date().toISOString(),
-      updatedAt: client.updatedAt || null,
+      createdAt: client.createdAt || client.createdOn || new Date().toISOString(),
+      updatedAt: client.updatedAt || client.lastUpdatedOn || null,
     };
   }
 
@@ -50,22 +82,37 @@ export function getActiveClientVersion(client, asOfDate = new Date()) {
 
   // Versions with effectiveDate <= asOfDate
   const pastOrPresent = versions.filter(
-    (v) => v.effectiveDate && v.effectiveDate <= asOfStr
+    (v) => v.effectiveDate && String(v.effectiveDate).slice(0, 10) <= asOfStr
   );
 
   if (pastOrPresent.length > 0) {
     // Sort descending by effectiveDate to get the latest active
     const sorted = [...pastOrPresent].sort((a, b) =>
-      b.effectiveDate.localeCompare(a.effectiveDate)
+      String(b.effectiveDate || '').localeCompare(String(a.effectiveDate || ''))
     );
-    return sorted[0];
+    const chosen = sorted[0];
+    const rawId = chosen.clientDetailId ?? chosen.id;
+    const numId = toIntegerVersionId(rawId, 1);
+    return {
+      ...chosen,
+      id: numId,
+      clientDetailId: numId,
+    };
   }
 
   // All versions are future-dated -> return the earliest future version
   const sortedFuture = [...versions].sort((a, b) =>
-    (a.effectiveDate || '').localeCompare(b.effectiveDate || '')
+    String(a.effectiveDate || '').localeCompare(String(b.effectiveDate || ''))
   );
-  return sortedFuture[0] || null;
+  const chosen = sortedFuture[0] || null;
+  if (!chosen) return null;
+  const rawId = chosen.clientDetailId ?? chosen.id;
+  const numId = toIntegerVersionId(rawId, 1);
+  return {
+    ...chosen,
+    id: numId,
+    clientDetailId: numId,
+  };
 }
 
 /**
@@ -81,32 +128,53 @@ export function getClientRevisions(client) {
   let list = [];
   if (Array.isArray(client.effectiveVersions) && client.effectiveVersions.length > 0) {
     list = [...client.effectiveVersions];
+  } else if (Array.isArray(client.versions) && client.versions.length > 0) {
+    list = [...client.versions];
+  } else if (client.currentDetail) {
+    list = [client.currentDetail];
   } else {
-    // Synthesize initial revision from master record
+    const rawId = client.clientDetailId || client.currentDetail?.clientDetailId || client.clientId || client.id || 1;
+    const numId = toIntegerVersionId(rawId, 1);
+
     list = [
       {
-        id: client.clientId ? `ver_${client.clientId}_1` : 'ver_1',
-        effectiveDate: client.effectiveDate || (client.createdAt ? client.createdAt.slice(0, 10) : getTodayISO()),
-        companyName: client.companyName || '',
+        id: numId,
+        clientDetailId: numId,
+        effectiveDate: client.effectiveDate || (client.createdAt ? String(client.createdAt).slice(0, 10) : getTodayISO()),
+        companyName: client.companyName || client.clientName || '',
+        clientName: client.clientName || client.companyName || '',
         billingName: client.billingName || '',
-        contactTypeId: client.contactTypeId || 'Customer',
-        email: client.email || '',
+        contactTypeId: client.contactTypeId || client.contactType || 'Customer',
+        contactType: client.contactType || client.contactTypeId || 'Customer',
+        email: client.email || client.officialEmail || '',
+        officialEmail: client.officialEmail || client.email || '',
         gstNo: client.gstNo || '',
         isActive: client.isActive !== false,
         paymentTerms: client.paymentTerms || [],
         deliveryTerms: client.deliveryTerms || '',
-        comments: client.comments || '',
+        comments: client.comments || client.internalComments || '',
         addresses: Array.isArray(client.addresses) ? [...client.addresses] : [],
         contacts: Array.isArray(client.contacts) ? [...client.contacts] : [],
-        createdAt: client.createdAt || new Date().toISOString(),
-        updatedAt: client.updatedAt || null,
+        createdAt: client.createdAt || client.createdOn || new Date().toISOString(),
+        updatedAt: client.updatedAt || client.lastUpdatedOn || null,
       },
     ];
   }
 
+  // Ensure each item has numeric integer id matching clientDetailId
+  list = list.map((v, idx) => {
+    const rawId = v.clientDetailId ?? v.id;
+    const numId = toIntegerVersionId(rawId, idx + 1);
+    return {
+      ...v,
+      id: numId,
+      clientDetailId: numId,
+    };
+  });
+
   // Sort descending by effectiveDate
   const sorted = list.sort((a, b) =>
-    (b.effectiveDate || '').localeCompare(a.effectiveDate || '')
+    String(b.effectiveDate || '').localeCompare(String(a.effectiveDate || ''))
   );
 
   return computeRevisionStatuses(sorted);

@@ -46,6 +46,65 @@ import {
 import { formatDate } from '../../utils/dateUtils';
 import { getEffectiveDateStatus, formatDateDisplay } from '../../utils/effectiveDateUtils';
 
+function decodeHtmlString(str) {
+  if (!str || typeof str !== 'string') return '';
+  let res = str.trim();
+
+  if (res.startsWith('"') && res.endsWith('"') && res.length >= 2) {
+    try {
+      res = JSON.parse(res);
+    } catch {
+      // ignore
+    }
+  }
+
+  if (/&(?:lt|gt|amp|quot|#39|#x27|nbsp);/i.test(res)) {
+    try {
+      const txt = document.createElement('textarea');
+      txt.innerHTML = res;
+      res = txt.value;
+      if (/&lt;[a-z/!]/i.test(res)) {
+        txt.innerHTML = res;
+        res = txt.value;
+      }
+    } catch {
+      res = res
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&');
+    }
+  }
+
+  return res;
+}
+
+function FormattedHtmlBlock({ content, emptyText = '—' }) {
+  const decoded = useMemo(() => decodeHtmlString(content), [content]);
+
+  if (!decoded) {
+    return <span className="text-xs text-text-muted">{emptyText}</span>;
+  }
+
+  const hasHtmlTags = /<[a-z][\s\S]*>/i.test(decoded);
+
+  if (hasHtmlTags) {
+    return (
+      <div
+        className="p-3 rounded-lg bg-surface/60 border border-border text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:my-1.5 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:my-1.5 [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-heading [&_em]:italic [&_a]:text-primary [&_a]:underline shadow-2xs"
+        dangerouslySetInnerHTML={{ __html: decoded }}
+      />
+    );
+  }
+
+  return (
+    <p className="text-xs text-heading font-medium whitespace-pre-line leading-relaxed p-3 rounded-lg bg-surface/60 border border-border shadow-2xs">
+      {decoded}
+    </p>
+  );
+}
+
 export default function ClientViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();

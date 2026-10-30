@@ -17,6 +17,7 @@
  *   - Working StatusSwitches in child editors and master form
  *   - Responsive grids without multiple delete options
  *   - Dirty form detection with confirmation prompt on discard
+ *   - Integrated with Client API service (Oct 30, 2026)
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -25,14 +26,9 @@ import {
   IconBack,
   IconBuilding2,
   IconCalendar,
-  IconCheck,
   IconClient,
-  IconClock,
-  IconClose,
-  IconError,
   IconFileText,
   IconLocation,
-  IconSave,
   IconUsers,
 } from '../../constants/icons';
 import toast from 'react-hot-toast';
@@ -53,14 +49,11 @@ import {
   SearchableMultiSelect,
   Badge,
   ScrollableTabs,
-  FormActionsBar,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
-import { CONTACT_TYPE_OPTIONS } from '../../mocks/clients';
 import {
   getTodayIsoDate,
-  formatDateDisplay,
 } from '../../utils/effectiveDateUtils';
 import AddressesEditor from './components/AddressesEditor';
 import ContactsEditor from './components/ContactsEditor';
@@ -69,6 +62,7 @@ const INITIAL_FORM = {
   effectiveDate: getTodayIsoDate(),
   companyName: '',
   billingName: '',
+  billingNameSameAsClientName: false,
   contactTypeId: 'Customer',
   email: '',
   gstNo: '',
@@ -87,7 +81,7 @@ export default function ClientFormPage() {
   const navigate = useNavigate();
   const isEdit = Boolean(id);
 
-  const { getClientById, addClient, updateClient } = useClientsContext();
+  const { getClientById, fetchClientDetail, addClient, updateClient, lookups } = useClientsContext();
   const { paymentTerms = [] } = usePaymentTermsContext();
 
   const [activeTab, setActiveTab] = useState('company_terms');
@@ -97,61 +91,72 @@ export default function ClientFormPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sameAsCompany, setSameAsCompany] = useState(false);
 
+  // Dynamic Contact Type options from Lookups
+  const contactTypeOptions = useMemo(() => {
+    const list = Array.isArray(lookups?.contactTypes) && lookups.contactTypes.length > 0
+      ? lookups.contactTypes
+      : ['Customer', 'Distributor', 'Dealer', 'Agency'];
+
+    return list.map((t) => ({ value: t, label: t }));
+  }, [lookups]);
+
   // Load existing client in edit mode
   useEffect(() => {
-    if (isEdit) {
-      const existing = getClientById(id);
-      if (existing) {
-        let loadedPaymentTerms = [];
-        if (Array.isArray(existing.paymentTerms)) {
-          loadedPaymentTerms = existing.paymentTerms;
-        } else if (typeof existing.paymentTerms === 'string' && existing.paymentTerms.trim()) {
-          const raw = existing.paymentTerms.trim();
-          const directMatch = paymentTerms.find(
-            (pt) =>
-              pt.termCode?.toUpperCase() === raw.toUpperCase() ||
-              pt.paymentTermId === raw
-          );
-          if (directMatch) {
-            loadedPaymentTerms = [directMatch.termCode || directMatch.paymentTermId];
-          } else if (raw.includes(',')) {
-            const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
-            loadedPaymentTerms = parts.map((part) => {
-              const m = paymentTerms.find(
-                (pt) =>
-                  pt.termCode?.toUpperCase() === part.toUpperCase() ||
-                  pt.paymentTermId === part
-              );
-              return m ? (m.termCode || m.paymentTermId) : part;
-            });
-          } else {
-            loadedPaymentTerms = [raw];
-          }
+    let isMounted = true;
+    async function loadClientData() {
+      if (isEdit) {
+        let existing = getClientById(id);
+        if (!existing && fetchClientDetail) {
+          existing = await fetchClientDetail(id);
         }
+        if (!isMounted) return;
 
-        const loadedData = {
-          effectiveDate: existing.effectiveDate || getTodayIsoDate(),
-          companyName: existing.companyName || '',
-          billingName: existing.billingName || '',
-          contactTypeId: existing.contactTypeId || 'Customer',
-          email: existing.email || '',
-          gstNo: existing.gstNo || '',
-          isActive: existing.isActive !== false,
-          paymentTerms: loadedPaymentTerms,
-          deliveryTerms: existing.deliveryTerms || '',
-          comments: existing.comments || '',
-          addresses: Array.isArray(existing.addresses) ? [...existing.addresses] : [],
-          contacts: Array.isArray(existing.contacts) ? [...existing.contacts] : [],
-        };
-        setForm(loadedData);
-        setInitialSnapshot(loadedData);
-        setSameAsCompany(Boolean(existing.companyName && existing.companyName === existing.billingName));
-      } else {
-        toast.error('Client not found');
-        navigate('/clients');
+        if (existing) {
+          const detail = existing.currentDetail || existing;
+          let loadedPaymentTerms = [];
+          if (Array.isArray(detail.paymentTerms)) {
+            loadedPaymentTerms = detail.paymentTerms.map((pt) =>
+              typeof pt === 'object' && pt !== null ? (pt.termCode || pt.paymentTermId) : pt
+            );
+          } else if (typeof detail.paymentTerms === 'string' && detail.paymentTerms.trim()) {
+            loadedPaymentTerms = [detail.paymentTerms.trim()];
+          }
+
+          const isSame = Boolean(
+            detail.billingNameSameAsClientName ||
+            (detail.companyName && detail.companyName === detail.billingName) ||
+            (detail.clientName && detail.clientName === detail.billingName)
+          );
+
+          const loadedData = {
+            clientDetailId: detail.clientDetailId || detail.id,
+            effectiveDate: detail.effectiveDate || existing.effectiveDate || getTodayIsoDate(),
+            companyName: detail.clientName || detail.companyName || existing.companyName || '',
+            billingName: isSame ? (detail.clientName || detail.companyName || '') : (detail.billingName || ''),
+            billingNameSameAsClientName: isSame,
+            contactTypeId: detail.contactType || detail.contactTypeId || existing.contactTypeId || 'Customer',
+            email: detail.officialEmail || detail.email || existing.email || '',
+            gstNo: detail.gstNo || existing.gstNo || '',
+            isActive: detail.isActive !== false,
+            paymentTerms: loadedPaymentTerms,
+            deliveryTerms: detail.deliveryTerms || existing.deliveryTerms || '',
+            comments: detail.internalComments || detail.comments || existing.comments || '',
+            addresses: Array.isArray(detail.addresses) ? [...detail.addresses] : [],
+            contacts: Array.isArray(detail.contacts) ? [...detail.contacts] : [],
+          };
+          setForm(loadedData);
+          setInitialSnapshot(loadedData);
+          setSameAsCompany(isSame);
+        } else {
+          toast.error('Client not found');
+          navigate('/clients');
+        }
       }
     }
-  }, [id, isEdit, getClientById, navigate, paymentTerms]);
+
+    loadClientData();
+    return () => { isMounted = false; };
+  }, [id, isEdit, getClientById, fetchClientDetail, navigate, paymentTerms]);
 
   // Dirty detection
   const isDirty = useMemo(() => {
@@ -174,9 +179,11 @@ export default function ClientFormPage() {
   // Toggle "Same as company name"
   const handleSameAsCompanyToggle = (checked) => {
     setSameAsCompany(checked);
-    if (checked) {
-      setForm((prev) => ({ ...prev, billingName: prev.companyName }));
-    }
+    setForm((prev) => ({
+      ...prev,
+      billingNameSameAsClientName: checked,
+      billingName: checked ? prev.companyName : '',
+    }));
   };
 
   const handleFieldChange = (field, value) => {
@@ -186,25 +193,29 @@ export default function ClientFormPage() {
     }
   };
 
-  // Payment Terms options from Configuration
+  // Payment Terms options from Configuration or lookups
   const paymentTermOptions = useMemo(() => {
     const stripHtml = (html) => {
       if (!html) return '';
       return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     };
 
-    return (paymentTerms || [])
+    const source = (lookups?.paymentTerms && lookups.paymentTerms.length > 0)
+      ? lookups.paymentTerms
+      : paymentTerms;
+
+    return (source || [])
       .filter((pt) => pt.isActive !== false)
       .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
       .map((pt) => ({
-        value: pt.termCode || pt.paymentTermId,
-        label: pt.termCode,
-        chipLabel: pt.termCode,
-        subtitle: stripHtml(pt.description || ''),
+        value: pt.id || pt.paymentTermId || pt.termCode,
+        label: pt.termCode || pt.termName,
+        chipLabel: pt.termCode || pt.termName,
+        subtitle: stripHtml(pt.description || pt.termName || ''),
         termCode: pt.termCode,
-        description: pt.description || '',
+        description: pt.description || pt.termName || '',
       }));
-  }, [paymentTerms]);
+  }, [paymentTerms, lookups]);
 
   // Resolve selected payment terms objects for preview cards
   const selectedPaymentTermsList = useMemo(() => {
@@ -214,11 +225,16 @@ export default function ClientFormPage() {
         ? [form.paymentTerms]
         : [];
 
+    const source = (lookups?.paymentTerms && lookups.paymentTerms.length > 0)
+      ? lookups.paymentTerms
+      : paymentTerms;
+
     return selected.map((val) => {
-      const match = paymentTerms.find(
+      const match = source.find(
         (pt) =>
-          pt.termCode?.toUpperCase() === String(val).toUpperCase() ||
-          pt.paymentTermId === val
+          pt.id === val ||
+          pt.paymentTermId === val ||
+          pt.termCode?.toUpperCase() === String(val).toUpperCase()
       );
       if (match) return match;
       return {
@@ -227,18 +243,7 @@ export default function ClientFormPage() {
         description: '',
       };
     });
-  }, [form.paymentTerms, paymentTerms]);
-
-  const handleRemovePaymentTerm = (termValue) => {
-    setForm((prev) => {
-      const current = Array.isArray(prev.paymentTerms) ? prev.paymentTerms : [];
-      return {
-        ...prev,
-        paymentTerms: current.filter((t) => t !== termValue),
-      };
-    });
-  };
-
+  }, [form.paymentTerms, paymentTerms, lookups]);
 
   // Master validation
   const validateMasterForm = () => {
@@ -254,7 +259,7 @@ export default function ClientFormPage() {
       errs.companyName = 'Max 200 characters';
     }
 
-    if (form.billingName && form.billingName.length > 200) {
+    if (!sameAsCompany && form.billingName && form.billingName.length > 200) {
       errs.billingName = 'Max 200 characters';
     }
 
@@ -307,20 +312,19 @@ export default function ClientFormPage() {
     setIsSubmitting(true);
 
     try {
-      // 700ms simulated delay matching ERP specifications
-      await new Promise((res) => setTimeout(res, 700));
-
       let savedRecord;
       if (isEdit) {
-        savedRecord = updateClient(id, form);
+        savedRecord = await updateClient(id, form);
       } else {
-        savedRecord = addClient(form);
+        savedRecord = await addClient(form);
       }
 
       const targetId = savedRecord?.clientId || savedRecord?.id || id;
       navigate(`/clients/${targetId}`);
     } catch (err) {
-      toast.error('An unexpected error occurred while saving.');
+      if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        setErrors(err.fieldErrors);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -348,15 +352,16 @@ export default function ClientFormPage() {
         </span>
       </div>
 
-      <div className="flex items-center gap-2.5 justify-end w-full sm:w-auto">
+      <div className="flex items-center gap-2">
         <CancelButton
-          size="sm"
           onClick={handleCancel}
           disabled={isSubmitting}
+          size="sm"
           className="flex-1 sm:flex-none justify-center"
         />
         <SaveButton
-          type="submit"
+          type="button"
+          onClick={handleSubmit}
           size="sm"
           disabled={isSubmitting}
           loading={isSubmitting}
@@ -439,43 +444,27 @@ export default function ClientFormPage() {
               <IconCalendar size={13} className="text-primary shrink-0" />
               <span className="mf-label whitespace-nowrap">Effective Date <span className="mf-required" aria-hidden="true">*</span></span>
             </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="w-full sm:w-44">
-                <DatePicker
-                  id="effectiveDate"
-                  name="effectiveDate"
-                  value={form.effectiveDate}
-                  onChange={(e) => handleFieldChange('effectiveDate', e.target ? e.target.value : e)}
-                  error={errors.effectiveDate}
-                  disabled={isEdit}
-                />
-              </div>
-
-              {isEdit && (
-                <button
-                  type="button"
-                  onClick={() => navigate(`/clients/${id}/effective-dates`)}
-                  className="text-text-muted hover:text-primary transition-colors p-1.5 rounded-md cursor-pointer shrink-0 border border-border sm:border-0"
-                  title="View past and scheduled revisions"
-                >
-                  <IconClock size={14} />
-                </button>
-              )}
+            <div className="w-full sm:w-44">
+              <DatePicker
+                id="effectiveDate"
+                value={form.effectiveDate}
+                onChange={(val) => handleFieldChange('effectiveDate', val)}
+                error={errors.effectiveDate}
+                hint="Initial effective start date"
+              />
             </div>
           </div>
         </div>
       </Card>
 
-      {/* ── TABS NAVIGATION BAR (Fully touch & mouse scrollable on mobile) ── */}
+      {/* ── Tabs Navigation ── */}
       <ScrollableTabs
-        variant="pills"
-        activeTab={activeTab}
+        value={activeTab}
         onChange={setActiveTab}
         tabs={[
           {
             id: 'company_terms',
-            label: 'Client Details & Terms',
+            label: 'Company Details & Terms',
             icon: IconBuilding2,
             hasError: hasCompanyTermsErrors,
           },
@@ -506,7 +495,6 @@ export default function ClientFormPage() {
             hasError={Boolean(errors.companyName || errors.billingName || errors.contactTypeId || errors.email)}
             className="space-y-4"
           >
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Company Name */}
               <div>
@@ -528,15 +516,15 @@ export default function ClientFormPage() {
                   <span className="mf-label text-xs">Billing Name</span>
                   <Checkbox
                     id="same-as-company"
-                    checked={sameAsCompany}
-                    onChange={handleSameAsCompanyToggle}
                     label="Same as company name"
+                    checked={sameAsCompany}
+                    onChange={(e) => handleSameAsCompanyToggle(e.target.checked)}
                   />
                 </div>
                 <Input
                   id="billingName"
                   maxLength={200}
-                  value={form.billingName}
+                  value={sameAsCompany ? form.companyName : form.billingName}
                   disabled={sameAsCompany}
                   onChange={(e) => handleFieldChange('billingName', e.target.value)}
                   placeholder="Legal invoicing name"
@@ -552,7 +540,7 @@ export default function ClientFormPage() {
                   required
                   value={form.contactTypeId}
                   onChange={(e) => handleFieldChange('contactTypeId', e.target.value)}
-                  options={CONTACT_TYPE_OPTIONS}
+                  options={contactTypeOptions}
                   error={errors.contactTypeId}
                 />
               </div>
@@ -611,7 +599,6 @@ export default function ClientFormPage() {
             defaultOpen={true}
             className="space-y-4"
           >
-
             <div className="space-y-5">
               {/* Payment Terms Multi-Select */}
               <div className="space-y-2.5">
@@ -631,7 +618,7 @@ export default function ClientFormPage() {
                 {/* Selected Terms Cards */}
                 {selectedPaymentTermsList.length > 0 && (
                   <div className="space-y-2 pt-1">
-                    <div className="flex items-center justify-between text-2xs font-semibold text-text-muted  tracking-wider">
+                    <div className="flex items-center justify-between text-2xs font-semibold text-text-muted tracking-wider">
                       <span>Selected Terms ({selectedPaymentTermsList.length})</span>
                       <button
                         type="button"
@@ -641,43 +628,34 @@ export default function ClientFormPage() {
                         Clear All
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
-                      {selectedPaymentTermsList.map((term) => {
-                        const desc = term.description || '';
-                        const isHtml = /<[a-z][\s\S]*>/i.test(desc);
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {selectedPaymentTermsList.map((term, idx) => {
+                        const code = term.termCode || term.termName || term.paymentTermId || `Term ${idx + 1}`;
+                        const desc = term.description || term.termName || '';
+                        const termVal = term.id || term.paymentTermId || term.termCode;
 
                         return (
                           <div
-                            key={term.paymentTermId || term.termCode}
-                            className="p-3 rounded-lg bg-surface/70 border border-border space-y-1.5 text-xs group hover:border-primary/30 transition-colors shadow-2xs"
+                            key={termVal || idx}
+                            className="flex flex-col p-2.5 rounded-lg border border-border bg-surface/50 text-xs space-y-1 relative group"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <Badge variant="role" className="font-mono text-xs px-2 py-0.5 shrink-0">
-                                {term.termCode}
-                              </Badge>
+                              <span className="font-semibold text-heading font-mono">{code}</span>
                               <button
                                 type="button"
-                                onClick={() => handleRemovePaymentTerm(term.termCode || term.paymentTermId)}
-                                className="text-text-muted hover:text-danger p-0.5 rounded cursor-pointer transition-colors shrink-0"
-                                title={`Remove ${term.termCode}`}
-                                aria-label={`Remove ${term.termCode}`}
+                                onClick={() => {
+                                  const current = Array.isArray(form.paymentTerms) ? form.paymentTerms : [];
+                                  handleFieldChange('paymentTerms', current.filter((t) => t !== termVal && t !== code));
+                                }}
+                                className="text-text-muted hover:text-danger p-0.5 rounded cursor-pointer transition-colors"
+                                title="Remove term"
                               >
-                                <IconClose size={14} />
+                                &times;
                               </button>
                             </div>
-                            {desc ? (
-                              isHtml ? (
-                                <div
-                                  className="text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
-                                  dangerouslySetInnerHTML={{ __html: desc }}
-                                />
-                              ) : (
-                                <p className="text-xs text-text whitespace-pre-line leading-relaxed">
-                                  {desc}
-                                </p>
-                              )
-                            ) : (
-                              <p className="text-2xs text-text-muted italic">No terms description specified</p>
+                            {desc && (
+                              <p className="text-2xs text-text-muted line-clamp-2">{desc}</p>
                             )}
                           </div>
                         );
@@ -689,7 +667,7 @@ export default function ClientFormPage() {
 
               {/* Rich Text Editors for Delivery Terms & Internal Comments */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {/* Delivery Terms (Rich Text Editor) */}
+                {/* Delivery Terms */}
                 <RichTextEditor
                   id="deliveryTerms"
                   name="deliveryTerms"
@@ -700,7 +678,7 @@ export default function ClientFormPage() {
                   hint="Formatted delivery and transport terms for dispatch documentation."
                 />
 
-                {/* Internal Comments (Rich Text Editor) */}
+                {/* Internal Comments */}
                 <RichTextEditor
                   id="comments"
                   name="comments"
@@ -748,8 +726,6 @@ export default function ClientFormPage() {
           {renderTabSaveBar('Contact Persons')}
         </div>
       )}
-
-
     </form>
   );
 }

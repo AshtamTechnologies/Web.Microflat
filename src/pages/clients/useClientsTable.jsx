@@ -12,26 +12,30 @@ export function useClientsTable({ onEditClick, onViewClick }) {
     /* 1. COMPANY */
     columnHelper.accessor('companyName', {
       id: 'company',
-      header: 'COMPANY',
+      header: 'CLIENT / COMPANY',
       minSize: 240,
       size: 280,
       cell: (info) => {
         const row = info.row.original;
         const id = row.clientId || row.id;
+        const code = row.clientCode || (typeof id === 'number' ? `CLI-${String(id).padStart(3, '0')}` : id);
         return (
           <Link
             to={`/clients/${id}`}
             state={{ readOnly: true }}
             className="flex flex-col py-0.5 max-w-xs group cursor-pointer"
-            title={`View ${row.companyName}`}
+            title={`View ${row.companyName || row.clientName}`}
           >
-            <span
-              className="font-semibold text-heading text-xs sm:text-sm leading-snug truncate group-hover:text-primary transition-colors"
-            >
-              {row.companyName}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-mono text-2xs font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded">
+                {code}
+              </span>
+              <span className="font-semibold text-heading text-xs sm:text-sm leading-snug truncate group-hover:text-primary transition-colors">
+                {row.companyName || row.clientName}
+              </span>
+            </div>
             <span className="text-text-muted text-xs truncate mt-0.5">
-              {row.email || row.billingName || '—'}
+              {row.email || row.officialEmail || row.billingName || '—'}
             </span>
           </Link>
         );
@@ -45,7 +49,7 @@ export function useClientsTable({ onEditClick, onViewClick }) {
       minSize: 130,
       size: 140,
       cell: (info) => {
-        const type = info.getValue() || 'Customer';
+        const type = info.getValue() || info.row.original.contactType || 'Customer';
         return (
           <Badge variant={getContactTypeBadgeVariant(type)} className="text-xs px-2.5 py-0.5">
             {type}
@@ -54,16 +58,58 @@ export function useClientsTable({ onEditClick, onViewClick }) {
       },
     }),
 
-    /* 3. STATUS */
+    /* 3. PRIMARY CONTACT & CITY */
+    columnHelper.accessor('primaryContactName', {
+      id: 'primaryContact',
+      header: 'PRIMARY CONTACT',
+      minSize: 160,
+      size: 180,
+      cell: (info) => {
+        const row = info.row.original;
+        const name = row.primaryContactName;
+        const phone = row.primaryContactPhoneNo;
+        const city = row.city;
+
+        if (!name && !city) return <span className="text-text-muted text-xs">—</span>;
+
+        return (
+          <div className="flex flex-col text-xs leading-tight">
+            {name ? (
+              <span className="font-medium text-heading truncate">{name}</span>
+            ) : null}
+            <div className="flex items-center gap-1.5 text-text-muted text-2xs mt-0.5 truncate">
+              {phone ? <span className="font-mono tabular-nums">{phone}</span> : null}
+              {phone && city ? <span>•</span> : null}
+              {city ? <span>{city}</span> : null}
+            </div>
+          </div>
+        );
+      },
+    }),
+
+    /* 4. STATUS */
     columnHelper.accessor('isActive', {
       id: 'status',
       header: 'STATUS',
       minSize: 110,
       size: 120,
-      cell: (info) => <StatusBadge status={Boolean(info.getValue())} size="sm" />,
+      cell: (info) => {
+        const row = info.row.original;
+        const isScheduled = row.versionState === 'Scheduled' || row.hasScheduledChange;
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <StatusBadge status={Boolean(info.getValue())} size="sm" />
+            {isScheduled && (
+              <Badge variant="warning" className="text-2xs px-1.5 py-0">
+                Scheduled
+              </Badge>
+            )}
+          </div>
+        );
+      },
     }),
 
-    /* 4. CREATED */
+    /* 5. CREATED */
     columnHelper.accessor('createdAt', {
       id: 'createdAt',
       header: 'CREATED',
@@ -71,12 +117,12 @@ export function useClientsTable({ onEditClick, onViewClick }) {
       size: 130,
       cell: (info) => (
         <span className="font-mono tabular-nums text-xs text-text-muted">
-          {formatDate(info.getValue())}
+          {formatDate(info.getValue() || info.row.original.createdOn)}
         </span>
       ),
     }),
 
-    /* 5. ACTIONS */
+    /* 6. ACTIONS */
     columnHelper.display({
       id: 'actions',
       header: 'ACTIONS',

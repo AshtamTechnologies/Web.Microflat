@@ -2,14 +2,12 @@
  * ClientsPage.jsx — Client Registration List view for MicroFlat ERP.
  *
  * Implements standard ERP master view with TanStack Table:
- *   - Resizable columns
- *   - Sortable headers with hover chevrons
- *   - Status & Contact Type filtering
- *   - Full-text search across company, contacts, and addresses
- *   - Confirmation dialog on Delete
+ *   - Server-side and client-side pagination / search / filtering
+ *   - Status & Contact Type filtering using dynamic lookups
+ *   - Summary counts metrics bar
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   useReactTable,
@@ -35,10 +33,7 @@ import {
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useClientsTable } from './useClientsTable.jsx';
-import {
-  CONTACT_TYPE_OPTIONS,
-  getContactTypeBadgeVariant,
-} from '../../mocks/clients';
+import { getContactTypeBadgeVariant } from '../../mocks/clients';
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
@@ -46,31 +41,42 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'INACTIVE', label: 'Inactive' },
 ];
 
-const CONTACT_TYPE_FILTER_OPTIONS = [
-  { value: 'ALL', label: 'All Contact Types' },
-  ...CONTACT_TYPE_OPTIONS,
-];
-
 export default function ClientsPage() {
   const navigate = useNavigate();
 
   const {
     filteredClients,
+    summary,
+    lookups,
     search,
     setSearch,
     statusFilter,
     setStatusFilter,
     contactTypeFilter,
     setContactTypeFilter,
+    pageNumber,
+    setPageNumber,
+    pageSize,
+    setPageSize,
+    totalCount,
+    totalPages,
+    isLoading,
     resetFilters,
   } = useClientsContext();
 
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
-  const [pagination, setPagination] = useState({
-    pageIndex: 0,
-    pageSize: 10,
-  });
+
+  const contactTypeOptions = useMemo(() => {
+    const list = Array.isArray(lookups?.contactTypes) && lookups.contactTypes.length > 0
+      ? lookups.contactTypes
+      : ['Customer', 'Distributor', 'Dealer', 'Agency'];
+
+    return [
+      { value: 'ALL', label: 'All Contact Types' },
+      ...list.map((t) => ({ value: t, label: t })),
+    ];
+  }, [lookups]);
 
   const hasActiveFilters = Boolean(
     search.trim() || statusFilter !== 'ALL' || contactTypeFilter !== 'ALL'
@@ -87,9 +93,18 @@ export default function ClientsPage() {
     },
   });
 
+  const pagination = useMemo(
+    () => ({
+      pageIndex: Math.max(0, pageNumber - 1),
+      pageSize: pageSize,
+    }),
+    [pageNumber, pageSize]
+  );
+
   const table = useReactTable({
     data: filteredClients,
     columns,
+    pageCount: totalPages,
     state: {
       sorting,
       columnSizing,
@@ -97,10 +112,15 @@ export default function ClientsPage() {
     },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
-    onPaginationChange: setPagination,
+    onPaginationChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(pagination) : updater;
+      setPageNumber(next.pageIndex + 1);
+      setPageSize(next.pageSize);
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: true,
     columnResizeMode: 'onChange',
     enableColumnResizing: true,
   });
@@ -125,11 +145,36 @@ export default function ClientsPage() {
         }
       />
 
+      {/* ── KPI Summary Cards ── */}
+      {summary && summary.total > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Card padding="none" className="p-3 bg-surface border border-border rounded-xl">
+            <span className="text-2xs text-text-muted font-medium uppercase tracking-wider">Total Clients</span>
+            <p className="text-lg font-bold text-heading mt-0.5">{summary.total}</p>
+          </Card>
+          <Card padding="none" className="p-3 bg-surface border border-border rounded-xl">
+            <span className="text-2xs text-success font-medium uppercase tracking-wider">Active</span>
+            <p className="text-lg font-bold text-success mt-0.5">{summary.active}</p>
+          </Card>
+          <Card padding="none" className="p-3 bg-surface border border-border rounded-xl">
+            <span className="text-2xs text-text-muted font-medium uppercase tracking-wider">Inactive</span>
+            <p className="text-lg font-bold text-text-muted mt-0.5">{summary.inactive}</p>
+          </Card>
+          <Card padding="none" className="p-3 bg-surface border border-border rounded-xl">
+            <span className="text-2xs text-warning font-medium uppercase tracking-wider">Scheduled Changes</span>
+            <p className="text-lg font-bold text-warning mt-0.5">{summary.scheduledChanges || 0}</p>
+          </Card>
+        </div>
+      )}
+
       {/* ── Toolbar & Filter Controls ── */}
       <TableToolbar
         searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search company, contact, GST, city..."
+        onSearchChange={(val) => {
+          setSearch(val);
+          setPageNumber(1);
+        }}
+        searchPlaceholder="Search client code, company, contact, GST, city..."
         hasActiveFilters={hasActiveFilters}
         onReset={resetFilters}
         resetLabel="Reset"
@@ -139,7 +184,10 @@ export default function ClientsPage() {
           <SearchableSelect
             id="status-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPageNumber(1);
+            }}
             options={STATUS_FILTER_OPTIONS}
             placeholder="All Statuses"
             searchPlaceholder="Search statuses..."
@@ -151,8 +199,11 @@ export default function ClientsPage() {
           <SearchableSelect
             id="contact-type-filter"
             value={contactTypeFilter}
-            onChange={(e) => setContactTypeFilter(e.target.value)}
-            options={CONTACT_TYPE_FILTER_OPTIONS}
+            onChange={(e) => {
+              setContactTypeFilter(e.target.value);
+              setPageNumber(1);
+            }}
+            options={contactTypeOptions}
             placeholder="All Contact Types"
             searchPlaceholder="Search contact types..."
           />
@@ -163,8 +214,9 @@ export default function ClientsPage() {
       <DataTable
         table={table}
         columns={columns}
-        totalCount={filteredClients.length}
+        totalCount={totalCount || filteredClients.length}
         entityName="clients"
+        isLoading={isLoading}
         emptyTitle="No clients found"
         emptyDescription={
           hasActiveFilters
@@ -187,7 +239,8 @@ export default function ClientsPage() {
         renderMobileCard={(row) => {
           const client = row.original;
           const id = client.clientId || client.id;
-          const contactType = client.contactTypeId || 'Customer';
+          const code = client.clientCode || (typeof id === 'number' ? `CLI-${String(id).padStart(3, '0')}` : id);
+          const contactType = client.contactTypeId || client.contactType || 'Customer';
 
           const addresses = client.addresses || [];
           const primaryAddr = addresses.find((a) => a.isDefault || a.isActive !== false) || addresses[0];
@@ -203,7 +256,7 @@ export default function ClientsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-xs font-bold text-primary">
-                      {id}
+                      {code}
                     </span>
                     <Badge variant={getContactTypeBadgeVariant(contactType)}>
                       {contactType}
@@ -214,11 +267,11 @@ export default function ClientsPage() {
                     state={{ readOnly: true }}
                     className="block text-sm font-semibold text-heading leading-tight mt-1 hover:text-primary transition-colors"
                   >
-                    {client.companyName}
+                    {client.companyName || client.clientName}
                   </Link>
-                  {client.email && (
+                  {(client.email || client.officialEmail) && (
                     <p className="text-xs text-text-muted mt-0.5 truncate">
-                      {client.email}
+                      {client.email || client.officialEmail}
                     </p>
                   )}
                 </div>
@@ -226,10 +279,15 @@ export default function ClientsPage() {
                 <StatusBadge status={client.isActive} size="sm" />
               </div>
 
-              {/* Location if present */}
-              {city && (
-                <div className="text-xs text-text-muted pt-2 border-t border-border/50">
-                  <span className="truncate">{city}</span>
+              {/* Location & Primary contact if present */}
+              {(city || client.primaryContactName) && (
+                <div className="text-xs text-text-muted pt-2 border-t border-border/50 flex items-center justify-between">
+                  {client.primaryContactName && (
+                    <span className="truncate font-medium text-heading">
+                      {client.primaryContactName}
+                    </span>
+                  )}
+                  {city && <span className="truncate">{city}</span>}
                 </div>
               )}
 

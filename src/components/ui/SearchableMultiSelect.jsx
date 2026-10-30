@@ -20,7 +20,7 @@ export default function SearchableMultiSelect({
   label,
   id,
   name,
-  value = [], // array of selected values e.g. ['Admin', 'Supervisor']
+  value = [], // array of selected values e.g. ['Admin', 'Supervisor'] or [1, 2]
   onChange,
   onBlur,
   options = [],
@@ -132,9 +132,23 @@ export default function SearchableMultiSelect({
 
   function handleToggleOption(optVal, e) {
     e?.stopPropagation();
+    const exists = selectedValues.some((v) => {
+      if (v === optVal) return true;
+      if (typeof v === 'object' && v !== null) {
+        return (v.id ?? v.value ?? v.paymentTermId ?? v.termCode) === optVal;
+      }
+      return false;
+    });
+
     let nextValues;
-    if (selectedValues.includes(optVal)) {
-      nextValues = selectedValues.filter((v) => v !== optVal);
+    if (exists) {
+      nextValues = selectedValues.filter((v) => {
+        if (v === optVal) return false;
+        if (typeof v === 'object' && v !== null) {
+          return (v.id ?? v.value ?? v.paymentTermId ?? v.termCode) !== optVal;
+        }
+        return true;
+      });
     } else {
       nextValues = [...selectedValues, optVal];
     }
@@ -149,7 +163,16 @@ export default function SearchableMultiSelect({
 
   function handleRemoveTag(optVal, e) {
     e.stopPropagation();
-    const nextValues = selectedValues.filter((v) => v !== optVal);
+    const nextValues = selectedValues.filter((v) => {
+      if (v === optVal) return false;
+      if (typeof v === 'object' && v !== null && typeof optVal === 'object' && optVal !== null) {
+        return (v.id ?? v.value ?? v.paymentTermId ?? v.termCode) !== (optVal.id ?? optVal.value ?? optVal.paymentTermId ?? optVal.termCode);
+      }
+      if (typeof v === 'object' && v !== null) {
+        return (v.id ?? v.value ?? v.paymentTermId ?? v.termCode) !== optVal;
+      }
+      return true;
+    });
     onChange?.({
       target: {
         name,
@@ -157,7 +180,6 @@ export default function SearchableMultiSelect({
       },
     });
   }
-
 
   function handleClearAll(e) {
     e.stopPropagation();
@@ -168,10 +190,6 @@ export default function SearchableMultiSelect({
       },
     });
   }
-
-  const selectedLabels = selectedValues.map(
-    (v) => options.find((o) => o.value === v)?.label || v
-  );
 
   return (
     <div className="flex flex-col gap-1.5 relative">
@@ -207,7 +225,12 @@ export default function SearchableMultiSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={[
-          'w-full rounded-control border bg-bg text-left', size === 'sm' ? 'min-h-[var(--control-height-sm)] text-xs' : size === 'lg' ? 'min-h-[var(--control-height-lg)] text-base' : 'min-h-[var(--control-height-md)] text-sm',
+          'w-full rounded-control border bg-bg text-left',
+          size === 'sm'
+            ? 'min-h-[var(--control-height-sm)] text-xs'
+            : size === 'lg'
+            ? 'min-h-[var(--control-height-lg)] text-base'
+            : 'min-h-[var(--control-height-md)] text-sm',
           'px-3 py-1 flex items-center justify-between gap-2',
           'transition-all duration-150 ease-in-out cursor-pointer',
           'outline-none select-none',
@@ -228,12 +251,36 @@ export default function SearchableMultiSelect({
             <span className="text-text-muted text-sm truncate">{placeholder}</span>
           ) : (
             <>
-              {selectedValues.slice(0, maxDisplayTags).map((val) => {
-                const opt = options.find((o) => o.value === val);
-                const labelText = opt ? (opt.chipLabel || opt.label) : val;
+              {selectedValues.slice(0, maxDisplayTags).map((val, idx) => {
+                const opt = options.find(
+                  (o) =>
+                    o.value === val ||
+                    (typeof val === 'object' &&
+                      val !== null &&
+                      (o.value === val.id ||
+                        o.value === val.value ||
+                        o.value === val.paymentTermId ||
+                        o.value === val.termCode))
+                );
+
+                let labelText;
+                if (opt) {
+                  labelText = opt.chipLabel || opt.label;
+                } else if (typeof val === 'object' && val !== null) {
+                  labelText =
+                    val.termCode || val.termName || val.label || val.name || String(val.id || idx);
+                } else {
+                  labelText = String(val ?? '');
+                }
+
+                const itemKey =
+                  typeof val === 'object' && val !== null
+                    ? (val.id ?? val.paymentTermId ?? val.termCode ?? idx)
+                    : val;
+
                 return (
                   <span
-                    key={val}
+                    key={itemKey}
                     className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-xs font-semibold px-2 py-0.5 rounded-badge leading-tight max-w-[180px] shrink-0"
                   >
                     <span className="truncate">{labelText}</span>
@@ -336,7 +383,18 @@ export default function SearchableMultiSelect({
                 </li>
               ) : (
                 filteredOptions.map((option) => {
-                  const isSelected = selectedValues.includes(option.value);
+                  const isSelected = selectedValues.some((v) => {
+                    if (v === option.value) return true;
+                    if (typeof v === 'object' && v !== null) {
+                      return (
+                        v.id === option.value ||
+                        v.value === option.value ||
+                        v.paymentTermId === option.value ||
+                        v.termCode === option.value
+                      );
+                    }
+                    return false;
+                  });
 
                   return (
                     <li
