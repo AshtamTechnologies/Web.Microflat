@@ -11,11 +11,93 @@ import {
   approvalRequestsFromApi,
   approvalSummaryFromApi,
 } from '../../models/approvals/approvalModel';
+import { normalizeApprovalStatus } from '../../constants/approvalStatus';
 
 function cleanId(val) {
   if (typeof val === 'number') return val;
   const match = String(val).match(/\d+/);
   return match ? Number(match[0]) : val;
+}
+
+/**
+ * Returns all approval status codes and names ({ id, name }).
+ * GET /api/approval-requests/statuses
+ */
+export async function getApprovalStatuses() {
+  try {
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.STATUSES);
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Returns pending approvals waiting for decision (Approver's to-do list).
+ * GET /api/approval-requests/pending
+ * @param {object} [params]
+ */
+export async function getPendingApprovals(params = {}) {
+  try {
+    const query = {
+      ModuleCode: params.moduleCode || params.ModuleCode || 'VENDOR',
+    };
+    if (params.approvalTypeId) query.ApprovalTypeId = params.approvalTypeId;
+    if (params.referenceId) query.ReferenceId = params.referenceId;
+    query.Mine = params.mine !== undefined ? Boolean(params.mine) : (params.Mine !== undefined ? Boolean(params.Mine) : true);
+    if (params.pageNumber) query.PageNumber = params.pageNumber;
+    if (params.pageSize) query.PageSize = params.pageSize;
+
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.PENDING, {
+      params: query,
+    });
+    return approvalRequestsFromApi(response.data);
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Returns approval history list (Approved: 3, Rejected: 4, Cancelled: 5).
+ * GET /api/approval-requests/history
+ * @param {object} [params]
+ */
+export async function getApprovalHistory(params = {}) {
+  try {
+    const query = {
+      ModuleCode: params.moduleCode || params.ModuleCode || 'VENDOR',
+    };
+    if (params.status !== undefined && params.status !== null && params.status !== 'ALL') {
+      query.Status = typeof params.status === 'number' ? params.status : normalizeApprovalStatus(params.status);
+    }
+    if (params.approvalTypeId) query.ApprovalTypeId = params.approvalTypeId;
+    if (params.referenceId) query.ReferenceId = params.referenceId;
+    query.Mine = params.mine !== undefined ? Boolean(params.mine) : (params.Mine !== undefined ? Boolean(params.Mine) : true);
+    if (params.pageNumber) query.PageNumber = params.pageNumber;
+    if (params.pageSize) query.PageSize = params.pageSize;
+
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.HISTORY, {
+      params: query,
+    });
+    return approvalRequestsFromApi(response.data);
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Returns step-by-step audit timeline for one request.
+ * GET /api/approval-requests/{id}/history
+ * @param {number|string} id
+ */
+export async function getRequestTimeline(id) {
+  try {
+    const validId = cleanId(id);
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.TIMELINE(validId));
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
 }
 
 /**
@@ -26,10 +108,12 @@ function cleanId(val) {
 export async function listApprovalRequests(params = {}) {
   try {
     const query = {
-      status: params.status || 'Pending',
       moduleCode: params.moduleCode || 'VENDOR',
     };
 
+    if (params.status !== undefined && params.status !== null && params.status !== 'ALL') {
+      query.status = typeof params.status === 'number' ? params.status : normalizeApprovalStatus(params.status);
+    }
     if (params.approvalTypeId) query.approvalTypeId = params.approvalTypeId;
     if (params.referenceId) query.referenceId = params.referenceId;
     if (params.mine !== undefined) query.mine = Boolean(params.mine);
@@ -105,7 +189,7 @@ export async function approveRequest(id, data = {}) {
   try {
     const validId = cleanId(id);
     const payload = {
-      isDocumentVerified: data.isDocumentVerified !== false, // default true per integration guide
+      isDocumentVerified: Boolean(data.isDocumentVerified),
     };
     if (data.comments?.trim()) payload.comments = data.comments.trim();
     if (data.documentVerificationComments?.trim()) {

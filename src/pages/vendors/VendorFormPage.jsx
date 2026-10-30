@@ -53,6 +53,7 @@ import {
 } from '../../components/ui';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 import { useVendorsContext } from '../../context/VendorsContext';
+import { ApprovalStatus, ApprovalStatusLabel, getApprovalStatusLabel, normalizeApprovalStatus } from '../../constants/approvalStatus';
 import { vendorService } from '../../services';
 import { useCountryState } from '../../context/CountryStateContext';
 import {
@@ -1286,7 +1287,7 @@ export default function VendorFormPage() {
                     Approval Status
                   </span>
                   <Badge variant={existingVendor.approvalStatus?.toLowerCase() || 'pending'}>
-                    {existingVendor.approvalStatus || 'Pending'}
+                    {getApprovalStatusLabel(existingVendor.approvalStatus)}
                   </Badge>
                 </div>
 
@@ -1297,7 +1298,7 @@ export default function VendorFormPage() {
                       Approved / Reviewed By
                     </span>
                     <span className="text-xs font-medium text-heading">
-                      {existingVendor.approvedBy || 'System Admin'}
+                      {existingVendor.approvedByName || existingVendor.approvedBy || 'Not approved yet'}
                     </span>
                   </div>
                 )}

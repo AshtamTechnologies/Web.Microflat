@@ -44,6 +44,13 @@ import {
 import { useVendorsContext } from '../../context/VendorsContext';
 import { getStateName } from '../../mocks/vendors';
 import {
+  ApprovalStatus,
+  ApprovalStatusLabel,
+  getApprovalStatusLabel,
+  getApprovalBadgeVariant,
+  normalizeApprovalStatus,
+} from '../../constants/approvalStatus';
+import {
   getEffectiveDateStatus,
   formatDateDisplay,
 } from '../../utils/effectiveDateUtils';
@@ -58,23 +65,11 @@ const STATUS_FILTER_OPTIONS = [
 
 const APPROVAL_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Approvals' },
-  { value: 'Approved', label: 'Approved' },
-  { value: 'Pending', label: 'Pending' },
-  { value: 'Rejected', label: 'Rejected' },
+  { value: String(ApprovalStatus.Approved), label: 'Approved' },
+  { value: String(ApprovalStatus.Pending), label: 'Pending' },
+  { value: String(ApprovalStatus.Rejected), label: 'Rejected' },
+  { value: String(ApprovalStatus.Draft), label: 'Draft' },
 ];
-
-function getApprovalBadgeVariant(status) {
-  switch (status) {
-    case 'Approved':
-      return 'approved';
-    case 'Pending':
-      return 'pending';
-    case 'Rejected':
-      return 'rejected';
-    default:
-      return 'neutral';
-  }
-}
 
 export default function VendorsPage() {
   const navigate = useNavigate();
@@ -103,7 +98,6 @@ export default function VendorsPage() {
     pageIndex: 0,
     pageSize: 10,
   });
-  // Loading state managed via useVendorsContext
   const [vendorToDelete, setVendorToDelete] = useState(null);
 
   const [searchParams] = useSearchParams();
@@ -134,15 +128,11 @@ export default function VendorsPage() {
 
     if (hasApproval) {
       const rawApproval = searchParams.get('approval') || searchParams.get('approvalStatus') || '';
-      const lower = rawApproval.toLowerCase();
-      if (lower === 'approved') {
-        setApprovalFilter('Approved');
-      } else if (lower === 'pending') {
-        setApprovalFilter('Pending');
-      } else if (lower === 'rejected') {
-        setApprovalFilter('Rejected');
-      } else if (lower === 'all') {
+      if (rawApproval.toUpperCase() === 'ALL') {
         setApprovalFilter('ALL');
+      } else {
+        const normalized = normalizeApprovalStatus(rawApproval);
+        setApprovalFilter(String(normalized));
       }
     }
 
@@ -221,49 +211,6 @@ export default function VendorsPage() {
         },
       }),
 
-      /* 4. CITY / STATE — Commented out as requested
-      columnHelper.accessor((row) => `${row.city}, ${getStateName(row.countryId, row.stateId)}`, {
-        id: 'cityState',
-        header: 'CITY / STATE',
-        minSize: 150,
-        size: 180,
-        cell: (info) => {
-          const row = info.row.original;
-          const state = getStateName(row.countryId, row.stateId);
-          return (
-            <span className="text-xs text-text truncate block">
-              {row.city ? `${row.city}, ${state}` : state || '—'}
-            </span>
-          );
-        },
-      }),
-      */
-
-      /* 5. EFFECTIVE DATE — Commented out as requested
-      columnHelper.accessor((row) => row.effectiveDate || '', {
-        id: 'effectiveDate',
-        header: 'EFFECTIVE DATE',
-        minSize: 145,
-        size: 165,
-        cell: (info) => {
-          const row = info.row.original;
-          const statusInfo = getEffectiveDateStatus(row.effectiveDate);
-          return (
-            <div className="flex flex-col py-0.5 gap-1">
-              <span className="font-mono text-xs text-heading font-medium">
-                {formatDateDisplay(row.effectiveDate)}
-              </span>
-              <div>
-                <Badge variant={statusInfo.badgeVariant} className="text-2xs px-1.5 py-0">
-                  {statusInfo.label}
-                </Badge>
-              </div>
-            </div>
-          );
-        },
-      }),
-      */
-
       /* 6. STATUS (Only shown if vendor is approved) */
       columnHelper.accessor('isActive', {
         header: 'STATUS',
@@ -271,7 +218,7 @@ export default function VendorsPage() {
         size: 140,
         cell: (info) => {
           const row = info.row.original;
-          const isApproved = (row.approvalStatus || '').toLowerCase() === 'approved';
+          const isApproved = normalizeApprovalStatus(row.approvalStatus) === ApprovalStatus.Approved;
           if (!isApproved) {
             return <span className="text-text-muted text-xs font-mono">—</span>;
           }
@@ -286,10 +233,11 @@ export default function VendorsPage() {
         minSize: 120,
         size: 130,
         cell: (info) => {
-          const status = info.getValue() || 'Pending';
+          const status = info.getValue();
+          const label = getApprovalStatusLabel(status);
           return (
             <Badge variant={getApprovalBadgeVariant(status)}>
-              {status}
+              {label}
             </Badge>
           );
         },
@@ -309,7 +257,7 @@ export default function VendorsPage() {
           return (
             <TableActions
               onView={() => navigate(`/vendors/${row.vendorId ?? row.id}/effective-dates`, { state: { readOnly: true } })}
-              onEdit={() => navigate(`/vendors/${row.vendorId ?? row.id}/effective-dates`, { state: { mode: 'EDIT' } })}
+              onEdit={() => navigate(`/vendors/${row.vendorId ?? row.id}/effective-dates`)}
               viewTitle="View vendor details"
               editTitle="Edit vendor"
             />
@@ -342,9 +290,6 @@ export default function VendorsPage() {
   const totalRows = vendors.length;
   const currentPage = pagination.pageIndex;
   const pageSize = pagination.pageSize;
-  const startRow = totalRows === 0 ? 0 : currentPage * pageSize + 1;
-  const endRow = Math.min((currentPage + 1) * pageSize, totalRows);
-  const pageCount = table.getPageCount();
 
   /* ── Delete Handler ── */
   function handleDeleteConfirm() {
@@ -432,6 +377,7 @@ export default function VendorsPage() {
         }
         renderMobileCard={(row) => {
           const vendor = row.original;
+          const isApproved = normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Approved;
           return (
             <div
               key={vendor.id}
@@ -444,7 +390,7 @@ export default function VendorsPage() {
                       {vendor.vendorCode}
                     </span>
                     <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
-                      {vendor.approvalStatus}
+                      {getApprovalStatusLabel(vendor.approvalStatus)}
                     </Badge>
                   </div>
                   <Link
@@ -462,7 +408,7 @@ export default function VendorsPage() {
                   </p>
                 </div>
 
-                {(vendor.approvalStatus || '').toLowerCase() === 'approved' && (
+                {isApproved && (
                   <StatusBadge status={vendor.isActive} size="sm" />
                 )}
               </div>

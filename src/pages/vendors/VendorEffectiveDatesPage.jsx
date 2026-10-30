@@ -81,8 +81,23 @@ import { getActiveVendorVersion } from '../../utils/vendorVersions';
 import { formatDateDisplay, getTodayIsoDate } from '../../utils/effectiveDateUtils';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 import { countryIdToCode, stateIdToCode } from '../../models/vendors/vendorModel';
+import {
+  ApprovalStatus,
+  ApprovalStatusLabel,
+  getApprovalStatusLabel,
+  getApprovalBadgeVariant,
+  normalizeApprovalStatus,
+} from '../../constants/approvalStatus';
 
 const columnHelper = createColumnHelper();
+
+const formatApprovedOrDate = (val, row) => {
+  if (!val) return 'Not approved yet';
+  if (row?.approvedByName && val === row.approvedByName) {
+    return row.approvedOn ? `${val} (${formatDateDisplay(row.approvedOn)})` : val;
+  }
+  return formatDateDisplay(val);
+};
 
 
 
@@ -127,7 +142,7 @@ function formatAuditTimestamp(date = new Date()) {
   return `${yyyy}-${mm}-${dd} ${formattedHours}:${minutes} ${ampm}`;
 }
 
-function getApprovalBadgeVariant(status) {
+function legacyApprovalBadgeVariant(status) {
   switch (status?.toLowerCase()) {
     case 'approved':
       return 'approved';
@@ -263,7 +278,7 @@ export default function VendorEffectiveDatesPage() {
       }
 
       await updateVendor(vendor.id, {
-        approvalStatus: 'Approved',
+        approvalStatus: ApprovalStatus.Approved,
         approvedOn: now,
         approvedBy: 'Current User',
         approvedByComments: approveComments.trim(),
@@ -312,7 +327,7 @@ export default function VendorEffectiveDatesPage() {
       }
 
       await updateVendor(vendor.id, {
-        approvalStatus: 'Rejected',
+        approvalStatus: ApprovalStatus.Rejected,
         approvedOn: now,
         approvedBy: 'Current User',
         approvedByComments: rejectComments.trim(),
@@ -408,7 +423,7 @@ export default function VendorEffectiveDatesPage() {
         id: v.vendorDetailId || v.id,
         vendorDetailId: v.vendorDetailId || v.id,
         effectiveDate: v.effectiveDate ? String(v.effectiveDate).slice(0, 10) : '',
-        approvalStatus: v.approvalStatus || 'Approved',
+        approvalStatus: normalizeApprovalStatus(v.approvalStatus),
         versionState: v.versionState || 'History',
         isActive: v.isActive !== false,
         attachmentCount: Number(v.attachmentCount) || 0,
@@ -433,7 +448,7 @@ export default function VendorEffectiveDatesPage() {
   const [selectedVersionId, setSelectedVersionId] = useState(null);
 
   useEffect(() => {
-    if (location.state?.mode === 'EDIT') {
+    if (false && location.state?.mode === 'EDIT') {
       setMode('EDIT');
     } else if (location.state?.readOnly) {
       setMode('VIEW');
@@ -668,8 +683,10 @@ export default function VendorEffectiveDatesPage() {
 
   const isDraftOrRejected = useMemo(() => {
     if (!selectedVersion) return false;
-    const st = (selectedVersion.versionState || selectedVersion.approvalStatus || '').toLowerCase();
-    return st === 'draft' || st === 'rejected';
+    const numSt = normalizeApprovalStatus(selectedVersion.approvalStatus);
+    const verState = String(selectedVersion.versionState || '').toLowerCase();
+    // Safely computed without calling .toLowerCase() on numeric status
+    return numSt === ApprovalStatus.Draft || numSt === ApprovalStatus.Rejected || verState === 'draft' || verState === 'rejected';
   }, [selectedVersion]);
 
   // Synchronize attachments when entering EDIT or ADD mode or switching view
@@ -726,6 +743,18 @@ export default function VendorEffectiveDatesPage() {
   }
 
   async function handleStartEdit(ver) {
+    if (!ver) return;
+    const numSt = normalizeApprovalStatus(ver.approvalStatus);
+    const verState = String(ver.versionState || '').toLowerCase();
+    const canEdit =
+      numSt === ApprovalStatus.Draft ||
+      numSt === ApprovalStatus.Rejected ||
+      verState === 'draft' ||
+      verState === 'rejected';
+
+    if (!canEdit) {
+      return;
+    }
     const verId = ver.vendorDetailId || ver.id;
     setSelectedVersionId(verId);
     setMode('EDIT');
@@ -743,7 +772,7 @@ export default function VendorEffectiveDatesPage() {
       email: full.email || ver.email || '',
       gstNo: full.gstNo || ver.gstNo || '',
       website: full.website || ver.website || '',
-      countryId: full.countryId || ver.countryId || 'IN',
+      countryId: full.countryId || ver.countryId || 2,
       stateId: full.stateId || ver.stateId || '',
       city: full.city || ver.city || '',
       zipCode: full.zipCode || ver.zipCode || '',
@@ -767,7 +796,7 @@ export default function VendorEffectiveDatesPage() {
           email: fetched.email || '',
           gstNo: fetched.gstNo || '',
           website: fetched.website || '',
-          countryId: fetched.countryId || 'IN',
+          countryId: fetched.countryId || 2,
           stateId: fetched.stateId || '',
           city: fetched.city || '',
           zipCode: fetched.zipCode || '',
@@ -789,14 +818,28 @@ export default function VendorEffectiveDatesPage() {
   useEffect(() => {
     if (
       !modeInitializedRef.current &&
-      location.state?.mode === 'EDIT' &&
+      false && location.state?.mode === 'EDIT' &&
       Array.isArray(apiVersions) &&
       versions.length > 0
     ) {
       const target = activeVersion || versions[0];
       if (target) {
         modeInitializedRef.current = true;
-        handleStartEdit(target);
+        const draftOrRejectedVer = versions.find((v) => {
+          const numSt = normalizeApprovalStatus(v.approvalStatus);
+          const verState = String(v.versionState || '').toLowerCase();
+          return (
+            numSt === ApprovalStatus.Draft ||
+            numSt === ApprovalStatus.Rejected ||
+            verState === 'draft' ||
+            verState === 'rejected'
+          );
+        });
+        if (draftOrRejectedVer) {
+          handleStartEdit(draftOrRejectedVer);
+        } else {
+          handleStartAdd();
+        }
       }
     }
   }, [location.state?.mode, apiVersions, versions, activeVersion]);
@@ -854,7 +897,7 @@ export default function VendorEffectiveDatesPage() {
         email: src.email || '',
         gstNo: src.gstNo || '',
         website: src.website || '',
-        countryId: src.countryId || 'IN',
+        countryId: src.countryId || 2,
         stateId: src.stateId || '',
         city: src.city || '',
         zipCode: src.zipCode || '',
@@ -1413,7 +1456,7 @@ export default function VendorEffectiveDatesPage() {
   }
 
   /* ── Column Definitions for Resizable TanStack Table Grid ── */
-  const columns = useMemo(
+  const allColumns = useMemo(
     () => [
       /* 1. EFFECTIVE DATE */
       columnHelper.accessor('effectiveDate', {
@@ -1422,7 +1465,7 @@ export default function VendorEffectiveDatesPage() {
         size: 160,
         cell: (info) => (
           <span className="font-mono text-xs font-semibold text-heading py-0.5 block">
-            {formatDateDisplay(info.getValue())}
+            {formatApprovedOrDate(info.getValue(), info.row.original)}
           </span>
         ),
       }),
@@ -1460,7 +1503,7 @@ export default function VendorEffectiveDatesPage() {
           const status = info.getValue() || 'Pending';
           return (
             <Badge variant={getApprovalBadgeVariant(status)}>
-              {status}
+              {getApprovalStatusLabel(status)}
             </Badge>
           );
         },
@@ -1474,7 +1517,7 @@ export default function VendorEffectiveDatesPage() {
         cell: (info) => <StatusBadge status={info.getValue()} size="sm" />,
       }),
 
-      /* 5. ATTACHMENTS */
+
       columnHelper.accessor('attachmentCount', {
         header: 'ATTACHMENTS',
         minSize: 110,
@@ -1493,14 +1536,14 @@ export default function VendorEffectiveDatesPage() {
         },
       }),
 
-      /* 6. CREATED ON */
-      columnHelper.accessor('createdOn', {
-        header: 'CREATED ON',
+      // 6. APPROVED BY
+      columnHelper.accessor('approvedByName', {
+        header: 'APPROVED BY',
         minSize: 140,
         size: 160,
         cell: (info) => (
           <span className="font-mono text-xs text-text-muted py-0.5 block">
-            {formatDateDisplay(info.getValue())}
+            {formatApprovedOrDate(info.getValue(), info.row.original)}
           </span>
         ),
       }),
@@ -1512,7 +1555,7 @@ export default function VendorEffectiveDatesPage() {
         size: 160,
         cell: (info) => (
           <span className="font-mono text-xs text-text-muted py-0.5 block">
-            {formatDateDisplay(info.getValue())}
+            {formatApprovedOrDate(info.getValue(), info.row.original)}
           </span>
         ),
       }),
@@ -1556,6 +1599,19 @@ export default function VendorEffectiveDatesPage() {
       }),
     ],
     [selectedVersion, mode]
+  );
+
+  // Filter out Attachment and Approved By columns as requested
+  const columns = useMemo(
+    () =>
+      allColumns.filter(
+        (col) =>
+          col.accessorKey !== 'attachmentCount' &&
+          col.id !== 'attachmentCount' &&
+          col.accessorKey !== 'approvedByName' &&
+          col.id !== 'approvedByName'
+      ),
+    [allColumns]
   );
 
   /* ── React Table Instance with Column Resizing Enabled ── */
@@ -1624,7 +1680,7 @@ export default function VendorEffectiveDatesPage() {
         }}
         actions={
           <div className="flex items-center gap-2.5 flex-wrap">
-            {(vendor.approvalStatus || '').toLowerCase() === 'approved' && (
+            {normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Approved && (
               <span
                 className={[
                   'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none',
@@ -1643,10 +1699,10 @@ export default function VendorEffectiveDatesPage() {
             )}
 
             <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
-              {vendor.approvalStatus || 'Pending'}
+              {getApprovalStatusLabel(vendor.approvalStatus)}
             </Badge>
 
-            {!isReadOnly && mode === 'VIEW' && selectedVersion && (
+            {!isReadOnly && mode === 'VIEW' && selectedVersion && isDraftOrRejected && (
               <Button
                 type="button"
                 variant="secondary"
@@ -1658,7 +1714,7 @@ export default function VendorEffectiveDatesPage() {
               </Button>
             )}
 
-            {!isReadOnly && (vendor.approvalStatus || '').toLowerCase() === 'approved' && (
+            {!isReadOnly && normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Approved && (
               vendor.isActive ? (
                 <Button
                   type="button"
@@ -1682,7 +1738,7 @@ export default function VendorEffectiveDatesPage() {
               )
             )}
 
-            {isFromApproval && (vendor.approvalStatus || '').toLowerCase() === 'pending' && (
+            {isFromApproval && normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Pending && (
               <div className="flex items-center gap-2 pl-2 border-l border-border">
                 <Button
                   type="button"
@@ -1727,8 +1783,8 @@ export default function VendorEffectiveDatesPage() {
               </span>
               {vendor.inactiveDate && (
                 <span className="text-2xs font-mono text-text-muted ml-1">
-                  ({formatDate(vendor.inactiveDate)})
-                </span>
+                  ({formatDate(vendor.inactiveDate)})</span>
+
               )}
             </div>
           </div>
@@ -1803,13 +1859,13 @@ export default function VendorEffectiveDatesPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-mono text-xs font-bold text-heading">
-                          {formatDateDisplay(ver.effectiveDate)}
-                        </span>
+                          {formatDateDisplay(ver.effectiveDate)}</span>
+        
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs border select-none ${stateBadgeCls}`}>
-                          {state}
-                        </span>
+                          {state}</span>
+        
                         <Badge variant={getApprovalBadgeVariant(ver.approvalStatus)}>
-                          {ver.approvalStatus || 'Pending'}
+                          {getApprovalStatusLabel(ver.approvalStatus)}
                         </Badge>
                         <StatusBadge status={ver.isActive} size="sm" />
                       </div>
@@ -1839,7 +1895,7 @@ export default function VendorEffectiveDatesPage() {
                   <div className="mt-2 pt-2 border-t border-border/60 flex flex-wrap items-center justify-between gap-2 text-2xs text-text-muted">
                     <div className="flex items-center gap-1.5 font-mono">
                       <IconClock size={11} className="shrink-0 text-text-muted/70" />
-                      <span>Created: {formatDateDisplay(ver.createdOn)}</span>
+                      <span>{ver.approvedByName ? `Approved by: ${ver.approvedByName}` : 'Not approved yet'}</span>
                     </div>
 
                     {ver.lastUpdatedOn && (
@@ -1895,7 +1951,20 @@ export default function VendorEffectiveDatesPage() {
                                 header.getContext()
                               )}
                             </span>
+                            {/* REMOVE_OLD_HEADER
+                              {flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                              {flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                            </span>
+                              )}
+            
 
+                            REMOVE_OLD_HEADER */}
                             <span className="shrink-0 ml-1 inline-flex items-center">
                               {sorted === 'asc' ? (
                                 <IconChevronUp
@@ -1919,6 +1988,23 @@ export default function VendorEffectiveDatesPage() {
                           </button>
                         ) : (
                           <div
+                            style={{/*
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        ) : (
+                          <div
+
+                                </span>
+                
+                              )}
+            
+                          </button>
+                        ) : (
+                          <div
+
+                            */}}
                             className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''
                               }`}
                           >
@@ -2024,7 +2110,7 @@ export default function VendorEffectiveDatesPage() {
         className="overflow-hidden shadow-xs border-border"
         actions={
           <div className="flex items-center gap-2 self-start sm:self-auto w-full sm:w-auto justify-end">
-            {!isReadOnly && mode === 'VIEW' && selectedVersion && (
+            {!isReadOnly && mode === 'VIEW' && selectedVersion && isDraftOrRejected && (
               <>
                 {isDraftOrRejected && (
                   <Button
@@ -2205,6 +2291,7 @@ export default function VendorEffectiveDatesPage() {
                   <span className="view-field-label mf-detail-label">
                     Notes & Terms
                   </span>
+  
                   <div className="text-xs text-heading font-medium bg-surface/50 rounded-lg p-3.5 border border-border/60 whitespace-pre-line leading-relaxed">
                     {selectedVersion.notes || 'No specific notes recorded for this effective date.'}
                   </div>
@@ -2212,13 +2299,13 @@ export default function VendorEffectiveDatesPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                   <DetailField
-                    label="Version Created On"
-                    value={formatDateDisplay(selectedVersion.createdOn)}
+                    label="Approved On"
+                    value={selectedVersion.approvedOn ? formatDateDisplay(selectedVersion.approvedOn) : 'Not approved yet'}
                     mono
                   />
                   <DetailField
-                    label="Version Created By"
-                    value={selectedVersion.createdBy || 'System'}
+                    label="Approved By"
+                    value={selectedVersion.approvedByName || 'Not approved yet'}
                   />
                 </div>
               </div>
@@ -2233,10 +2320,11 @@ export default function VendorEffectiveDatesPage() {
                   <span className="text-2xs font-normal text-text-muted ml-1">
                     ({currentViewAttachments.length})
                   </span>
+  
                 </div>
-                <span className="text-2xs text-text-muted hidden sm:inline">
-                  Click any document card to view details in popup
-                </span>
+
+
+
               </div>
 
               {currentViewAttachments.length === 0 ? (
@@ -2248,9 +2336,9 @@ export default function VendorEffectiveDatesPage() {
                   {currentViewAttachments.map((att) => (
                     <div
                       key={att.id}
-                      onClick={() => setPreviewItem(att)}
-                      className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-bg hover:border-primary/60 hover:bg-primary/[0.03] hover:shadow-xs transition-all duration-150 cursor-pointer group select-none"
-                      title="Click to view document in popup"
+
+                      className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface hover:border-primary/40 transition-all select-none"
+
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className="p-2 rounded-lg bg-surface border border-border group-hover:border-primary/30 group-hover:bg-primary/10 transition-colors shrink-0">
@@ -2272,12 +2360,12 @@ export default function VendorEffectiveDatesPage() {
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setPreviewItem(att);
+                            /* no-op */
                           }}
-                          title="View preview"
-                          className="h-8 w-8 text-text-muted group-hover:text-primary hover:bg-primary/10"
+                          className="!hidden hidden" style={{ display: 'none' }}
+
                         >
-                          <IconMaximize2 size={13} />
+                          {null}
                         </Button>
                         <Button
                           variant="ghost"
@@ -2547,6 +2635,7 @@ export default function VendorEffectiveDatesPage() {
                 <span className="text-2xs font-normal text-text-muted ml-1">
                   ({attachments.length})
                 </span>
+
               </div>
 
               {/* Copy Attachments Option for ADD Mode */}
@@ -2662,9 +2751,9 @@ export default function VendorEffectiveDatesPage() {
                       className="flex items-center justify-between p-3 rounded-xl border border-border bg-bg hover:border-primary/40 transition-colors"
                     >
                       <div
-                        onClick={() => setPreviewItem(att)}
-                        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
-                        title="Click to preview"
+  
+
+                        className="flex items-center gap-2.5 min-w-0 flex-1"
                       >
                         {getFileIcon(att.fileName, att.fileType)}
                         <div className="min-w-0 flex-1">
@@ -2682,19 +2771,19 @@ export default function VendorEffectiveDatesPage() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => setPreviewItem(att)}
-                          title="Preview file"
-                          className="h-7 w-7 text-text-muted hover:text-primary"
+    
+                          style={{ display: 'none' }} className="hidden"
+
                         >
-                          <IconMaximize2 size={13} />
+                          {null}
                         </Button>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
                           onClick={(e) => handleDownloadAttachment(att, e)}
-                          title="Download file"
                           className="h-7 w-7 text-text-muted hover:text-primary"
+
                         >
                           <IconDownload size={13} />
                         </Button>
@@ -2703,10 +2792,10 @@ export default function VendorEffectiveDatesPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleRequestDeleteAttachment(att)}
-                          title="Remove attachment"
-                          className="h-7 w-7 text-text-muted hover:text-danger"
+                          style={{ display: 'none' }} className="hidden"
+
                         >
-                          <IconDelete size={13} />
+                          {null}
                         </Button>
                       </div>
                     </div>
@@ -2778,6 +2867,11 @@ export default function VendorEffectiveDatesPage() {
                   {previewItem.fileName}
                 </span>
               </div>
+              {/* REMOVE_DUPE
+                  {previewItem.fileName}
+
+              </div>
+              REMOVE_DUPE */}
               <div className="flex items-center gap-3 text-text-muted">
                 {previewItem.fileSize && (
                   <span>Size: <strong className="text-heading">{previewItem.fileSize}</strong></span>
@@ -2823,6 +2917,7 @@ export default function VendorEffectiveDatesPage() {
                     <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-2xs font-bold bg-success/10 text-success border border-success/20">
                       <IconShieldCheck size={12} /> Verified Document
                     </span>
+    
                     <h4 className="text-base font-bold text-heading mt-2">
                       {previewItem.documentName || previewItem.fileName}
                     </h4>
@@ -2897,6 +2992,7 @@ export default function VendorEffectiveDatesPage() {
                   <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
                     {vendor.vendorCode}
                   </span>
+  
                 </div>
                 <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
                   {vendor.contactPersonName && (
@@ -2904,12 +3000,14 @@ export default function VendorEffectiveDatesPage() {
                       <IconUser size={12} className="text-text-muted/70" />
                       {vendor.contactPersonName}
                     </span>
+    
                   )}
                   {vendor.city && (
                     <span className="flex items-center gap-1">
                       <IconLocation size={12} className="text-text-muted/70" />
                       {vendor.city}, {getStateName(vendor.countryId, vendor.stateId)}
                     </span>
+    
                   )}
                 </div>
               </div>
@@ -2974,6 +3072,7 @@ export default function VendorEffectiveDatesPage() {
                   <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
                     {vendor.vendorCode}
                   </span>
+  
                 </div>
                 <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
                   {vendor.contactPersonName && (
@@ -2981,12 +3080,14 @@ export default function VendorEffectiveDatesPage() {
                       <IconUser size={12} className="text-text-muted/70" />
                       {vendor.contactPersonName}
                     </span>
+    
                   )}
                   {vendor.city && (
                     <span className="flex items-center gap-1">
                       <IconLocation size={12} className="text-text-muted/70" />
                       {vendor.city}, {getStateName(vendor.countryId, vendor.stateId)}
                     </span>
+    
                   )}
                 </div>
               </div>
@@ -3056,6 +3157,7 @@ export default function VendorEffectiveDatesPage() {
                   <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
                     {vendor.vendorCode}
                   </span>
+  
                 </div>
                 <p className="text-xs text-text-muted mt-1">
                   Deactivating this vendor will block purchase requisition and purchase order creation.
@@ -3078,6 +3180,7 @@ export default function VendorEffectiveDatesPage() {
                 <span className="text-xs font-medium text-danger block">
                   {deactivateError}
                 </span>
+
               )}
             </div>
 
@@ -3132,6 +3235,7 @@ export default function VendorEffectiveDatesPage() {
                   <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
                     {vendor.vendorCode}
                   </span>
+  
                 </div>
                 <p className="text-xs text-text-muted mt-1 leading-relaxed">
                   Are you sure you want to mark this vendor as <strong>Active</strong>? This will re-enable purchase order creation and new effective date revisions.

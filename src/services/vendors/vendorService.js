@@ -14,6 +14,7 @@ import {
   bankDetailFromApi,
   bankDetailToApi,
 } from '../../models/vendors/vendorModel';
+import { normalizeApprovalStatus, ApprovalStatus } from '../../constants/approvalStatus';
 
 /**
  * Lists vendors with server-side pagination, search, and status filters.
@@ -24,7 +25,12 @@ export async function listVendors(params = {}) {
     const query = {};
     if (params.search?.trim()) query.Search = params.search.trim();
     if (params.approvalStatus && params.approvalStatus !== 'ALL') {
-      query.ApprovalStatus = params.approvalStatus;
+      const code = typeof params.approvalStatus === 'number'
+        ? params.approvalStatus
+        : normalizeApprovalStatus(params.approvalStatus);
+      if (code) {
+        query.ApprovalStatus = code;
+      }
     }
     if (params.isActive !== undefined && params.isActive !== null && params.isActive !== 'ALL') {
       query.IsActive = typeof params.isActive === 'boolean'

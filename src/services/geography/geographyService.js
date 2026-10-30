@@ -35,7 +35,15 @@ export async function listCountries({ isActive = true } = {}) {
 export async function listStates(countryId, { isActive = true } = {}) {
   if (!countryId) return [];
   try {
-    const params = { CountryId: countryId };
+    let numericCountryId = typeof countryId === 'number' ? countryId : parseInt(countryId, 10);
+    if (isNaN(numericCountryId) || !numericCountryId) {
+      const code = String(countryId).trim().toUpperCase();
+      if (code === 'IN' || code === 'INDIA') numericCountryId = 2;
+      else if (code === 'US' || code === 'USA') numericCountryId = 1;
+      else return [];
+    }
+
+    const params = { CountryId: numericCountryId };
     if (isActive !== undefined && isActive !== null) {
       params.IsActive = isActive;
     }

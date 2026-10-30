@@ -48,7 +48,18 @@ export function CountryStateProvider({ children }) {
   const fetchStatesForCountry = useCallback(
     async (countryId) => {
       if (!countryId) return [];
-      const key = String(countryId);
+      let numericId = typeof countryId === 'number' ? countryId : parseInt(countryId, 10);
+      if (isNaN(numericId) || !numericId) {
+        const str = String(countryId).trim();
+        const found = countries.find(
+          (c) =>
+            String(c.id) === str ||
+            c.countryName?.toLowerCase() === str.toLowerCase() ||
+            (str.toUpperCase() === 'IN' && c.countryName?.toLowerCase() === 'india')
+        );
+        numericId = found ? found.id : (str.toUpperCase() === 'IN' ? 2 : countryId);
+      }
+      const key = String(numericId);
 
       // Return immediately if already cached
       if (statesCache[key]) {
@@ -57,11 +68,12 @@ export function CountryStateProvider({ children }) {
 
       setLoadingStatesMap((prev) => ({ ...prev, [key]: true }));
       try {
-        const data = await geographyService.listStates(countryId, { isActive: true });
+        const data = await geographyService.listStates(numericId, { isActive: true });
         const statesList = Array.isArray(data) ? data : [];
         setStatesCache((prev) => ({
           ...prev,
           [key]: statesList,
+          [String(countryId)]: statesList,
         }));
         return statesList;
       } catch (err) {
@@ -71,7 +83,7 @@ export function CountryStateProvider({ children }) {
         setLoadingStatesMap((prev) => ({ ...prev, [key]: false }));
       }
     },
-    [statesCache]
+    [statesCache, countries]
   );
 
   // Synchronous getter for dropdown options of a given country

@@ -4,6 +4,8 @@
  * Normalizes backend responses to frontend UI representations and converts form state into backend DTOs.
  */
 
+import { normalizeApprovalStatus, ApprovalStatusLabel } from '../../constants/approvalStatus';
+
 // Country Code <-> ID bidirectional helper map
 const COUNTRY_CODE_TO_ID = {
   IN: 1,
@@ -94,13 +96,15 @@ export function vendorItemFromApi(apiItem) {
 
   const id = apiItem.vendorId ?? apiItem.id;
   const effDate = apiItem.currentEffectiveDate ? apiItem.currentEffectiveDate.slice(0, 10) : '';
+  const numericStatus = normalizeApprovalStatus(apiItem.approvalStatus);
 
   return {
     id,
     vendorId: id,
     vendorCode: apiItem.vendorCode || '',
     vendorName: apiItem.vendorName || '',
-    approvalStatus: apiItem.approvalStatus || 'Draft',
+    approvalStatus: numericStatus,
+    statusLabel: ApprovalStatusLabel[numericStatus] || 'Pending',
     hasPendingChange: Boolean(apiItem.hasPendingChange),
     isActive: Boolean(apiItem.isActive),
     effectiveDate: effDate,
@@ -110,6 +114,9 @@ export function vendorItemFromApi(apiItem) {
     email: apiItem.email || '',
     gstNo: apiItem.gstNo || '',
     city: apiItem.city || '',
+    approvedBy: apiItem.approvedBy || null,
+    approvedByName: apiItem.approvedByName || null,
+    approvedOn: apiItem.approvedOn || null,
     createdOn: apiItem.createdOn || '',
   };
 }
@@ -127,18 +134,25 @@ export function vendorDetailFromApi(apiVendor) {
 
   const rawCountry = currentDetail.countryId;
   const rawState = currentDetail.stateId;
+  const numericStatus = normalizeApprovalStatus(apiVendor.approvalStatus ?? currentDetail.approvalStatus);
 
   return {
     id,
     vendorId: id,
     vendorCode: apiVendor.vendorCode || currentDetail.vendorCode || '',
     vendorName: apiVendor.vendorName || currentDetail.vendorName || '',
-    approvalStatus: apiVendor.approvalStatus || currentDetail.approvalStatus || 'Draft',
+    approvalStatus: numericStatus,
+    statusLabel: ApprovalStatusLabel[numericStatus] || 'Draft',
     hasPendingChange: Boolean(apiVendor.hasPendingChange),
     isActive: apiVendor.isActive !== false,
     createdOn: apiVendor.createdOn || currentDetail.createdOn || '',
     lastUpdatedOn: apiVendor.lastUpdatedOn || currentDetail.lastUpdatedOn || '',
     bankDetailCount: apiVendor.bankDetailCount || 0,
+
+    // Approval info (per Guide: approvedBy, approvedByName, approvedOn)
+    approvedBy: apiVendor.approvedBy ?? currentDetail.approvedBy ?? null,
+    approvedByName: apiVendor.approvedByName ?? currentDetail.approvedByName ?? null,
+    approvedOn: apiVendor.approvedOn ?? currentDetail.approvedOn ?? null,
 
     // Detail fields
     vendorDetailId: currentDetail.vendorDetailId,
@@ -173,14 +187,19 @@ export function vendorDetailFromApi(apiVendor) {
           .sort((a, b) => (b.effectiveDate || '').localeCompare(a.effectiveDate || ''))
           .map((v) => {
             const isCurrent = currentDetail && String(v.vendorDetailId) === String(currentDetail.vendorDetailId);
+            const vStatus = normalizeApprovalStatus(v.approvalStatus || (isCurrent ? currentDetail.approvalStatus : 3));
             return {
               id: v.vendorDetailId,
               vendorDetailId: v.vendorDetailId,
               effectiveDate: v.effectiveDate ? v.effectiveDate.slice(0, 10) : '',
-              approvalStatus: v.approvalStatus || (isCurrent ? currentDetail.approvalStatus : 'Approved'),
+              approvalStatus: vStatus,
+              statusLabel: ApprovalStatusLabel[vStatus] || 'Approved',
               versionState: v.versionState || (isCurrent ? currentDetail.versionState || 'Current' : 'History'),
               isActive: v.isActive !== false,
               attachmentCount: v.attachmentCount ?? (isCurrent ? (currentDetail.attachments?.length || 0) : 0),
+              approvedBy: v.approvedBy ?? (isCurrent ? currentDetail.approvedBy : null),
+              approvedByName: v.approvedByName ?? (isCurrent ? currentDetail.approvedByName : null),
+              approvedOn: v.approvedOn ?? (isCurrent ? currentDetail.approvedOn : null),
               createdOn: v.createdOn || (isCurrent ? currentDetail.createdOn : ''),
               lastUpdatedOn: v.lastUpdatedOn || (isCurrent ? currentDetail.lastUpdatedOn : ''),
               ...(isCurrent
@@ -211,10 +230,14 @@ export function vendorDetailFromApi(apiVendor) {
             id: currentDetail.vendorDetailId || id,
             vendorDetailId: currentDetail.vendorDetailId || id,
             effectiveDate: currentDetail.effectiveDate ? currentDetail.effectiveDate.slice(0, 10) : '',
-            approvalStatus: currentDetail.approvalStatus || 'Approved',
+            approvalStatus: numericStatus,
+            statusLabel: ApprovalStatusLabel[numericStatus] || 'Approved',
             versionState: currentDetail.versionState || 'Current',
             isActive: currentDetail.isActive !== false,
             attachmentCount: currentDetail.attachments?.length || 0,
+            approvedBy: currentDetail.approvedBy || null,
+            approvedByName: currentDetail.approvedByName || null,
+            approvedOn: currentDetail.approvedOn || null,
             contactPersonName: currentDetail.contactPersonName || '',
             phoneNo: currentDetail.phoneNo || '',
             alternatePhoneNo: currentDetail.alternatePhoneNo || '',
@@ -246,6 +269,7 @@ export function vendorVersionDetailFromApi(apiVersion) {
 
   const rawCountry = apiVersion.countryId;
   const rawState = apiVersion.stateId;
+  const numericStatus = normalizeApprovalStatus(apiVersion.approvalStatus);
 
   return {
     id: apiVersion.vendorDetailId,
@@ -272,8 +296,12 @@ export function vendorVersionDetailFromApi(apiVersion) {
     isActive: apiVersion.isActive !== false,
     inactiveDate: apiVersion.inactiveDate || null,
     inactiveComment: apiVersion.inactiveComment || '',
-    approvalStatus: apiVersion.approvalStatus || 'Draft',
+    approvalStatus: numericStatus,
+    statusLabel: ApprovalStatusLabel[numericStatus] || 'Draft',
     versionState: apiVersion.versionState || 'Current',
+    approvedBy: apiVersion.approvedBy || null,
+    approvedByName: apiVersion.approvedByName || null,
+    approvedOn: apiVersion.approvedOn || null,
     attachments: Array.isArray(apiVersion.attachments) ? apiVersion.attachments : [],
     latestApprovalRequest: apiVersion.latestApprovalRequest || null,
     createdOn: apiVersion.createdOn || '',

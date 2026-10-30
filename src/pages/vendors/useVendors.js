@@ -4,6 +4,7 @@ import { mockVendors } from '../../mocks/vendors';
 import { getActiveVendorVersion } from '../../utils/vendorVersions';
 import { getTodayISO } from '../../utils/dateUtils';
 import { vendorService, isMockApi } from '../../services';
+import { normalizeApprovalStatus, ApprovalStatus } from '../../constants/approvalStatus';
 
 let nextSeqNumber = mockVendors.length + 1;
 let nextIdNumber = mockVendors.length + 1;
@@ -108,7 +109,13 @@ export function useVendors() {
       }
 
       if (approvalFilter !== 'ALL') {
-        if (v.approvalStatus !== approvalFilter) {
+        const filterCode = typeof approvalFilter === 'number'
+          ? approvalFilter
+          : normalizeApprovalStatus(approvalFilter);
+        const itemCode = typeof v.approvalStatus === 'number'
+          ? v.approvalStatus
+          : normalizeApprovalStatus(v.approvalStatus);
+        if (itemCode !== filterCode) {
           return false;
         }
       }
@@ -202,7 +209,7 @@ export function useVendors() {
         gstNo: formData.gstNo?.trim().toUpperCase() || '',
         website: formData.website?.trim() || '',
         email: formData.email?.trim() || '',
-        countryId: formData.countryId || 'IN',
+        countryId: formData.countryId || 2,
         stateId: formData.stateId || '',
         city: formData.city?.trim() || '',
         zipCode: formData.zipCode?.trim() || '',

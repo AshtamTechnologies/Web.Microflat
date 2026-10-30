@@ -5,6 +5,10 @@
 
 export const APPROVAL_ENDPOINTS = {
   APPROVAL_REQUESTS: '/api/approval-requests',
+  STATUSES: '/api/approval-requests/statuses',
+  PENDING: '/api/approval-requests/pending',
+  HISTORY: '/api/approval-requests/history',
+  TIMELINE: (id) => `/api/approval-requests/${id}/history`,
   SUMMARY: '/api/approval-requests/summary',
   REQUEST_BY_ID: (id) => `/api/approval-requests/${id}`,
   VERIFY_DOCUMENTS: (id) => `/api/approval-requests/${id}/verify-documents`,

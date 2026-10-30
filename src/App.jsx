@@ -12,6 +12,7 @@ import VendorsPage from './pages/vendors/VendorsPage';
 import VendorDashboardPage from './pages/vendors/VendorDashboardPage';
 import VendorFormPage from './pages/vendors/VendorFormPage';
 import VendorApprovalPage from './pages/approvals/VendorApprovalPage';
+import VendorApprovalViewPage from './pages/approvals/VendorApprovalViewPage';
 import PurchaseRequisitionApprovalPage from './pages/approvals/PurchaseRequisitionApprovalPage';
 import VendorEffectiveDatesPage from './pages/vendors/VendorEffectiveDatesPage';
 import { VendorsProvider } from './context/VendorsContext';
@@ -172,6 +173,7 @@ export default function App() {
               <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
               <Route path="/vendors/:id/effective-dates" element={<VendorEffectiveDatesPage />} />
               <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
+              <Route path="/approvals/vendors/:id" element={<VendorApprovalViewPage />} />
               <Route path="/approvals/purchase-requisitions" element={<PurchaseRequisitionApprovalPage />} />
 
               {/* Vendor Bank Details Routes */}

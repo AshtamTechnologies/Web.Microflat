@@ -56,6 +56,7 @@ import {
 import { useVendorsContext } from '../../context/VendorsContext';
 import { chartColors } from '../../config/chartColors';
 import { getStateName } from '../../mocks/vendors';
+import { ApprovalStatus, normalizeApprovalStatus, getApprovalStatusLabel, getApprovalBadgeVariant } from '../../constants/approvalStatus';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 
 /* ── Custom Pie Tooltip ─────────────────────────────────────────────────────── */
@@ -162,7 +163,7 @@ export default function VendorDashboardPage() {
   const kpis = useMemo(() => {
     const total = allVendors.length;
     const active = allVendors.filter((v) => v.isActive).length;
-    const pending = allVendors.filter((v) => v.approvalStatus === 'Pending').length;
+    const pending = allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Pending).length;
     const inactive = allVendors.filter((v) => !v.isActive).length;
 
     const activePct = total > 0 ? Math.round((active / total) * 100) : 0;
@@ -181,9 +182,9 @@ export default function VendorDashboardPage() {
   /* ── 2. Approval Status Breakdown (Pie/Donut Data) ────────────────────────── */
   const approvalChartData = useMemo(() => {
     const total = allVendors.length || 1;
-    const approvedCount = allVendors.filter((v) => v.approvalStatus === 'Approved').length;
-    const pendingCount = allVendors.filter((v) => v.approvalStatus === 'Pending').length;
-    const rejectedCount = allVendors.filter((v) => v.approvalStatus === 'Rejected').length;
+    const approvedCount = allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Approved).length;
+    const pendingCount = allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Pending).length;
+    const rejectedCount = allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Rejected).length;
 
     return [
       {
@@ -231,7 +232,7 @@ export default function VendorDashboardPage() {
 
   /* ── 4. Pending Approvals List (Up to 5) ──────────────────────────────────── */
   const pendingApprovals = useMemo(() => {
-    return allVendors.filter((v) => v.approvalStatus === 'Pending').slice(0, 5);
+    return allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Pending).slice(0, 5);
   }, [allVendors]);
 
   /* ── 5. Recently Added Vendors List (Up to 5) ────────────────────────────── */
@@ -252,7 +253,7 @@ export default function VendorDashboardPage() {
   async function handleApprove(vendor) {
     try {
       await updateVendor(vendor.id, {
-        approvalStatus: 'Approved',
+        approvalStatus: ApprovalStatus.Approved,
         approvedBy: 'Ian Chesnut',
         approvedOn: getTodayISO(),
       });
@@ -274,7 +275,7 @@ export default function VendorDashboardPage() {
     setActionLoading(true);
     try {
       await updateVendor(rejectingVendor.id, {
-        approvalStatus: 'Rejected',
+        approvalStatus: ApprovalStatus.Rejected,
         approvedBy: 'Ian Chesnut',
         approvedByComments: rejectComments.trim() || 'Vendor compliance audit was not cleared.',
         approvedOn: getTodayISO(),
@@ -552,7 +553,7 @@ export default function VendorDashboardPage() {
           {/* Bottom link */}
           <div className="pt-3 sm:pt-4 border-t border-border mt-3 sm:mt-4 flex items-center justify-end">
             <Link
-              to="/vendors?status=ALL&approval=Pending"
+              to={`/vendors?status=ALL&approval=${ApprovalStatus.Pending}`}
               className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 group/link"
             >
               <span>View all in directory</span>

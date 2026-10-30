@@ -3,6 +3,8 @@
  * Domain model and DTO transformations for Approvals.
  */
 
+import { normalizeApprovalStatus, ApprovalStatusLabel } from '../../constants/approvalStatus';
+
 /**
  * Normalizes an approval request item from GET /api/approval-requests.
  * @param {object} apiItem
@@ -13,6 +15,9 @@ export function approvalRequestFromApi(apiItem) {
 
   const reqId = apiItem.approvalRequestId ?? apiItem.id;
   const refId = apiItem.referenceId ?? apiItem.vendorId;
+  const rawStatus = apiItem.status ?? apiItem.approvalStatus;
+  const numericStatus = normalizeApprovalStatus(rawStatus);
+  const statusLabel = ApprovalStatusLabel[numericStatus] || 'Pending';
 
   return {
     id: reqId,
@@ -25,14 +30,17 @@ export function approvalRequestFromApi(apiItem) {
     moduleCode: apiItem.moduleCode || 'VENDOR',
     typeCode: apiItem.typeCode || 'VENDOR_REGISTRATION',
     typeName: apiItem.typeName || 'Vendor Registration',
-    status: apiItem.status || apiItem.approvalStatus || 'Pending',
-    approvalStatus: apiItem.status || apiItem.approvalStatus || 'Pending',
+    status: numericStatus,
+    approvalStatus: numericStatus,
+    statusLabel,
     initiatedByName: apiItem.initiatedByName || apiItem.createdByName || apiItem.createdBy || 'System',
     initiatedBy: apiItem.initiatedBy,
     initiatedOn: apiItem.initiatedOn || apiItem.createdOn || '',
     createdOn: apiItem.initiatedOn || apiItem.createdOn || '',
     effectiveDate: apiItem.effectiveDate || (apiItem.initiatedOn ? String(apiItem.initiatedOn).slice(0, 10) : ''),
     isDocumentVerified: Boolean(apiItem.isDocumentVerified),
+    actionedByName: apiItem.actionedByName || null,
+    actionedOn: apiItem.actionedOn || null,
     contactPersonName: apiItem.contactPersonName || '',
     city: apiItem.city || '',
     phoneNo: apiItem.phoneNo || '',
