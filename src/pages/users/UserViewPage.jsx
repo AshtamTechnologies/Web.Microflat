@@ -184,11 +184,6 @@ export default function UserViewPage() {
     return [{ roleName: 'Viewer', isPrimary: true }];
   }, [user]);
 
-  const initials = useMemo(() => {
-    if (!user) return 'U';
-    return `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase() || 'U';
-  }, [user]);
-
   function getDeviceIcon(device = '') {
     switch (device.toLowerCase()) {
       case 'mobile':
@@ -427,26 +422,21 @@ export default function UserViewPage() {
       {/* ════════════════════════════════════════════════════════════════ */}
       <Card padding="md" className="bg-bg border border-border shadow-2xs space-y-6">
         {/* Header Profile Block */}
-        <div className="flex items-start gap-4 p-4 rounded-xl bg-surface/60 border border-border">
-          <div className="w-14 h-14 rounded-full bg-primary/15 border-2 border-primary/20 text-primary font-bold text-lg flex items-center justify-center shrink-0 shadow-2xs">
-            {initials}
+        <div className="p-4 rounded-xl bg-surface/60 border border-border">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h2 className="text-lg font-bold text-heading truncate">
+              {user.firstName} {user.lastName}
+            </h2>
+            {user.id && (
+              <span className="font-mono text-xs text-text-muted bg-bg border border-border px-2 py-0.5 rounded-md">
+                ID: {user.id}
+              </span>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <h2 className="text-lg font-bold text-heading truncate">
-                {user.firstName} {user.lastName}
-              </h2>
-              {user.id && (
-                <span className="font-mono text-xs text-text-muted bg-bg border border-border px-2 py-0.5 rounded-md">
-                  ID: {user.id}
-                </span>
-              )}
-            </div>
-            <p className="text-xs sm:text-sm text-text-muted mt-1 flex items-center gap-1.5">
-              <IconMail size={13} className="shrink-0 text-text-muted/70" />
-              <span className="truncate font-medium">{user.email || '—'}</span>
-            </p>
-          </div>
+          <p className="text-xs sm:text-sm text-text-muted mt-1 flex items-center gap-1.5">
+            <IconMail size={13} className="shrink-0 text-text-muted/70" />
+            <span className="truncate font-medium">{user.email || '—'}</span>
+          </p>
         </div>
 
         {/* Contact & Role Information Grid */}
@@ -513,7 +503,6 @@ export default function UserViewPage() {
         {/* Audit & Security Metadata Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-border/80 text-xs text-text-muted">
           <div>
-            {/* <span className="text-2xs font-semibold text-text-muted tracking-wider block"> */}
             <span className="view-field-label mf-detail-label">
               Created On
             </span>
@@ -523,7 +512,6 @@ export default function UserViewPage() {
           </div>
 
           <div>
-            {/* <span className="text-2xs font-semibold text-text-muted tracking-wider block"> */}
             <span className="view-field-label mf-detail-label">
               Last Updated On
             </span>
@@ -533,7 +521,6 @@ export default function UserViewPage() {
           </div>
 
           <div>
-            {/* <span className="text-2xs font-semibold text-text-muted tracking-wider block"> */}
             <span className="view-field-label mf-detail-label">
               Temporary Password Expiry
             </span>

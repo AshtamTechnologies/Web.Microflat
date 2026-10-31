@@ -204,22 +204,15 @@ export default function UsersPage() {
         enableSorting: Boolean(capabilities.sort),
         cell: (info) => {
           const row = info.row.original;
-          const initials =
-            `${(row.firstName || '')[0] || ''}${(row.lastName || '')[0] || ''}`.toUpperCase() || 'U';
 
           return (
-            <div className="flex items-center gap-3 py-0.5">
-              <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 text-primary font-bold text-xs flex items-center justify-center shrink-0">
-                {initials}
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-heading text-sm leading-snug truncate">
-                  {row.firstName} {row.lastName}
-                </span>
-                <span className="text-text-muted text-xs leading-normal truncate">
-                  {row.email}
-                </span>
-              </div>
+            <div className="flex flex-col min-w-0 py-0.5">
+              <span className="font-semibold text-heading text-sm leading-snug truncate">
+                {row.firstName} {row.lastName}
+              </span>
+              <span className="text-text-muted text-xs leading-normal truncate">
+                {row.email}
+              </span>
             </div>
           );
         },
