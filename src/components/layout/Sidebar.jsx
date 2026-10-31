@@ -114,9 +114,9 @@ function NavItem({ item, collapsed, onClick }) {
             ) : Icon ? (
               <Icon
                 size={18}
-
-                className={`shrink-0 transition-transform duration-150 ${isActive ? 'text-primary' : 'text-text-muted group-hover/nav-item:text-heading'
-                  }`}
+                className={`shrink-0 transition-transform duration-150 ${
+                  isActive ? 'text-primary' : 'text-text-muted group-hover/nav-item:text-heading'
+                }`}
                 aria-hidden="true"
               />
             ) : null}
@@ -287,8 +287,19 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
     }
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
+      const childCount = item.children?.length || 0;
+      // Header is ~44px, each child item is ~36px, container padding is ~16px
+      const estimatedHeight = 44 + childCount * 36 + 16;
+      const viewportHeight = window.innerHeight;
+
+      // Smart positioning: if it would overflow the bottom viewport, shift it up
+      const top =
+        rect.top + estimatedHeight > viewportHeight - 12
+          ? Math.max(12, viewportHeight - estimatedHeight - 12)
+          : Math.max(12, rect.top - 4);
+
       setFlyoutCoords({
-        top: Math.max(12, rect.top - 4),
+        top,
         left: rect.right + 8,
       });
       setIsFlyoutOpen(true);
@@ -350,7 +361,6 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
           ) : Icon ? (
             <Icon
               size={18}
-
               className="shrink-0"
               aria-hidden="true"
             />
@@ -365,18 +375,19 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
                 position: 'fixed',
                 top: `${flyoutCoords.top}px`,
                 left: `${flyoutCoords.left}px`,
+                maxHeight: 'calc(100vh - 24px)',
                 zIndex: 99999,
               }}
               onMouseEnter={handleFlyoutMouseEnter}
               onMouseLeave={handleFlyoutMouseLeave}
-              className="w-56 bg-bg border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+              className="w-56 bg-bg border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100"
             >
-              <div className="px-3.5 py-2.5 border-b border-border bg-surface/70 text-2xs font-bold tracking-wider text-text-muted uppercase flex items-center justify-between">
+              <div className="px-3.5 py-2.5 border-b border-border bg-surface/70 text-2xs font-bold tracking-wider text-text-muted uppercase flex items-center justify-between shrink-0">
                 <span>{item.label}</span>
                 {Icon && <Icon size={13} className="text-text-muted" />}
               </div>
 
-              <div className="p-1.5 space-y-0.5">
+              <div className="p-1.5 space-y-0.5 overflow-y-auto min-h-0">
                 {item.children?.map((child) => {
                   const ChildIcon = child.icon;
                   const isLinkActive = isSubNavActive(child.path, location.pathname, childPaths);
@@ -439,7 +450,6 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
           ) : Icon ? (
             <Icon
               size={18}
-
               className={`shrink-0 ${isChildActive ? 'text-primary' : 'text-text-muted'}`}
               aria-hidden="true"
             />
@@ -449,14 +459,12 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
         {isAccordionOpen ? (
           <IconChevronDown
             size={14}
-
             className="shrink-0 text-heading transition-colors"
             aria-hidden="true"
           />
         ) : (
           <IconChevronRight
             size={14}
-
             className="shrink-0 text-text-muted transition-colors"
             aria-hidden="true"
           />
@@ -667,19 +675,19 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
       {!collapsed && (
         <div className="px-3 pt-2.5 pb-1 shrink-0">
           <Input
-              ref={searchInputRef}
-              type="search"
-              size="sm"
-              placeholder="Quick jump..."
-              value={navSearch}
-              onChange={(e) => setNavSearch(e.target.value)}
-              leftIcon={<IconSearch size={13} />}
-              rightElement={
-                <kbd className="px-1.5 py-0.5 text-2xs font-mono font-medium text-text-muted/80 bg-bg border border-border/80 rounded shadow-2xs pointer-events-none">
-                  Ctrl K
-                </kbd>
-              }
-            />
+            ref={searchInputRef}
+            type="search"
+            size="sm"
+            placeholder="Quick jump..."
+            value={navSearch}
+            onChange={(e) => setNavSearch(e.target.value)}
+            leftIcon={<IconSearch size={13} />}
+            rightElement={
+              <kbd className="px-1.5 py-0.5 text-2xs font-mono font-medium text-text-muted/80 bg-bg border border-border/80 rounded shadow-2xs pointer-events-none">
+                Ctrl K
+              </kbd>
+            }
+          />
         </div>
       )}
 
@@ -781,9 +789,6 @@ function SidebarContent({ collapsed, onCollapsedToggle, onChildClick }) {
                   <span className="inline-flex items-center px-1.5 py-0.5 bg-primary/10 text-primary text-2xs font-semibold rounded whitespace-nowrap leading-none shrink-0">
                     {user.role}
                   </span>
-                  {/* <span className="text-2xs text-text-muted truncate group-hover:text-text transition-colors">
-                    View profile
-                  </span> */}
                 </div>
               </div>
             )}
