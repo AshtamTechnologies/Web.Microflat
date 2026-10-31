@@ -143,7 +143,7 @@ export function useInquiries(usersList = mockUsers) {
         Source: formData.Source || 'Website',
         DistributorName: formData.Source === 'Distributor' ? (formData.DistributorName?.trim() || '') : '',
         Priority: formData.Priority || 'Medium',
-        Quantity: formData.Quantity ? Number(formData.Quantity) : 1,
+        Quantity: formData.Quantity ? Number(formData.Quantity) : (Array.isArray(formData.items) && formData.items.length > 0 ? formData.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0) : 0),
         UOM: formData.UOM || 'PCS',
         EstimatedValue: formData.EstimatedValue ? Number(formData.EstimatedValue) : 0,
         RequiredByDate: formData.RequiredByDate || '',

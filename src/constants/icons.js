@@ -92,6 +92,9 @@ import {
   ShoppingCart,
   Receipt,
   PackageCheck,
+  LayoutList,
+  Columns3,
+  GripVertical,
 
   // ── Field & Contact Icons ──
   Phone,
@@ -305,6 +308,9 @@ export const IconMenu = Menu;
 export const IconShoppingCart = ShoppingCart;
 export const IconReceipt = Receipt;
 export const IconPackageCheck = PackageCheck;
+export const IconListView = LayoutList;
+export const IconKanbanView = Columns3;
+export const IconGrip = GripVertical;
 
 /* ── 8. STANDARD ICON COLOR & SIZE CLASSES ── */
 export const ICON_STYLES = {

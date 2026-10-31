@@ -264,7 +264,8 @@ export default function InquiryViewPage() {
   // Line items for Product Selection table — always provides structured items even for legacy single-item records
   const inquiryItems = useMemo(() => {
     if (!inquiry) return [];
-    if (Array.isArray(inquiry.items) && inquiry.items.length > 0) {
+    if (Array.isArray(inquiry.items)) {
+      if (inquiry.items.length === 0) return [];
       return inquiry.items.map((it, idx) => ({
         ...it,
         prItemId: it.prItemId || it.id || idx + 1,

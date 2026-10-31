@@ -1648,7 +1648,11 @@ export default function InquiryFormPage() {
   }
 
   function handleCancel() {
-    navigate(isEdit && existingInquiry ? `/inquiries/${existingInquiry.id || existingInquiry.InquiryId}` : '/inquiries');
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/inquiries');
+    }
   }
 
   function handleNextTab() {
@@ -1830,7 +1834,7 @@ export default function InquiryFormPage() {
               });
             }
           }
-          navigate(`/inquiries/${inquiryId}`);
+          navigate(`/inquiries/${inquiryId}`, { replace: true });
         }
       } else {
         const res = await addInquiry(submissionForm);
@@ -1847,7 +1851,7 @@ export default function InquiryFormPage() {
               });
             }
           }
-          navigate(`/inquiries/${newInquiryId}`);
+          navigate(`/inquiries/${newInquiryId}`, { replace: true });
         }
       }
     } finally {
@@ -2010,6 +2014,23 @@ export default function InquiryFormPage() {
                   onChange={handleChange}
                 />
 
+                {/* Distributor Name */}
+                {form.Source === 'Distributor' && (
+                  <Input
+                    id="DistributorName"
+                    name="DistributorName"
+                    type="text"
+                    label="Distributor Name"
+                    placeholder="e.g. Apex Industrial Solutions"
+                    required
+                    value={form.DistributorName}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={errors.DistributorName}
+                    hint="Associated distributor"
+                  />
+                )}
+
                 {/* Priority */}
                 <SearchableSelect
                   id="Priority"
@@ -2020,9 +2041,11 @@ export default function InquiryFormPage() {
                   onChange={handleChange}
                 />
 
-                {/* Distributor Name (conditionally shown when Source is Distributor) */}
-                {form.Source === 'Distributor' && (
-                  <div className="md:col-span-3">
+
+                {/* Old distributor input removed */}
+                {false && (
+                  <div style={{ display: 'none' }}>
+
                     <Input
                       id="DistributorName"
                       name="DistributorName"
@@ -2034,7 +2057,7 @@ export default function InquiryFormPage() {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       error={errors.DistributorName}
-                      hint="Associated distributor"
+                      id="DistributorName_deprecated"
                     />
                   </div>
                 )}

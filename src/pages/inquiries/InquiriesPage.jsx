@@ -2,6 +2,8 @@
  * InquiriesPage.jsx — Inquiry management dashboard for MicroFlat ERP.
  *
  * Route: /inquiries
+ * Supports both Table / List View and Drag-and-Drop Kanban View.
+ * View preference is remembered across page refreshes and navigation.
  */
 
 import { useMemo, useState, useEffect } from 'react';
@@ -11,6 +13,8 @@ import {
   IconInquiry,
   IconUserPlus,
   IconView,
+  IconListView,
+  IconKanbanView,
 } from '../../constants/icons';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
@@ -29,6 +33,7 @@ import {
   DataTable,
   TableToolbar,
   TableActions,
+  KanbanBoard,
 } from '../../components/ui';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useUsersContext } from '../../context/UsersContext';
@@ -39,6 +44,8 @@ import {
   getStatusOption,
   getPriorityBadgeVariant,
 } from '../../mocks/inquiries';
+import { INQUIRY_STAGES } from './inquiryStages';
+import InquiryKanbanCard from './components/InquiryKanbanCard';
 import AssignInquiryModal from './components/AssignInquiryModal';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -56,11 +63,10 @@ const PRIORITY_FILTER_OPTIONS = [
 
 export default function InquiriesPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const {
     inquiries,
-    allInquiries,
     search,
     setSearch,
     statusFilter,
@@ -69,6 +75,7 @@ export default function InquiriesPage() {
     setPriorityFilter,
     resetFilters,
     deleteInquiry,
+    changeInquiryStatus,
   } = useInquiriesContext();
 
   const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
@@ -79,6 +86,43 @@ export default function InquiriesPage() {
       ensureUsersLoaded();
     }
   }, [userList.length, ensureUsersLoaded]);
+
+  // View mode switcher: 'list' | 'kanban' with persistent storage & URL support
+  const [viewMode, setViewMode] = useState(() => {
+    const urlView = searchParams.get('view');
+    if (urlView === 'kanban' || urlView === 'list') return urlView;
+    try {
+      const saved = localStorage.getItem('mf_inquiries_view_mode');
+      if (saved === 'kanban' || saved === 'list') return saved;
+    } catch {
+      // ignore storage error
+    }
+    return 'list';
+  });
+
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('mf_inquiries_view_mode', mode);
+    } catch {
+      // ignore
+    }
+    const newParams = new URLSearchParams(searchParams);
+    if (mode === 'kanban') {
+      newParams.set('view', 'kanban');
+    } else {
+      newParams.delete('view');
+    }
+    setSearchParams(newParams, { replace: true });
+  };
+
+  // Sync state if URL view param changes externally (e.g. browser back/forward)
+  useEffect(() => {
+    const urlView = searchParams.get('view');
+    if (urlView && (urlView === 'kanban' || urlView === 'list') && urlView !== viewMode) {
+      setViewMode(urlView);
+    }
+  }, [searchParams, viewMode]);
 
   // Modals state
   const [assignModalInquiry, setAssignModalInquiry] = useState(null);
@@ -171,7 +215,11 @@ export default function InquiriesPage() {
         minSize: 180,
         size: 220,
         cell: (info) => {
-          const subject = info.getValue() || info.row.original.items?.[0]?.itemName || info.row.original.items?.[0]?.specification || '—';
+          const subject =
+            info.getValue() ||
+            info.row.original.items?.[0]?.itemName ||
+            info.row.original.items?.[0]?.specification ||
+            '—';
           return (
             <span
               className="text-xs text-text font-medium line-clamp-1"
@@ -192,7 +240,10 @@ export default function InquiriesPage() {
           const regionId = info.getValue();
           const regionLabel = getRegionName(regionId);
           return (
-            <span className="text-xs text-text-muted truncate block" title={regionLabel}>
+            <span
+              className="text-xs text-text-muted truncate block"
+              title={regionLabel}
+            >
               {regionLabel}
             </span>
           );
@@ -207,7 +258,10 @@ export default function InquiriesPage() {
         cell: (info) => {
           const priority = info.getValue() || 'Medium';
           return (
-            <Badge variant={getPriorityBadgeVariant(priority)} className="text-2xs px-2 py-0.5">
+            <Badge
+              variant={getPriorityBadgeVariant(priority)}
+              className="text-2xs px-2 py-0.5"
+            >
               {priority}
             </Badge>
           );
@@ -220,13 +274,16 @@ export default function InquiriesPage() {
         minSize: 120,
         size: 130,
         cell: (info) => {
-          const statusId = info.getValue() || 'New';
+          const statusId = info.getValue() || 'Inquiry';
           const statusInfo = getStatusOption(statusId);
           return (
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border ${statusInfo.badgeClass}`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`} aria-hidden="true" />
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`}
+                aria-hidden="true"
+              />
               {statusInfo.name}
             </span>
           );
@@ -325,14 +382,6 @@ export default function InquiriesPage() {
     getPaginationRowModel: getPaginationRowModel(),
   });
 
-
-
-  function handleDeleteConfirm() {
-    if (!inquiryToDelete) return;
-    deleteInquiry(inquiryToDelete.id || inquiryToDelete.InquiryId);
-    setInquiryToDelete(null);
-  }
-
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Top Header Bar ── */}
@@ -341,18 +390,52 @@ export default function InquiriesPage() {
         subtitle="Track customer RFQs, precision manufacturing enquiries, assignments & conversion status."
         icon={<IconInquiry className="h-6 w-6 text-primary" aria-hidden="true" />}
         actions={
-          <Button
-            variant="primary"
-            onClick={() => navigate('/inquiries/new')}
-            className="shadow-sm text-xs font-semibold"
-          >
-            <IconAdd size={16} className="mr-1.5" aria-hidden="true" />
-            New Inquiry
-          </Button>
+          <div className="flex items-center gap-2.5">
+            {/* View Mode Toggle: List vs Kanban */}
+            <div className="inline-flex items-center p-1 rounded-xl bg-surface border border-border shadow-2xs">
+              <button
+                type="button"
+                onClick={() => handleViewModeChange('list')}
+                title="Switch to List View"
+                aria-pressed={viewMode === 'list'}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-primary text-white shadow-2xs'
+                    : 'text-text-muted hover:text-heading hover:bg-surface-muted'
+                }`}
+              >
+                <IconListView size={15} />
+                <span className="hidden sm:inline">List</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleViewModeChange('kanban')}
+                title="Switch to Kanban Board View"
+                aria-pressed={viewMode === 'kanban'}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'kanban'
+                    ? 'bg-primary text-white shadow-2xs'
+                    : 'text-text-muted hover:text-heading hover:bg-surface-muted'
+                }`}
+              >
+                <IconKanbanView size={15} />
+                <span className="hidden sm:inline">Kanban</span>
+              </button>
+            </div>
+
+            <Button
+              variant="primary"
+              onClick={() => navigate('/inquiries/new')}
+              className="shadow-sm text-xs font-semibold"
+            >
+              <IconAdd size={16} className="mr-1.5" aria-hidden="true" />
+              New Inquiry
+            </Button>
+          </div>
         }
       />
 
-      {/* ── Table Toolbar ── */}
+      {/* ── Table & Filter Toolbar ── */}
       <TableToolbar
         searchValue={search}
         onSearchChange={setSearch}
@@ -383,137 +466,202 @@ export default function InquiriesPage() {
         </div>
       </TableToolbar>
 
-      {/* ── Standard TanStack DataTable & Responsive Mobile Cards ── */}
-      <DataTable
-        table={table}
-        columns={columns}
-        isLoading={loading}
-        totalCount={inquiries.length}
-        entityName="inquiries"
-        emptyTitle="No inquiries found"
-        emptyDescription={
-          hasActiveFilters
-            ? 'Try altering your search or status filters.'
-            : 'No customer inquiries have been logged yet.'
-        }
-        emptyAction={
-          hasActiveFilters ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={resetFilters}
-              className="text-xs text-primary"
-            >
-              Clear filters
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => navigate('/inquiries/new')}
-              className="text-xs"
-            >
-              <IconAdd size={14} className="mr-1.5" />
-              New Inquiry
-            </Button>
-          )
-        }
-        renderMobileCard={(row) => {
-          const inq = row.original;
-          const statusInfo = getStatusOption(inq.StatusId);
-          const assigneeName = resolveUserName(inq.AssignedTo);
+      {/* ── Conditional View Rendering: List vs. Kanban ── */}
+      {viewMode === 'list' ? (
+        <DataTable
+          table={table}
+          columns={columns}
+          isLoading={loading}
+          totalCount={inquiries.length}
+          entityName="inquiries"
+          emptyTitle="No inquiries found"
+          emptyDescription={
+            hasActiveFilters
+              ? 'Try altering your search or status filters.'
+              : 'No customer inquiries have been logged yet.'
+          }
+          emptyAction={
+            hasActiveFilters ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={resetFilters}
+                className="text-xs text-primary"
+              >
+                Clear filters
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => navigate('/inquiries/new')}
+                className="text-xs"
+              >
+                <IconAdd size={14} className="mr-1.5" />
+                New Inquiry
+              </Button>
+            )
+          }
+          renderMobileCard={(row) => {
+            const inq = row.original;
+            const statusInfo = getStatusOption(inq.StatusId);
+            const assigneeName = resolveUserName(inq.AssignedTo);
 
-          return (
-            <div
-              key={inq.id || inq.InquiryId}
-              className="bg-surface border border-border rounded-xl p-4 shadow-2xs space-y-3"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-xs font-bold text-primary">
-                      {inq.InquiryNo}
-                    </span>
-                    <Badge variant={getPriorityBadgeVariant(inq.Priority)} className="text-2xs px-1.5 py-0">
-                      {inq.Priority}
-                    </Badge>
+            return (
+              <div
+                key={inq.id || inq.InquiryId}
+                className="bg-surface border border-border rounded-xl p-4 shadow-2xs space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-bold text-primary">
+                        {inq.InquiryNo}
+                      </span>
+                      <Badge
+                        variant={getPriorityBadgeVariant(inq.Priority)}
+                        className="text-2xs px-1.5 py-0"
+                      >
+                        {inq.Priority}
+                      </Badge>
+                    </div>
+
+                    <Link
+                      to={`/inquiries/${inq.id || inq.InquiryId}`}
+                      className="block text-sm font-semibold text-heading leading-tight mt-1 hover:text-primary"
+                    >
+                      {inq.CustomerName}
+                    </Link>
+                    <p className="text-xs text-text font-medium mt-1 line-clamp-1">
+                      {inq.Subject}
+                    </p>
                   </div>
 
-                  <Link
-                    to={`/inquiries/${inq.id || inq.InquiryId}`}
-                    className="block text-sm font-semibold text-heading leading-tight mt-1 hover:text-primary"
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border shrink-0 ${statusInfo.badgeClass}`}
                   >
-                    {inq.CustomerName}
-                  </Link>
-                  <p className="text-xs text-text font-medium mt-1 line-clamp-1">
-                    {inq.Subject}
-                  </p>
-                </div>
-
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border shrink-0 ${statusInfo.badgeClass}`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`} />
-                  {statusInfo.name}
-                </span>
-              </div>
-
-              {/* Details summary */}
-              <div className="space-y-1 text-xs text-text-muted pt-2 border-t border-border/50">
-                <div className="flex items-center justify-between">
-                  <span>Assigned:</span>
-                  <span className="font-medium text-heading">
-                    {assigneeName}
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`}
+                    />
+                    {statusInfo.name}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span>Region:</span>
-                  <span className="truncate max-w-[180px]">
-                    {getRegionName(inq.RegionId)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between font-mono tabular-nums text-2xs">
-                  <span>Date:</span>
-                  <span>{formatDate(inq.InquiryDate)}</span>
-                </div>
-              </div>
 
-              {/* Action buttons footer */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setAssignModalInquiry(inq)}
-                  className="flex-1 text-xs"
-                >
-                  <IconUserPlus size={13} className="mr-1.5" aria-hidden="true" />
-                  {inq.AssignedTo ? 'Reassign' : 'Assign'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => navigate(`/inquiries/${inq.id || inq.InquiryId}`)}
-                  className="flex-1 text-xs"
-                >
-                  <IconView size={13} className="mr-1.5" aria-hidden="true" />
-                  View
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => navigate(`/inquiries/${inq.id || inq.InquiryId}/edit`)}
-                  className="flex-1 text-xs"
-                >
-                  <IconEdit size={13} className="mr-1.5" aria-hidden="true" />
-                  Edit
-                </Button>
+                {/* Details summary */}
+                <div className="space-y-1 text-xs text-text-muted pt-2 border-t border-border/50">
+                  <div className="flex items-center justify-between">
+                    <span>Assigned:</span>
+                    <span className="font-medium text-heading">
+                      {assigneeName}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Region:</span>
+                    <span className="truncate max-w-[180px]">
+                      {getRegionName(inq.RegionId)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between font-mono tabular-nums text-2xs">
+                    <span>Date:</span>
+                    <span>{formatDate(inq.InquiryDate)}</span>
+                  </div>
+                </div>
+
+                {/* Action buttons footer */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setAssignModalInquiry(inq)}
+                    className="flex-1 text-xs"
+                  >
+                    <IconUserPlus
+                      size={13}
+                      className="mr-1.5"
+                      aria-hidden="true"
+                    />
+                    {inq.AssignedTo ? 'Reassign' : 'Assign'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      navigate(`/inquiries/${inq.id || inq.InquiryId}`)
+                    }
+                    className="flex-1 text-xs"
+                  >
+                    <IconView
+                      size={13}
+                      className="mr-1.5"
+                      aria-hidden="true"
+                    />
+                    View
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      navigate(`/inquiries/${inq.id || inq.InquiryId}/edit`)
+                    }
+                    className="flex-1 text-xs"
+                  >
+                    <IconEdit
+                      size={13}
+                      className="mr-1.5"
+                      aria-hidden="true"
+                    />
+                    Edit
+                  </Button>
+                </div>
               </div>
+            );
+          }}
+        />
+      ) : (
+        /* ── Kanban Board View ── */
+        <div className="space-y-3">
+          {hasActiveFilters && (
+            <div className="flex items-center justify-between text-xs text-text-muted px-1">
+              <span>
+                Showing filtered inquiries across stages ({inquiries.length} total)
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={resetFilters}
+                className="text-xs text-primary h-7 px-2"
+              >
+                Clear filters
+              </Button>
             </div>
-          );
-        }}
-      />
+          )}
+
+          <KanbanBoard
+            columns={INQUIRY_STAGES}
+            items={inquiries}
+            getItemId={(item) => item.id || item.InquiryId}
+            getItemStatus={(item) => item.StatusId}
+            onItemMove={(itemId, newStatusId) => {
+              changeInquiryStatus(itemId, newStatusId);
+            }}
+            renderCard={(item) => (
+              <InquiryKanbanCard
+                inquiry={item}
+                assigneeName={resolveUserName(item.AssignedTo)}
+                onAssignClick={(inq) => setAssignModalInquiry(inq)}
+                onMoveStage={(itemId, newStatusId) => {
+                  changeInquiryStatus(itemId, newStatusId);
+                }}
+                availableStages={INQUIRY_STAGES}
+              />
+            )}
+            emptyColumnText="No inquiries in this stage"
+          />
+        </div>
+      )}
 
       {/* ── Assign Inquiry Modal ── */}
       <AssignInquiryModal

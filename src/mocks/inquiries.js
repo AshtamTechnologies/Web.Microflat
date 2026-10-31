@@ -4,7 +4,7 @@
 
 import { INITIAL_REGIONS } from './regions';
 import { getPathLabel } from '../utils/treeUtils';
-
+import { INQUIRY_STAGES, normalizeInquiryStage } from '../pages/inquiries/inquiryStages';
 
 export const CATEGORY_OPTIONS = [
   { value: 'cat_surface', label: 'Cast Iron & Granite Surface Plates' },
@@ -38,50 +38,7 @@ export const UOM_OPTIONS = [
   { value: 'BOX', label: 'BOX (Boxes)' },
 ];
 
-export const STATUS_OPTIONS = [
-  {
-    id: 'New',
-    name: 'New',
-    badgeVariant: 'info',
-    badgeClass: 'bg-primary/10 text-primary border-primary/20',
-    dotClass: 'bg-primary',
-  },
-  {
-    id: 'In Progress',
-    name: 'In Progress',
-    badgeVariant: 'warning',
-    badgeClass: 'bg-warning/10 text-warning border-warning/20',
-    dotClass: 'bg-warning',
-  },
-  {
-    id: 'Quoted',
-    name: 'Quoted',
-    badgeVariant: 'role',
-    badgeClass: 'bg-primary/15 text-primary border-primary/30',
-    dotClass: 'bg-primary',
-  },
-  {
-    id: 'Won',
-    name: 'Won',
-    badgeVariant: 'success',
-    badgeClass: 'bg-success/10 text-success border-success/20',
-    dotClass: 'bg-success',
-  },
-  {
-    id: 'Lost',
-    name: 'Lost',
-    badgeVariant: 'danger',
-    badgeClass: 'bg-danger/10 text-danger border-danger/20',
-    dotClass: 'bg-danger',
-  },
-  {
-    id: 'Closed',
-    name: 'Closed',
-    badgeVariant: 'neutral',
-    badgeClass: 'bg-surface text-text-muted border-border',
-    dotClass: 'bg-text-muted',
-  },
-];
+export const STATUS_OPTIONS = INQUIRY_STAGES;
 
 export function getRegionName(regionId) {
   if (!regionId) return '—';
@@ -98,7 +55,8 @@ export function getCategoryName(categoryId) {
 }
 
 export function getStatusOption(statusId) {
-  return STATUS_OPTIONS.find((s) => s.id === statusId) || STATUS_OPTIONS[0];
+  const normalized = normalizeInquiryStage(statusId);
+  return STATUS_OPTIONS.find((s) => s.id === normalized) || STATUS_OPTIONS[0];
 }
 
 export function getPriorityBadgeVariant(priority) {
@@ -161,7 +119,7 @@ export const mockInquiries = [
         categoryName: 'Surface Plates',
       },
     ],
-    StatusId: 'In Progress',
+    StatusId: 'Qualified',
     AssignedTo: 'u11', // Arjun Sharma
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-01T09:30:00',
@@ -260,7 +218,7 @@ export const mockInquiries = [
     UOM: 'SETS',
     EstimatedValue: 1450000,
     RequiredByDate: '2026-11-30',
-    StatusId: 'Won',
+    StatusId: 'Order Confirm',
     AssignedTo: 'u1', // Ian Chesnut
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-02T11:00:00',
@@ -314,7 +272,7 @@ export const mockInquiries = [
     UOM: 'PCS',
     EstimatedValue: 180000,
     RequiredByDate: '2026-12-15',
-    StatusId: 'New',
+    StatusId: 'Inquiry',
     AssignedTo: null,
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-02T14:40:00',
@@ -350,7 +308,7 @@ export const mockInquiries = [
     UOM: 'NOS',
     EstimatedValue: 320000,
     RequiredByDate: '2026-11-10',
-    StatusId: 'In Progress',
+    StatusId: 'Negotiation',
     AssignedTo: 'u12', // Priya Mehta
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-03T10:15:00',
@@ -440,7 +398,7 @@ export const mockInquiries = [
     UOM: 'PCS',
     EstimatedValue: 140000,
     RequiredByDate: '2026-11-05',
-    StatusId: 'Lost',
+    StatusId: 'Rejected',
     AssignedTo: 'u3', // Faith Robinson
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-04T11:45:00',
@@ -494,7 +452,7 @@ export const mockInquiries = [
     UOM: 'SETS',
     EstimatedValue: 95000,
     RequiredByDate: '2026-10-25',
-    StatusId: 'Closed',
+    StatusId: 'Accepted',
     AssignedTo: 'u9', // Tonye Gabril
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-04T16:10:00',
@@ -539,7 +497,7 @@ export const mockInquiries = [
     UOM: 'SETS',
     EstimatedValue: 620000,
     RequiredByDate: '2026-11-20',
-    StatusId: 'New',
+    StatusId: 'Inquiry',
     AssignedTo: 'u11', // Arjun Sharma
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-05T09:15:00',
@@ -575,7 +533,7 @@ export const mockInquiries = [
     UOM: 'PCS',
     EstimatedValue: 260000,
     RequiredByDate: '2026-11-10',
-    StatusId: 'In Progress',
+    StatusId: 'Qualified',
     AssignedTo: 'u4', // Scott Walter
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-05T11:30:00',
@@ -665,7 +623,7 @@ export const mockInquiries = [
     UOM: 'SETS',
     EstimatedValue: 840000,
     RequiredByDate: '2026-11-28',
-    StatusId: 'In Progress',
+    StatusId: 'PO created',
     AssignedTo: 'u7', // Natali Emanuel
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-06T10:00:00',
@@ -710,7 +668,7 @@ export const mockInquiries = [
     UOM: 'PCS',
     EstimatedValue: 215000,
     RequiredByDate: '2026-12-05',
-    StatusId: 'New',
+    StatusId: 'Negotiation',
     AssignedTo: null,
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-06T15:30:00',
@@ -746,7 +704,7 @@ export const mockInquiries = [
     UOM: 'UNITS',
     EstimatedValue: 1750000,
     RequiredByDate: '2026-12-30',
-    StatusId: 'Won',
+    StatusId: 'Order Confirm',
     AssignedTo: 'u11', // Arjun Sharma
     CreatedBy: 'Ian Chesnut',
     CreatedOn: '2026-10-07T09:00:00',

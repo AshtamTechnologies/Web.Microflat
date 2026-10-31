@@ -36,3 +36,4 @@ export { default as FormActionsBar } from './FormActionsBar';
 export { default as CollapsibleCard } from './CollapsibleCard';
 export { default as IconPicker } from './IconPicker';
 export { default as GlobalTooltip, Tooltip } from './GlobalTooltip';
+export { default as KanbanBoard, KanbanColumn, KanbanCard } from './KanbanBoard';
