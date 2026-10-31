@@ -41,10 +41,12 @@ import {
   IconBack,
   IconBuilding2,
   IconCalendar,
+  IconCheck,
   IconChevronDown,
   IconChevronUp,
   IconClient,
   IconClock,
+  IconClose,
   IconDelete,
   IconEdit,
   IconFileText,
@@ -76,8 +78,8 @@ import {
   SearchableMultiSelect,
   ScrollableTabs,
   ConfirmModal,
+  StatusSwitch,
 } from '../../components/ui';
-import StatusSwitch from '../../components/ui/StatusSwitch';
 import RichTextEditor from '../../components/ui/RichTextEditor';
 import AddressesEditor from './components/AddressesEditor';
 import ContactsEditor from './components/ContactsEditor';
@@ -710,8 +712,21 @@ export default function ClientEffectiveDatesPage() {
     }
   }
 
-  /* ── Toggle Client Status (PATCH /api/clients/{id}/status) ── */
-  async function handleToggleStatus() {
+  /* ── Client Status (Active / Inactive) with Confirmation Modal ── */
+  const [statusConfirmModal, setStatusConfirmModal] = useState({
+    isOpen: false,
+    nextStatus: null,
+  });
+
+  function handleOpenDeactivate() {
+    setStatusConfirmModal({ isOpen: true, nextStatus: false });
+  }
+
+  function handleOpenActivate() {
+    setStatusConfirmModal({ isOpen: true, nextStatus: true });
+  }
+
+  async function handleConfirmStatusChange() {
     if (!client) return;
     try {
       setIsSaving(true);
@@ -721,8 +736,9 @@ export default function ClientEffectiveDatesPage() {
         const freshVer = await fetchVersionDetail(selectedVersionId);
         if (freshVer) setDetailedVersion(freshVer);
       }
+      setStatusConfirmModal({ isOpen: false, nextStatus: null });
     } catch (err) {
-      console.error('Failed to toggle client status:', err);
+      console.error('Failed to change client status:', err);
     } finally {
       setIsSaving(false);
     }
@@ -915,24 +931,23 @@ export default function ClientEffectiveDatesPage() {
         }}
         actions={
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Status Switch (Updates client header and all current/scheduled versions via PATCH /api/clients/{id}/status) */}
-            <div className="flex items-center gap-2 bg-surface/80 border border-border px-2.5 py-1 rounded-full shadow-2xs">
-              <StatusSwitch
-                checked={client.isActive !== false}
-                onChange={handleToggleStatus}
-                size="sm"
-                activeLabel="Active"
-                inactiveLabel="Inactive"
-                disabled={isSaving}
-              />
+            {/* Status Pill Indicator */}
+            <span
+              className={[
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none',
+                client.isActive !== false
+                  ? 'bg-success/10 text-success border border-success/20'
+                  : 'bg-danger/10 text-danger border border-danger/20',
+              ].join(' ')}
+            >
               <span
-                className={`text-xs font-semibold select-none ${
-                  client.isActive !== false ? 'text-success' : 'text-danger'
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  client.isActive !== false ? 'bg-success' : 'bg-danger'
                 }`}
-              >
-                {client.isActive !== false ? 'Active' : 'Inactive'}
-              </span>
-            </div>
+                aria-hidden="true"
+              />
+              {client.isActive !== false ? 'Active' : 'Inactive'}
+            </span>
 
             <Badge variant={getContactTypeBadgeVariant(client.contactTypeId || client.contactType)}>
               {client.contactTypeId || client.contactType || 'Customer'}
@@ -957,6 +972,36 @@ export default function ClientEffectiveDatesPage() {
                 <IconEdit size={13} className="mr-1.5" />
                 Edit Revision
               </Button>
+            )}
+
+            {!isReadOnly && (
+              client.isActive !== false ? (
+                <Button
+                  type="button"
+                  variant="danger-soft"
+                  size="sm"
+                  onClick={handleOpenDeactivate}
+                  disabled={isSaving}
+                  icon={IconClose}
+                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer text-danger hover:bg-danger/10"
+                  title="Mark client inactive"
+                >
+                  Deactivate
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={handleOpenActivate}
+                  disabled={isSaving}
+                  icon={IconCheck}
+                  className="text-xs font-semibold transition-all h-8 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer bg-success hover:bg-success/90 text-white border-transparent"
+                  title="Re-activate client"
+                >
+                  Activate
+                </Button>
+              )
             )}
 
             {/* Admin Delete Client Button */}
@@ -1769,6 +1814,33 @@ export default function ClientEffectiveDatesPage() {
         confirmText="Delete Client"
         cancelText="Cancel"
         variant="danger"
+      />
+
+      {/* ── Status Change (Activate / Deactivate) Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={statusConfirmModal.isOpen}
+        onClose={() => setStatusConfirmModal({ isOpen: false, nextStatus: null })}
+        onConfirm={handleConfirmStatusChange}
+        title={statusConfirmModal.nextStatus ? 'Activate Client Account' : 'Deactivate Client Account'}
+        message={
+          statusConfirmModal.nextStatus ? (
+            <span>
+              Are you sure you want to mark client{' '}
+              <strong>&quot;{client.companyName || client.clientName}&quot;</strong> as{' '}
+              <strong className="text-success">Active</strong>? This will re-enable inquiries and order processing.
+            </span>
+          ) : (
+            <span>
+              Are you sure you want to mark client{' '}
+              <strong>&quot;{client.companyName || client.clientName}&quot;</strong> as{' '}
+              <strong className="text-danger">Inactive</strong>? This will block inquiry creation and transactions for this client.
+            </span>
+          )
+        }
+        confirmText={statusConfirmModal.nextStatus ? 'Confirm Activation' : 'Confirm Deactivation'}
+        cancelText="Cancel"
+        variant={statusConfirmModal.nextStatus ? 'primary' : 'danger'}
+        loading={isSaving}
       />
     </div>
   );
