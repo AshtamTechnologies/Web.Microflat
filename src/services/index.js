@@ -40,6 +40,18 @@ import * as mockRegions from './regions/regionService.mock';
 import * as realPaymentTerms from './paymentTerms/paymentTermService';
 import * as mockPaymentTerms from './paymentTerms/paymentTermService.mock';
 
+import * as realGrades from './grades/gradesService';
+import * as mockGrades from './grades/gradesService.mock';
+
+import * as realMaterials from './materials/materialsService';
+import * as mockMaterials from './materials/materialsService.mock';
+
+import * as realSpecParameters from './specParameters/specParametersService';
+import * as mockSpecParameters from './specParameters/specParametersService.mock';
+
+import * as realStandards from './standards/standardsService';
+import * as mockStandards from './standards/standardsService.mock';
+
 import * as delegationService from './delegation/delegationService';
 
 import * as geographyService from './geography/geographyService';
@@ -57,6 +69,10 @@ export const approvalsService = useMock ? mockApprovals : realApprovals;
 export const uomService = useMock ? mockUoms : realUoms;
 export const regionService = useMock ? mockRegions : realRegions;
 export const paymentTermService = useMock ? mockPaymentTerms : realPaymentTerms;
+export const gradesService = useMock ? mockGrades : realGrades;
+export const materialsService = useMock ? mockMaterials : realMaterials;
+export const specParametersService = useMock ? mockSpecParameters : realSpecParameters;
+export const standardsService = useMock ? mockStandards : realStandards;
 export { delegationService };
 export { geographyService };
 export const isMockApi = useMock;

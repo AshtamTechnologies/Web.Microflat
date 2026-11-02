@@ -43,6 +43,14 @@ import { DocumentTypesProvider } from './context/DocumentTypesContext';
 
 import ProductCategoriesPage from './pages/configuration/ProductCategoriesPage';
 import { ProductCategoriesProvider } from './context/ProductCategoriesContext';
+import GradesPage from './pages/configuration/GradesPage';
+import { GradesProvider } from './context/GradesContext';
+import MaterialsPage from './pages/configuration/MaterialsPage';
+import { MaterialsProvider } from './context/MaterialsContext';
+import SpecParametersPage from './pages/configuration/SpecParametersPage';
+import { SpecParametersProvider } from './context/SpecParametersContext';
+import StandardsPage from './pages/configuration/StandardsPage';
+import { StandardsProvider } from './context/StandardsContext';
 
 import UomPage from './pages/configuration/UomPage';
 import { UomProvider } from './context/UomContext';
@@ -130,6 +138,10 @@ export default function App() {
                                 <InquiryDocumentsProvider>
                                   <DocumentTypesProvider>
                                     <ProductCategoriesProvider>
+                                      <GradesProvider>
+                                        <MaterialsProvider>
+                                          <SpecParametersProvider>
+                                            <StandardsProvider>
                                       <UomProvider>
                                         <RegionsProvider>
                                           <PaymentTermsProvider>
@@ -145,6 +157,10 @@ export default function App() {
                                           </PaymentTermsProvider>
                                         </RegionsProvider>
                                       </UomProvider>
+                                            </StandardsProvider>
+                                          </SpecParametersProvider>
+                                        </MaterialsProvider>
+                                      </GradesProvider>
                                     </ProductCategoriesProvider>
                                   </DocumentTypesProvider>
                                 </InquiryDocumentsProvider>
@@ -221,6 +237,10 @@ export default function App() {
               <Route path="/configuration/series/:docType" element={<SeriesSetupPage />} />
               <Route path="/configuration/document-types" element={<DocumentTypesPage />} />
               <Route path="/configuration/product-categories" element={<ProductCategoriesPage />} />
+              <Route path="/configuration/grades" element={<GradesPage />} />
+              <Route path="/configuration/materials" element={<MaterialsPage />} />
+              <Route path="/configuration/spec-parameters" element={<SpecParametersPage />} />
+              <Route path="/configuration/standards" element={<StandardsPage />} />
               <Route path="/configuration/uom" element={<UomPage />} />
               <Route path="/configuration/regions" element={<RegionsPage />} />
               <Route path="/configuration/payment-terms" element={<PaymentTermsPage />} />

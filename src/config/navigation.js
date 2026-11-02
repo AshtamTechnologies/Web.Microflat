@@ -33,6 +33,10 @@ import {
   IconRegions,
   IconPaymentTerms,
   IconProcessFlow,
+  IconGrades,
+  IconMaterials,
+  IconSpecParameters,
+  IconStandards,
   IconList,
   IconAdd,
 } from '../constants/icons';
@@ -222,6 +226,30 @@ export const navigation = [
             label: 'Product Categories',
             icon: IconProductCategories,
             path: '/configuration/product-categories',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Grades',
+            icon: IconGrades,
+            path: '/configuration/grades',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Materials',
+            icon: IconMaterials,
+            path: '/configuration/materials',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Spec Parameters',
+            icon: IconSpecParameters,
+            path: '/configuration/spec-parameters',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Standards',
+            icon: IconStandards,
+            path: '/configuration/standards',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {

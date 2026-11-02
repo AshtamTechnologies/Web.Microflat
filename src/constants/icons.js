@@ -32,6 +32,8 @@ import {
   HandCoins,
   ListTree,
   Workflow,
+  Sliders,
+  Award,
 
   // ── Action Icons ──
   Plus,
@@ -192,6 +194,10 @@ export const IconRegions = MapPin;
 export const IconPaymentTerms = HandCoins;
 export const IconProcessFlow = Workflow;
 export const IconWorkflow = Workflow;
+export const IconGrades = Target;
+export const IconMaterials = Package;
+export const IconSpecParameters = Sliders;
+export const IconStandards = Award;
 export const IconList = ListTree;
 
 /* ── 2. GLOBAL ACTION ICONS (Canonical semantic registry) ── */
