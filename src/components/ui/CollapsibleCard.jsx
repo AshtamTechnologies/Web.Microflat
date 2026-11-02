@@ -6,7 +6,7 @@
  * and auto-expands if validation errors are detected.
  */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Card from './Card';
 import { IconChevronDown } from '../../constants/icons';
 
@@ -60,6 +60,16 @@ export default function CollapsibleCard({
     }
   };
 
+  const renderIcon = () => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) return icon;
+    if (typeof icon === 'function' || typeof icon === 'object') {
+      const IconComponent = icon;
+      return <IconComponent size={18} />;
+    }
+    return null;
+  };
+
   return (
     <Card padding="none" className={`overflow-hidden transition-shadow ${className}`} {...rest}>
       {/* ── Section Header ── */}
@@ -87,7 +97,7 @@ export default function CollapsibleCard({
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {icon && (
             <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              {icon}
+              {renderIcon()}
             </div>
           )}
           <div className="min-w-0">

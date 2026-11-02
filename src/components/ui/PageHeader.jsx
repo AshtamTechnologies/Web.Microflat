@@ -91,7 +91,13 @@ export default function PageHeader({
             <span className={truncateTitle ? 'truncate' : 'break-words'}>{title}</span>
             {badge && <span className="inline-flex shrink-0">{badge}</span>}
           </h1>
-          {subtitle && <p className="mf-page-subtitle">{subtitle}</p>}
+          {subtitle && (
+            typeof subtitle === 'string' ? (
+              <p className="mf-page-subtitle">{subtitle}</p>
+            ) : (
+              <div className="mf-page-subtitle">{subtitle}</div>
+            )
+          )}
         </div>
 
         {actionsContent && (

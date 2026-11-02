@@ -43,6 +43,10 @@ import { DocumentTypesProvider } from './context/DocumentTypesContext';
 
 import ProductCategoriesPage from './pages/configuration/ProductCategoriesPage';
 import { ProductCategoriesProvider } from './context/ProductCategoriesContext';
+import ProductsPage from './pages/products/ProductsPage';
+import ProductFormPage from './pages/products/ProductFormPage';
+import ProductViewPage from './pages/products/ProductViewPage';
+import { ProductsProvider } from './context/ProductsContext';
 import GradesPage from './pages/configuration/GradesPage';
 import { GradesProvider } from './context/GradesContext';
 import MaterialsPage from './pages/configuration/MaterialsPage';
@@ -135,6 +139,7 @@ export default function App() {
                           <ClientsProvider>
                             <PurchaseRequisitionProvider>
                               <InquiriesProvider>
+                                <ProductsProvider>
                                 <InquiryDocumentsProvider>
                                   <DocumentTypesProvider>
                                     <ProductCategoriesProvider>
@@ -164,6 +169,7 @@ export default function App() {
                                     </ProductCategoriesProvider>
                                   </DocumentTypesProvider>
                                 </InquiryDocumentsProvider>
+                                </ProductsProvider>
                               </InquiriesProvider>
                             </PurchaseRequisitionProvider>
                           </ClientsProvider>
@@ -231,6 +237,12 @@ export default function App() {
               <Route path="/inquiries/new" element={<InquiryFormPage />} />
               <Route path="/inquiries/:id" element={<InquiryViewPage />} />
               <Route path="/inquiries/:id/edit" element={<InquiryFormPage />} />
+
+              {/* Product Routes */}
+              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/products/new" element={<ProductFormPage />} />
+              <Route path="/products/:id" element={<ProductViewPage />} />
+              <Route path="/products/:id/edit" element={<ProductFormPage />} />
 
               {/* Configuration Routes */}
               <Route path="/configuration/series" element={<Navigate to="/configuration/series/po" replace />} />

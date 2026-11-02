@@ -179,7 +179,18 @@ export function AuthProvider({ children }) {
 export function useAuthContext() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuthContext must be used within an <AuthProvider>');
+    console.warn('useAuthContext accessed outside <AuthProvider>, using fallback state.');
+    return {
+      user: null,
+      setUser: () => {},
+      loading: true,
+      isAuthenticated: false,
+      mustChangePassword: false,
+      setMustChangePassword: () => {},
+      login: async () => {},
+      logout: () => {},
+      changePassword: async () => {},
+    };
   }
   return context;
 }

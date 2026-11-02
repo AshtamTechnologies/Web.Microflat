@@ -127,16 +127,31 @@ export default function ScrollableTabs({
     }
   };
 
+  // Safely render icon whether passed as a component (IconLayers) or a JSX element (<IconLayers />)
+  const renderTabIcon = (icon, defaultSize = 14) => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) {
+      return React.cloneElement(icon, {
+        className: `shrink-0 ${icon.props.className || ''}`.trim(),
+        size: icon.props.size || defaultSize,
+      });
+    }
+    if (typeof icon === 'function' || typeof icon === 'object') {
+      const IconComponent = icon;
+      return <IconComponent size={defaultSize} className="shrink-0" />;
+    }
+    return null;
+  };
+
   return (
-    <div className={`relative w-full max-w-full min-w-0 ${className}`}>
-      {/* Left Scroll Chevron (visible when scrolled right) */}
+    <div className={`relative flex items-center w-full min-w-0 ${className}`}>
+      {/* Left Scroll Button */}
       {canScrollLeft && (
         <button
           type="button"
           onClick={() => handleScroll('left')}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-surface/95 border border-border shadow-md flex items-center justify-center text-text-muted hover:text-primary transition-all cursor-pointer backdrop-blur-xs"
-          title="Scroll tabs left"
-          aria-label="Scroll tabs left"
+          className="absolute left-0 z-20 flex items-center justify-center w-7 h-7 -ml-2 rounded-full bg-surface border border-border shadow-xs text-text-muted hover:text-primary transition-colors cursor-pointer"
+          aria-label="Scroll left"
         >
           <ChevronLeft size={16} />
         </button>
@@ -164,7 +179,6 @@ export default function ScrollableTabs({
         ) : (
           tabs.map((tab) => {
             const isActive = currentActiveTab === tab.id;
-            const Icon = tab.icon;
 
             if (variant === 'pills') {
               return (
@@ -182,7 +196,7 @@ export default function ScrollableTabs({
                       : 'bg-surface hover:bg-surface/80 text-text hover:text-primary border border-border'
                   }`}
                 >
-                  {Icon && <Icon size={15} className="shrink-0" />}
+                  {renderTabIcon(tab.icon, 15)}
                   <span>{tab.label}</span>
                   {tab.hasError && (
                     <span
@@ -221,7 +235,7 @@ export default function ScrollableTabs({
                     : 'border-transparent text-text-muted hover:text-heading hover:border-border'
                 }`}
               >
-                {Icon && <Icon size={14} className="shrink-0" />}
+                {renderTabIcon(tab.icon, 14)}
                 <span>{tab.label}</span>
                 {tab.hasError && (
                   <span
@@ -251,14 +265,13 @@ export default function ScrollableTabs({
         <div className="absolute right-0 top-0 bottom-1.5 w-6 bg-gradient-to-l from-surface to-transparent pointer-events-none z-10" />
       )}
 
-      {/* Right Scroll Chevron (visible when content extends to the right) */}
+      {/* Right Scroll Button */}
       {canScrollRight && (
         <button
           type="button"
           onClick={() => handleScroll('right')}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-surface/95 border border-border shadow-md flex items-center justify-center text-text-muted hover:text-primary transition-all cursor-pointer backdrop-blur-xs"
-          title="Scroll tabs right"
-          aria-label="Scroll tabs right"
+          className="absolute right-0 z-20 flex items-center justify-center w-7 h-7 -mr-2 rounded-full bg-surface border border-border shadow-xs text-text-muted hover:text-primary transition-colors cursor-pointer"
+          aria-label="Scroll right"
         >
           <ChevronRight size={16} />
         </button>

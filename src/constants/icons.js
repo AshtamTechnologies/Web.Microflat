@@ -173,6 +173,7 @@ export const IconBankDetails = Landmark;
 export const IconPurchaseRequisition = ClipboardList;
 export const IconPR = ClipboardList; // Shorthand alias
 export const IconInquiry = Inbox;
+export const IconProduct = PackageCheck;
 export const IconDashboard = LayoutDashboard;
 export const IconDashboardImage = createImageIcon(DashboardIconImg, 'Dashboard');
 export const IconUsers = Users;
