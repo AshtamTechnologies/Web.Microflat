@@ -644,8 +644,8 @@ export default function InquiriesPage() {
             items={inquiries}
             getItemId={(item) => item.id || item.InquiryId}
             getItemStatus={(item) => item.StatusId}
-            onItemMove={(itemId, newStatusId) => {
-              changeInquiryStatus(itemId, newStatusId);
+            onItemMove={(itemId, newStatusId, oldStatusId, targetItemId, position) => {
+              changeInquiryStatus(itemId, newStatusId, '', targetItemId, position);
             }}
             renderCard={(item) => (
               <InquiryKanbanCard

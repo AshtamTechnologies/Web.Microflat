@@ -242,37 +242,83 @@ export function useInquiries(usersList = mockUsers) {
 
   /* ── Change Inquiry Status ── */
   const changeInquiryStatus = useCallback(
-    (id, newStatusId, remarks = '') => {
+    (id, newStatusId, remarks = '', targetItemId = null, position = 'top') => {
       const target = inquiries.find((inq) => inq.id === id || inq.InquiryId === id);
       if (!target) return { ok: false };
 
       const now = formatAuditTimestamp();
       const prevStatus = target.StatusId || 'New';
+      const statusChanged = prevStatus !== newStatusId;
 
-      const activityEntry = {
-        id: `act_${Date.now()}_status`,
-        type: 'status',
-        timestamp: now,
-        changedBy: 'Ian Chesnut',
-        fromValue: prevStatus,
-        toValue: newStatusId,
-        remarks: remarks?.trim() || `Status updated to ${newStatusId}`,
-      };
+      // No-op if status didn't change and no card reordering was requested
+      if (!statusChanged && !targetItemId) return { ok: true };
 
-      setInquiries((prev) =>
-        prev.map((inq) => {
-          if (inq.id !== id && inq.InquiryId !== id) return inq;
-          return {
-            ...inq,
-            StatusId: newStatusId,
-            ModifiedBy: 'Ian Chesnut',
-            ModifiedOn: now,
-            activity: [activityEntry, ...(inq.activity || [])],
-          };
-        })
-      );
+      const activityEntry = statusChanged
+        ? {
+            id: `act_${Date.now()}_status`,
+            type: 'status',
+            timestamp: now,
+            changedBy: 'Ian Chesnut',
+            fromValue: prevStatus,
+            toValue: newStatusId,
+            remarks: remarks?.trim() || `Status updated to ${newStatusId}`,
+          }
+        : null;
 
-      toast.success(`Inquiry status updated to ${newStatusId}`);
+      setInquiries((prev) => {
+        const remaining = prev.filter((inq) => inq.id !== id && inq.InquiryId !== id);
+        const updatedRecord = {
+          ...target,
+          StatusId: newStatusId,
+          ModifiedBy: 'Ian Chesnut',
+          ModifiedOn: now,
+          ...(activityEntry ? { activity: [activityEntry, ...(target.activity || [])] } : {}),
+        };
+
+        // If dropped before or after a specific card in that column
+        if (targetItemId && targetItemId !== id) {
+          const targetIdx = remaining.findIndex(
+            (inq) => inq.id === targetItemId || inq.InquiryId === targetItemId
+          );
+          if (targetIdx !== -1) {
+            const insertIdx = position === 'before' ? targetIdx : targetIdx + 1;
+            const next = [...remaining];
+            next.splice(insertIdx, 0, updatedRecord);
+            return next;
+          }
+        }
+
+        // If dropped anywhere in the stage column (defaults to top of stage)
+        if (position === 'top' || position === 'start') {
+          const firstIdxInStage = remaining.findIndex(
+            (inq) => inq.StatusId === newStatusId
+          );
+
+          if (firstIdxInStage !== -1) {
+            const next = [...remaining];
+            next.splice(firstIdxInStage, 0, updatedRecord);
+            return next;
+          }
+          return [updatedRecord, ...remaining];
+        }
+
+        // Otherwise (if dropped at bottom/end)
+        const lastIdxInStage = remaining
+          .map((inq) => inq.StatusId)
+          .lastIndexOf(newStatusId);
+
+        if (lastIdxInStage !== -1) {
+          const next = [...remaining];
+          next.splice(lastIdxInStage + 1, 0, updatedRecord);
+          return next;
+        }
+
+        return [updatedRecord, ...remaining];
+      });
+
+      if (statusChanged) {
+        toast.success(`Inquiry status updated to ${newStatusId}`);
+      }
       return { ok: true };
     },
     [inquiries]

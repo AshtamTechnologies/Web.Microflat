@@ -43,13 +43,21 @@ function KanbanColumn({
     const itemId = rawId || draggedItemId;
 
     if (itemId && onItemMove) {
-      onItemMove(itemId, columnId);
+      // Dropping anywhere on the column background/empty area places at the top of this stage
+      onItemMove(itemId, columnId, null, 'top');
+    }
+  };
+
+  const handleCardDrop = (incomingItemId, targetCardId, position) => {
+    setIsOver(false);
+    if (incomingItemId && onItemMove) {
+      onItemMove(incomingItemId, columnId, targetCardId, position);
     }
   };
 
   return (
     <div
-      className={`flex flex-col shrink-0 rounded-2xl bg-surface-muted/50 dark:bg-surface-muted/20 border transition-all duration-200 select-none ${widthClass} ${
+      className={`flex flex-col shrink-0 rounded-2xl bg-surface-muted/50 dark:bg-surface-muted/20 border transition-all duration-200 select-none h-full ${widthClass} ${
         isOver
           ? 'border-primary ring-2 ring-primary/30 bg-primary/5 dark:bg-primary/10'
           : 'border-border/80'
@@ -59,7 +67,7 @@ function KanbanColumn({
       onDrop={handleDrop}
     >
       {/* ── Column Header ── */}
-      <div className="p-3 border-b border-border/60">
+      <div className="p-3 border-b border-border/60 shrink-0">
         {renderColumnHeader ? (
           renderColumnHeader({ column, count, items })
         ) : (
@@ -88,12 +96,12 @@ function KanbanColumn({
 
       {/* ── Scrollable Cards Body / Drop Target ── */}
       <div
-        className={`flex-1 p-2.5 space-y-2.5 overflow-y-auto max-h-[calc(100vh-280px)] min-h-[140px] transition-colors rounded-b-2xl ${
+        className={`flex-1 min-h-0 p-2.5 space-y-2.5 overflow-y-auto transition-colors rounded-b-2xl ${
           isOver ? 'bg-primary/5' : ''
         }`}
       >
         {items.length === 0 ? (
-          <div className="h-28 rounded-xl border-2 border-dashed border-border/70 flex flex-col items-center justify-center p-3 text-center">
+          <div className="h-full min-h-[140px] rounded-xl border-2 border-dashed border-border/70 flex flex-col items-center justify-center p-3 text-center transition-colors">
             <p className="text-2xs text-text-muted/70 font-medium">
               {isOver ? 'Drop card here' : emptyColumnText}
             </p>
@@ -109,8 +117,10 @@ function KanbanColumn({
                 id={id}
                 item={item}
                 isDragging={isDragging}
+                draggedItemId={draggedItemId}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
+                onCardDrop={handleCardDrop}
                 renderCard={renderCard}
               />
             );
@@ -120,7 +130,7 @@ function KanbanColumn({
 
       {/* ── Optional Column Footer ── */}
       {renderColumnFooter && (
-        <div className="p-2.5 border-t border-border/60 bg-surface/50 rounded-b-2xl">
+        <div className="p-2.5 border-t border-border/60 bg-surface/50 rounded-b-2xl shrink-0">
           {renderColumnFooter({ column, items })}
         </div>
       )}
