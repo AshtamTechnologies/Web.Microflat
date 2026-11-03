@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -67,36 +67,58 @@ const INITIAL_FORM = {
 
 export default function ProductCategoriesPage() {
   const {
-    categories,
+    categories = [],
+    isLoading = false,
+    fetchCategories,
+    fetchCategoryById,
     addCategory,
     updateCategory,
-    deleteCategory,
-    toggleCategoryActive,
+    updateCategoryStatus,
   } = useProductCategoriesContext();
 
   const { inquiries = [] } = useInquiriesContext();
 
-  // Simulated initial loading delay
-  const [initialLoading, setInitialLoading] = useState(true);
-  useEffect(() => {
-    const timer = setTimeout(() => setInitialLoading(false), 700);
-    return () => clearTimeout(timer);
-  }, []);
-
   // Filter and Search Toolbar state
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
+
+  // Debounce search query by 350ms
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // Load categories from server when filters change
+  const loadData = useCallback(() => {
+    const params = {};
+    if (debouncedSearch) {
+      params.search = debouncedSearch;
+    }
+    if (statusFilter === 'ACTIVE') {
+      params.isActive = true;
+    } else if (statusFilter === 'INACTIVE') {
+      params.isActive = false;
+    }
+    fetchCategories(params);
+  }, [debouncedSearch, statusFilter, fetchCategories]);
+
+  useEffect(() => {
+    loadData();
+  }, [debouncedSearch, statusFilter, loadData]);
 
   // Tree expansion state (start with all categories expanded)
   const [expandedIds, setExpandedIds] = useState(() => {
-    return new Set(categories.map((c) => c.categoryId));
+    return new Set(categories.map((c) => c.categoryId || c.id));
   });
 
   // Ensure new categories get expanded when added
   useEffect(() => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      categories.forEach((c) => next.add(c.categoryId));
+      categories.forEach((c) => next.add(c.categoryId || c.id));
       return next;
     });
   }, [categories]);
@@ -109,6 +131,7 @@ export default function ProductCategoriesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [viewingCategory, setViewingCategory] = useState(null); // View modal state
+  const [isFetchingDetail, setIsFetchingDetail] = useState(false);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -130,7 +153,7 @@ export default function ProductCategoriesPage() {
   }
 
   function expandAll() {
-    setExpandedIds(new Set(categories.map((c) => c.categoryId)));
+    setExpandedIds(new Set(categories.map((c) => c.categoryId || c.id)));
   }
 
   function collapseAll() {
@@ -156,10 +179,11 @@ export default function ProductCategoriesPage() {
     // Find all matching category IDs
     const matchingIds = new Set();
     categories.forEach((cat) => {
+      const catId = cat.categoryId || cat.id;
       const matchesSearch =
         !q ||
-        cat.categoryCode.toLowerCase().includes(q) ||
-        cat.categoryName.toLowerCase().includes(q);
+        (cat.categoryCode && cat.categoryCode.toLowerCase().includes(q)) ||
+        (cat.categoryName && cat.categoryName.toLowerCase().includes(q));
 
       const matchesStatus =
         statusFilter === 'ALL' ||
@@ -167,13 +191,13 @@ export default function ProductCategoriesPage() {
         (statusFilter === 'INACTIVE' && !cat.isActive);
 
       if (matchesSearch && matchesStatus) {
-        matchingIds.add(cat.categoryId);
+        matchingIds.add(catId);
       }
     });
 
     // Also include all ancestors of matching nodes so hierarchy remains readable
     const visibleIdsWithAncestors = new Set(matchingIds);
-    const catMap = new Map(categories.map((c) => [c.categoryId, c]));
+    const catMap = new Map(categories.map((c) => [c.categoryId || c.id, c]));
 
     matchingIds.forEach((id) => {
       let curr = catMap.get(id);
@@ -186,16 +210,16 @@ export default function ProductCategoriesPage() {
     // Flatten tree including visible nodes (ignore collapse state during search)
     const alwaysExpandDuringSearch = Boolean(q);
     const effectiveExpanded = alwaysExpandDuringSearch
-      ? new Set(categories.map((c) => c.categoryId))
+      ? new Set(categories.map((c) => c.categoryId || c.id))
       : expandedIds;
 
     const flattened = flattenVisible(tree, effectiveExpanded);
-    return flattened.filter((row) => visibleIdsWithAncestors.has(row.categoryId));
+    return flattened.filter((row) => visibleIdsWithAncestors.has(row.categoryId || row.id));
   }, [categories, expandedIds, searchQuery, statusFilter]);
 
   /* ── Form Validation ── */
   function validateField(name, value) {
-    const targetId = editingCategory?.categoryId;
+    const targetId = editingCategory?.categoryId || editingCategory?.id;
 
     switch (name) {
       case 'categoryCode': {
@@ -208,8 +232,9 @@ export default function ProductCategoriesPage() {
 
         // Check unique code (case-insensitive)
         const duplicate = categories.find((c) => {
-          if (editingCategory && c.categoryId === targetId) return false;
-          return c.categoryCode.toUpperCase() === str;
+          const cid = c.categoryId || c.id;
+          if (editingCategory && String(cid) === String(targetId)) return false;
+          return c.categoryCode && c.categoryCode.toUpperCase() === str;
         });
         if (duplicate) return 'A category with this code already exists.';
         return '';
@@ -238,30 +263,70 @@ export default function ProductCategoriesPage() {
   function handleOpenAdd(parentCatId = null) {
     // Only top-level categories can be chosen as parent
     const targetParent = parentCatId
-      ? categories.find((c) => c.categoryId === parentCatId && !c.parentCategoryId)
+      ? categories.find(
+          (c) =>
+            (String(c.categoryId) === String(parentCatId) || String(c.id) === String(parentCatId)) &&
+            !c.parentCategoryId
+        )
       : null;
 
     setEditingCategory(null);
     setFormData({
       categoryCode: '',
       categoryName: '',
-      parentCategoryId: targetParent ? targetParent.categoryId : '',
+      parentCategoryId: targetParent ? String(targetParent.categoryId || targetParent.id) : '',
       isActive: true,
     });
     setFormErrors({});
     setIsModalOpen(true);
   }
 
-  function handleOpenEdit(cat) {
+  async function handleOpenEdit(cat) {
+    const id = cat.id || cat.categoryId;
     setEditingCategory(cat);
     setFormData({
       categoryCode: cat.categoryCode || '',
       categoryName: cat.categoryName || '',
-      parentCategoryId: cat.parentCategoryId || '',
+      parentCategoryId: cat.parentCategoryId ? String(cat.parentCategoryId) : '',
       isActive: Boolean(cat.isActive),
     });
     setFormErrors({});
     setIsModalOpen(true);
+    setIsFetchingDetail(true);
+
+    try {
+      const fresh = await fetchCategoryById(id);
+      if (fresh) {
+        setEditingCategory(fresh);
+        setFormData({
+          categoryCode: fresh.categoryCode || '',
+          categoryName: fresh.categoryName || '',
+          parentCategoryId: fresh.parentCategoryId ? String(fresh.parentCategoryId) : '',
+          isActive: Boolean(fresh.isActive),
+        });
+      }
+    } catch {
+      // toast is handled in context
+    } finally {
+      setIsFetchingDetail(false);
+    }
+  }
+
+  async function handleOpenView(cat) {
+    const id = cat.id || cat.categoryId;
+    setViewingCategory(cat);
+    setIsFetchingDetail(true);
+
+    try {
+      const fresh = await fetchCategoryById(id);
+      if (fresh) {
+        setViewingCategory(fresh);
+      }
+    } catch {
+      // toast is handled in context
+    } finally {
+      setIsFetchingDetail(false);
+    }
   }
 
   function handleCloseModal() {
@@ -270,6 +335,7 @@ export default function ProductCategoriesPage() {
     setEditingCategory(null);
     setFormData(INITIAL_FORM);
     setFormErrors({});
+    setIsFetchingDetail(false);
   }
 
   async function handleFormSubmit(e) {
@@ -282,17 +348,36 @@ export default function ProductCategoriesPage() {
 
     setIsSubmitting(true);
     try {
+      const payload = {
+        categoryCode: formData.categoryCode.trim().toUpperCase(),
+        categoryName: formData.categoryName.trim(),
+        parentCategoryId: formData.parentCategoryId ? Number(formData.parentCategoryId) : 0,
+      };
+
       if (editingCategory) {
-        await updateCategory(editingCategory.categoryId, formData);
+        const id = editingCategory.id || editingCategory.categoryId;
+        // 1. Update category details via PUT /api/product-categories/{id}
+        await updateCategory(id, payload);
+
+        // 2. If status was changed in form, update via PATCH /api/product-categories/{id}/status
+        if (Boolean(editingCategory.isActive) !== Boolean(formData.isActive)) {
+          await updateCategoryStatus(id, formData.isActive);
+        }
       } else {
-        await addCategory(formData);
+        // 1. Create category via POST /api/product-categories
+        const created = await addCategory(payload);
+        const newId = created?.id || created?.categoryId;
+
+        // 2. If status was set to inactive during creation, update via PATCH /api/product-categories/{id}/status
+        if (newId && formData.isActive === false) {
+          await updateCategoryStatus(newId, false);
+        }
       }
-      setIsModalOpen(false);
-      setEditingCategory(null);
-      setFormData(INITIAL_FORM);
-      setFormErrors({});
-    } catch (err) {
-      toast.error('Failed to save category.');
+
+      handleCloseModal();
+      loadData();
+    } catch {
+      // toast handled in context
     } finally {
       setIsSubmitting(false);
     }
@@ -300,10 +385,10 @@ export default function ProductCategoriesPage() {
 
   /* ── Delete Handlers with Safety Blocks ── */
   function handleDeleteClick(cat) {
-    const id = cat.categoryId;
+    const id = cat.categoryId || cat.id;
 
     // 1. Block if category has children
-    const hasChildren = categories.some((c) => c.parentCategoryId === id);
+    const hasChildren = categories.some((c) => String(c.parentCategoryId) === String(id));
     if (hasChildren) {
       toast.error('Cannot delete. It has sub-categories.');
       return;
@@ -311,7 +396,7 @@ export default function ProductCategoriesPage() {
 
     // 2. Block if category is used by any inquiry
     const usedCount = inquiries.filter(
-      (inq) => inq.CategoryId === id || inq.categoryId === id
+      (inq) => String(inq.CategoryId) === String(id) || String(inq.categoryId) === String(id)
     ).length;
 
     if (usedCount > 0) {
@@ -326,15 +411,15 @@ export default function ProductCategoriesPage() {
 
   function handleConfirmDelete() {
     if (!categoryToDelete) return;
-    deleteCategory(categoryToDelete.categoryId);
     setCategoryToDelete(null);
   }
 
   /* ── Parent Category Options for Add/Edit Modal (Strict 2-Level Limit: Root categories only) ── */
   const parentSelectOptions = useMemo(() => {
     // If editing a category that already has children, it cannot become a child of another category (must stay root)
+    const targetId = editingCategory?.categoryId || editingCategory?.id;
     const hasChildren = editingCategory
-      ? categories.some((c) => c.parentCategoryId === editingCategory.categoryId)
+      ? categories.some((c) => String(c.parentCategoryId) === String(targetId))
       : false;
 
     if (hasChildren) {
@@ -343,12 +428,13 @@ export default function ProductCategoriesPage() {
 
     // Only Top-Level categories (where !parentCategoryId) can be chosen as a parent
     const rootCategories = categories.filter((c) => {
-      if (editingCategory && c.categoryId === editingCategory.categoryId) return false;
+      const cid = c.categoryId || c.id;
+      if (editingCategory && String(cid) === String(targetId)) return false;
       return !c.parentCategoryId; // Only root categories
     });
 
     const baseOptions = rootCategories.map((cat) => ({
-      value: cat.categoryId,
+      value: String(cat.categoryId || cat.id),
       label: `${cat.categoryName} (${cat.categoryCode})`,
     }));
 
@@ -370,7 +456,7 @@ export default function ProductCategoriesPage() {
         cell: ({ row }) => (
           <button
             type="button"
-            onClick={() => setViewingCategory(row.original)}
+            onClick={() => handleOpenView(row.original)}
             className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
           >
             {row.original.categoryCode}
@@ -396,7 +482,7 @@ export default function ProductCategoriesPage() {
               {hasChildren ? (
                 <button
                   type="button"
-                  onClick={() => toggleExpand(cat.categoryId)}
+                  onClick={() => toggleExpand(cat.categoryId || cat.id)}
                   className="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-heading hover:bg-surface transition-colors cursor-pointer"
                   title={isExpanded ? 'Collapse subcategories' : 'Expand subcategories'}
                 >
@@ -423,8 +509,9 @@ export default function ProductCategoriesPage() {
                   />
                 )}
                 <span
-                  className={`text-sm font-medium truncate ${cat.isActive ? 'text-heading' : 'text-text-muted line-through'
-                    }`}
+                  className={`text-sm font-medium truncate ${
+                    cat.isActive ? 'text-heading' : 'text-text-muted line-through'
+                  }`}
                   title={cat.categoryName}
                 >
                   {cat.categoryName}
@@ -462,8 +549,9 @@ export default function ProductCategoriesPage() {
               ].join(' ')}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-success' : 'bg-danger'
-                  }`}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  isActive ? 'bg-success' : 'bg-danger'
+                }`}
                 aria-hidden="true"
               />
               {isActive ? 'Active' : 'Inactive'}
@@ -497,7 +585,7 @@ export default function ProductCategoriesPage() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  onClick={() => handleOpenAdd(row.original.categoryId)}
+                  onClick={() => handleOpenAdd(row.original.categoryId || row.original.id)}
                   title="Add sub-category"
                   className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface transition-colors"
                 >
@@ -505,7 +593,7 @@ export default function ProductCategoriesPage() {
                 </Button>
               )
             }
-            onView={() => setViewingCategory(row.original)}
+            onView={() => handleOpenView(row.original)}
             onEdit={() => handleOpenEdit(row.original)}
             viewTitle="View category"
             editTitle="Edit category"
@@ -585,10 +673,11 @@ export default function ProductCategoriesPage() {
                 key={status}
                 type="button"
                 onClick={() => setStatusFilter(status)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${statusFilter === status
-                  ? 'bg-bg text-heading shadow-2xs font-semibold'
-                  : 'text-text-muted hover:text-text'
-                  }`}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
+                  statusFilter === status
+                    ? 'bg-bg text-heading shadow-2xs font-semibold'
+                    : 'text-text-muted hover:text-text'
+                }`}
               >
                 {status.toLowerCase()}
               </button>
@@ -642,8 +731,9 @@ export default function ProductCategoriesPage() {
                       }
                     >
                       <div
-                        className={`flex items-center gap-1.5 ${header.column.getCanSort() ? 'cursor-pointer select-none' : ''
-                          }`}
+                        className={`flex items-center gap-1.5 ${
+                          header.column.getCanSort() ? 'cursor-pointer select-none' : ''
+                        }`}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         <span className="truncate">
@@ -675,7 +765,7 @@ export default function ProductCategoriesPage() {
           </thead>
 
           <tbody className="divide-y divide-border bg-bg">
-            {initialLoading ? (
+            {isLoading ? (
               // Skeleton loading rows
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={`skeleton-${i}`} className="animate-pulse">
@@ -732,7 +822,7 @@ export default function ProductCategoriesPage() {
 
       {/* ── Mobile View (< md): Touch-friendly Card List ── */}
       <div className="block md:hidden space-y-3">
-        {initialLoading ? (
+        {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={`m-skel-${i}`} className="bg-bg border border-border rounded-xl p-4 animate-pulse space-y-3">
               <div className="flex justify-between items-center">
@@ -746,7 +836,7 @@ export default function ProductCategoriesPage() {
         ) : visibleRows.length > 0 ? (
           visibleRows.map((cat) => (
             <div
-              key={cat.categoryId}
+              key={cat.categoryId || cat.id}
               className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
             >
               <div className="flex items-start justify-between gap-2">
@@ -754,7 +844,7 @@ export default function ProductCategoriesPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => setViewingCategory(cat)}
+                      onClick={() => handleOpenView(cat)}
                       className="font-mono text-xs font-bold text-primary hover:underline text-left cursor-pointer"
                     >
                       {cat.categoryCode}
@@ -784,8 +874,9 @@ export default function ProductCategoriesPage() {
                   ].join(' ')}
                 >
                   <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${cat.isActive ? 'bg-success' : 'bg-danger'
-                      }`}
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      cat.isActive ? 'bg-success' : 'bg-danger'
+                    }`}
                     aria-hidden="true"
                   />
                   {cat.isActive ? 'Active' : 'Inactive'}
@@ -798,21 +889,21 @@ export default function ProductCategoriesPage() {
                   {!cat.parentCategoryId && (
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="secondary"
                       size="sm"
-                      onClick={() => handleOpenAdd(cat.categoryId)}
-                      title="Add sub-category"
+                      onClick={() => handleOpenAdd(cat.categoryId || cat.id)}
                       className="text-xs"
+                      title="Add sub-category"
                     >
                       <IconAdd size={13} className="mr-1" />
-                      Add Sub
+                      Sub
                     </Button>
                   )}
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={() => setViewingCategory(cat)}
+                    onClick={() => handleOpenView(cat)}
                     className="text-xs"
                   >
                     <IconView size={13} className="mr-1.5" />
@@ -991,8 +1082,9 @@ export default function ProductCategoriesPage() {
                 ].join(' ')}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${viewingCategory.isActive ? 'bg-success' : 'bg-danger'
-                    }`}
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    viewingCategory.isActive ? 'bg-success' : 'bg-danger'
+                  }`}
                   aria-hidden="true"
                 />
                 {viewingCategory.isActive ? 'Active' : 'Inactive'}
@@ -1002,7 +1094,6 @@ export default function ProductCategoriesPage() {
             {/* Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
                 <span className="view-field-label mf-detail-label">
                   Category Code
                 </span>
@@ -1012,7 +1103,6 @@ export default function ProductCategoriesPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
                 <span className="view-field-label mf-detail-label">
                   Category Type
                 </span>
@@ -1022,27 +1112,24 @@ export default function ProductCategoriesPage() {
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
                 <span className="view-field-label mf-detail-label">
                   Parent Category
                 </span>
                 <span className="text-xs text-text break-words block leading-relaxed">
-                  {viewingCategory.parentName || '— (None / Top-Level)'}
+                  {viewingCategory.parentCategoryName || viewingCategory.parentName || '— (None / Top-Level)'}
                 </span>
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
                 <span className="view-field-label mf-detail-label">
                   Sub-Categories
                 </span>
                 <span className="text-xs font-medium text-heading">
-                  {categories.filter(c => c.parentCategoryId === viewingCategory.categoryId).length} sub-categories
+                  {categories.filter(c => String(c.parentCategoryId) === String(viewingCategory.categoryId || viewingCategory.id)).length} sub-categories
                 </span>
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                {/* <span className="text-2xs tracking-wider text-text-muted font-bold block"> */}
                 <span className="view-field-label mf-detail-label">
                   Created On
                 </span>
@@ -1050,15 +1137,6 @@ export default function ProductCategoriesPage() {
                   {formatDate(viewingCategory.createdOn)}
                 </span>
               </div>
-
-              {/* <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
-                <span className="text-2xs uppercase tracking-wider text-text-muted font-bold block">
-                  Linked Inquiries
-                </span>
-                <span className="text-xs text-text">
-                  {inquiries.filter(inq => inq.CategoryId === viewingCategory.categoryId || inq.categoryId === viewingCategory.categoryId).length} inquiries
-                </span>
-              </div> */}
             </div>
 
             {/* Footer Actions */}
