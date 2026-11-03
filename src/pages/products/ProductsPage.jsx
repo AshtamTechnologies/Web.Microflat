@@ -190,16 +190,11 @@ export default function ProductsPage() {
         size: 120,
         cell: (info) => {
           const row = info.row.original;
-          const isPendingOrRejected =
-            row.approvalStatus === ApprovalStatus.Pending ||
-            row.approvalStatus === ApprovalStatus.Rejected;
-
           return (
             <TableActions
               align="right"
               onView={() => navigate(`/products/${row.id}`)}
               onEdit={() => navigate(`/products/${row.id}/edit`)}
-              onDelete={isPendingOrRejected ? () => setProductToDelete(row) : undefined}
             />
           );
         },
@@ -269,7 +264,7 @@ export default function ProductsPage() {
       />
 
       {/* ── 2. Summary KPI Cards ── */}
-      <ProductSummaryCards summary={summary} isLoading={isLoadingSummary} />
+      {/* <ProductSummaryCards summary={summary} isLoading={isLoadingSummary} /> */}
 
       {/* ── 3. Filters Toolbar (Swagger Image 1) ── */}
       <ProductFilterBar
@@ -306,10 +301,6 @@ export default function ProductsPage() {
         }
         renderMobileCard={(row) => {
           const product = row.original;
-          const isPendingOrRejected =
-            product.approvalStatus === ApprovalStatus.Pending ||
-            product.approvalStatus === ApprovalStatus.Rejected;
-
           return (
             <div
               key={product.id}
@@ -388,18 +379,7 @@ export default function ProductsPage() {
                   Edit
                 </Button>
 
-                {isPendingOrRejected && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setProductToDelete(product)}
-                    className="text-danger hover:bg-danger/10 px-2.5"
-                    title="Delete Product"
-                  >
-                    <IconDelete size={14} aria-hidden="true" />
-                  </Button>
-                )}
+
               </div>
             </div>
           );

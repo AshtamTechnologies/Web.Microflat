@@ -51,8 +51,8 @@ export default function ProductViewPage() {
   const [activeTab, setActiveTab] = useState('variants');
 
   // Approval modals
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-  const [rejectComments, setRejectComments] = useState('');
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
 
   // Quick edit standards & options
@@ -106,6 +106,7 @@ export default function ProductViewPage() {
     try {
       await productService.approveProduct(product.id);
       toast.success('Product approved successfully');
+      setIsApproveModalOpen(false);
       loadProduct();
       refreshProducts?.();
       loadSummary?.();
@@ -117,14 +118,12 @@ export default function ProductViewPage() {
   };
 
   // Handle Reject
-  const handleReject = async (e) => {
-    e?.preventDefault();
+  const handleReject = async () => {
     setIsSubmittingApproval(true);
     try {
-      await productService.rejectProduct(product.id, { comments: rejectComments });
+      await productService.rejectProduct(product.id);
       toast.success('Product rejected');
       setIsRejectModalOpen(false);
-      setRejectComments('');
       loadProduct();
       refreshProducts?.();
       loadSummary?.();
@@ -263,8 +262,8 @@ export default function ProductViewPage() {
                 <Button
                   variant="success"
                   size="sm"
-                  onClick={handleApprove}
-                  loading={isSubmittingApproval}
+                  onClick={() => setIsApproveModalOpen(true)}
+                  disabled={isSubmittingApproval}
                   className="flex items-center gap-1.5 shadow-xs"
                 >
                   <IconCheck size={15} />
@@ -486,37 +485,31 @@ export default function ProductViewPage() {
         </div>
       </Card>
 
-      {/* ── Reject Modal ── */}
-      <Modal
+      {/* ── Approve Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={isApproveModalOpen}
+        onClose={() => !isSubmittingApproval && setIsApproveModalOpen(false)}
+        onConfirm={handleApprove}
+        title="Approve Product"
+        message={`Are you sure you want to approve "${product?.productName || product?.productCode}"? Once approved, it will be active for inquiries and orders.`}
+        confirmText="Approve"
+        cancelText="Cancel"
+        variant="primary"
+        loading={isSubmittingApproval}
+      />
+
+      {/* ── Reject Confirmation Modal ── */}
+      <ConfirmModal
         isOpen={isRejectModalOpen}
         onClose={() => !isSubmittingApproval && setIsRejectModalOpen(false)}
+        onConfirm={handleReject}
         title="Reject Product"
-        size="sm"
-      >
-        <form onSubmit={handleReject} className="space-y-4">
-          <p className="text-xs text-muted-foreground">
-            Please provide a rejection reason so the creator can revise and resubmit this product.
-          </p>
-          <Textarea
-            rows={3}
-            value={rejectComments}
-            onChange={(e) => setRejectComments(e.target.value)}
-            placeholder="Reason for rejection..."
-            required
-            autoFocus
-          />
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-            <CancelButton
-              size="sm"
-              onClick={() => setIsRejectModalOpen(false)}
-              disabled={isSubmittingApproval}
-            />
-            <Button type="submit" variant="danger" size="sm" loading={isSubmittingApproval}>
-              Confirm Rejection
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        message={`Are you sure you want to reject "${product?.productName || product?.productCode}"?`}
+        confirmText="Reject"
+        cancelText="Cancel"
+        variant="danger"
+        loading={isSubmittingApproval}
+      />
     </div>
   );
 }

@@ -32,6 +32,7 @@ import {
   SaveButton,
   CancelButton,
   Input,
+  Textarea,
   Modal,
   StatusSwitch,
   PageHeader,
@@ -54,6 +55,7 @@ const STATUS_FILTER_OPTIONS = [
 
 const INITIAL_FORM = {
   standardCode: '',
+  description: '',
   isActive: true,
 };
 
@@ -132,6 +134,11 @@ export default function StandardsPage() {
         if (duplicate) return 'A standard with this code already exists.';
         return '';
       }
+      case 'description': {
+        const str = typeof value === 'string' ? value : '';
+        if (str.length > 250) return 'Description cannot exceed 250 characters.';
+        return '';
+      }
       default:
         return '';
     }
@@ -139,8 +146,10 @@ export default function StandardsPage() {
 
   function validateAll(data) {
     const errors = {};
-    const err = validateField('standardCode', data.standardCode);
-    if (err) errors.standardCode = err;
+    const codeErr = validateField('standardCode', data.standardCode);
+    if (codeErr) errors.standardCode = codeErr;
+    const descErr = validateField('description', data.description);
+    if (descErr) errors.description = descErr;
     return errors;
   }
 
@@ -157,6 +166,7 @@ export default function StandardsPage() {
     setEditingStandard(standard);
     setFormData({
       standardCode: standard.standardCode || '',
+      description: standard.description || '',
       isActive: Boolean(standard.isActive),
     });
     setFormErrors({});
@@ -169,6 +179,7 @@ export default function StandardsPage() {
         setEditingStandard(fresh);
         setFormData({
           standardCode: fresh.standardCode || '',
+          description: fresh.description || '',
           isActive: Boolean(fresh.isActive),
         });
       }
@@ -218,12 +229,18 @@ export default function StandardsPage() {
     try {
       const payload = {
         standardCode: formData.standardCode.trim(),
+        description: formData.description ? formData.description.trim() : null,
       };
 
       if (editingStandard) {
         const id = editingStandard.id;
-        // 1. Update standard via PUT /api/standards/{id}
-        if (editingStandard.standardCode !== payload.standardCode) {
+        // 1. Update standard via PUT /api/standards/{id} if standardCode or description changed
+        const currentCode = (editingStandard.standardCode || '').trim();
+        const currentDesc = (editingStandard.description || '').trim();
+        const nextCode = (payload.standardCode || '').trim();
+        const nextDesc = (payload.description || '').trim();
+
+        if (currentCode !== nextCode || currentDesc !== nextDesc) {
           await updateStandard(id, payload);
         }
 
@@ -277,17 +294,30 @@ export default function StandardsPage() {
       columnHelper.accessor('standardCode', {
         id: 'standardCode',
         header: 'STANDARD CODE',
-        size: 240,
+        size: 200,
         cell: ({ row }) => (
           <span className="font-semibold text-heading text-xs">
             {row.original.standardCode}
           </span>
         ),
       }),
+      columnHelper.accessor('description', {
+        id: 'description',
+        header: 'DESCRIPTION',
+        size: 260,
+        cell: ({ row }) => (
+          <span
+            className="text-xs text-text-muted line-clamp-1 break-words"
+            title={row.original.description || ''}
+          >
+            {row.original.description || '—'}
+          </span>
+        ),
+      }),
       columnHelper.accessor('isActive', {
         id: 'isActive',
         header: 'STATUS',
-        size: 140,
+        size: 130,
         cell: ({ row }) => (
           <StatusBadge status={row.original.isActive} size="sm" />
         ),
@@ -295,7 +325,7 @@ export default function StandardsPage() {
       columnHelper.accessor('createdOn', {
         id: 'createdOn',
         header: 'CREATED ON',
-        size: 160,
+        size: 150,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
             {formatDate(row.original.createdOn || row.original.createdAt)}
@@ -305,7 +335,7 @@ export default function StandardsPage() {
       columnHelper.accessor('lastUpdatedOn', {
         id: 'lastUpdatedOn',
         header: 'LAST UPDATED',
-        size: 160,
+        size: 150,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
             {row.original.lastUpdatedOn ? formatDate(row.original.lastUpdatedOn) : '—'}
@@ -379,7 +409,7 @@ export default function StandardsPage() {
       <TableToolbar
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by standard code..."
+        searchPlaceholder="Search by standard code or description..."
         hasActiveFilters={hasActiveFilters}
         onReset={handleResetFilters}
       >
@@ -452,10 +482,17 @@ export default function StandardsPage() {
                 <StatusBadge status={standard.isActive} size="sm" />
               </div>
 
-              {/* Full-width Name (allows multi-line wrap without truncation) */}
+              {/* Full-width Name */}
               <h3 className="text-sm font-semibold text-heading break-words leading-snug">
                 {standard.standardCode}
               </h3>
+
+              {/* Description */}
+              {standard.description && (
+                <p className="text-xs text-text-muted break-words line-clamp-2">
+                  {standard.description}
+                </p>
+              )}
 
               {/* Date Timestamps */}
               <div className="text-2xs text-text-muted space-y-1 pt-2 border-t border-border/60">
@@ -538,6 +575,31 @@ export default function StandardsPage() {
               if (err) setFormErrors((prev) => ({ ...prev, standardCode: err }));
             }}
             error={formErrors.standardCode}
+          />
+
+          {/* Description */}
+          <Textarea
+            id="description"
+            name="description"
+            label="Description"
+            placeholder="Enter standard description or specifications..."
+            rows={3}
+            maxLength={250}
+            showCharCount
+            value={formData.description}
+            disabled={isSubmitting || isFetchingDetail}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFormData((prev) => ({ ...prev, description: val }));
+              if (formErrors.description) {
+                setFormErrors((prev) => ({ ...prev, description: '' }));
+              }
+            }}
+            onBlur={(e) => {
+              const err = validateField('description', e.target.value);
+              if (err) setFormErrors((prev) => ({ ...prev, description: err }));
+            }}
+            error={formErrors.description}
           />
 
           {/* Status Switch (Active / Inactive inside form only) */}
@@ -632,6 +694,16 @@ export default function StandardsPage() {
                 </span>
               </div>
 
+              {/* Description */}
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 col-span-1 sm:col-span-2">
+                <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
+                  Description
+                </span>
+                <p className="text-xs text-heading break-words whitespace-pre-wrap">
+                  {viewingStandard.description || '—'}
+                </p>
+              </div>
+
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
                 <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
                   Created Date
@@ -681,4 +753,3 @@ export default function StandardsPage() {
     </div>
   );
 }
-

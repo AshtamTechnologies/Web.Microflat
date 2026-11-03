@@ -38,6 +38,7 @@ import {
   IconMaterials,
   IconSpecParameters,
   IconStandards,
+  IconCurrency,
   IconList,
   IconAdd,
 } from '../constants/icons';
@@ -274,6 +275,12 @@ export const navigation = [
             label: 'Regions',
             icon: IconRegions,
             path: '/configuration/regions',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Currencies',
+            icon: IconCurrency,
+            path: '/configuration/currencies',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {

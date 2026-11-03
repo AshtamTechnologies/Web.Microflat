@@ -4,6 +4,7 @@
  * Maps between backend DTO and frontend model:
  *   - id
  *   - standardCode
+ *   - description
  *   - isActive
  *   - createdOn / createdAt
  *   - lastUpdatedOn / updatedAt
@@ -11,6 +12,7 @@
  * @typedef {Object} ApiStandardDto
  * @property {number} id
  * @property {string} standardCode
+ * @property {string|null} [description]
  * @property {boolean} isActive
  * @property {string} createdOn
  * @property {string|null} [lastUpdatedOn]
@@ -18,6 +20,7 @@
  * @typedef {Object} StandardModel
  * @property {number} id
  * @property {string} standardCode
+ * @property {string} description
  * @property {boolean} isActive
  * @property {string} createdOn
  * @property {string} createdAt
@@ -33,6 +36,7 @@ export function createEmptyStandard() {
   return {
     id: 0,
     standardCode: '',
+    description: '',
     isActive: true,
     createdOn: '',
     createdAt: '',
@@ -57,6 +61,7 @@ export function standardFromApi(dto) {
   return {
     id,
     standardCode: dto.standardCode || '',
+    description: dto.description || '',
     isActive: dto.isActive !== undefined ? Boolean(dto.isActive) : true,
     createdOn: created,
     createdAt: created,
@@ -109,24 +114,32 @@ export function standardsFromApi(response) {
 /**
  * Serializes frontend form data to the payload expected by POST /api/standards.
  *
- * @param {{ standardCode: string }} data
- * @returns {{ standardCode: string }}
+ * @param {{ standardCode: string, description?: string|null }} data
+ * @returns {{ standardCode: string, description: string|null }}
  */
 export function standardToApiCreate(data = {}) {
   return {
     standardCode: String(data.standardCode || '').trim(),
+    description:
+      data.description !== undefined && data.description !== null && String(data.description).trim() !== ''
+        ? String(data.description).trim()
+        : null,
   };
 }
 
 /**
  * Serializes frontend form data to the payload expected by PUT /api/standards/{id}.
  *
- * @param {{ standardCode: string }} data
- * @returns {{ standardCode: string }}
+ * @param {{ standardCode: string, description?: string|null }} data
+ * @returns {{ standardCode: string, description: string|null }}
  */
 export function standardToApiUpdate(data = {}) {
   return {
     standardCode: String(data.standardCode || '').trim(),
+    description:
+      data.description !== undefined && data.description !== null && String(data.description).trim() !== ''
+        ? String(data.description).trim()
+        : null,
   };
 }
 
@@ -141,4 +154,3 @@ export function standardStatusToApi(isActive) {
     isActive: Boolean(isActive),
   };
 }
-

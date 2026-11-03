@@ -54,6 +54,8 @@ import { MaterialsProvider } from './context/MaterialsContext';
 import SpecParametersPage from './pages/configuration/SpecParametersPage';
 import { SpecParametersProvider } from './context/SpecParametersContext';
 import StandardsPage from './pages/configuration/StandardsPage';
+import CurrenciesPage from './pages/configuration/CurrenciesPage';
+import { CurrenciesProvider } from './context/CurrenciesContext';
 import { StandardsProvider } from './context/StandardsContext';
 
 import UomPage from './pages/configuration/UomPage';
@@ -147,6 +149,7 @@ export default function App() {
                                         <MaterialsProvider>
                                           <SpecParametersProvider>
                                             <StandardsProvider>
+                                            <CurrenciesProvider>
                                       <UomProvider>
                                         <RegionsProvider>
                                           <PaymentTermsProvider>
@@ -162,6 +165,7 @@ export default function App() {
                                           </PaymentTermsProvider>
                                         </RegionsProvider>
                                       </UomProvider>
+                                            </CurrenciesProvider>
                                             </StandardsProvider>
                                           </SpecParametersProvider>
                                         </MaterialsProvider>
@@ -253,6 +257,7 @@ export default function App() {
               <Route path="/configuration/materials" element={<MaterialsPage />} />
               <Route path="/configuration/spec-parameters" element={<SpecParametersPage />} />
               <Route path="/configuration/standards" element={<StandardsPage />} />
+              <Route path="/configuration/currencies" element={<CurrenciesPage />} />
               <Route path="/configuration/uom" element={<UomPage />} />
               <Route path="/configuration/regions" element={<RegionsPage />} />
               <Route path="/configuration/payment-terms" element={<PaymentTermsPage />} />

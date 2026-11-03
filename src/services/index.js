@@ -52,6 +52,9 @@ import * as mockSpecParameters from './specParameters/specParametersService.mock
 import * as realStandards from './standards/standardsService';
 import * as mockStandards from './standards/standardsService.mock';
 
+import * as realCurrencies from './currencies/currencyService';
+import * as mockCurrencies from './currencies/currencyService.mock';
+
 import * as realProductCategories from './productCategories/productCategoriesService';
 import * as mockProductCategories from './productCategories/productCategoriesService.mock';
 
@@ -78,6 +81,7 @@ export const gradesService = useMock ? mockGrades : realGrades;
 export const materialsService = useMock ? mockMaterials : realMaterials;
 export const specParametersService = useMock ? mockSpecParameters : realSpecParameters;
 export const standardsService = useMock ? mockStandards : realStandards;
+export const currencyService = useMock ? mockCurrencies : realCurrencies;
 export const productCategoriesService = useMock ? mockProductCategories : realProductCategories;
 export const productService = realProducts;
 export { delegationService };

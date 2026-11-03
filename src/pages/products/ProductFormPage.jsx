@@ -806,7 +806,7 @@ export default function ProductFormPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-semibold text-heading">
-                    {isEditMode ? 'Product Variants & Sizes' : 'Initial Variants & Sizes'}
+                    Product Variants & Sizes
                   </h4>
                   <p className="text-2xs text-text-muted">
                     {isEditMode
@@ -941,7 +941,7 @@ export default function ProductFormPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-semibold text-heading">
-                    {isEditMode ? 'Product Documents & Files' : 'Initial Documents & Files'}
+                    Product Documents & Files
                   </h4>
                   <p className="text-2xs text-text-muted">
                     {isEditMode

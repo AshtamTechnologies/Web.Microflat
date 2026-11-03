@@ -10,6 +10,7 @@ const INITIAL_STANDARDS = [
   {
     id: 1,
     standardCode: 'IS-7327-2003',
+    description: 'Indian standard specification for granite surface plates.',
     isActive: true,
     createdOn: '2026-10-28T11:09:52Z',
     lastUpdatedOn: null,
@@ -17,6 +18,7 @@ const INITIAL_STANDARDS = [
   {
     id: 24,
     standardCode: 'DIN-876',
+    description: 'German standard for accuracy requirements of surface plates.',
     isActive: true,
     createdOn: '2026-10-28T11:09:57Z',
     lastUpdatedOn: null,
@@ -24,6 +26,7 @@ const INITIAL_STANDARDS = [
   {
     id: 25,
     standardCode: 'BS-817',
+    description: 'British standard for surface plates and precision equipment.',
     isActive: true,
     createdOn: '2026-10-28T11:09:57Z',
     lastUpdatedOn: null,
@@ -31,6 +34,7 @@ const INITIAL_STANDARDS = [
   {
     id: 30,
     standardCode: 'JIS B 7513',
+    description: 'Japanese industrial standard for precision surface plates.',
     isActive: true,
     createdOn: '2026-10-28T11:12:30Z',
     lastUpdatedOn: null,
@@ -38,6 +42,7 @@ const INITIAL_STANDARDS = [
   {
     id: 35,
     standardCode: 'ASME B89.3.7',
+    description: 'American standard specification for precision measurement surfaces.',
     isActive: false,
     createdOn: '2026-10-28T11:16:00Z',
     lastUpdatedOn: null,
@@ -83,7 +88,11 @@ export async function listStandards(params = {}) {
   const search = params.Search ?? params.search;
   if (search && String(search).trim()) {
     const q = String(search).trim().toLowerCase();
-    items = items.filter((s) => s.standardCode?.toLowerCase().includes(q));
+    items = items.filter(
+      (s) =>
+        s.standardCode?.toLowerCase().includes(q) ||
+        s.description?.toLowerCase().includes(q)
+    );
   }
 
   const act = params.IsActive ?? params.isActive;
@@ -127,6 +136,10 @@ export async function createStandard(data) {
   const newItem = {
     id: newId,
     standardCode: String(data.standardCode || '').trim(),
+    description:
+      data.description !== undefined && data.description !== null && String(data.description).trim() !== ''
+        ? String(data.description).trim()
+        : null,
     isActive: true,
     createdOn: new Date().toISOString(),
     lastUpdatedOn: null,
@@ -148,6 +161,10 @@ export async function updateStandard(id, data) {
   items[idx] = {
     ...items[idx],
     standardCode: String(data.standardCode || '').trim(),
+    description:
+      data.description !== undefined && data.description !== null && String(data.description).trim() !== ''
+        ? String(data.description).trim()
+        : null,
     lastUpdatedOn: new Date().toISOString(),
   };
   saveStoredStandards(items);
@@ -170,4 +187,3 @@ export async function updateStandardStatus(id, isActive) {
   };
   saveStoredStandards(items);
 }
-
