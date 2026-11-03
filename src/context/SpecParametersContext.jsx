@@ -2,7 +2,7 @@
  * src/context/SpecParametersContext.jsx — Spec Parameters context wired to backend APIs.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { specParametersService } from '../services';
@@ -32,6 +32,7 @@ export function SpecParametersProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
+  const initialFetchDone = useRef(false);
 
   /**
    * Fetches paged spec parameters from GET /api/spec-parameters with search, isActive, pageNumber, pageSize.
@@ -40,6 +41,7 @@ export function SpecParametersProvider({ children }) {
     try {
       setIsLoading(true);
       setError(null);
+      initialFetchDone.current = true;
       const res = await specParametersService.listSpecParameters(filters);
       setSpecParametersList(res.items || []);
       setPagination({
@@ -62,10 +64,10 @@ export function SpecParametersProvider({ children }) {
   // Initial load when relevant route is visited or requested
   useEffect(() => {
     if (!shouldFetch) return;
-    if (specParametersList.length === 0) {
+    if (!initialFetchDone.current) {
       fetchSpecParameters({ pageNumber: 1, pageSize: 10 });
     }
-  }, [shouldFetch, specParametersList.length, fetchSpecParameters]);
+  }, [shouldFetch, fetchSpecParameters]);
 
   /**
    * Synchronous helper to find a parameter by ID in current loaded state.

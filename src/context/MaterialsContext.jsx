@@ -2,7 +2,7 @@
  * src/context/MaterialsContext.jsx — Materials context wired to backend APIs.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { materialsService } from '../services';
@@ -32,6 +32,7 @@ export function MaterialsProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
+  const initialFetchDone = useRef(false);
 
   /**
    * Fetches paged materials from GET /api/materials with search, isActive, pageNumber, pageSize.
@@ -40,6 +41,7 @@ export function MaterialsProvider({ children }) {
     try {
       setIsLoading(true);
       setError(null);
+      initialFetchDone.current = true;
       const res = await materialsService.listMaterials(filters);
       setMaterialsList(res.items || []);
       setPagination({
@@ -62,10 +64,10 @@ export function MaterialsProvider({ children }) {
   // Initial load when relevant route is visited or requested
   useEffect(() => {
     if (!shouldFetch) return;
-    if (materialsList.length === 0) {
+    if (!initialFetchDone.current) {
       fetchMaterials({ pageNumber: 1, pageSize: 10 });
     }
-  }, [shouldFetch, materialsList.length, fetchMaterials]);
+  }, [shouldFetch, fetchMaterials]);
 
   /**
    * Synchronous helper to find a material by ID in current loaded state.

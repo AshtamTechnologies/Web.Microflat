@@ -2,7 +2,7 @@
  * src/context/RegionsContext.jsx — Regions context wired to backend APIs.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { regionService } from '../services';
@@ -26,6 +26,7 @@ export function RegionsProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
+  const initialFetchDone = useRef(false);
 
   /**
    * Fetches regions from GET /api/regions with optional query parameters.
@@ -34,6 +35,7 @@ export function RegionsProvider({ children }) {
     try {
       setIsLoading(true);
       setError(null);
+      initialFetchDone.current = true;
       const data = await regionService.listRegions(filters);
       setRegions(Array.isArray(data) ? data : []);
       setLastFilters(filters);
@@ -50,10 +52,10 @@ export function RegionsProvider({ children }) {
   // Initial load only when relevant route is visited or explicitly requested
   useEffect(() => {
     if (!shouldFetch) return;
-    if (regions.length === 0) {
+    if (!initialFetchDone.current) {
       fetchRegions();
     }
-  }, [shouldFetch, regions.length, fetchRegions]);
+  }, [shouldFetch, fetchRegions]);
 
   /**
    * Synchronous helper to find a region by ID in current local state.

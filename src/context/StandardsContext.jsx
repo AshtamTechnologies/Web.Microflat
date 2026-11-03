@@ -2,7 +2,7 @@
  * src/context/StandardsContext.jsx — Standards context wired to backend APIs.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { standardsService } from '../services';
@@ -32,6 +32,7 @@ export function StandardsProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
+  const initialFetchDone = useRef(false);
 
   /**
    * Fetches paged standards from GET /api/standards with search, isActive, pageNumber, pageSize.
@@ -40,6 +41,7 @@ export function StandardsProvider({ children }) {
     try {
       setIsLoading(true);
       setError(null);
+      initialFetchDone.current = true;
       const res = await standardsService.listStandards(filters);
       setStandardsList(res.items || []);
       setPagination({
@@ -62,10 +64,10 @@ export function StandardsProvider({ children }) {
   // Initial load when relevant route is visited or requested
   useEffect(() => {
     if (!shouldFetch) return;
-    if (standardsList.length === 0) {
+    if (!initialFetchDone.current) {
       fetchStandards({ pageNumber: 1, pageSize: 10 });
     }
-  }, [shouldFetch, standardsList.length, fetchStandards]);
+  }, [shouldFetch, fetchStandards]);
 
   /**
    * Synchronous helper to find a standard by ID in current loaded state.

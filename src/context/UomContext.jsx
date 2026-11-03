@@ -2,7 +2,7 @@
  * src/context/UomContext.jsx — Unit of Measurement (UOM) context wired to backend APIs.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { uomService } from '../services';
@@ -27,6 +27,7 @@ export function UomProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
+  const initialFetchDone = useRef(false);
 
   /**
    * Fetches UOMs list from GET /api/uoms with optional filters (e.g. { isActive: true }).
@@ -35,6 +36,7 @@ export function UomProvider({ children }) {
     try {
       setIsLoading(true);
       setError(null);
+      initialFetchDone.current = true;
       const data = await uomService.listUoms(filters);
       setUomList(Array.isArray(data) ? data : []);
       setLastFilters(filters);
@@ -51,10 +53,10 @@ export function UomProvider({ children }) {
   // Lazy load only on relevant routes or when requested
   useEffect(() => {
     if (!shouldFetch) return;
-    if (uomList.length === 0) {
+    if (!initialFetchDone.current) {
       fetchUoms();
     }
-  }, [shouldFetch, uomList.length, fetchUoms]);
+  }, [shouldFetch, fetchUoms]);
 
   /**
    * Synchronous helper to find a UOM by id in current local state.

@@ -2,7 +2,7 @@
  * src/context/PaymentTermsContext.jsx — Payment Terms context wired to backend APIs.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { paymentTermService } from '../services';
@@ -27,6 +27,7 @@ export function PaymentTermsProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
+  const initialFetchDone = useRef(false);
 
   /**
    * Fetches payment terms from GET /api/payment-terms with optional query parameters.
@@ -36,6 +37,7 @@ export function PaymentTermsProvider({ children }) {
     try {
       setIsLoading(true);
       setError(null);
+      initialFetchDone.current = true;
       const data = await paymentTermService.listPaymentTerms(filters);
       setPaymentTerms(Array.isArray(data) ? data : []);
       setLastFilters(filters);
@@ -52,10 +54,10 @@ export function PaymentTermsProvider({ children }) {
   // Lazy load only on relevant routes or when requested
   useEffect(() => {
     if (!shouldFetch) return;
-    if (paymentTerms.length === 0) {
+    if (!initialFetchDone.current) {
       fetchPaymentTerms();
     }
-  }, [shouldFetch, paymentTerms.length, fetchPaymentTerms]);
+  }, [shouldFetch, fetchPaymentTerms]);
 
   /**
    * Synchronous helper to find a payment term in current local state.

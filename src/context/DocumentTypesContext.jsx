@@ -2,7 +2,7 @@
  * src/context/DocumentTypesContext.jsx — Document Types state management wired to real API service.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { documentTypesService } from '../services';
@@ -27,11 +27,13 @@ export function DocumentTypesProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
+  const initialFetchDone = useRef(false);
 
   const fetchDocumentTypes = useCallback(async (filters = {}) => {
     try {
       setIsLoading(true);
       setError(null);
+      initialFetchDone.current = true;
       const data = await documentTypesService.listDocumentTypes(filters);
       setDocumentTypes(data);
       setLastFilters(filters);
@@ -60,11 +62,13 @@ export function DocumentTypesProvider({ children }) {
   // Lazy load only on relevant routes or when requested
   useEffect(() => {
     if (!shouldFetch) return;
-    if (documentTypes.length === 0) {
+    if (!initialFetchDone.current) {
       fetchDocumentTypes();
+    }
+    if (modules.length === 0) {
       fetchModules();
     }
-  }, [shouldFetch, documentTypes.length, fetchDocumentTypes, fetchModules]);
+  }, [shouldFetch, fetchDocumentTypes, fetchModules, modules.length]);
 
   const getDocumentTypeById = useCallback(
     (id) => {

@@ -2,7 +2,7 @@
  * src/context/GradesContext.jsx — Grades context wired to backend APIs.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { gradesService } from '../services';
@@ -32,6 +32,7 @@ export function GradesProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastFilters, setLastFilters] = useState({});
+  const initialFetchDone = useRef(false);
 
   /**
    * Fetches paged grades from GET /api/grades with search, isActive, pageNumber, pageSize.
@@ -40,6 +41,7 @@ export function GradesProvider({ children }) {
     try {
       setIsLoading(true);
       setError(null);
+      initialFetchDone.current = true;
       const res = await gradesService.listGrades(filters);
       setGradesList(res.items || []);
       setPagination({
@@ -62,10 +64,10 @@ export function GradesProvider({ children }) {
   // Initial load when relevant route is visited or requested
   useEffect(() => {
     if (!shouldFetch) return;
-    if (gradesList.length === 0) {
+    if (!initialFetchDone.current) {
       fetchGrades({ pageNumber: 1, pageSize: 10 });
     }
-  }, [shouldFetch, gradesList.length, fetchGrades]);
+  }, [shouldFetch, fetchGrades]);
 
   /**
    * Synchronous helper to find a grade by ID in current loaded state.
