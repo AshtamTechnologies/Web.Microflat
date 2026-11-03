@@ -54,6 +54,7 @@ import {
 
 import { useCompanyContext } from '../../context/CompanyContext';
 import { useCompanyBankDetails } from '../../context/CompanyBankDetailsContext';
+import * as companyService from '../../services/companies/companyService';
 import { useRowsEditor } from '../../hooks/useRowsEditor';
 import AuthVerificationModal from './components/AuthVerificationModal';
 import {
@@ -124,8 +125,11 @@ export default function CompanyBankDetailsFormPage() {
 
   // Company Selection — Bound to the single registered company
   const [selectedCompanyId, setSelectedCompanyId] = useState(
-    routeCompanyId || companies[0]?.id || 'COMP-001'
+    routeCompanyId || companies[0]?.id || ''
   );
+  const [loadedCompany, setLoadedCompany] = useState(null);
+  const [pendingDeleteAttachmentIds, setPendingDeleteAttachmentIds] = useState([]);
+  const [lookups, setLookups] = useState({ bankAccountTypes: [], documentTypes: [], countries: [] });
 
   useEffect(() => {
     if (routeCompanyId) {
@@ -136,6 +140,7 @@ export default function CompanyBankDetailsFormPage() {
   }, [routeCompanyId, companies]);
 
   const currentCompany = useMemo(() => {
+    if (loadedCompany) return loadedCompany;
     if (!selectedCompanyId) return companies[0] || null;
     return (
       (getCompanyById && getCompanyById(selectedCompanyId)) ||
@@ -143,9 +148,7 @@ export default function CompanyBankDetailsFormPage() {
       companies[0] ||
       null
     );
-  }, [selectedCompanyId, getCompanyById, companies]);
-
-
+  }, [loadedCompany, selectedCompanyId, getCompanyById, companies]);
 
   // Draft rows for the selected company
   const [draftRows, setDraftRows] = useState([]);
@@ -160,34 +163,151 @@ export default function CompanyBankDetailsFormPage() {
     targetData: null,
   });
 
-  // Attachments modal
+  // Attachments modal & upload state
   const [viewingAttachmentsRow, setViewingAttachmentsRow] = useState(null);
   const [previewingFile, setPreviewingFile] = useState(null);
+  const [selectedDocType, setSelectedDocType] = useState('Bank Cancelled Cheque');
+  const fileInputRef = useRef(null);
 
-  // Load existing bank accounts when selectedCompanyId changes
+  // Load existing bank accounts and company profile via API on mount / change
   useEffect(() => {
-    if (!selectedCompanyId) {
-      setDraftRows([]);
-      return;
-    }
-    const banks = getBanksForCompany(selectedCompanyId) || [];
-    setDraftRows(banks);
-  }, [selectedCompanyId, getBanksForCompany]);
+    let isMounted = true;
+    async function loadData() {
+      try {
+        let comp = null;
+        let compId = routeCompanyId || selectedCompanyId;
 
-  // If queryBankId was passed, auto-select it for editing
-  useEffect(() => {
-    if (queryBankId && draftRows.length > 0) {
-      const match = draftRows.find(
-        (b) => String(b.bankDetailId) === String(queryBankId) || String(b.id) === String(queryBankId)
-      );
-      if (match) {
-        handleStartEdit({
-          ...match,
-          confirmAccountNumber: match.confirmAccountNumber || match.accountNumber || '',
-        });
+        // 1. If routeCompanyId or selectedCompanyId is provided, fetch that company: GET /api/companies/{id}
+        if (compId) {
+          try {
+            comp = await companyService.getCompanyById(compId);
+          } catch (e) {
+            console.warn('Failed to load company profile by ID:', e);
+          }
+        }
+
+        // 2. If no company loaded yet (e.g. user clicked "Add Bank Details"), call company API and pick first company
+        if (!comp) {
+          try {
+            const res = await companyService.listCompanies({ pageNumber: 1, pageSize: 20 });
+            if (res?.items && res.items.length > 0) {
+              const firstComp = res.items[0];
+              const firstId = firstComp.companyId || firstComp.id;
+              try {
+                // Fetch full company details
+                comp = await companyService.getCompanyById(firstId);
+              } catch (e) {
+                comp = firstComp;
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to fetch companies list:', e);
+          }
+        }
+
+        if (comp && isMounted) {
+          setLoadedCompany(comp);
+          setSelectedCompanyId(String(comp.companyId || comp.id));
+        }
+
+        // 3. If editing a specific bank account via queryBankId:
+        let currentBank = null;
+        if (queryBankId) {
+          try {
+            currentBank = await companyService.getCompanyBankDetailById(queryBankId);
+            if (currentBank && isMounted) {
+              handleStartEdit({
+                ...currentBank,
+                confirmAccountNumber: currentBank.accountNumber || '',
+              });
+              // Also load attachments via GET /api/company-bank-details/{id}/attachments if needed
+              let atts = currentBank.attachments || [];
+              if (!atts.length) {
+                try {
+                  const fetchedAtts = await companyService.getBankAttachments(queryBankId);
+                  if (fetchedAtts?.length) atts = fetchedAtts;
+                } catch (e) {
+                  // ignore
+                }
+              }
+              handleFieldChange('attachments', atts);
+
+              // If bank belongs to a specific company, ensure that company is loaded
+              if (currentBank.companyId && (!comp || String(comp.companyId || comp.id) !== String(currentBank.companyId))) {
+                try {
+                  const bankComp = await companyService.getCompanyById(currentBank.companyId);
+                  if (bankComp && isMounted) {
+                    setLoadedCompany(bankComp);
+                    setSelectedCompanyId(String(bankComp.companyId || bankComp.id));
+                    comp = bankComp;
+                  }
+                } catch (e) {}
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to fetch bank detail by ID:', e);
+          }
+        }
+
+        // 4. Fetch the banks according to the company: GET /api/companies/{companyid}/bank-details
+        const activeCompId = currentBank?.companyId || comp?.companyId || comp?.id || compId;
+        if (activeCompId) {
+          try {
+            const banks = await companyService.getCompanyBankDetails(activeCompId);
+            if (Array.isArray(banks) && isMounted) {
+              setDraftRows(banks);
+            }
+          } catch (e) {
+            console.warn('Failed to fetch company bank details:', e);
+          }
+        }
+
+        // 5. Fetch lookups for Document Types & Account Types: GET /api/companies/lookups
+        try {
+          const lk = await companyService.getCompanyLookups();
+          if (lk && isMounted) {
+            setLookups(lk);
+          }
+        } catch (e) {
+          console.warn('Failed to load company lookups:', e);
+        }
+      } catch (err) {
+        console.warn('Failed in initial bank form load:', err);
       }
     }
-  }, [queryBankId, draftRows.length]);
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [queryBankId, routeCompanyId]);
+
+  // Document types for SearchableSelect
+  const documentTypeOptions = useMemo(() => {
+    if (lookups.documentTypes && lookups.documentTypes.length > 0) {
+      return lookups.documentTypes.map((dt) => ({
+        value: String(dt.id),
+        label: dt.documentTypeName,
+      }));
+    }
+    return BANK_DOCUMENT_TYPE_OPTIONS;
+  }, [lookups.documentTypes]);
+
+  // Config for currently selected document type
+  const currentDocTypeConfig = useMemo(() => {
+    return (lookups.documentTypes || []).find(
+      (d) =>
+        String(d.id) === String(selectedDocType) ||
+        d.documentTypeName?.toLowerCase() === String(selectedDocType).toLowerCase()
+    );
+  }, [lookups.documentTypes, selectedDocType]);
+
+  // Account types for SearchableSelect
+  const accountTypeOptions = useMemo(() => {
+    if (lookups.bankAccountTypes && lookups.bankAccountTypes.length > 0) {
+      return lookups.bankAccountTypes.map((t) => ({ value: t, label: t }));
+    }
+    return ACCOUNT_TYPE_OPTIONS;
+  }, [lookups.bankAccountTypes]);
 
   // Company options for SearchableSelect
   const companyOptions = useMemo(() => {
@@ -323,9 +443,44 @@ export default function CompanyBankDetailsFormPage() {
     }
   }, [currentCompany, isEditing, formState.accountHolderName, handleFieldChange]);
 
+  // Helper: Upload attachments for a bank account (POST /api/company-bank-details/{id}/attachments)
+  const uploadPendingAttachments = async (bankId, attachments) => {
+    if (!bankId || !Array.isArray(attachments)) return;
+    const newFiles = attachments.filter((a) => a.file);
+    for (const newAtt of newFiles) {
+      try {
+        await companyService.uploadBankAttachment(bankId, {
+          documentTypeId: newAtt.documentTypeId || 21,
+          documentName: newAtt.documentName,
+          documentTitle: newAtt.fileName,
+          remarks: newAtt.remarks || '',
+          file: newAtt.file,
+        });
+      } catch (upErr) {
+        console.warn('Failed to upload attachment:', upErr);
+        toast.error(`Failed to upload ${newAtt.fileName}: ${upErr.message || 'Error'}`);
+      }
+    }
+  };
+
+  // Helper: Delete staged removed attachments (DELETE /api/company-bank-attachments/{id})
+  const deletePendingAttachments = async () => {
+    if (pendingDeleteAttachmentIds.length > 0) {
+      for (const attId of pendingDeleteAttachmentIds) {
+        try {
+          await companyService.deleteBankAttachment(attId);
+        } catch (delErr) {
+          console.warn(`Failed to delete attachment ${attId}:`, delErr);
+        }
+      }
+      setPendingDeleteAttachmentIds([]);
+    }
+  };
+
   // Action Click Handler: Validates and saves bank details
-  const handleFormActionClick = () => {
-    if (!selectedCompanyId) {
+  const handleFormActionClick = async () => {
+    const effectiveCompId = selectedCompanyId || loadedCompany?.companyId || loadedCompany?.id;
+    if (!effectiveCompId) {
       toast.error('Please select a company first');
       return;
     }
@@ -340,32 +495,38 @@ export default function CompanyBankDetailsFormPage() {
     setFieldErrors({});
 
     if (!isEditing) {
-      // Adding new record: can add to list directly
-      const newId = `cbd_${Date.now()}`;
-      const { confirmAccountNumber, ...cleanBank } = formState;
-      const newRow = {
-        ...cleanBank,
-        bankDetailId: newId,
-        id: newId,
-        companyId: selectedCompanyId,
-        companyName: currentCompany?.companyName,
-        createdAt: new Date().toISOString(),
-        createdBy: 'Ian Chesnut',
-        updatedAt: null,
-      };
+      // ── CREATE NEW BANK ACCOUNT DIRECTLY VIA API ──
+      setIsSubmitting(true);
+      try {
+        const { confirmAccountNumber, ...cleanBank } = formState;
 
-      const nextRows = [...draftRows, newRow];
-      setDraftRows(nextRows);
+        // 1. POST /api/companies/{companyId}/bank-details
+        const created = await companyService.createCompanyBankDetail(effectiveCompId, cleanBank);
+        const targetBankId = created?.companyBankDetailId || created?.id;
 
-      if (saveCompanyBanks) {
-        saveCompanyBanks(selectedCompanyId, nextRows);
+        // 2. POST /api/company-bank-details/{id}/attachments
+        if (targetBankId && formState.attachments?.length) {
+          await uploadPendingAttachments(targetBankId, formState.attachments);
+        }
+
+        // 3. Refresh bank list: GET /api/companies/{companyid}/bank-details
+        const banks = await companyService.getCompanyBankDetails(effectiveCompId);
+        if (Array.isArray(banks)) {
+          setDraftRows(banks);
+        }
+
+        handleCancelEdit();
+        toast.success(`Bank account and attachments saved successfully`);
+      } catch (err) {
+        toast.error(err.message || 'Failed to create bank account');
+      } finally {
+        setIsSubmitting(false);
       }
-      handleCancelEdit();
-      toast.success(`Bank account for ${formState.bankName || 'company'} added to list`);
       return;
     }
 
-    // Updating existing record: Require security credentials authorization
+    // ── EDIT EXISTING BANK ACCOUNT ──
+    // Require security credentials authorization
     setAuthModalState({
       isOpen: true,
       action: 'update',
@@ -383,52 +544,95 @@ export default function CompanyBankDetailsFormPage() {
   };
 
   // Callback on successful authentication (for Update or Delete)
-  const handleAuthSuccess = (authenticatedUser) => {
+  const handleAuthSuccess = async (authenticatedUser) => {
+    const effectiveCompId = selectedCompanyId || loadedCompany?.companyId || loadedCompany?.id;
     if (authModalState.action === 'update') {
-      const targetId = editingId;
+      const targetId = editingId || queryBankId;
       const { confirmAccountNumber, ...cleanBank } = formState;
 
-      const nextRows = draftRows.map((r) => {
-        if (r.bankDetailId === targetId || r.id === targetId) {
-          return {
-            ...r,
-            ...cleanBank,
-            updatedAt: new Date().toISOString(),
-            updatedBy: authenticatedUser.name,
-          };
-        }
-        return r;
-      });
+      setIsSubmitting(true);
+      try {
+        // 1. PUT /api/company-bank-details/{id}
+        if (targetId) {
+          await companyService.updateCompanyBankDetail(targetId, cleanBank);
 
-      setDraftRows(nextRows);
-      if (saveCompanyBanks) {
-        saveCompanyBanks(selectedCompanyId, nextRows, authenticatedUser);
+          // 2. DELETE staged attachments: DELETE /api/company-bank-attachments/{id}
+          await deletePendingAttachments();
+
+          // 3. POST /api/company-bank-details/{id}/attachments
+          if (formState.attachments?.length) {
+            await uploadPendingAttachments(targetId, formState.attachments);
+          }
+        }
+
+        // 4. Refresh banks: GET /api/companies/{companyid}/bank-details
+        if (effectiveCompId) {
+          const banks = await companyService.getCompanyBankDetails(effectiveCompId);
+          if (Array.isArray(banks)) {
+            setDraftRows(banks);
+          }
+        }
+
+        handleCancelEdit();
+        toast.success(`Bank account and attachments updated successfully`);
+      } catch (err) {
+        toast.error(err.message || 'Failed to update bank details');
+      } finally {
+        setIsSubmitting(false);
+        setAuthModalState({ isOpen: false, action: 'update', targetData: null });
       }
-      handleCancelEdit();
     } else if (authModalState.action === 'delete') {
       const targetId = authModalState.targetData?.bankDetailId || authModalState.targetData?.id;
-      const nextRows = draftRows.filter(
-        (r) => r.bankDetailId !== targetId && r.id !== targetId
-      );
-      setDraftRows(nextRows);
-
-      if (deleteBankDetail) {
-        deleteBankDetail(targetId, authenticatedUser);
-      }
-      if (editingId === targetId) {
-        handleCancelEdit();
+      setIsSubmitting(true);
+      try {
+        if (targetId) {
+          await companyService.deleteCompanyBankDetail(targetId);
+        }
+        if (effectiveCompId) {
+          const banks = await companyService.getCompanyBankDetails(effectiveCompId);
+          if (Array.isArray(banks)) {
+            setDraftRows(banks);
+          }
+        }
+        if (editingId === targetId) {
+          handleCancelEdit();
+        }
+        toast.success(`Bank account deleted successfully`);
+      } catch (err) {
+        toast.error(err.message || 'Failed to delete bank account');
+      } finally {
+        setIsSubmitting(false);
+        setAuthModalState({ isOpen: false, action: 'delete', targetData: null });
       }
     }
-
-    setAuthModalState({ isOpen: false, action: 'update', targetData: null });
   };
 
   // Select an account from the grid to edit in the form above
-  const handleSelectAccountForEdit = (row) => {
-    handleStartEdit({
-      ...row,
-      confirmAccountNumber: row.confirmAccountNumber || row.accountNumber || '',
-    });
+  const handleSelectAccountForEdit = async (row) => {
+    const bankId = row.companyBankDetailId || row.bankDetailId || row.id;
+    try {
+      // Call GET /api/company-bank-details/{id}
+      const freshBank = await companyService.getCompanyBankDetailById(bankId);
+      let atts = freshBank?.attachments || row.attachments || [];
+      if (!atts.length) {
+        try {
+          const fetchedAtts = await companyService.getBankAttachments(bankId);
+          if (fetchedAtts?.length) atts = fetchedAtts;
+        } catch (e) {
+          // ignore
+        }
+      }
+      handleStartEdit({
+        ...(freshBank || row),
+        confirmAccountNumber: (freshBank || row).accountNumber || '',
+        attachments: atts,
+      });
+    } catch (e) {
+      handleStartEdit({
+        ...row,
+        confirmAccountNumber: row.accountNumber || '',
+      });
+    }
     setShowAccountNumber(false);
     setShowConfirmAccountNumber(false);
     const formCard = document.getElementById('company-bank-form-card');
@@ -437,17 +641,23 @@ export default function CompanyBankDetailsFormPage() {
     }
   };
 
-  // File upload state for attachments
-  const [selectedDocType, setSelectedDocType] = useState('Bank Cancelled Cheque');
-  const fileInputRef = useRef(null);
-
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
+    // Resolve documentTypeId from lookups
+    const matchedDoc = (lookups.documentTypes || []).find(
+      (d) =>
+        String(d.id) === String(selectedDocType) ||
+        d.documentTypeName?.toLowerCase() === String(selectedDocType).toLowerCase()
+    );
+    const resolvedDocTypeId = matchedDoc?.id || (/^\d+$/.test(String(selectedDocType)) ? Number(selectedDocType) : 21);
+    const resolvedDocTypeName = matchedDoc?.documentTypeName || selectedDocType || 'Cancelled Cheque';
+
     const newAttachments = files.map((file, idx) => ({
       id: `att_${Date.now()}_${idx}`,
-      documentName: selectedDocType,
+      documentTypeId: resolvedDocTypeId,
+      documentName: resolvedDocTypeName,
       fileName: file.name,
       fileSize: `${Math.round(file.size / 1024)} KB`,
       fileType: file.type || 'application/octet-stream',
@@ -461,7 +671,13 @@ export default function CompanyBankDetailsFormPage() {
   };
 
   const handleRemoveAttachment = (attId) => {
-    const updated = (formState.attachments || []).filter((a) => a.id !== attId);
+    // If it is an existing backend attachment, queue its ID for deletion on save
+    const att = (formState.attachments || []).find((a) => a.id === attId || a.companyBankAttachmentId === attId);
+    const backendId = att?.companyBankAttachmentId || (typeof att?.id === 'number' ? att.id : (/^\d+$/.test(String(att?.id)) ? Number(att.id) : null));
+    if (backendId) {
+      setPendingDeleteAttachmentIds((prev) => [...prev, backendId]);
+    }
+    const updated = (formState.attachments || []).filter((a) => a.id !== attId && a.companyBankAttachmentId !== attId);
     handleFieldChange('attachments', updated);
   };
 
@@ -480,20 +696,47 @@ export default function CompanyBankDetailsFormPage() {
   // Master submit
   const handleSaveChanges = async (e) => {
     if (e) e.preventDefault();
-    if (!selectedCompanyId) {
+    const effectiveCompId = selectedCompanyId || loadedCompany?.companyId || loadedCompany?.id;
+    if (!effectiveCompId) {
       toast.error('Please select a company first');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      if (saveCompanyBanks) {
-        await saveCompanyBanks(selectedCompanyId, draftRows);
+      const activeBankId = editingId || queryBankId;
+      const hasFormInput = formState.bankName && formState.accountNumber;
+
+      let targetBankId = activeBankId;
+
+      if (hasFormInput) {
+        const { confirmAccountNumber, ...cleanBank } = formState;
+
+        if (activeBankId) {
+          // PUT /api/company-bank-details/{id}
+          await companyService.updateCompanyBankDetail(activeBankId, cleanBank);
+          targetBankId = activeBankId;
+        } else {
+          // POST /api/companies/{companyId}/bank-details
+          const created = await companyService.createCompanyBankDetail(effectiveCompId, cleanBank);
+          targetBankId = created?.companyBankDetailId || created?.id;
+        }
+
+        // 1. Execute DELETE for removed attachments: DELETE /api/company-bank-attachments/{id}
+        await deletePendingAttachments();
+
+        // 2. Upload newly added attachments: POST /api/company-bank-details/{id}/attachments
+        if (targetBankId && formState.attachments?.length) {
+          await uploadPendingAttachments(targetBankId, formState.attachments);
+        }
+      } else if (draftRows.length > 0 && saveCompanyBanks) {
+        await saveCompanyBanks(effectiveCompId, draftRows);
       }
-      toast.success('Bank details saved');
+
+      toast.success('Bank details saved successfully');
       navigate('/company-bank-details');
     } catch (err) {
-      toast.error('Failed to save bank details');
+      toast.error(err.message || 'Failed to save bank details');
     } finally {
       setIsSubmitting(false);
     }
@@ -532,7 +775,7 @@ export default function CompanyBankDetailsFormPage() {
             <SaveButton
               onClick={handleSaveChanges}
               loading={isSubmitting}
-              disabled={isSubmitting || !selectedCompanyId}
+              disabled={isSubmitting || (!selectedCompanyId && !loadedCompany)}
               size="sm"
             >
               {isEditMode ? 'Save Changes' : 'Save Bank Account'}
@@ -560,18 +803,21 @@ export default function CompanyBankDetailsFormPage() {
             label="Company Name"
             value={
               currentCompany
-                ? `${currentCompany.companyName} (${currentCompany.id})`
-                : 'Micro-Flat Datasoft Pvt. Ltd. (COMP-001)'
+                ? `${currentCompany.companyName} (${currentCompany.companyCode || (currentCompany.companyId ? `COMP-${String(currentCompany.companyId).padStart(3, '0')}` : '') || 'COMP-001'})`
+                : '—'
             }
           />
           <DetailField
             label="Authorized Contact Person"
-            value={currentCompany?.contactPersonName || 'Krupal Bhoi'}
+            value={currentCompany?.contactPersonName || '—'}
           />
           <DetailField
             label="Contact Mobile / Email"
             value={
-              [currentCompany?.contactPersonMobile, currentCompany?.contactPersonEmail]
+              [
+                currentCompany?.contactPersonMobile || currentCompany?.phone1,
+                currentCompany?.contactPersonEmail || currentCompany?.companyEmail,
+              ]
                 .filter(Boolean)
                 .join(' • ') || '—'
             }
@@ -581,7 +827,7 @@ export default function CompanyBankDetailsFormPage() {
             value={
               [
                 currentCompany?.city,
-                getStateName(currentCompany?.country, currentCompany?.state) || currentCompany?.state,
+                currentCompany?.stateName || (getStateName && getStateName(currentCompany?.country, currentCompany?.state)) || currentCompany?.state,
                 currentCompany?.gstNo ? `GST: ${currentCompany.gstNo}` : '',
               ]
                 .filter(Boolean)
@@ -679,7 +925,7 @@ export default function CompanyBankDetailsFormPage() {
               id="account-type-select"
               value={formState.accountType}
               onChange={(e) => handleFieldChange('accountType', e.target.value)}
-              options={ACCOUNT_TYPE_OPTIONS}
+              options={accountTypeOptions}
               placeholder="Select account type"
               className="w-full"
             />
@@ -872,9 +1118,6 @@ export default function CompanyBankDetailsFormPage() {
                 <IconAttachment size={14} className="text-primary" />
                 Supporting Banking Documents
               </h4>
-              <p className="text-3xs text-text-muted">
-                Upload cancelled cheque, bank confirmation letter, or mandate form (PDF, PNG, JPG)
-              </p>
             </div>
           </div>
 
@@ -885,7 +1128,7 @@ export default function CompanyBankDetailsFormPage() {
                 id="doc-type-select"
                 value={selectedDocType}
                 onChange={(e) => setSelectedDocType(e.target.value)}
-                options={BANK_DOCUMENT_TYPE_OPTIONS}
+                options={documentTypeOptions}
                 placeholder="Select document type"
                 className="w-full"
               />
@@ -895,7 +1138,7 @@ export default function CompanyBankDetailsFormPage() {
               type="file"
               ref={fileInputRef}
               onChange={handleFileUpload}
-              accept=".pdf,.png,.jpg,.jpeg,.webp"
+              accept={currentDocTypeConfig?.allowedExtensions || currentDocTypeConfig?.allowedExtensionList?.join(',') || '.pdf,.png,.jpg,.jpeg,.webp'}
               multiple
               className="hidden"
               id="bank-file-upload-input"
@@ -910,7 +1153,16 @@ export default function CompanyBankDetailsFormPage() {
             >
               Choose Document
             </Button>
-            <span className="text-3xs text-text-muted">Max file size 10 MB per document</span>
+            <span className="text-3xs text-text-muted">
+              Allowed formats:{' '}
+              <span className="font-semibold text-heading">
+                {currentDocTypeConfig?.allowedExtensions || currentDocTypeConfig?.allowedExtensionList?.join(', ') || '.pdf, .jpg, .jpeg, .png'}
+              </span>
+              {' '}(Max:{' '}
+              <span className="font-semibold text-heading">
+                {currentDocTypeConfig?.maxFileSizeMB ? `${currentDocTypeConfig.maxFileSizeMB} MB` : '10 MB'}
+              </span>)
+            </span>
           </div>
 
           {/* List of Attached Files */}
@@ -924,23 +1176,47 @@ export default function CompanyBankDetailsFormPage() {
                   <div className="flex items-center gap-2 min-w-0">
                     {getFileIcon(att.fileName, att.fileType)}
                     <div className="min-w-0">
-                      <p className="font-medium text-heading text-2xs truncate" title={att.fileName}>
-                        {att.fileName}
+                      <p className="font-semibold text-heading text-xs truncate" title={att.documentTypeName || att.documentName || att.fileName}>
+                        {att.documentTypeName || att.documentName || 'Banking Document'}
                       </p>
-                      <p className="text-3xs text-text-muted">
-                        {att.documentName} • {att.fileSize}
+                      <p className="text-3xs text-text-muted truncate" title={att.fileName}>
+                        {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
                       </p>
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveAttachment(att.id)}
-                    className="text-text-muted hover:text-danger p-1 rounded transition-colors shrink-0"
-                    title="Remove attachment"
-                  >
-                    <IconClose size={14} />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = att.downloadUrl || att.companyBankAttachmentId || att.id;
+                        if (att.file) {
+                          const url = URL.createObjectURL(att.file);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = att.fileName;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        } else if (target) {
+                          companyService.downloadBankAttachment(target, att.fileName);
+                        }
+                      }}
+                      className="text-text-muted hover:text-primary p-1 rounded transition-colors"
+                      title="Download document"
+                    >
+                      <IconDownload size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAttachment(att.id)}
+                      className="text-text-muted hover:text-danger p-1 rounded transition-colors"
+                      title="Remove attachment"
+                    >
+                      <IconClose size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1001,7 +1277,6 @@ export default function CompanyBankDetailsFormPage() {
                   <Th className="text-2xs uppercase">IFSC / SWIFT</Th>
                   <Th className="text-2xs uppercase">Type</Th>
                   <Th className="text-2xs uppercase">Status</Th>
-                  <Th className="text-2xs uppercase">Attachments</Th>
                   <Th className="text-2xs uppercase text-right">Actions</Th>
                 </tr>
               </thead>
@@ -1009,7 +1284,6 @@ export default function CompanyBankDetailsFormPage() {
                 {draftRows.map((row) => {
                   const rowId = row.bankDetailId || row.id;
                   const isRevealed = Boolean(revealedAccounts[rowId]);
-                  const attCount = Array.isArray(row.attachments) ? row.attachments.length : 0;
                   const isCurEditing = editingId === rowId;
 
                   return (
@@ -1060,21 +1334,6 @@ export default function CompanyBankDetailsFormPage() {
                         </Badge>
                       </td>
 
-                      <td className="px-3 py-2.5 text-xs">
-                        {attCount > 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => setViewingAttachmentsRow(row)}
-                            className="inline-flex items-center gap-1 text-2xs text-primary hover:underline font-medium"
-                          >
-                            <IconAttachment size={13} />
-                            {attCount} file(s)
-                          </button>
-                        ) : (
-                          <span className="text-text-muted text-2xs">0 files</span>
-                        )}
-                      </td>
-
                       <td className="px-3 py-2.5 text-xs text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button
@@ -1085,15 +1344,6 @@ export default function CompanyBankDetailsFormPage() {
                             className="h-7 w-7 text-text-muted hover:text-primary hover:bg-surface"
                           >
                             <IconEdit size={14} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handlePromptDeleteAccount(row)}
-                            title="Delete this account (requires login)"
-                            className="h-7 w-7 text-text-muted hover:text-danger hover:bg-danger/10"
-                          >
-                            <IconDelete size={14} />
                           </Button>
                         </div>
                       </td>
@@ -1130,11 +1380,11 @@ export default function CompanyBankDetailsFormPage() {
                   <div className="flex items-center gap-2.5 min-w-0">
                     {getFileIcon(att.fileName, att.fileType)}
                     <div className="min-w-0">
-                      <p className="font-semibold text-heading text-xs truncate">
-                        {att.fileName}
+                      <p className="font-semibold text-heading text-xs truncate" title={att.documentTypeName || att.documentName || att.fileName}>
+                        {att.documentTypeName || att.documentName || 'Banking Document'}
                       </p>
-                      <p className="text-2xs text-text-muted">
-                        {att.documentName} • {att.fileSize}
+                      <p className="text-2xs text-text-muted truncate" title={att.fileName}>
+                        {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
                       </p>
                     </div>
                   </div>

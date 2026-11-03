@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { productService } from '../../services';
 
@@ -106,21 +107,30 @@ export function useProducts() {
     }
   }, [search, categoryId, materialId, uomId, approvalStatus, statusFilter, pageNumber, pageSize]);
 
-  // Initial fetch for Lookups & Summary
+  const location = useLocation();
+  const isProductRoute = location?.pathname?.startsWith('/products');
+
+  // Initial fetch for Lookups & Summary (only on product routes)
   useEffect(() => {
-    loadLookups();
-    loadSummary();
-  }, [loadLookups, loadSummary]);
+    if (isProductRoute) {
+      loadLookups();
+      loadSummary();
+    }
+  }, [isProductRoute, loadLookups, loadSummary]);
 
   // Reset pagination to page 1 whenever any filter changes
   useEffect(() => {
-    setPageNumber(1);
-  }, [search, categoryId, materialId, uomId, approvalStatus, statusFilter]);
+    if (isProductRoute) {
+      setPageNumber(1);
+    }
+  }, [isProductRoute, search, categoryId, materialId, uomId, approvalStatus, statusFilter]);
 
-  // Refetch products when filters/page change
+  // Refetch products when filters/page change (only on product routes)
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    if (isProductRoute) {
+      loadProducts();
+    }
+  }, [isProductRoute, loadProducts]);
 
   // Reset all filters to default
   const resetFilters = useCallback(() => {

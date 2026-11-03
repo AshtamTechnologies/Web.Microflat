@@ -28,6 +28,7 @@ import {
   IconCopy,
   IconCreditCard,
   IconDelete,
+  IconDownload,
   IconEdit,
   IconError,
   IconEyeOff,
@@ -52,6 +53,7 @@ import {
 
 import { useCompanyContext } from '../../context/CompanyContext';
 import { useCompanyBankDetails } from '../../context/CompanyBankDetailsContext';
+import * as companyService from '../../services/companies/companyService';
 import { getCountryName, getStateName } from '../../mocks/vendors';
 import { formatDate } from '../../utils/dateUtils';
 import AuthVerificationModal from './components/AuthVerificationModal';
@@ -75,23 +77,30 @@ export default function CompanyBankDetailsViewPage() {
   const {
     getBanksForCompany,
     deleteBankDetail,
+    downloadAttachment,
   } = useCompanyBankDetails();
 
   const effectiveCompanyId = companyId || companies[0]?.id || 'COMP-001';
+  const [loading, setLoading] = useState(true);
+  const [loadedCompany, setLoadedCompany] = useState(null);
+  const [singleBankDetail, setSingleBankDetail] = useState(null);
+  const [companyBankAccounts, setCompanyBankAccounts] = useState([]);
 
   const currentCompany = useMemo(() => {
+    if (loadedCompany) return loadedCompany;
     return (
       (getCompanyById && getCompanyById(effectiveCompanyId)) ||
       companies.find((c) => String(c.id) === String(effectiveCompanyId)) ||
       companies[0] ||
       null
     );
-  }, [effectiveCompanyId, getCompanyById, companies]);
+  }, [loadedCompany, effectiveCompanyId, getCompanyById, companies]);
 
   // Load bank accounts for this company
   const bankAccounts = useMemo(() => {
+    if (companyBankAccounts.length > 0) return companyBankAccounts;
     return getBanksForCompany(effectiveCompanyId) || [];
-  }, [effectiveCompanyId, getBanksForCompany]);
+  }, [companyBankAccounts, effectiveCompanyId, getBanksForCompany]);
 
   const [selectedBankId, setSelectedBankId] = useState(bankQueryId || null);
   const [isRevealed, setIsRevealed] = useState(false);
@@ -104,16 +113,74 @@ export default function CompanyBankDetailsViewPage() {
     bank: null,
   });
 
+  // Load live bank detail and company bank details via API on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function loadViewData() {
+      setLoading(true);
+      try {
+        const targetBankId = bankQueryId || selectedBankId;
+        // 1. Call GET /api/company-bank-details/{id}
+        if (targetBankId) {
+          try {
+            const freshAccount = await companyService.getCompanyBankDetailById(targetBankId);
+            if (freshAccount && isMounted) {
+              setSingleBankDetail(freshAccount);
+              setSelectedBankId(String(freshAccount.companyBankDetailId || freshAccount.id));
+            }
+          } catch (e) {
+            console.warn('Failed to load single bank detail:', e);
+          }
+        }
+
+        // 2. Call GET /api/companies/{companyid}/bank-details
+        let compId = companyId || (companies[0]?.companyId || companies[0]?.id);
+        if (!compId) {
+          try {
+            const res = await companyService.listCompanies({ pageNumber: 1, pageSize: 20 });
+            if (res?.items && res.items.length > 0) {
+              compId = res.items[0].companyId || res.items[0].id;
+            }
+          } catch (e) {
+            console.warn('Failed to list companies:', e);
+          }
+        }
+        if (compId) {
+          try {
+            const banks = await companyService.getCompanyBankDetails(compId);
+            if (Array.isArray(banks) && isMounted) {
+              setCompanyBankAccounts(banks);
+            }
+            const comp = await companyService.getCompanyById(compId);
+            if (comp && isMounted) {
+              setLoadedCompany(comp);
+            }
+          } catch (e) {
+            console.warn('Failed to load company bank details:', e);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed in view bank data load:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadViewData();
+    return () => {
+      isMounted = false;
+    };
+  }, [bankQueryId, effectiveCompanyId, companyId]);
+
   // Sync selectedBankId
   useEffect(() => {
     if (bankAccounts.length > 0) {
       const exists = bankAccounts.some(
-        (b) => b.bankDetailId === selectedBankId || b.id === selectedBankId
+        (b) => String(b.bankDetailId || b.id) === String(selectedBankId)
       );
       if (!exists) {
         if (bankQueryId) {
           const match = bankAccounts.find(
-            (b) => b.bankDetailId === bankQueryId || b.id === bankQueryId
+            (b) => String(b.bankDetailId || b.id) === String(bankQueryId)
           );
           if (match) {
             setSelectedBankId(match.bankDetailId || match.id);
@@ -127,26 +194,35 @@ export default function CompanyBankDetailsViewPage() {
     }
   }, [bankAccounts, selectedBankId, bankQueryId]);
 
-  const handleSelectAccount = useCallback((accId) => {
+  const handleSelectAccount = useCallback(async (accId) => {
     setSelectedBankId(accId);
     setIsRevealed(false);
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('bank', accId);
       window.history.replaceState(window.history.state, '', url.toString());
+
+      // Fetch GET /api/company-bank-details/{id}
+      const fresh = await companyService.getCompanyBankDetailById(accId);
+      if (fresh) {
+        setSingleBankDetail(fresh);
+      }
     } catch {
       /* ignore */
     }
   }, []);
 
   const selectedAccount = useMemo(() => {
-    if (!bankAccounts.length) return null;
+    if (singleBankDetail && (String(singleBankDetail.companyBankDetailId) === String(selectedBankId) || String(singleBankDetail.id) === String(selectedBankId))) {
+      return singleBankDetail;
+    }
+    if (!bankAccounts.length) return singleBankDetail || null;
     return (
       bankAccounts.find(
-        (b) => b.bankDetailId === selectedBankId || b.id === selectedBankId
-      ) || bankAccounts[0]
+        (b) => String(b.bankDetailId) === String(selectedBankId) || String(b.id) === String(selectedBankId)
+      ) || singleBankDetail || bankAccounts[0]
     );
-  }, [bankAccounts, selectedBankId]);
+  }, [singleBankDetail, selectedBankId, bankAccounts]);
 
   const selectedAttachments = useMemo(() => {
     if (!selectedAccount) return [];
@@ -192,6 +268,17 @@ export default function CompanyBankDetailsViewPage() {
     toast.success('Bank account deleted successfully');
     setAuthModalState({ isOpen: false, bank: null });
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-text-muted font-medium">Loading bank details...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentCompany) {
     return (
@@ -279,7 +366,7 @@ export default function CompanyBankDetailsViewPage() {
         {/* ── LEFT RAIL: Compact Metrics & Bank Account Navigator (xl:col-span-5) ── */}
         <div className="xl:col-span-5 space-y-4">
           {/* Metrics Pill Bar */}
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
             <Card padding="sm" className="bg-bg text-center space-y-0.5">
               <span className="text-3xs text-text-muted uppercase font-semibold block">Total</span>
               <span className="text-base font-bold text-heading font-mono">{bankAccounts.length}</span>
@@ -287,10 +374,6 @@ export default function CompanyBankDetailsViewPage() {
             <Card padding="sm" className="bg-bg text-center space-y-0.5">
               <span className="text-3xs text-success uppercase font-semibold block">Active</span>
               <span className="text-base font-bold text-success font-mono">{activeCount}</span>
-            </Card>
-            <Card padding="sm" className="bg-bg text-center space-y-0.5">
-              <span className="text-3xs text-info uppercase font-semibold block">Docs</span>
-              <span className="text-base font-bold text-info font-mono">{totalAttachments}</span>
             </Card>
           </div>
 
@@ -404,15 +487,6 @@ export default function CompanyBankDetailsViewPage() {
                     <Badge variant={selectedAccount.isActive ? 'active' : 'inactive'}>
                       {selectedAccount.isActive ? 'Active' : 'Inactive'}
                     </Badge>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-danger hover:bg-danger/10"
-                      onClick={handlePromptDelete}
-                      title="Delete account (requires authorization)"
-                    >
-                      <IconDelete size={15} />
-                    </Button>
                   </div>
                 </div>
 
@@ -463,15 +537,6 @@ export default function CompanyBankDetailsViewPage() {
                       <Badge variant="neutral" size="sm">
                         {selectedAccount.accountType || 'Current'}
                       </Badge>
-                    }
-                  />
-
-                  <DetailField
-                    label="Company ID"
-                    value={
-                      <span className="font-mono text-xs font-semibold text-primary">
-                        {selectedAccount.companyId}
-                      </span>
                     }
                   />
                 </div>
@@ -533,31 +598,51 @@ export default function CompanyBankDetailsViewPage() {
                     </div>
                   </div>
 
-                  <DetailField
-                    label="MICR Code"
-                    value={
-                      selectedAccount.micrCode ? (
-                        <span className="font-mono text-xs font-semibold text-heading">
-                          {selectedAccount.micrCode}
-                        </span>
-                      ) : (
-                        '—'
-                      )
-                    }
-                  />
+                  <div>
+                    <span className="view-field-label">MICR Code</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
+                        {selectedAccount.micrCode || '—'}
+                      </span>
+                      {selectedAccount.micrCode && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(selectedAccount.micrCode, 'MICR Code')}
+                          className="text-text-muted hover:text-primary p-0.5 rounded transition-colors"
+                          title="Copy MICR Code"
+                        >
+                          {copiedField === 'MICR Code' ? (
+                            <IconCheck size={14} className="text-success" />
+                          ) : (
+                            <IconCopy size={14} />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                  <DetailField
-                    label="IBAN"
-                    value={
-                      selectedAccount.iban ? (
-                        <span className="font-mono text-xs font-semibold text-heading">
-                          {selectedAccount.iban}
-                        </span>
-                      ) : (
-                        '—'
-                      )
-                    }
-                  />
+                  <div>
+                    <span className="view-field-label">IBAN</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
+                        {selectedAccount.iban || '—'}
+                      </span>
+                      {selectedAccount.iban && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(selectedAccount.iban, 'IBAN')}
+                          className="text-text-muted hover:text-primary p-0.5 rounded transition-colors"
+                          title="Copy IBAN"
+                        >
+                          {copiedField === 'IBAN' ? (
+                            <IconCheck size={14} className="text-success" />
+                          ) : (
+                            <IconCopy size={14} />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="sm:col-span-2 lg:col-span-4 pt-1 border-t border-border/50">
                     <DetailField
@@ -640,24 +725,26 @@ export default function CompanyBankDetailsViewPage() {
                         <div className="flex items-center gap-2.5 min-w-0">
                           {getFileIcon(att.fileName, att.fileType)}
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-heading truncate" title={att.fileName}>
-                              {att.fileName}
+                            <p className="text-xs font-semibold text-heading truncate" title={att.documentTypeName || att.documentName || att.fileName}>
+                              {att.documentTypeName || att.documentName || 'Banking Document'}
                             </p>
-                            <p className="text-3xs text-text-muted">
-                              {att.documentName} • {att.fileSize}
+                            <p className="text-3xs text-text-muted truncate" title={att.fileName}>
+                              {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
                             </p>
                           </div>
                         </div>
 
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-primary shrink-0"
-                          onClick={() => setPreviewItem(att)}
-                          title="Preview attachment"
-                        >
-                          <IconView size={14} />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-primary shrink-0 hover:bg-primary/10"
+                            onClick={() => downloadAttachment(att.downloadUrl || att.companyBankAttachmentId || att.id, att.fileName)}
+                            title="Download attachment"
+                          >
+                            <IconDownload size={14} />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -692,7 +779,22 @@ export default function CompanyBankDetailsViewPage() {
             </div>
           </div>
 
-          <div className="flex justify-end pt-3 border-t border-border">
+          <div className="flex justify-end gap-2 pt-3 border-t border-border">
+            <Button
+              variant="primary"
+              size="sm"
+              icon={IconDownload}
+              onClick={() => {
+                if (previewItem) {
+                  downloadAttachment(
+                    previewItem.downloadUrl || previewItem.companyBankAttachmentId || previewItem.id,
+                    previewItem.fileName
+                  );
+                }
+              }}
+            >
+              Download
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => setPreviewItem(null)}>
               Close
             </Button>

@@ -39,18 +39,50 @@ import { formatDateTime } from '../../utils/dateUtils';
 export default function CompanyViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getCompanyById } = useCompanyContext();
+  const { getCompanyById, fetchCompanyById } = useCompanyContext();
   const { getCountryName, getStateName, fetchStatesForCountry } = useCountryState();
 
   const [copiedField, setCopiedField] = useState(null);
+  const [company, setCompany] = useState(() => getCompanyById(id));
+  const [loading, setLoading] = useState(!company);
 
-  const company = getCompanyById(id);
+  React.useEffect(() => {
+    let isMounted = true;
+    async function loadCompanyData() {
+      if (!company) setLoading(true);
+      try {
+        const fetched = await fetchCompanyById(id);
+        if (fetched && isMounted) {
+          setCompany(fetched);
+        }
+      } catch (err) {
+        console.warn('Failed to load company by id:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadCompanyData();
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   React.useEffect(() => {
     if (company?.country) {
       fetchStatesForCountry(company.country);
     }
   }, [company?.country, fetchStatesForCountry]);
+
+  if (loading && !company) {
+    return (
+      <div className="max-w-2xl mx-auto py-16 px-4 text-center">
+        <div className="flex flex-col items-center justify-center space-y-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-text-muted">Loading company profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!company) {
     return (
@@ -122,7 +154,7 @@ export default function CompanyViewPage() {
             variant="primary"
             size="sm"
             icon={IconEdit}
-            onClick={() => navigate(`/company-registration/${company.id}/edit`)}
+            onClick={() => navigate(`/company-registration/${company.companyId || company.id}/edit`)}
             className="text-xs font-semibold shadow-2xs"
           >
             Edit Company

@@ -51,36 +51,59 @@ export default function CompanyFormPage() {
   const navigate = useNavigate();
   const isEdit = Boolean(id);
 
-  const { getCompanyById, addCompany, updateCompany } = useCompanyContext();
+  const { getCompanyById, fetchCompanyById, addCompany, updateCompany } = useCompanyContext();
 
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingCompany, setIsLoadingCompany] = useState(isEdit);
 
-  // Load existing company if in Edit mode
+  // Load existing company via API if in Edit mode
   useEffect(() => {
-    if (isEdit) {
-      const existing = getCompanyById(id);
-      if (existing) {
-        setForm({
-          ...INITIAL_FORM,
-          ...existing,
-          country: existing.country || '',
-          state: existing.state || '',
-          website: existing.website || '',
-          contactPersonName:
-            existing.contactPersonName ||
-            [existing.firstName, existing.lastName].filter(Boolean).join(' ') ||
-            '',
-          contactPersonEmail: existing.contactPersonEmail || existing.email || '',
-          contactPersonMobile: existing.contactPersonMobile || existing.phone1 || '',
-        });
-      } else {
-        toast.error('Company not found');
-        navigate('/company-registration');
+    if (isEdit && id) {
+      let isMounted = true;
+      async function loadCompany() {
+        setIsLoadingCompany(true);
+        try {
+          const existing = (fetchCompanyById && (await fetchCompanyById(id))) || getCompanyById(id);
+          if (existing && isMounted) {
+            setForm({
+              ...INITIAL_FORM,
+              ...existing,
+              country: existing.countryId || existing.country || '',
+              countryId: existing.countryId || null,
+              state: existing.stateId || existing.state || '',
+              stateId: existing.stateId || null,
+              pinCode: existing.zipCode || existing.pinCode || '',
+              email: existing.companyEmail || existing.email || '',
+              website: existing.website || '',
+              contactPersonName:
+                existing.contactPersonName ||
+                [existing.firstName, existing.lastName].filter(Boolean).join(' ') ||
+                '',
+              contactPersonEmail: existing.contactPersonEmail || existing.email || '',
+              contactPersonMobile: existing.contactPersonMobile || existing.phone1 || '',
+            });
+          } else if (isMounted) {
+            toast.error('Company not found');
+            navigate('/company-registration');
+          }
+        } catch (err) {
+          if (isMounted) {
+            console.warn('Failed to load company for edit:', err);
+            toast.error('Failed to load company details');
+            navigate('/company-registration');
+          }
+        } finally {
+          if (isMounted) setIsLoadingCompany(false);
+        }
       }
+      loadCompany();
+      return () => {
+        isMounted = false;
+      };
     }
-  }, [id, isEdit, getCompanyById, navigate]);
+  }, [id, isEdit]);
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -119,7 +142,7 @@ export default function CompanyFormPage() {
     return validateCompanyDetails();
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     if (e) e.preventDefault();
 
     const validationErrors = validateForm();
@@ -133,15 +156,15 @@ export default function CompanyFormPage() {
     setIsSubmitting(true);
     try {
       if (isEdit) {
-        updateCompany(id, form);
+        await updateCompany(id, form);
         toast.success('Company updated successfully');
       } else {
-        addCompany(form);
+        await addCompany(form);
         toast.success('Company registered successfully');
       }
       navigate('/company-registration');
     } catch (err) {
-      toast.error('Failed to save company registration');
+      toast.error(err.message || 'Failed to save company registration');
     } finally {
       setIsSubmitting(false);
     }
@@ -151,6 +174,17 @@ export default function CompanyFormPage() {
   const handleCancel = () => {
     navigate('/company-registration');
   };
+
+  if (isLoadingCompany) {
+    return (
+      <div className="max-w-2xl mx-auto py-16 px-4 text-center">
+        <div className="flex flex-col items-center justify-center space-y-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-text-muted">Loading company details...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 pb-12 w-full">

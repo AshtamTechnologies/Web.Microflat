@@ -32,13 +32,14 @@ import {
 } from '../../components/ui';
 import { useCompanyContext } from '../../context/CompanyContext';
 import { useCompanyBankDetails } from '../../context/CompanyBankDetailsContext';
+import * as companyService from '../../services/companies/companyService';
 import { useCompanyBankTable, STATUS_FILTER_OPTIONS } from './useCompanyBankTable';
 import AuthVerificationModal from './components/AuthVerificationModal';
 import { formatDate } from '../../utils/dateUtils';
 
 export default function CompanyBankDetailsPage() {
   const navigate = useNavigate();
-  const { getAllBanks, toggleBankActive, deleteBankDetail } = useCompanyBankDetails();
+  const { getAllBanks, toggleBankActive, deleteBankDetail, fetchBanksForCompany } = useCompanyBankDetails();
   const { companies = [] } = useCompanyContext();
 
   const [loading, setLoading] = useState(true);
@@ -67,9 +68,32 @@ export default function CompanyBankDetailsPage() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 200);
-    return () => clearTimeout(timer);
-  }, []);
+    let isMounted = true;
+    async function loadData() {
+      setLoading(true);
+      try {
+        let activeCompanies = companies;
+        if (!activeCompanies || activeCompanies.length === 0) {
+          const res = await companyService.listCompanies({ pageNumber: 1, pageSize: 20 });
+          if (res?.items && res.items.length > 0) {
+            activeCompanies = res.items;
+          }
+        }
+        const activeComp = activeCompanies && activeCompanies[0];
+        if (activeComp?.companyId || activeComp?.id) {
+          await fetchBanksForCompany(activeComp.companyId || activeComp.id);
+        }
+      } catch (err) {
+        console.warn('Failed to load bank details for company:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [companies, fetchBanksForCompany]);
 
   const allBanks = useMemo(() => getAllBanks(), [getAllBanks]);
 
@@ -188,7 +212,20 @@ export default function CompanyBankDetailsPage() {
             >
               Clear all filters
             </Button>
-          ) : null
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                const targetCompanyId = companies[0]?.id || companies[0]?.companyId || '';
+                navigate(targetCompanyId ? `/company-bank-details/${targetCompanyId}/edit` : '/company-bank-details/new');
+              }}
+            >
+              <IconAdd size={14} className="mr-1.5" aria-hidden="true" />
+              Add Bank Details
+            </Button>
+          )
         }
         renderMobileCard={(row) => {
           const bank = row.original;

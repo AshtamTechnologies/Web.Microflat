@@ -8,7 +8,7 @@
  *   - Responsive mobile card view for small touch screens (< 768px)
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   useReactTable,
@@ -44,11 +44,18 @@ const columnHelper = createColumnHelper();
 
 export default function CompanyRegistrationPage() {
   const navigate = useNavigate();
-  const { companies } = useCompanyContext();
+  const { companies = [], fetchCompanies, loading } = useCompanyContext();
 
   const [sorting, setSorting] = useState([{ id: 'companyName', desc: false }]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  // Fetch companies from backend on page load / navigation
+  useEffect(() => {
+    if (fetchCompanies) {
+      fetchCompanies();
+    }
+  }, [fetchCompanies]);
 
   // Filter companies by search query and active status
   const filteredCompanies = useMemo(() => {
@@ -89,12 +96,13 @@ export default function CompanyRegistrationPage() {
         size: 130,
         cell: (info) => {
           const row = info.row.original;
+          const targetId = row.companyId || row.id;
           return (
             <Link
-              to={`/company-registration/${row.id}`}
+              to={`/company-registration/${targetId}`}
               className="font-mono text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer text-left"
             >
-              {row.id}
+              {row.companyCode || row.id}
             </Link>
           );
         },
@@ -105,11 +113,12 @@ export default function CompanyRegistrationPage() {
         size: 240,
         cell: (info) => {
           const row = info.row.original;
+          const targetId = row.companyId || row.id;
           const person = row.contactPersonName;
           return (
             <div className="min-w-0">
               <Link
-                to={`/company-registration/${row.id}`}
+                to={`/company-registration/${targetId}`}
                 className="font-semibold text-heading text-xs leading-snug hover:text-primary transition-colors truncate block text-left cursor-pointer"
                 title={info.getValue()}
               >
@@ -180,7 +189,7 @@ export default function CompanyRegistrationPage() {
       columnHelper.accessor('isActive', {
         header: 'STATUS',
         size: 100,
-        cell: (info) => <StatusBadge status={info.getValue()} size="sm" />,
+        cell: (info) => <StatusBadge status={Boolean(info.getValue())} size="sm" />,
       }),
 
       columnHelper.display({
@@ -192,10 +201,11 @@ export default function CompanyRegistrationPage() {
         enableResizing: false,
         cell: (info) => {
           const row = info.row.original;
+          const targetId = row.companyId || row.id;
           return (
             <TableActions
-              onView={() => navigate(`/company-registration/${row.id}`)}
-              onEdit={() => navigate(`/company-registration/${row.id}/edit`)}
+              onView={() => navigate(`/company-registration/${targetId}`)}
+              onEdit={() => navigate(`/company-registration/${targetId}/edit`)}
               viewTooltip="View company details"
               editTooltip="Edit company"
             />
@@ -215,6 +225,8 @@ export default function CompanyRegistrationPage() {
     getSortedRowModel: getSortedRowModel(),
   });
 
+  const hasRegisteredCompany = companies.length > 0;
+
   return (
     <div className="space-y-6 pb-12 w-full">
       {/* ── Page Header ── */}
@@ -222,6 +234,19 @@ export default function CompanyRegistrationPage() {
         title="Company Registration"
         icon={<IconBuilding2 className="h-6 w-6 text-primary" aria-hidden="true" />}
         subtitle="Registered organization profile, legal identifiers, and official business details."
+        actions={
+          !hasRegisteredCompany && (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              icon={IconAdd}
+              onClick={() => navigate('/company-registration/new')}
+            >
+              Add Company
+            </Button>
+          )
+        }
       />
 
       {/* ── Table Toolbar & Filters ── */}
@@ -257,6 +282,7 @@ export default function CompanyRegistrationPage() {
       <DataTable
         table={table}
         columns={columns}
+        isLoading={loading}
         emptyTitle="No companies registered"
         emptyDescription="Get started by registering your company master profile and bank accounts."
         emptyAction={
@@ -276,19 +302,21 @@ export default function CompanyRegistrationPage() {
           const person = comp.contactPersonName;
           const stateLabel = getStateName(comp.country, comp.state) || comp.state;
 
+          const targetId = comp.companyId || comp.id;
+
           return (
             <div className="p-4 space-y-3 bg-bg border border-border rounded-xl shadow-2xs hover:border-primary/40 transition-colors">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Link
-                      to={`/company-registration/${comp.id}`}
+                      to={`/company-registration/${targetId}`}
                       className="font-mono text-xs font-bold text-primary hover:underline"
                     >
-                      {comp.id}
+                      {comp.companyCode || comp.id}
                     </Link>
                     <Link
-                      to={`/company-registration/${comp.id}`}
+                      to={`/company-registration/${targetId}`}
                       className="font-semibold text-sm text-heading truncate hover:text-primary transition-colors"
                     >
                       {comp.companyName}

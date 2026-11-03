@@ -171,12 +171,12 @@ export function useCompanyBankTable({
         },
       }),
 
-      /* 6. Actions (View, Edit, Delete) */
+      /* 6. Actions (View, Edit) */
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 100,
-        size: 110,
+        minSize: 80,
+        size: 90,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -186,10 +186,8 @@ export function useCompanyBankTable({
             <TableActions
               onView={() => navigate(`/company-bank-details/${row.companyId}/view?bank=${bankId}`)}
               onEdit={() => navigate(`/company-bank-details/${row.companyId}/edit?bank=${bankId}`)}
-              onDelete={onDeleteBank ? () => onDeleteBank(row) : undefined}
               viewTitle={`View bank details for ${row.companyName}`}
               editTitle={`Edit bank account for ${row.companyName}`}
-              deleteTitle={`Delete bank account for ${row.companyName}`}
             />
           );
         },
