@@ -2,13 +2,14 @@
  * ProductOptionsEditor.jsx — Sub-component for managing product options (e.g. Counter Bored Holes, Rexine Cover).
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Button,
   Input,
   Checkbox,
   Badge,
   TableContainer,
+  ConfirmModal,
   Th,
 } from '../../../components/ui';
 import { IconAdd, IconDelete, IconLayers } from '../../../constants/icons';
@@ -29,9 +30,13 @@ export default function ProductOptionsEditor({
     onChange?.(nextList);
   };
 
-  const handleRemove = (index) => {
-    const nextList = options.filter((_, i) => i !== index);
+  const [indexToDelete, setIndexToDelete] = useState(null);
+
+  const handleConfirmDelete = () => {
+    if (indexToDelete === null) return;
+    const nextList = options.filter((_, i) => i !== indexToDelete);
     onChange?.(nextList);
+    setIndexToDelete(null);
   };
 
   const handleChangeName = (index, value) => {
@@ -80,11 +85,11 @@ export default function ProductOptionsEditor({
         </div>
       ) : (
         <TableContainer
-          className="border border-border rounded-lg overflow-hidden"
+          className="border border-border rounded-lg max-h-60 overflow-y-auto"
           tableClassName="w-full text-xs table-auto"
         >
-          <thead>
-            <tr className="bg-muted/40 border-b border-border">
+          <thead className="sticky top-0 bg-surface z-10">
+            <tr className="bg-surface border-b border-border">
               <Th>Option Name</Th>
               <Th className="w-32 text-center">Is Standard</Th>
               {!readOnly && <Th className="w-16 text-center">Action</Th>}
@@ -128,8 +133,9 @@ export default function ProductOptionsEditor({
                         type="button"
                         variant="ghost"
                         size="xs"
-                        onClick={() => handleRemove(index)}
+                        onClick={() => setIndexToDelete(index)}
                         className="text-danger hover:bg-danger/10"
+                        title="Remove option"
                       >
                         <IconDelete size={14} />
                       </Button>
@@ -140,6 +146,17 @@ export default function ProductOptionsEditor({
             </tbody>
         </TableContainer>
       )}
+
+      {/* Confirmation Modal for Option Removal */}
+      <ConfirmModal
+        isOpen={indexToDelete !== null}
+        onClose={() => setIndexToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Remove Option"
+        message={`Are you sure you want to remove "${options[indexToDelete]?.optionName || 'Option'}"?`}
+        confirmText="Remove"
+        variant="danger"
+      />
     </div>
   );
 }

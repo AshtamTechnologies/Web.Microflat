@@ -68,6 +68,7 @@ export default function ConfirmModal({
       title={title}
       size={size}
       maxWidth={maxWidth}
+      zIndex="z-[60]"
     >
       <div className="space-y-4">
         {/* Visual Icon & Content */}

@@ -44,15 +44,16 @@ import {
   IconFileText,
   IconAttachment,
   IconUpload,
+  IconDownload,
   IconAdd,
+  IconEdit,
   IconDelete,
+  IconSpecParameters,
 } from '../../constants/icons';
 import { productService } from '../../services';
 import { useProductsContext } from '../../context/ProductsContext';
 import ProductStandardsEditor from './components/ProductStandardsEditor';
 import ProductOptionsEditor from './components/ProductOptionsEditor';
-import ProductVariantsTab from './components/ProductVariantsTab';
-import ProductAttachmentsTab from './components/ProductAttachmentsTab';
 import { createEmptyProductForm } from '../../models/products/productModel';
 
 function extractVal(e) {
@@ -77,9 +78,11 @@ export default function ProductFormPage() {
   const [isActive, setIsActive] = useState(true);
   const [initialIsActive, setInitialIsActive] = useState(true);
 
-  // Draft variants for create mode
-  const [draftVariants, setDraftVariants] = useState([]);
+  // Staged variants for both create and edit modes (Option 2: 100% deferred staging)
+  const [variants, setVariants] = useState([]);
+  const [deletedVariantIds, setDeletedVariantIds] = useState([]);
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
+  const [editingVariantIndex, setEditingVariantIndex] = useState(null);
   const [variantForm, setVariantForm] = useState({
     variantCode: '',
     gradeId: '',
@@ -87,9 +90,10 @@ export default function ProductFormPage() {
     widthMm: '',
     heightMm: '',
     diameterMm: '',
+    isActive: true,
   });
 
-  // Draft attachments for create mode
+  // Staged attachments for both create and edit modes
   const [draftAttachments, setDraftAttachments] = useState([]);
   const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState(false);
   const [attachmentForm, setAttachmentForm] = useState({
@@ -100,8 +104,43 @@ export default function ProductFormPage() {
     file: null,
   });
 
+  // Staged Specs modal state
+  const [selectedVariantIndexForSpecs, setSelectedVariantIndexForSpecs] = useState(null);
+  const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
+  const [variantSpecs, setVariantSpecs] = useState([]);
+  const [isLoadingSpecs, setIsLoadingSpecs] = useState(false);
+
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
+
+  const handleOpenAddVariant = () => {
+    setEditingVariantIndex(null);
+    setVariantForm({
+      variantCode: form.productCode ? `${form.productCode}-` : '',
+      gradeId: '',
+      lengthMm: '',
+      widthMm: '',
+      heightMm: '',
+      diameterMm: '',
+      isActive: true,
+    });
+    setIsVariantModalOpen(true);
+  };
+
+  const handleOpenEditVariant = (idx) => {
+    setEditingVariantIndex(idx);
+    const v = variants[idx];
+    setVariantForm({
+      variantCode: v.variantCode || '',
+      gradeId: v.gradeId ? Number(v.gradeId) : '',
+      lengthMm: v.lengthMm ?? '',
+      widthMm: v.widthMm ?? '',
+      heightMm: v.heightMm ?? '',
+      diameterMm: v.diameterMm ?? '',
+      isActive: v.isActive !== undefined ? Boolean(v.isActive) : true,
+    });
+    setIsVariantModalOpen(true);
+  };
 
   // Deletion confirmation dialog state
   const [itemToDelete, setItemToDelete] = useState(null);
@@ -109,13 +148,121 @@ export default function ProductFormPage() {
   const handleConfirmDelete = () => {
     if (!itemToDelete) return;
     if (itemToDelete.type === 'variant') {
-      setDraftVariants((prev) => prev.filter((_, i) => i !== itemToDelete.index));
+      if (itemToDelete.id) {
+        setDeletedVariantIds((prev) => [...prev, itemToDelete.id]);
+      }
+      setVariants((prev) => prev.filter((_, i) => i !== itemToDelete.index));
       toast.success(`Removed variant "${itemToDelete.name}"`);
     } else if (itemToDelete.type === 'attachment') {
       setDraftAttachments((prev) => prev.filter((_, i) => i !== itemToDelete.index));
       toast.success(`Removed attachment "${itemToDelete.name}"`);
+    } else if (itemToDelete.type === 'spec') {
+      setVariantSpecs((prev) => prev.filter((_, i) => i !== itemToDelete.index));
+      toast.success(`Removed parameter "${itemToDelete.name}"`);
     }
     setItemToDelete(null);
+  };
+
+  // Specs Modal local handlers (100% deferred staging)
+  const handleOpenSpecsModal = async (idx) => {
+    setSelectedVariantIndexForSpecs(idx);
+    const v = variants[idx];
+    if (v.specs) {
+      setVariantSpecs(v.specs);
+      setIsSpecsModalOpen(true);
+    } else if (v.id) {
+      setIsLoadingSpecs(true);
+      setIsSpecsModalOpen(true);
+      try {
+        const data = await productService.getVariantById(v.id);
+        const fetchedSpecs = data?.specs || [];
+        setVariantSpecs(fetchedSpecs);
+        setVariants((prev) => {
+          const next = [...prev];
+          next[idx] = { ...next[idx], specs: fetchedSpecs, specCount: fetchedSpecs.length };
+          return next;
+        });
+      } catch (err) {
+        console.warn('Could not load variant specs:', err);
+        setVariantSpecs([]);
+      } finally {
+        setIsLoadingSpecs(false);
+      }
+    } else {
+      setVariantSpecs(v.specs || []);
+      setIsSpecsModalOpen(true);
+    }
+  };
+
+  const handleAddSpecRow = () => {
+    setVariantSpecs((prev) => [
+      ...prev,
+      {
+        specParameterId: '',
+        parameterName: '',
+        unitSymbol: '',
+        valueDecimal: '',
+        valueText: '',
+        tolerancePlus: '',
+        toleranceMinus: '',
+      },
+    ]);
+  };
+
+  const handleRemoveSpecRow = (sIdx) => {
+    setVariantSpecs((prev) => prev.filter((_, i) => i !== sIdx));
+  };
+
+  const handleChangeSpecParam = (sIdx, paramId) => {
+    const param = (lookups?.specParameters || []).find((p) => Number(p.id) === Number(paramId));
+    setVariantSpecs((prev) => {
+      const next = [...prev];
+      next[sIdx] = {
+        ...next[sIdx],
+        specParameterId: Number(paramId),
+        parameterName: param?.parameterName || '',
+        unitSymbol: param?.unitSymbol || '',
+      };
+      return next;
+    });
+  };
+
+  const handleSaveSpecsLocally = (e) => {
+    e?.preventDefault();
+    if (selectedVariantIndexForSpecs === null) return;
+
+    for (const spec of variantSpecs) {
+      if (!spec.specParameterId) {
+        toast.error('Please select a specification parameter for each row');
+        return;
+      }
+      const hasDecimal = spec.valueDecimal !== '' && spec.valueDecimal !== null && spec.valueDecimal !== undefined;
+      const hasText = Boolean(spec.valueText && String(spec.valueText).trim());
+      if (!hasDecimal && !hasText) {
+        toast.error(`Please provide a value for parameter "${spec.parameterName || 'Spec'}"`);
+        return;
+      }
+      if (hasDecimal && hasText) {
+        toast.error(`Parameter "${spec.parameterName}" can have decimal OR text value, not both.`);
+        return;
+      }
+    }
+
+    setVariants((prev) => {
+      const next = [...prev];
+      const target = next[selectedVariantIndexForSpecs];
+      next[selectedVariantIndexForSpecs] = {
+        ...target,
+        specs: variantSpecs,
+        specCount: variantSpecs.length,
+        _isSpecsModified: true,
+      };
+      return next;
+    });
+
+    toast.success('Accuracy specifications updated');
+    setIsSpecsModalOpen(false);
+    setSelectedVariantIndexForSpecs(null);
   };
 
   // Lookups options
@@ -154,17 +301,12 @@ export default function ProductFormPage() {
     }));
   }, [lookups?.documentTypes]);
 
-  const reloadAttachments = async () => {
-    if (!id) return;
-    try {
-      const data = await productService.getProductById(id);
-      if (data?.attachments) {
-        setAttachments(data.attachments);
-      }
-    } catch (err) {
-      console.warn('Could not reload attachments:', err);
-    }
-  };
+  const specParamOptions = useMemo(() => {
+    return (lookups?.specParameters || []).map((p) => ({
+      value: Number(p.id),
+      label: `${p.parameterName}${p.unitSymbol ? ` (${p.unitSymbol})` : ''}`,
+    }));
+  }, [lookups?.specParameters]);
 
   // Load product if edit mode
   useEffect(() => {
@@ -174,7 +316,10 @@ export default function ProductFormPage() {
     async function fetchProduct() {
       setIsLoading(true);
       try {
-        const data = await productService.getProductById(id);
+        const [data, variantsRes] = await Promise.all([
+          productService.getProductById(id),
+          productService.listProductVariants(id, { pageSize: 100 }).catch(() => ({ items: [] })),
+        ]);
         if (!isMounted || !data) return;
 
         setForm({
@@ -206,6 +351,14 @@ export default function ProductFormPage() {
         setAttachments(data.attachments || []);
         setIsActive(Boolean(data.isActive));
         setInitialIsActive(Boolean(data.isActive));
+
+        const loadedVariants = Array.isArray(variantsRes?.items)
+          ? variantsRes.items
+          : Array.isArray(variantsRes)
+          ? variantsRes
+          : [];
+        setVariants(loadedVariants);
+        setDeletedVariantIds([]);
       } catch (err) {
         toast.error(err?.message || 'Failed to load product details');
         navigate('/products');
@@ -313,6 +466,76 @@ export default function ProductFormPage() {
           options.filter((o) => o.optionName?.trim())
         );
 
+        // 5. Delete removed variants
+        for (const vId of deletedVariantIds) {
+          try {
+            await productService.deleteVariant(vId);
+          } catch (delErr) {
+            console.warn(`Could not delete variant #${vId}:`, delErr);
+          }
+        }
+
+        // 6. Update modified variants (including status change via patch)
+        const modifiedVariants = variants.filter((v) => v.id && v._isModified && !v._isNew);
+        for (const v of modifiedVariants) {
+          try {
+            await productService.updateVariant(v.id, v);
+            if (v._isStatusChanged) {
+              await productService.updateVariantStatus(v.id, v.isActive);
+            }
+          } catch (updErr) {
+            console.warn(`Could not update variant #${v.id}:`, updErr);
+          }
+        }
+
+        // 7. Save specs for modified existing variants
+        const existingVariantsWithSpecs = variants.filter(
+          (v) => v.id && v._isSpecsModified && !v._isNew && Array.isArray(v.specs)
+        );
+        for (const v of existingVariantsWithSpecs) {
+          try {
+            await productService.setVariantSpecs(v.id, v.specs);
+          } catch (spErr) {
+            console.warn(`Could not save specs for variant #${v.id}:`, spErr);
+          }
+        }
+
+        // 8. Add newly added variants (and their specs/status) in edit mode
+        const newVariants = variants.filter((v) => v._isNew);
+        for (const v of newVariants) {
+          try {
+            const createdVar = await productService.addVariant(productId, v);
+            const newVarId = createdVar?.id || createdVar?.data?.id;
+            if (newVarId) {
+              if (v.isActive === false) {
+                await productService.updateVariantStatus(newVarId, false);
+              }
+              if (Array.isArray(v.specs) && v.specs.length > 0) {
+                await productService.setVariantSpecs(newVarId, v.specs);
+              }
+            }
+          } catch (addErr) {
+            console.warn('Could not add new variant in edit mode:', addErr);
+          }
+        }
+
+        // 9. Upload newly queued attachments
+        if (draftAttachments.length > 0) {
+          for (const att of draftAttachments) {
+            try {
+              const formData = new FormData();
+              formData.append('DocumentTypeId', Number(att.documentTypeId));
+              if (att.documentName) formData.append('DocumentName', att.documentName);
+              if (att.documentTitle) formData.append('DocumentTitle', att.documentTitle);
+              if (att.remarks) formData.append('Remarks', att.remarks);
+              formData.append('File', att.file);
+              await productService.uploadAttachment(productId, formData);
+            } catch (attErr) {
+              console.warn('Could not upload attachment in edit mode:', attErr);
+            }
+          }
+        }
+
         toast.success('Product updated successfully');
       } else {
         // 1. Create product
@@ -343,11 +566,20 @@ export default function ProductFormPage() {
           }
         }
 
-        // 4. Link initial variants if any defined
-        if (productId && draftVariants.length > 0) {
-          for (const v of draftVariants) {
+        // 4. Link initial variants and their specs if any defined
+        if (productId && variants.length > 0) {
+          for (const v of variants) {
             try {
-              await productService.addVariant(productId, v);
+              const createdVar = await productService.addVariant(productId, v);
+              const newVarId = createdVar?.id || createdVar?.data?.id;
+              if (newVarId) {
+                if (v.isActive === false) {
+                  await productService.updateVariantStatus(newVarId, false);
+                }
+                if (Array.isArray(v.specs) && v.specs.length > 0) {
+                  await productService.setVariantSpecs(newVarId, v.specs);
+                }
+              }
             } catch (vErr) {
               console.warn('Could not add draft variant on create:', vErr);
             }
@@ -431,7 +663,7 @@ export default function ProductFormPage() {
           icon={<IconProduct size={18} />}
           defaultOpen={true}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Product Code */}
             <Input
               id="productCode"
@@ -447,19 +679,17 @@ export default function ProductFormPage() {
             />
 
             {/* Product Name */}
-            <div className="md:col-span-2">
-              <Input
-                id="productName"
-                label="Product Name"
-                required
-                value={form.productName}
-                onChange={(e) => handleFieldChange('productName', e.target.value)}
-                onBlur={() => handleBlur('productName')}
-                placeholder="e.g. Granite Surface Plate, Aluminium Straight Edge"
-                error={errors.productName}
-                hint="Full commercial and technical product name"
-              />
-            </div>
+            <Input
+              id="productName"
+              label="Product Name"
+              required
+              value={form.productName}
+              onChange={(e) => handleFieldChange('productName', e.target.value)}
+              onBlur={() => handleBlur('productName')}
+              placeholder="e.g. Granite Surface Plate, Aluminium Straight Edge"
+              error={errors.productName}
+              hint="Full commercial and technical product name"
+            />
 
             {/* Category */}
             <SearchableSelect
@@ -504,16 +734,14 @@ export default function ProductFormPage() {
             />
 
             {/* Finish Type */}
-            <div className="md:col-span-2">
-              <Input
-                id="finishType"
-                label="Finish Type"
-                value={form.finishType}
-                onChange={(e) => handleFieldChange('finishType', e.target.value)}
-                placeholder="e.g. Precision Lapped, Hand Lapped, Hard Anodized"
-                hint="Surface treatment and mechanical finish specification"
-              />
-            </div>
+            <Input
+              id="finishType"
+              label="Finish Type"
+              value={form.finishType}
+              onChange={(e) => handleFieldChange('finishType', e.target.value)}
+              placeholder="e.g. Precision Lapped, Hand Lapped, Hard Anodized"
+              hint="Surface treatment and mechanical finish specification"
+            />
 
             {/* Account Status in Edit Mode */}
             {isEditMode && (
@@ -535,7 +763,310 @@ export default function ProductFormPage() {
           </div>
         </CollapsibleCard>
 
-        {/* ── Section 2: Quality & Manufacturing Flags ── */}
+        {/* ── Sections 2 & 3: Standards & Options (2-Column Desktop Grid) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* ── Section 3: Applicable Standards ── */}
+          <CollapsibleCard
+            title="Manufacturing & Calibration Standards"
+            subtitle="IS, DIN, BS, and GGG metrology specifications"
+            icon={<IconStandards size={18} />}
+            defaultOpen={true}
+          >
+            <ProductStandardsEditor
+              standards={standards}
+              onChange={setStandards}
+              availableStandards={lookups?.standards || []}
+            />
+          </CollapsibleCard>
+
+          {/* ── Section 4: Product Options & Accessories ── */}
+          <CollapsibleCard
+            title="Product Options & Accessories"
+            subtitle="Optional fixtures, covers, and attachment configurations"
+            icon={<IconLayers size={18} />}
+            defaultOpen={true}
+          >
+            <ProductOptionsEditor
+              options={options}
+              onChange={setOptions}
+            />
+          </CollapsibleCard>
+        </div>
+
+        {/* ── Sections 5 & 6: Variants & Attachments (2-Column Desktop Grid) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* ── Section 5: Product Variants & Specifications ── */}
+          <CollapsibleCard
+            title="Product Variants & Dimensions"
+            subtitle="Physical sizes, grades, and dimensional figures"
+            icon={<IconLayers size={18} />}
+            defaultOpen={true}
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-semibold text-heading">
+                    {isEditMode ? 'Product Variants & Sizes' : 'Initial Variants & Sizes'}
+                  </h4>
+                  <p className="text-2xs text-text-muted">
+                    {isEditMode
+                      ? 'Configure dimensions, grades, and active statuses. Changes are saved upon updating product.'
+                      : 'You can define product sizes now or add them later after registration.'}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenAddVariant}
+                  className="flex items-center gap-1.5"
+                >
+                  <IconAdd size={14} />
+                  <span>Add Variant</span>
+                </Button>
+              </div>
+
+              {variants.length === 0 ? (
+                <div className="p-4 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
+                  No variants added yet. Click &quot;Add Variant&quot; above to configure dimensions and grades.
+                </div>
+              ) : (
+                <TableContainer
+                  className="border border-border rounded-lg max-h-80 overflow-y-auto"
+                  tableClassName="w-full text-xs table-auto"
+                >
+                  <thead className="sticky top-0 bg-surface z-10">
+                    <tr className="bg-surface border-b border-border">
+                      <Th>Variant Code</Th>
+                      <Th>Grade</Th>
+                      <Th className="text-right">Length (mm)</Th>
+                      <Th className="text-right">Width (mm)</Th>
+                      <Th className="text-right">Height (mm)</Th>
+                      <Th className="text-right">Diameter (mm)</Th>
+                      <Th className="text-center">Status</Th>
+                      <Th className="w-32 text-center">Actions</Th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {variants.map((v, idx) => (
+                      <tr key={v.id || v._tempId || idx} className="hover:bg-surface/30">
+                        <td className="p-2.5 font-mono font-medium text-heading">
+                          <div className="flex items-center gap-1.5">
+                            <span>{v.variantCode}</span>
+                            {v._isNew && (
+                              <Badge variant="info" size="xs">New</Badge>
+                            )}
+                            {v._isModified && !v._isNew && (
+                              <Badge variant="warning" size="xs">Modified</Badge>
+                            )}
+                            {v._isSpecsModified && !v._isNew && (
+                              <Badge variant="neutral" size="xs">Specs Updated</Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-2.5">
+                          {lookups?.grades?.find((g) => Number(g.id) === Number(v.gradeId))?.gradeCode || '—'}
+                        </td>
+                        <td className="p-2.5 text-right font-mono">{v.lengthMm ?? '—'}</td>
+                        <td className="p-2.5 text-right font-mono">{v.widthMm ?? '—'}</td>
+                        <td className="p-2.5 text-right font-mono">{v.heightMm ?? '—'}</td>
+                        <td className="p-2.5 text-right font-mono">{v.diameterMm ?? '—'}</td>
+                        <td className="p-2.5 text-center">
+                          <Badge variant={v.isActive ? 'success' : 'neutral'} size="xs">
+                            {v.isActive ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => handleOpenSpecsModal(idx)}
+                              className="text-text-muted hover:text-primary flex items-center gap-1 px-1.5 py-1 border border-border/70 rounded hover:bg-surface/70"
+                              title="Configure accuracy specifications"
+                            >
+                              <IconSpecParameters size={13} className="text-primary shrink-0" />
+                              <span className="text-2xs font-mono">
+                                {(v.specs !== undefined ? v.specs.length : (v.specCount || 0)) > 0
+                                  ? `${v.specs !== undefined ? v.specs.length : v.specCount} Specs`
+                                  : 'Add Specs'}
+                              </span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() => handleOpenEditVariant(idx)}
+                              className="text-text-muted hover:text-primary"
+                              title="Edit variant"
+                            >
+                              <IconEdit size={14} />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={() =>
+                                setItemToDelete({
+                                  type: 'variant',
+                                  index: idx,
+                                  id: v.id,
+                                  name: v.variantCode || `Variant #${idx + 1}`,
+                                })
+                              }
+                              className="text-danger hover:bg-danger/10"
+                              title="Remove variant"
+                            >
+                              <IconDelete size={14} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </TableContainer>
+              )}
+            </div>
+          </CollapsibleCard>
+
+          {/* ── Section 6: Technical Documents & Attachments ── */}
+          <CollapsibleCard
+            title="Technical Documents & Attachments"
+            subtitle="CAD drawings, calibration certificates, and datasheets"
+            icon={<IconFileText size={18} />}
+            defaultOpen={true}
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-semibold text-heading">
+                    {isEditMode ? 'Product Documents & Files' : 'Initial Documents & Files'}
+                  </h4>
+                  <p className="text-2xs text-text-muted">
+                    {isEditMode
+                      ? 'Existing attachments and queued files. Uploads commit when updating product.'
+                      : 'Queue technical drawings, datasheets, or certificates to be uploaded upon creation.'}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAttachmentForm({
+                      documentTypeId: '',
+                      documentName: '',
+                      documentTitle: '',
+                      remarks: '',
+                      file: null,
+                    });
+                    setIsAttachmentModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <IconUpload size={14} />
+                  <span>Add Document</span>
+                </Button>
+              </div>
+
+              {attachments.length === 0 && draftAttachments.length === 0 ? (
+                <div className="p-4 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
+                  No documents queued yet. Click &quot;Add Document&quot; above to select files.
+                </div>
+              ) : (
+                <TableContainer
+                  className="border border-border rounded-lg max-h-80 overflow-y-auto"
+                  tableClassName="w-full text-xs table-auto"
+                >
+                  <thead className="sticky top-0 bg-surface z-10">
+                    <tr className="bg-surface border-b border-border">
+                      <Th>File Name</Th>
+                      <Th>Document Type</Th>
+                      <Th>Title / Remarks</Th>
+                      <Th className="text-center">Status</Th>
+                      <Th className="w-16 text-center">Action</Th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {/* Existing uploaded attachments */}
+                    {attachments.map((att, idx) => (
+                      <tr key={`existing-${att.id || idx}`} className="hover:bg-surface/30">
+                        <td className="p-2.5 font-medium text-heading flex items-center gap-2">
+                          <IconFileText size={16} className="text-primary shrink-0" />
+                          <span className="truncate max-w-xs">{att.documentName || att.fileName || 'Attachment'}</span>
+                        </td>
+                        <td className="p-2.5">
+                          <Badge variant="neutral" size="xs">
+                            {att.documentTypeName || att.documentType || lookups?.documentTypes?.find((d) => Number(d.id) === Number(att.documentTypeId))?.typeName || `Type #${att.documentTypeId}`}
+                          </Badge>
+                        </td>
+                        <td className="p-2.5 text-text-muted truncate max-w-xs">{att.documentTitle || att.remarks || '—'}</td>
+                        <td className="p-2.5 text-center">
+                          <Badge variant="success" size="xs">Uploaded</Badge>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          {att.fileUrl || att.downloadUrl ? (
+                            <a
+                              href={att.fileUrl || att.downloadUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-primary hover:underline p-1"
+                              title="Download document"
+                            >
+                              <IconDownload size={14} />
+                            </a>
+                          ) : (
+                            <span className="text-text-muted">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+
+                    {/* Staged new draft attachments */}
+                    {draftAttachments.map((att, idx) => (
+                      <tr key={`draft-${idx}`} className="hover:bg-surface/30">
+                        <td className="p-2.5 font-medium text-heading flex items-center gap-2">
+                          <IconFileText size={16} className="text-primary shrink-0" />
+                          <span className="truncate max-w-xs">{att.file?.name}</span>
+                        </td>
+                        <td className="p-2.5">
+                          <Badge variant="neutral" size="xs">
+                            {lookups?.documentTypes?.find((d) => Number(d.id) === Number(att.documentTypeId))?.typeName || `Type #${att.documentTypeId}`}
+                          </Badge>
+                        </td>
+                        <td className="p-2.5 text-text-muted truncate max-w-xs">{att.documentTitle || att.documentName || '—'}</td>
+                        <td className="p-2.5 text-center">
+                          <Badge variant="warning" size="xs">Queued</Badge>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() =>
+                              setItemToDelete({
+                                type: 'attachment',
+                                index: idx,
+                                name: att.file?.name || att.documentTitle || `Attachment #${idx + 1}`,
+                              })
+                            }
+                            className="text-danger hover:bg-danger/10"
+                            title="Remove attachment from queue"
+                          >
+                            <IconDelete size={14} />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </TableContainer>
+              )}
+            </div>
+          </CollapsibleCard>
+        </div>
+
+        {/* ── Section 6: Manufacturing & Quality Specifications (Bottom) ── */}
         <CollapsibleCard
           title="Manufacturing & Quality Specifications"
           subtitle="Engineering standards, calibration requirements, and description"
@@ -609,237 +1140,6 @@ export default function ProductFormPage() {
           </div>
         </CollapsibleCard>
 
-        {/* ── Section 3: Applicable Standards ── */}
-        <CollapsibleCard
-          title="Manufacturing & Calibration Standards"
-          subtitle="IS, DIN, BS, and GGG metrology specifications"
-          icon={<IconStandards size={18} />}
-          defaultOpen={true}
-        >
-          <ProductStandardsEditor
-            standards={standards}
-            onChange={setStandards}
-            availableStandards={lookups?.standards || []}
-          />
-        </CollapsibleCard>
-
-        {/* ── Section 4: Product Options & Accessories ── */}
-        <CollapsibleCard
-          title="Product Options & Accessories"
-          subtitle="Optional fixtures, covers, and attachment configurations"
-          icon={<IconLayers size={18} />}
-          defaultOpen={true}
-        >
-          <ProductOptionsEditor
-            options={options}
-            onChange={setOptions}
-          />
-        </CollapsibleCard>
-
-        {/* ── Section 5: Product Variants & Specifications ── */}
-        <CollapsibleCard
-          title="Product Variants & Dimensions"
-          subtitle="Physical sizes, grades, and dimensional figures"
-          icon={<IconLayers size={18} />}
-          defaultOpen={true}
-        >
-          {isEditMode ? (
-            <ProductVariantsTab
-              productId={id}
-              grades={lookups?.grades || []}
-              specParameters={lookups?.specParameters || []}
-              onVariantAdded={() => refreshProducts?.()}
-            />
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-heading">Initial Variants & Sizes</h4>
-                  <p className="text-2xs text-text-muted">You can define product sizes now or add them later after registration.</p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setVariantForm({
-                      variantCode: form.productCode ? `${form.productCode}-` : '',
-                      gradeId: '',
-                      lengthMm: '',
-                      widthMm: '',
-                      heightMm: '',
-                      diameterMm: '',
-                    });
-                    setIsVariantModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5"
-                >
-                  <IconAdd size={14} />
-                  <span>Add Variant</span>
-                </Button>
-              </div>
-
-              {draftVariants.length === 0 ? (
-                <div className="p-4 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
-                  No variants added yet. Click &quot;Add Variant&quot; above to configure initial dimensions and grades.
-                </div>
-              ) : (
-                <TableContainer
-                  className="border border-border rounded-lg overflow-hidden"
-                  tableClassName="w-full text-xs table-auto"
-                >
-                  <thead>
-                    <tr className="bg-surface/50 border-b border-border">
-                      <Th>Variant Code</Th>
-                      <Th>Grade</Th>
-                      <Th className="text-right">Length (mm)</Th>
-                      <Th className="text-right">Width (mm)</Th>
-                      <Th className="text-right">Height (mm)</Th>
-                      <Th className="text-right">Diameter (mm)</Th>
-                      <Th className="w-16 text-center">Action</Th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {draftVariants.map((v, idx) => (
-                      <tr key={idx} className="hover:bg-surface/30">
-                        <td className="p-2.5 font-mono font-medium text-heading">{v.variantCode}</td>
-                        <td className="p-2.5">
-                          {lookups?.grades?.find((g) => Number(g.id) === Number(v.gradeId))?.gradeCode || '—'}
-                        </td>
-                        <td className="p-2.5 text-right font-mono">{v.lengthMm || '—'}</td>
-                        <td className="p-2.5 text-right font-mono">{v.widthMm || '—'}</td>
-                        <td className="p-2.5 text-right font-mono">{v.heightMm || '—'}</td>
-                        <td className="p-2.5 text-right font-mono">{v.diameterMm || '—'}</td>
-                        <td className="p-2.5 text-center">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() =>
-                              setItemToDelete({
-                                type: 'variant',
-                                index: idx,
-                                name: v.variantCode || `Variant #${idx + 1}`,
-                              })
-                            }
-                            className="text-danger hover:bg-danger/10"
-                            title="Remove variant"
-                          >
-                            <IconDelete size={14} />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </TableContainer>
-              )}
-            </div>
-          )}
-        </CollapsibleCard>
-
-        {/* ── Section 6: Technical Documents & Attachments ── */}
-        <CollapsibleCard
-          title="Technical Documents & Attachments"
-          subtitle="CAD drawings, calibration certificates, and datasheets"
-          icon={<IconFileText size={18} />}
-          defaultOpen={true}
-        >
-          {isEditMode ? (
-            <ProductAttachmentsTab
-              productId={id}
-              attachments={attachments}
-              documentTypes={lookups?.documentTypes || []}
-              onAttachmentUploaded={reloadAttachments}
-            />
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-heading">Initial Documents & Files</h4>
-                  <p className="text-2xs text-text-muted">Queue technical drawings, datasheets, or certificates to be uploaded upon creation.</p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setAttachmentForm({
-                      documentTypeId: '',
-                      documentName: '',
-                      documentTitle: '',
-                      remarks: '',
-                      file: null,
-                    });
-                    setIsAttachmentModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5"
-                >
-                  <IconUpload size={14} />
-                  <span>Add Document</span>
-                </Button>
-              </div>
-
-              {draftAttachments.length === 0 ? (
-                <div className="p-4 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
-                  No documents queued yet. Click &quot;Add Document&quot; above to select files.
-                </div>
-              ) : (
-                <TableContainer
-                  className="border border-border rounded-lg overflow-hidden"
-                  tableClassName="w-full text-xs table-auto"
-                >
-                  <thead>
-                    <tr className="bg-surface/50 border-b border-border">
-                      <Th>File Name</Th>
-                      <Th>Document Type</Th>
-                      <Th>Title</Th>
-                      <Th className="text-right">Size</Th>
-                      <Th className="w-16 text-center">Action</Th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {draftAttachments.map((att, idx) => (
-                      <tr key={idx} className="hover:bg-surface/30">
-                        <td className="p-2.5 font-medium text-heading flex items-center gap-2">
-                          <IconFileText size={16} className="text-primary shrink-0" />
-                          <span className="truncate max-w-xs">{att.file?.name}</span>
-                        </td>
-                        <td className="p-2.5">
-                          <Badge variant="neutral" size="xs">
-                            {lookups?.documentTypes?.find((d) => Number(d.id) === Number(att.documentTypeId))?.typeName || `Type #${att.documentTypeId}`}
-                          </Badge>
-                        </td>
-                        <td className="p-2.5 text-text-muted">{att.documentTitle || att.documentName || '—'}</td>
-                        <td className="p-2.5 text-right font-mono text-text-muted">
-                          {att.file?.size ? `${(att.file.size / 1024).toFixed(1)} KB` : '—'}
-                        </td>
-                        <td className="p-2.5 text-center">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={() =>
-                              setItemToDelete({
-                                type: 'attachment',
-                                index: idx,
-                                name: att.file?.name || att.documentTitle || `Attachment #${idx + 1}`,
-                              })
-                            }
-                            className="text-danger hover:bg-danger/10"
-                            title="Remove attachment"
-                          >
-                            <IconDelete size={14} />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </TableContainer>
-              )}
-            </div>
-          )}
-        </CollapsibleCard>
-
         {/* ── Sticky Bottom Action Bar ── */}
         <FormActionsBar>
           <div className="flex items-center justify-between w-full">
@@ -863,11 +1163,14 @@ export default function ProductFormPage() {
         </FormActionsBar>
       </form>
 
-      {/* ── Modal: Add Initial Variant (Create Mode) ── */}
+      {/* ── Modal: Add / Edit Variant (Deferred Staging) ── */}
       <Modal
         isOpen={isVariantModalOpen}
-        onClose={() => setIsVariantModalOpen(false)}
-        title="Add Initial Product Variant"
+        onClose={() => {
+          setIsVariantModalOpen(false);
+          setEditingVariantIndex(null);
+        }}
+        title={editingVariantIndex !== null ? 'Edit Variant' : 'Add Product Variant'}
         size="md"
       >
         <form
@@ -877,15 +1180,47 @@ export default function ProductFormPage() {
               toast.error('Variant code is required');
               return;
             }
-            setDraftVariants((prev) => [
-              ...prev,
-              {
-                ...variantForm,
-                variantCode: variantForm.variantCode.trim(),
-                gradeId: variantForm.gradeId ? Number(variantForm.gradeId) : null,
-              },
-            ]);
+            if (editingVariantIndex !== null) {
+              setVariants((prev) => {
+                const next = [...prev];
+                const existing = next[editingVariantIndex];
+                const statusChanged =
+                  existing.isActive !== undefined &&
+                  Boolean(existing.isActive) !== Boolean(variantForm.isActive);
+                next[editingVariantIndex] = {
+                  ...existing,
+                  variantCode: variantForm.variantCode.trim(),
+                  gradeId: variantForm.gradeId ? Number(variantForm.gradeId) : null,
+                  lengthMm: variantForm.lengthMm !== '' && variantForm.lengthMm !== null ? variantForm.lengthMm : null,
+                  widthMm: variantForm.widthMm !== '' && variantForm.widthMm !== null ? variantForm.widthMm : null,
+                  heightMm: variantForm.heightMm !== '' && variantForm.heightMm !== null ? variantForm.heightMm : null,
+                  diameterMm: variantForm.diameterMm !== '' && variantForm.diameterMm !== null ? variantForm.diameterMm : null,
+                  isActive: Boolean(variantForm.isActive),
+                  _isModified: existing.id ? true : existing._isModified,
+                  _isStatusChanged: existing.id ? (existing._isStatusChanged || statusChanged) : false,
+                };
+                return next;
+              });
+              toast.success('Variant updated');
+            } else {
+              setVariants((prev) => [
+                ...prev,
+                {
+                  _tempId: Date.now() + Math.random(),
+                  _isNew: true,
+                  variantCode: variantForm.variantCode.trim(),
+                  gradeId: variantForm.gradeId ? Number(variantForm.gradeId) : null,
+                  lengthMm: variantForm.lengthMm !== '' && variantForm.lengthMm !== null ? variantForm.lengthMm : null,
+                  widthMm: variantForm.widthMm !== '' && variantForm.widthMm !== null ? variantForm.widthMm : null,
+                  heightMm: variantForm.heightMm !== '' && variantForm.heightMm !== null ? variantForm.heightMm : null,
+                  diameterMm: variantForm.diameterMm !== '' && variantForm.diameterMm !== null ? variantForm.diameterMm : null,
+                  isActive: Boolean(variantForm.isActive),
+                },
+              ]);
+              toast.success('Variant added');
+            }
             setIsVariantModalOpen(false);
+            setEditingVariantIndex(null);
           }}
           className="space-y-4"
         >
@@ -922,7 +1257,7 @@ export default function ProductFormPage() {
                 id="draftLengthMm"
                 label="Length (mm)"
                 type="number"
-                step="any"
+                step="0.01"
                 min="0.01"
                 value={variantForm.lengthMm}
                 onChange={(e) => setVariantForm({ ...variantForm, lengthMm: e.target.value })}
@@ -932,7 +1267,7 @@ export default function ProductFormPage() {
                 id="draftWidthMm"
                 label="Width (mm)"
                 type="number"
-                step="any"
+                step="0.01"
                 min="0.01"
                 value={variantForm.widthMm}
                 onChange={(e) => setVariantForm({ ...variantForm, widthMm: e.target.value })}
@@ -945,7 +1280,7 @@ export default function ProductFormPage() {
                 id="draftHeightMm"
                 label="Height (mm)"
                 type="number"
-                step="any"
+                step="0.01"
                 min="0.01"
                 value={variantForm.heightMm}
                 onChange={(e) => setVariantForm({ ...variantForm, heightMm: e.target.value })}
@@ -955,20 +1290,215 @@ export default function ProductFormPage() {
                 id="draftDiameterMm"
                 label="Diameter (mm)"
                 type="number"
-                step="any"
+                step="0.01"
                 min="0.01"
                 value={variantForm.diameterMm}
                 onChange={(e) => setVariantForm({ ...variantForm, diameterMm: e.target.value })}
                 placeholder="Optional"
               />
             </div>
+
+            {/* Variant Active / Inactive Status Switch inside modal */}
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border/80 bg-surface/40">
+              <div>
+                <span className="text-xs font-semibold text-heading block">Variant Status</span>
+                <p className="text-2xs text-text-muted">
+                  {variantForm.isActive
+                    ? 'Active variant available for quotation and orders.'
+                    : 'Inactive variant hidden from inquiries.'}
+                </p>
+              </div>
+              <StatusSwitch
+                checked={Boolean(variantForm.isActive)}
+                onChange={(checked) => setVariantForm((prev) => ({ ...prev, isActive: checked }))}
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
-            <CancelButton size="sm" onClick={() => setIsVariantModalOpen(false)} />
-            <SaveButton size="sm" label="Add Variant" />
+            <CancelButton
+              size="sm"
+              onClick={() => {
+                setIsVariantModalOpen(false);
+                setEditingVariantIndex(null);
+              }}
+            />
+            <SaveButton
+              size="sm"
+              label={editingVariantIndex !== null ? 'Update Variant' : 'Add Variant'}
+            />
           </div>
         </form>
+      </Modal>
+
+      {/* ── Modal: Manage Accuracy Specifications (Deferred Staging) ── */}
+      <Modal
+        isOpen={isSpecsModalOpen}
+        onClose={() => {
+          setIsSpecsModalOpen(false);
+          setSelectedVariantIndexForSpecs(null);
+        }}
+        title={`Accuracy Specifications — ${
+          selectedVariantIndexForSpecs !== null && variants[selectedVariantIndexForSpecs]
+            ? variants[selectedVariantIndexForSpecs].variantCode || `Variant #${selectedVariantIndexForSpecs + 1}`
+            : ''
+        }`}
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-border">
+            <div>
+              <p className="text-xs text-text-muted">
+                Define metrological limits, tolerances, and calibration parameters for this variant size.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={handleAddSpecRow}
+              className="flex items-center gap-1"
+            >
+              <IconAdd size={13} />
+              <span>Add Parameter Row</span>
+            </Button>
+          </div>
+
+          {isLoadingSpecs ? (
+            <div className="p-8 text-center text-text-muted text-xs animate-pulse">
+              Loading specifications...
+            </div>
+          ) : variantSpecs.length === 0 ? (
+            <div className="p-6 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
+              No accuracy specifications defined yet. Click &quot;Add Parameter Row&quot; above to configure Flatness, Parallelism, etc.
+            </div>
+          ) : (
+            <TableContainer
+              className="border border-border rounded-lg max-h-72 overflow-y-auto"
+              tableClassName="w-full text-xs table-auto"
+            >
+              <thead className="sticky top-0 bg-surface z-10">
+                <tr className="bg-surface border-b border-border">
+                  <Th className="w-48">Parameter</Th>
+                  <Th className="w-24">Decimal</Th>
+                  <Th className="w-20">+ Tol</Th>
+                  <Th className="w-20">− Tol</Th>
+                  <Th className="w-36">Or Text Value</Th>
+                  <Th className="w-12 text-center">Action</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {variantSpecs.map((spec, sIdx) => (
+                  <tr key={sIdx} className="hover:bg-surface/30">
+                    <td className="p-2">
+                      <SearchableSelect
+                        value={spec.specParameterId ? Number(spec.specParameterId) : ''}
+                        onChange={(val) => {
+                          const rawId = val && typeof val === 'object' && 'target' in val ? val.target.value : val;
+                          handleChangeSpecParam(sIdx, rawId);
+                        }}
+                        options={specParamOptions}
+                        placeholder="Select Parameter"
+                        size="sm"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        type="number"
+                        step="any"
+                        size="sm"
+                        value={spec.valueDecimal ?? ''}
+                        onChange={(e) => {
+                          const next = [...variantSpecs];
+                          next[sIdx].valueDecimal = e.target.value;
+                          setVariantSpecs(next);
+                        }}
+                        placeholder="e.g. 3"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        type="number"
+                        step="any"
+                        size="sm"
+                        value={spec.tolerancePlus ?? ''}
+                        onChange={(e) => {
+                          const next = [...variantSpecs];
+                          next[sIdx].tolerancePlus = e.target.value;
+                          setVariantSpecs(next);
+                        }}
+                        placeholder="+0.5"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        type="number"
+                        step="any"
+                        size="sm"
+                        value={spec.toleranceMinus ?? ''}
+                        onChange={(e) => {
+                          const next = [...variantSpecs];
+                          next[sIdx].toleranceMinus = e.target.value;
+                          setVariantSpecs(next);
+                        }}
+                        placeholder="0.5"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        size="sm"
+                        value={spec.valueText ?? ''}
+                        onChange={(e) => {
+                          const next = [...variantSpecs];
+                          next[sIdx].valueText = e.target.value;
+                          setVariantSpecs(next);
+                        }}
+                        placeholder="e.g. Grade 0"
+                      />
+                    </td>
+                    <td className="p-2 text-center">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => {
+                          const pName =
+                            spec.parameterName ||
+                            lookups?.specParameters?.find((p) => Number(p.id) === Number(spec.specParameterId))?.parameterName ||
+                            `Parameter #${sIdx + 1}`;
+                          setItemToDelete({
+                            type: 'spec',
+                            index: sIdx,
+                            name: pName,
+                          });
+                        }}
+                        className="text-danger hover:bg-danger/10"
+                        title="Remove parameter"
+                      >
+                        <IconDelete size={14} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableContainer>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+            <CancelButton
+              size="sm"
+              onClick={() => {
+                setIsSpecsModalOpen(false);
+                setSelectedVariantIndexForSpecs(null);
+              }}
+            />
+            <SaveButton
+              size="sm"
+              label="Apply Specs"
+              onClick={handleSaveSpecsLocally}
+            />
+          </div>
+        </div>
       </Modal>
 
       {/* ── Modal: Queue Initial Attachment (Create Mode) ── */}
@@ -1073,7 +1603,13 @@ export default function ProductFormPage() {
         isOpen={Boolean(itemToDelete)}
         onClose={() => setItemToDelete(null)}
         onConfirm={handleConfirmDelete}
-        title={`Remove ${itemToDelete?.type === 'variant' ? 'Variant' : 'Attachment'}`}
+        title={`Remove ${
+          itemToDelete?.type === 'variant'
+            ? 'Variant'
+            : itemToDelete?.type === 'attachment'
+            ? 'Attachment'
+            : 'Specification Parameter'
+        }`}
         message={`Are you sure you want to remove "${itemToDelete?.name}"? This action cannot be undone.`}
         confirmText="Remove"
         variant="danger"

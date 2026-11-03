@@ -150,11 +150,11 @@ export default function ProductAttachmentsTab({
         </div>
       ) : (
         <TableContainer
-          className="border border-border rounded-lg overflow-hidden bg-card"
+          className="border border-border rounded-lg max-h-80 overflow-y-auto bg-card"
           tableClassName="w-full text-xs table-auto"
         >
-          <thead>
-            <tr className="bg-muted/40 border-b border-border">
+          <thead className="sticky top-0 bg-surface z-10">
+            <tr className="bg-surface border-b border-border">
               <Th className="w-10"></Th>
               <Th>Document Name</Th>
               <Th>Document Type</Th>

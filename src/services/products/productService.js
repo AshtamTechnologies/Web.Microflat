@@ -285,6 +285,62 @@ export async function addVariant(productId, variantData) {
 }
 
 /**
+ * Updates an existing product variant.
+ * PUT /api/product-variants/{id}
+ */
+export async function updateVariant(variantId, variantData) {
+  try {
+    const parseDim = (val) =>
+      val !== '' && val !== null && val !== undefined && !isNaN(Number(val)) && Number(val) > 0
+        ? Number(val)
+        : null;
+
+    const payload = {
+      variantCode: (variantData.variantCode || '').trim(),
+      gradeId: variantData.gradeId ? Number(variantData.gradeId) : null,
+      lengthMm: parseDim(variantData.lengthMm),
+      widthMm: parseDim(variantData.widthMm),
+      heightMm: parseDim(variantData.heightMm),
+      diameterMm: parseDim(variantData.diameterMm),
+    };
+
+    const res = await axiosInstance.put(PRODUCT_ENDPOINTS.VARIANT_BY_ID(variantId), payload);
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Deletes a product variant.
+ * DELETE /api/product-variants/{id}
+ */
+export async function deleteVariant(variantId) {
+  try {
+    const res = await axiosInstance.delete(PRODUCT_ENDPOINTS.VARIANT_BY_ID(variantId));
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Toggles product variant active status.
+ * PATCH /api/product-variants/{id}/status
+ * Payload: { isActive: boolean }
+ */
+export async function updateVariantStatus(variantId, isActive) {
+  try {
+    const res = await axiosInstance.patch(PRODUCT_ENDPOINTS.VARIANT_STATUS(variantId), {
+      isActive: Boolean(isActive),
+    });
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
  * Returns paged list of variants for a product.
  * GET /api/product-variants?productId={productId}
  */

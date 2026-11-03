@@ -3,13 +3,14 @@
  * Supports adding, removing, and choosing exactly one primary standard.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Button,
   SearchableSelect,
   Badge,
   Card,
   TableContainer,
+  ConfirmModal,
   Th,
   Td,
 } from '../../../components/ui';
@@ -42,15 +43,19 @@ export default function ProductStandardsEditor({
     onChange?.(nextList);
   };
 
-  const handleRemove = (index) => {
-    const itemToRemove = standards[index];
-    const nextList = standards.filter((_, i) => i !== index);
+  const [indexToDelete, setIndexToDelete] = useState(null);
+
+  const handleConfirmDelete = () => {
+    if (indexToDelete === null) return;
+    const itemToRemove = standards[indexToDelete];
+    const nextList = standards.filter((_, i) => i !== indexToDelete);
 
     // If removed item was primary and there are remaining items, make the first one primary
-    if (itemToRemove.isPrimary && nextList.length > 0) {
+    if (itemToRemove?.isPrimary && nextList.length > 0) {
       nextList[0].isPrimary = true;
     }
     onChange?.(nextList);
+    setIndexToDelete(null);
   };
 
   const handleChangeStandard = (index, val) => {
@@ -103,11 +108,11 @@ export default function ProductStandardsEditor({
         </div>
       ) : (
         <TableContainer
-          className="border border-border rounded-lg overflow-hidden"
+          className="border border-border rounded-lg max-h-60 overflow-y-auto"
           tableClassName="w-full text-xs table-auto"
         >
-          <thead>
-            <tr className="bg-muted/40 border-b border-border">
+          <thead className="sticky top-0 bg-surface z-10">
+            <tr className="bg-surface border-b border-border">
               <Th className="w-16 text-center">Primary</Th>
               <Th>Standard Code</Th>
               {!readOnly && <Th className="w-16 text-center">Action</Th>}
@@ -157,8 +162,9 @@ export default function ProductStandardsEditor({
                           type="button"
                           variant="ghost"
                           size="xs"
-                          onClick={() => handleRemove(index)}
+                          onClick={() => setIndexToDelete(index)}
                           className="text-danger hover:bg-danger/10"
+                          title="Remove standard"
                         >
                           <IconDelete size={14} />
                         </Button>
@@ -170,6 +176,17 @@ export default function ProductStandardsEditor({
             </tbody>
         </TableContainer>
       )}
+
+      {/* Confirmation Modal for Standard Removal */}
+      <ConfirmModal
+        isOpen={indexToDelete !== null}
+        onClose={() => setIndexToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Remove Standard"
+        message={`Are you sure you want to remove standard "${standards[indexToDelete]?.standardCode || availableStandards.find((s) => s.id === (standards[indexToDelete]?.standardId || standards[indexToDelete]?.id))?.standardCode || 'Standard'}"?`}
+        confirmText="Remove"
+        variant="danger"
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 const SIZE_CLASSES = {
@@ -34,6 +35,7 @@ export default function Modal({
   footer,
   size,
   maxWidth,
+  zIndex = 'z-50',
 }) {
   const overlayRef = useRef(null);
 
@@ -61,10 +63,10 @@ export default function Modal({
 
   if (!isOpen) return null;
 
-  return (
+  const modalNode = (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-overlay backdrop-blur-xs transition-opacity duration-200"
+      className={`fixed inset-0 ${zIndex} flex items-center justify-center p-3 sm:p-5 bg-overlay backdrop-blur-xs transition-opacity duration-200`}
       onClick={(e) => {
         if (e.target === overlayRef.current) {
           onClose?.();
@@ -136,4 +138,8 @@ export default function Modal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(modalNode, document.body)
+    : modalNode;
 }

@@ -19,5 +19,6 @@ export const PRODUCT_ENDPOINTS = {
   // Product Variants & Specs (from Product Tables Guide)
   PRODUCT_VARIANTS: '/api/product-variants',
   VARIANT_BY_ID: (id) => `/api/product-variants/${id}`,
+  VARIANT_STATUS: (id) => `/api/product-variants/${id}/status`,
   VARIANT_SPECS: (id) => `/api/product-variants/${id}/specs`,
 };
