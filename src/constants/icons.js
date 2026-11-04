@@ -202,6 +202,7 @@ export const IconMaterials = Package;
 export const IconSpecParameters = Sliders;
 export const IconStandards = Award;
 export const IconCurrency = Coins;
+export const IconTax = Receipt;
 export const IconList = ListTree;
 
 /* ── 2. GLOBAL ACTION ICONS (Canonical semantic registry) ── */

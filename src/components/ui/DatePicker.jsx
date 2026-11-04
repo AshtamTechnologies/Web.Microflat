@@ -40,6 +40,26 @@ const DAY_NAMES = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 // Helpers for date calculations
 function parseDateString(str) {
   if (!str) return null;
+  if (str instanceof Date) {
+    return isNaN(str.getTime()) ? null : str;
+  }
+  if (typeof str === 'object') {
+    if (str.target && str.target.value !== undefined) {
+      str = str.target.value;
+    } else if (typeof str.value !== 'undefined') {
+      str = str.value;
+    } else {
+      return null;
+    }
+  }
+  if (typeof str !== 'string') {
+    if (typeof str === 'number') {
+      const d = new Date(str);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    str = String(str || '');
+  }
+  if (!str.trim()) return null;
   const parts = str.split('-');
   if (parts.length === 3) {
     const y = parseInt(parts[0], 10);
@@ -63,7 +83,13 @@ function formatDateToISO(date) {
 
 function formatDisplayDate(isoString) {
   if (!isoString) return '';
-  return formatDate(isoString);
+  const raw =
+    typeof isoString === 'object' && isoString?.target
+      ? isoString.target.value
+      : typeof isoString === 'string'
+      ? isoString
+      : String(isoString);
+  return formatDate(raw);
 }
 
 export default function DatePicker({

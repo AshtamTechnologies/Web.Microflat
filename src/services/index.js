@@ -58,6 +58,9 @@ import * as mockCurrencies from './currencies/currencyService.mock';
 import * as realProductCategories from './productCategories/productCategoriesService';
 import * as mockProductCategories from './productCategories/productCategoriesService.mock';
 
+import * as realTaxConfigs from './taxConfigs/taxConfigsService';
+import * as mockTaxConfigs from './taxConfigs/taxConfigsService.mock';
+
 import * as realProducts from './products/productService';
 
 import * as delegationService from './delegation/delegationService';
@@ -83,6 +86,7 @@ export const specParametersService = useMock ? mockSpecParameters : realSpecPara
 export const standardsService = useMock ? mockStandards : realStandards;
 export const currencyService = useMock ? mockCurrencies : realCurrencies;
 export const productCategoriesService = useMock ? mockProductCategories : realProductCategories;
+export const taxConfigService = useMock ? mockTaxConfigs : realTaxConfigs;
 export const productService = realProducts;
 export { delegationService };
 export { geographyService };

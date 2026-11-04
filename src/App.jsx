@@ -71,6 +71,10 @@ import { RegionsProvider } from './context/RegionsContext';
 
 import PaymentTermsPage from './pages/configuration/PaymentTermsPage';
 import { PaymentTermsProvider } from './context/PaymentTermsContext';
+
+import TaxConfigsPage from './pages/configuration/TaxConfigsPage';
+import { TaxConfigsProvider } from './context/TaxConfigsContext';
+
 import ProcessFlowsPage from './pages/configuration/processFlow/ProcessFlowsPage';
 import ProcessFlowEditorPage from './pages/configuration/processFlow/ProcessFlowEditorPage';
 
@@ -158,17 +162,19 @@ export default function App() {
                                       <UomProvider>
                                         <RegionsProvider>
                                           <PaymentTermsProvider>
-                                            <SeriesProvider>
-                                              <CompanyProvider>
-                                                <CompanyBankDetailsProvider>
-                                                  <ProcessFlowProvider>
-                                                    <QuotationsProvider>
-                                                      <AppLayout />
-                                                    </QuotationsProvider>
-                                                  </ProcessFlowProvider>
-                                                </CompanyBankDetailsProvider>
-                                              </CompanyProvider>
-                                            </SeriesProvider>
+                                            <TaxConfigsProvider>
+                                              <SeriesProvider>
+                                                <CompanyProvider>
+                                                  <CompanyBankDetailsProvider>
+                                                    <ProcessFlowProvider>
+                                                      <QuotationsProvider>
+                                                        <AppLayout />
+                                                      </QuotationsProvider>
+                                                    </ProcessFlowProvider>
+                                                  </CompanyBankDetailsProvider>
+                                                </CompanyProvider>
+                                              </SeriesProvider>
+                                            </TaxConfigsProvider>
                                           </PaymentTermsProvider>
                                         </RegionsProvider>
                                       </UomProvider>
@@ -274,6 +280,7 @@ export default function App() {
               <Route path="/configuration/uom" element={<UomPage />} />
               <Route path="/configuration/regions" element={<RegionsPage />} />
               <Route path="/configuration/payment-terms" element={<PaymentTermsPage />} />
+              <Route path="/configuration/tax-configs" element={<TaxConfigsPage />} />
               <Route path="/configuration/process-flows" element={<ProcessFlowsPage />} />
               <Route path="/configuration/process-flows/:flowId" element={<ProcessFlowEditorPage />} />
             </Route>

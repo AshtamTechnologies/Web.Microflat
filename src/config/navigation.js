@@ -34,6 +34,7 @@ import {
   IconUOM,
   IconRegions,
   IconPaymentTerms,
+  IconTax,
   IconProcessFlow,
   IconGrades,
   IconMaterials,
@@ -294,6 +295,12 @@ export const navigation = [
             label: 'Payment Terms',
             icon: IconPaymentTerms,
             path: '/configuration/payment-terms',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Tax Configurations',
+            icon: IconTax,
+            path: '/configuration/tax-configs',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {

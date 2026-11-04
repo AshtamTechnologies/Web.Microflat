@@ -141,7 +141,15 @@ export default function DataTable({
                 ))
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={columns?.length || 1} className="py-16 text-center text-text-muted">
+                  <td
+                    colSpan={
+                      columns?.length ||
+                      table?.getVisibleLeafColumns()?.length ||
+                      table?.getAllLeafColumns()?.length ||
+                      1
+                    }
+                    className="py-16 text-center text-text-muted"
+                  >
                     <EmptyState
                       icon={SearchX}
                       title={emptyTitle}
