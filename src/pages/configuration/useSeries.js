@@ -1,186 +1,238 @@
 /**
- * useSeries.js — State management and CRUD operations for Document Series Setup.
+ * useSeries.js — State management and API operations for Document Series Setup (Module-based).
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { mockSeries } from '../../mocks/series';
+import { documentSeriesService } from '../../services';
 import {
   getActiveSeries,
   getSeriesStatus,
-  formatAuditTimestamp,
   normalizeDateString,
 } from '../../utils/seriesUtils';
-import { getSeriesTypeByKey } from '../../config/seriesTypes';
 
-let nextSeriesSeq = 100;
+export function useSeries() {
+  // Map of moduleId -> Array of series versions
+  const [seriesByModule, setSeriesByModule] = useState({});
+  // Map of moduleId -> active series version
+  const [activeSeriesByModule, setActiveSeriesByModule] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-export function useSeries(initialSeries = mockSeries) {
-  const [seriesList, setSeriesList] = useState(initialSeries);
+  // In-flight request tracker to prevent duplicate fetches
+  const fetchingRef = useRef({});
 
   /**
-   * Retrieves all versions for a given document type, sorted by effectiveDate descending.
-   * @param {string} docType
+   * Fetches all series versions for a module.
+   * @param {number|string} moduleId
+   * @param {boolean} [force=false]
+   * @returns {Promise<Array<object>>}
+   */
+  const fetchVersionsForModule = useCallback(async (moduleId, force = false) => {
+    if (!moduleId) return [];
+    const moduleKey = String(moduleId);
+
+    if (!force && fetchingRef.current[moduleKey]) {
+      return fetchingRef.current[moduleKey];
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const data = await documentSeriesService.listSeries(moduleId);
+        setSeriesByModule((prev) => ({
+          ...prev,
+          [moduleKey]: data,
+        }));
+        return data;
+      } catch (err) {
+        console.error('Failed to load series versions:', err);
+        setError(err.message || 'Failed to load series history.');
+        return [];
+      } finally {
+        setIsLoading(false);
+        delete fetchingRef.current[moduleKey];
+      }
+    })();
+
+    fetchingRef.current[moduleKey] = fetchPromise;
+    return fetchPromise;
+  }, []);
+
+  /**
+   * Fetches the current active series version for a module.
+   * @param {number|string} moduleId
+   * @returns {Promise<object|null>}
+   */
+  const fetchActiveVersion = useCallback(async (moduleId) => {
+    if (!moduleId) return null;
+    const moduleKey = String(moduleId);
+    try {
+      const active = await documentSeriesService.getCurrentSeries(moduleId);
+      setActiveSeriesByModule((prev) => ({
+        ...prev,
+        [moduleKey]: active,
+      }));
+      return active;
+    } catch (err) {
+      console.error('Failed to load active series:', err);
+      return null;
+    }
+  }, []);
+
+  /**
+   * Synchronously retrieves cached versions for a module.
+   * @param {number|string} moduleId
    * @returns {Array<object>}
    */
   const getVersionsFor = useCallback(
-    (docType) => {
-      if (!docType) return [];
-      const normalized = docType.toLowerCase();
-
-      const matched = seriesList.filter(
-        (s) => (s.docType || '').toLowerCase() === normalized
-      );
-
-      // Sort by effectiveDate descending
-      return [...matched].sort((a, b) => {
-        if (b.effectiveDate !== a.effectiveDate) {
-          return b.effectiveDate.localeCompare(a.effectiveDate);
+    (moduleId) => {
+      if (!moduleId) return [];
+      const list = seriesByModule[String(moduleId)] || [];
+      // Sort newest effectiveDate first
+      return [...list].sort((a, b) => {
+        const dateA = normalizeDateString(a.effectiveDate);
+        const dateB = normalizeDateString(b.effectiveDate);
+        if (dateB !== dateA) {
+          return dateB.localeCompare(dateA);
         }
-        return String(b.id || '').localeCompare(String(a.id || ''));
+        return Number(b.id || 0) - Number(a.id || 0);
       });
     },
-    [seriesList]
+    [seriesByModule]
   );
 
   /**
-   * Returns the currently active series version for a docType.
-   * @param {string} docType
-   * @param {Date|string} asOf
+   * Synchronously returns cached active version for a module.
+   * @param {number|string} moduleId
    * @returns {object|null}
    */
   const getActiveVersion = useCallback(
-    (docType, asOf = new Date()) => {
-      const versions = getVersionsFor(docType);
-      return getActiveSeries(versions, asOf);
+    (moduleId) => {
+      if (!moduleId) return null;
+      const cached = activeSeriesByModule[String(moduleId)];
+      if (cached) return cached;
+      const versions = seriesByModule[String(moduleId)] || [];
+      return getActiveSeries(versions, new Date());
     },
-    [getVersionsFor]
+    [activeSeriesByModule, seriesByModule]
   );
 
   /**
-   * Adds a new series version for a document type.
-   * @param {string} docType
+   * Adds a new series version for a module.
+   * @param {number|string} moduleId
    * @param {object} formData
-   * @returns {Promise<{ ok: boolean, error?: string, version?: object }>}
+   * @returns {Promise<{ ok: boolean, error?: string, status?: number, version?: object }>}
    */
   const addVersion = useCallback(
-    async (docType, formData) => {
-      const typeInfo = getSeriesTypeByKey(docType);
-      const docTypeKey = (docType || typeInfo.key).toLowerCase();
-      const existingVersions = seriesList.filter(
-        (s) => (s.docType || '').toLowerCase() === docTypeKey
-      );
+    async (moduleId, formData) => {
+      try {
+        const payload = {
+          ...formData,
+          moduleId: Number(moduleId),
+        };
+        const created = await documentSeriesService.createSeries(payload);
 
-      const effectiveDateStr = normalizeDateString(formData.effectiveDate);
+        toast.success('Series version saved successfully');
 
-      // Check for duplicate effectiveDate
-      const hasDuplicateDate = existingVersions.some(
-        (v) => normalizeDateString(v.effectiveDate) === effectiveDateStr
-      );
+        // Refresh list and active version
+        await fetchVersionsForModule(moduleId, true);
+        await fetchActiveVersion(moduleId);
 
-      if (hasDuplicateDate) {
-        const msg = `A series version with effective date ${effectiveDateStr} already exists for ${typeInfo.label}.`;
+        return { ok: true, version: created };
+      } catch (err) {
+        const msg = err.message || 'Failed to save series version.';
         toast.error(msg);
-        return { ok: false, error: msg };
+        return {
+          ok: false,
+          error: msg,
+          status: err.status,
+          fieldErrors: err.fieldErrors,
+        };
       }
-
-      // Check for backdating (cannot be earlier than today)
-      const todayStr = normalizeDateString(new Date());
-      if (effectiveDateStr < todayStr) {
-        const msg = 'Effective Date cannot be earlier than today.';
-        toast.error(msg);
-        return { ok: false, error: msg };
-      }
-
-      // Simulate network latency
-      await new Promise((r) => setTimeout(r, 500));
-
-      const newVersion = {
-        id: `ser_${docTypeKey}_${Date.now()}_${nextSeriesSeq++}`,
-        docType: docTypeKey,
-        prefix: (formData.prefix || typeInfo.defaultPrefix || 'DOC').trim().toUpperCase(),
-        separator: formData.separator === 'None' ? '' : (formData.separator ?? '-'),
-        yearFormat: formData.yearFormat || 'YYYY',
-        numberLength: Math.max(3, Math.min(10, Number(formData.numberLength) || 6)),
-        startingNumber: Math.max(1, Number(formData.startingNumber) || 1),
-        resetCounter: formData.resetCounter || 'Yearly',
-        effectiveDate: effectiveDateStr,
-        createdBy: 'Ian Chesnut',
-        createdOn: formatAuditTimestamp(),
-      };
-
-      setSeriesList((prev) => [newVersion, ...prev]);
-
-      const typeShort = typeInfo.shortLabel || typeInfo.label;
-      toast.success(`${typeShort} series added`);
-
-      return { ok: true, version: newVersion };
     },
-    [seriesList]
+    [fetchVersionsForModule, fetchActiveVersion]
   );
 
   /**
    * Updates an existing series version.
-   * @param {string} versionId
+   * @param {number|string} seriesId
    * @param {object} formData
-   * @returns {Promise<{ ok: boolean, error?: string, version?: object }>}
+   * @param {number|string} [moduleId]
+   * @returns {Promise<{ ok: boolean, error?: string, status?: number, version?: object }>}
    */
   const updateVersion = useCallback(
-    async (versionId, formData) => {
-      const target = seriesList.find((s) => s.id === versionId);
-      if (!target) {
-        toast.error('Series version not found.');
-        return { ok: false, error: 'Not found' };
-      }
+    async (seriesId, formData, moduleId) => {
+      try {
+        const payload = {
+          ...formData,
+          moduleId: Number(moduleId || formData.moduleId),
+        };
+        const updated = await documentSeriesService.updateSeries(seriesId, payload);
 
-      const typeInfo = getSeriesTypeByKey(target.docType);
-      const effectiveDateStr = normalizeDateString(formData.effectiveDate || target.effectiveDate);
+        toast.success('Series version updated successfully');
 
-      // Check if duplicate date with another version (excluding this one)
-      const duplicate = seriesList.find(
-        (s) =>
-          s.id !== versionId &&
-          (s.docType || '').toLowerCase() === target.docType.toLowerCase() &&
-          normalizeDateString(s.effectiveDate) === effectiveDateStr
-      );
+        const mId = moduleId || updated.moduleId;
+        if (mId) {
+          await fetchVersionsForModule(mId, true);
+          await fetchActiveVersion(mId);
+        }
 
-      if (duplicate) {
-        const msg = `Another series version with effective date ${effectiveDateStr} already exists.`;
+        return { ok: true, version: updated };
+      } catch (err) {
+        const msg = err.message || 'Failed to update series version.';
         toast.error(msg);
-        return { ok: false, error: msg };
+        return {
+          ok: false,
+          error: msg,
+          status: err.status,
+          fieldErrors: err.fieldErrors,
+        };
       }
-
-      // Simulate slight latency
-      await new Promise((r) => setTimeout(r, 300));
-
-      const updated = {
-        ...target,
-        prefix: (formData.prefix || target.prefix || 'DOC').trim().toUpperCase(),
-        separator: formData.separator === 'None' ? '' : (formData.separator ?? target.separator ?? '-'),
-        yearFormat: formData.yearFormat || target.yearFormat || 'YYYY',
-        numberLength: Math.max(3, Math.min(10, Number(formData.numberLength) || target.numberLength || 6)),
-        startingNumber: Math.max(1, Number(formData.startingNumber) || target.startingNumber || 1),
-        resetCounter: formData.resetCounter || target.resetCounter || 'Yearly',
-        effectiveDate: effectiveDateStr,
-      };
-
-      setSeriesList((prev) => prev.map((s) => (s.id === versionId ? updated : s)));
-
-      const typeShort = typeInfo.shortLabel || typeInfo.label;
-      toast.success(`${typeShort} series version updated`);
-
-      return { ok: true, version: updated };
     },
-    [seriesList]
+    [fetchVersionsForModule, fetchActiveVersion]
+  );
+
+  /**
+   * Deletes an unused series version.
+   * @param {number|string} seriesId
+   * @param {number|string} [moduleId]
+   * @returns {Promise<{ ok: boolean, error?: string }>}
+   */
+  const deleteVersion = useCallback(
+    async (seriesId, moduleId) => {
+      try {
+        await documentSeriesService.deleteSeries(seriesId);
+        toast.success('Series version deleted successfully');
+
+        if (moduleId) {
+          await fetchVersionsForModule(moduleId, true);
+          await fetchActiveVersion(moduleId);
+        }
+
+        return { ok: true };
+      } catch (err) {
+        const msg = err.message || 'Failed to delete series version.';
+        toast.error(msg);
+        return { ok: false, error: msg, status: err.status };
+      }
+    },
+    [fetchVersionsForModule, fetchActiveVersion]
   );
 
   return {
-    allSeries: seriesList,
+    isLoading,
+    error,
+    fetchVersionsForModule,
+    fetchVersionsForType: fetchVersionsForModule, // alias
+    fetchActiveVersion,
     getVersionsFor,
     getActiveVersion,
     addVersion,
     updateVersion,
-    getSeriesStatus: (version, docType, asOf) =>
-      getSeriesStatus(version, getVersionsFor(docType || version?.docType), asOf),
+    deleteVersion,
+    getSeriesStatus: (version, versions, asOf) =>
+      getSeriesStatus(version, versions, asOf),
   };
 }

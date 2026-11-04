@@ -379,3 +379,37 @@ export async function deleteBankAttachment(attachmentId) {
   }
 }
 
+
+
+/**
+ * 19. POST /api/companies/{companyId}/bank-authentication — Re-authenticates user password before bank create/edit.
+ * @param {number|string} companyId
+ * @param {string} password
+ * @returns {Promise<{ id: number, userId: number, companyId: number, isSuccess: boolean, failureReason: string|null, authenticatedOn: string, expiresOn: string }>}
+ */
+export async function authenticateCompanyBankAction(companyId, password) {
+  try {
+    const numericId = String(companyId).replace(/^\D+/g, '') || companyId;
+    const response = await axiosInstance.post(COMPANY_ENDPOINTS.BANK_AUTHENTICATION(numericId), {
+      password,
+    });
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * 20. GET /api/companies/{companyId}/bank-authentication?take=50 — History of bank authentication attempts.
+ * @param {number|string} companyId
+ * @param {number} [take=50]
+ */
+export async function getCompanyBankAuthenticationHistory(companyId, take = 50) {
+  try {
+    const numericId = String(companyId).replace(/^\D+/g, '') || companyId;
+    const response = await axiosInstance.get(COMPANY_ENDPOINTS.BANK_AUTHENTICATION_HISTORY(numericId, take));
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}

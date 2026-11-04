@@ -12,6 +12,7 @@ import {
   IconRefresh,
   IconCheck,
   IconSend,
+  IconDownload,
   IconUpload,
   IconAdd,
   IconFileText,
@@ -199,6 +200,17 @@ export default function QuotationViewPage() {
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                // static: does nothing right now
+              }}
+              icon={<IconDownload size={14} />}
+            >
+              Download PDF
+            </Button>
+
             <Button
               variant="secondary"
               size="sm"

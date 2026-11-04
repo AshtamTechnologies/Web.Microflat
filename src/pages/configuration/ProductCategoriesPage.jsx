@@ -351,7 +351,7 @@ export default function ProductCategoriesPage() {
       const payload = {
         categoryCode: formData.categoryCode.trim().toUpperCase(),
         categoryName: formData.categoryName.trim(),
-        parentCategoryId: formData.parentCategoryId ? Number(formData.parentCategoryId) : 0,
+        parentCategoryId: formData.parentCategoryId ? Number(formData.parentCategoryId) : null,
       };
 
       if (editingCategory) {

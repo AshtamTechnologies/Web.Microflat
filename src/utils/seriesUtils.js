@@ -12,7 +12,6 @@ import { getTodayISO, toISODate } from './dateUtils';
 export function normalizeDateString(d = new Date()) {
   if (!d) return getTodayISO();
   if (typeof d === 'string') {
-    // If it's already YYYY-MM-DD, return first 10 chars
     return d.slice(0, 10);
   }
   if (d instanceof Date && !isNaN(d.getTime())) {
@@ -47,7 +46,6 @@ export function getActiveSeries(versions = [], asOf = new Date()) {
     if (b.effectiveDate !== a.effectiveDate) {
       return b.effectiveDate.localeCompare(a.effectiveDate);
     }
-    // Secondary tie-breaker by createdOn or id
     return String(b.id || '').localeCompare(String(a.id || ''));
   });
 
@@ -56,8 +54,8 @@ export function getActiveSeries(versions = [], asOf = new Date()) {
 
 /**
  * Determines the lifecycle status of a specific series version.
+ * - 'current': if version.isCurrent flag is true or latest effectiveDate <= asOf
  * - 'scheduled': effectiveDate > asOf (future date)
- * - 'current': latest effectiveDate <= asOf
  * - 'expired': older than the current active version
  *
  * @param {object} version
@@ -76,9 +74,13 @@ export function getSeriesStatus(version, versions = [], asOf = new Date()) {
     return 'scheduled';
   }
 
-  // Active version for this set
+  // Active / Current
+  if (version.isCurrent) {
+    return 'current';
+  }
+
   const active = getActiveSeries(versions, asOf);
-  if (active && (active.id === version.id || (active.effectiveDate === version.effectiveDate && active.docType === version.docType))) {
+  if (active && (String(active.id) === String(version.id) || (active.effectiveDate === version.effectiveDate && (active.docType === version.docType || active.documentTypeId === version.documentTypeId)))) {
     return 'current';
   }
 
@@ -86,47 +88,50 @@ export function getSeriesStatus(version, versions = [], asOf = new Date()) {
 }
 
 /**
+ * Live preview calculation matching backend formula exactly.
+ *
+ * @param {object} f - { prefix, separator, yearFormat, numberLength, startNumber, resetCounter }
+ * @param {Date|string} [date=new Date()]
+ * @returns {string}
+ */
+export function buildSampleNumber(f = {}, date = new Date()) {
+  const d = typeof date === 'string' ? new Date(date) : (date instanceof Date && !isNaN(date.getTime()) ? date : new Date());
+  const yyyy = String(d.getFullYear());
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+
+  const yFmt = (f.yearFormat || 'YYYY').toUpperCase();
+  let year = yFmt === 'YYYY' ? yyyy : yFmt === 'YY' ? yyyy.slice(2) : '';
+
+  const reset = (f.resetCounter || '').toUpperCase();
+  if (year && reset === 'MONTHLY') {
+    year += mm;
+  }
+
+  const start = f.startNumber ?? f.startingNumber ?? 1;
+  const len = Number(f.numberLength) || 1;
+  const running = String(start || 1).padStart(len, '0');
+
+  const prefix = (f.prefix || '').toUpperCase();
+  const sep = f.separator === 'None' || f.separator === undefined || f.separator === null ? '' : f.separator;
+
+  return year ? `${prefix}${sep}${year}${sep}${running}` : `${prefix}${sep}${running}`;
+}
+
+/**
  * Formats a sample or real document sequence number according to a series configuration.
- * Formula: Prefix + Separator + YearFormat + Separator + Zero-Padded-Sequence
  *
  * @param {object} version
- * @param {number|string} sequence
- * @param {Date|string} date
+ * @param {number|string} [sequence]
+ * @param {Date|string} [date]
  * @returns {string}
  */
 export function formatSeriesNumber(version, sequence, date = new Date()) {
   if (!version) return '—';
-
-  const prefix = (version.prefix || 'DOC').trim().toUpperCase();
-  const sep = version.separator === 'None' || version.separator === '' ? '' : (version.separator || '-');
-  const yearFormat = (version.yearFormat || 'YYYY').trim();
-  const numLength = Math.max(1, Math.min(10, Number(version.numberLength) || 1));
-  const startNum = sequence !== undefined && sequence !== null ? Number(sequence) : (Number(version.startingNumber) || 1);
-
-  // Extract year representation
-  let yearStr = '';
-  const d = typeof date === 'string' ? new Date(date) : (date instanceof Date ? date : new Date());
-  const fullYear = !isNaN(d.getTime()) ? d.getFullYear() : new Date().getFullYear();
-
-  if (yearFormat === 'YYYY') {
-    yearStr = String(fullYear);
-  } else if (yearFormat === 'YY') {
-    yearStr = String(fullYear).slice(-2);
-  } else {
-    yearStr = ''; // None
-  }
-
-  // Pad sequence number with leading zeros based on configured number length
-  const paddedSeq = String(Math.max(1, startNum)).padStart(numLength, '0');
-
-  // Build segments
-  const segments = [prefix];
-  if (yearStr) {
-    segments.push(yearStr);
-  }
-  segments.push(paddedSeq);
-
-  return segments.join(sep);
+  const v = {
+    ...version,
+    startNumber: sequence !== undefined && sequence !== null ? sequence : (version.startNumber ?? version.startingNumber ?? 1),
+  };
+  return buildSampleNumber(v, date);
 }
 
 /**
@@ -137,14 +142,15 @@ export function formatSeriesNumber(version, sequence, date = new Date()) {
 export function formatSeriesPattern(version) {
   if (!version) return '';
   const prefix = (version.prefix || 'DOC').trim().toUpperCase();
-  const sep = version.separator === 'None' || version.separator === '' ? '' : (version.separator || '-');
-  const yearFormat = (version.yearFormat || 'YYYY').trim();
+  const sep = version.separator === 'None' || version.separator === '' || version.separator === null || version.separator === undefined ? '' : version.separator;
+  const yFmt = (version.yearFormat || 'YYYY').toUpperCase();
+  const yearFormat = yFmt === 'NONE' || yFmt === 'NO YEAR' ? '' : yFmt;
   const numLength = Math.max(1, Math.min(10, Number(version.numberLength) || 1));
-  const startNum = Number(version.startingNumber) || 1;
+  const startNum = Number(version.startNumber ?? version.startingNumber ?? 1);
   const paddedSeq = String(startNum).padStart(numLength, '0');
 
   const segments = [prefix];
-  if (yearFormat && yearFormat !== 'None') {
+  if (yearFormat) {
     segments.push(yearFormat);
   }
   segments.push(paddedSeq);

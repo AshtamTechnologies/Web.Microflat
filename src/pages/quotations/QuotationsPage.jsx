@@ -17,6 +17,7 @@ import {
   IconAdd,
   IconView,
   IconEdit,
+  IconDownload,
   IconQuotation,
   IconSearch,
 } from '../../constants/icons';
@@ -189,6 +190,17 @@ export default function QuotationsPage() {
           const row = info.row.original;
           return (
             <div className="flex items-center justify-end gap-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // static: does nothing right now
+                }}
+                className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
+                title="Download PDF"
+              >
+                <IconDownload size={15} />
+              </button>
               <button
                 type="button"
                 onClick={() => navigate(`/quotations/${row.id}`)}

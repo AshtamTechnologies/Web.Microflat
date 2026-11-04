@@ -71,6 +71,7 @@ export function categoriesFromApi(response) {
 
 /**
  * Serializes form data to the payload expected by POST / PUT /api/product-categories.
+ * When parentCategoryId is not selected or empty, sends null instead of 0.
  */
 export function categoryToApiPayload(data = {}) {
   const rawParentId = data.parentCategoryId;
@@ -80,12 +81,12 @@ export function categoryToApiPayload(data = {}) {
     rawParentId !== '' &&
     Number(rawParentId) !== 0
       ? Number(rawParentId)
-      : 0;
+      : null;
 
   return {
     categoryCode: String(data.categoryCode || '').trim().toUpperCase(),
     categoryName: String(data.categoryName || '').trim(),
-    parentCategoryId: isNaN(parentId) ? 0 : parentId,
+    parentCategoryId: parentId !== null && !isNaN(parentId) ? parentId : null,
   };
 }
 
@@ -97,4 +98,3 @@ export function categoryStatusToApi(isActive) {
     isActive: Boolean(isActive),
   };
 }
-
