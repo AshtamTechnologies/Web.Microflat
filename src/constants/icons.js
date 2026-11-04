@@ -174,6 +174,7 @@ export const IconBankDetails = Landmark;
 export const IconPurchaseRequisition = ClipboardList;
 export const IconPR = ClipboardList; // Shorthand alias
 export const IconInquiry = Inbox;
+export const IconQuotation = Receipt;
 export const IconProduct = PackageCheck;
 export const IconDashboard = LayoutDashboard;
 export const IconDashboardImage = createImageIcon(DashboardIconImg, 'Dashboard');

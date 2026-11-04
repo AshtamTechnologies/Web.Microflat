@@ -35,6 +35,11 @@ import InquiryViewPage from './pages/inquiries/InquiryViewPage';
 import { InquiriesProvider } from './context/InquiriesContext';
 import { InquiryDocumentsProvider } from './context/InquiryDocumentsContext';
 
+import QuotationsPage from './pages/quotations/QuotationsPage';
+import QuotationFormPage from './pages/quotations/QuotationFormPage';
+import QuotationViewPage from './pages/quotations/QuotationViewPage';
+import { QuotationsProvider } from './context/QuotationsContext';
+
 import SeriesSetupPage from './pages/configuration/SeriesSetupPage';
 import { SeriesProvider } from './context/SeriesContext';
 
@@ -157,7 +162,9 @@ export default function App() {
                                               <CompanyProvider>
                                                 <CompanyBankDetailsProvider>
                                                   <ProcessFlowProvider>
-                                                    <AppLayout />
+                                                    <QuotationsProvider>
+                                                      <AppLayout />
+                                                    </QuotationsProvider>
                                                   </ProcessFlowProvider>
                                                 </CompanyBankDetailsProvider>
                                               </CompanyProvider>
@@ -241,6 +248,12 @@ export default function App() {
               <Route path="/inquiries/new" element={<InquiryFormPage />} />
               <Route path="/inquiries/:id" element={<InquiryViewPage />} />
               <Route path="/inquiries/:id/edit" element={<InquiryFormPage />} />
+
+              {/* Quotation Routes */}
+              <Route path="/quotations" element={<QuotationsPage />} />
+              <Route path="/quotations/new" element={<QuotationFormPage />} />
+              <Route path="/quotations/:id" element={<QuotationViewPage />} />
+              <Route path="/quotations/:id/new-revision" element={<QuotationFormPage />} />
 
               {/* Product Routes */}
               <Route path="/products" element={<ProductsPage />} />
