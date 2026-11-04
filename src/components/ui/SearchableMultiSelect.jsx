@@ -281,7 +281,7 @@ export default function SearchableMultiSelect({
                 return (
                   <span
                     key={itemKey}
-                    className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-xs font-semibold px-2 py-0.5 rounded-badge leading-tight max-w-[180px] shrink-0"
+                    className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-xs font-semibold px-2 py-0.5 rounded-badge leading-tight max-w-[280px] shrink-0"
                   >
                     <span className="truncate">{labelText}</span>
                     <button

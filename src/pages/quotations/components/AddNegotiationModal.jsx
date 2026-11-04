@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Modal, Button, CancelButton, Input, SearchableSelect, Textarea } from '../../../components/ui';
 import { useQuotationsContext } from '../../../context/QuotationsContext';
 import { useUsersContext } from '../../../context/UsersContext';
@@ -12,19 +12,29 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation }) {
 
   const nextStageNo = (quotation?.negotiations?.length || 0) + 1;
 
-  const now = new Date();
-  const defaultDateTime = `${now.toISOString().split('T')[0]}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const getInitialData = useCallback(() => {
+    const now = new Date();
+    const defaultDateTime = `${now.toISOString().split('T')[0]}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    return {
+      dateTime: defaultDateTime,
+      mode: 'Call',
+      handledBy: userList[0]?.name || userList[0]?.fullName || 'Janvi Motwani',
+      clientContact: quotation?.contactPerson || '',
+      ourOffer: '',
+      clientCounter: '',
+      revisionNo: quotation?.currentRevision !== undefined ? String(quotation.currentRevision) : '0',
+      discussion: '',
+    };
+  }, [quotation, userList]);
 
-  const [stageData, setStageData] = useState({
-    dateTime: defaultDateTime,
-    mode: 'Call',
-    handledBy: userList[0]?.name || userList[0]?.fullName || 'Janvi Motwani',
-    clientContact: quotation?.contactPerson || '',
-    ourOffer: '',
-    clientCounter: '',
-    revisionNo: quotation?.currentRevision !== undefined ? String(quotation.currentRevision) : '0',
-    discussion: '',
-  });
+  const [stageData, setStageData] = useState(getInitialData);
+
+  // Reset form whenever the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStageData(getInitialData());
+    }
+  }, [isOpen, getInitialData]);
 
   const modeOptions = NEGOTIATION_MODES.map((m) => ({ value: m, label: m }));
 
@@ -41,13 +51,19 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation }) {
   function handleSave() {
     if (!quotation) return;
     addNegotiationStage(quotation.id, stageData);
+    setStageData(getInitialData());
+    onClose();
+  }
+
+  function handleCancel() {
+    setStageData(getInitialData());
     onClose();
   }
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleCancel}
       title={`Add Negotiation Stage · Stage ${nextStageNo}`}
       maxWidth="max-w-xl"
     >
@@ -113,7 +129,7 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation }) {
         />
 
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-          <CancelButton onClick={onClose}>Cancel</CancelButton>
+          <CancelButton onClick={handleCancel}>Cancel</CancelButton>
           <Button variant="primary" onClick={handleSave} icon={<IconCheck size={15} />}>
             Save Negotiation Stage
           </Button>
@@ -122,4 +138,3 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation }) {
     </Modal>
   );
 }
-

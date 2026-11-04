@@ -59,6 +59,7 @@ import {
   INQUIRY_CATALOG_PRODUCTS,
 } from '../../mocks/inquiryCatalog';
 import QuotationStepper from './components/QuotationStepper';
+import useColumnResize from '../../hooks/useColumnResize';
 
 const CATALOG_OPTIONS = [
   'Rexine Cover (Standard)',
@@ -84,7 +85,7 @@ export default function QuotationFormPage() {
   } = useQuotationsContext();
 
   const { inquiries = [] } = useInquiriesContext();
-  const { clients = [] } = useClientsContext();
+  const { clients = [], ensureClientsLoaded } = useClientsContext();
 
   const isRevisionMode = Boolean(id);
   const targetQuotation = useMemo(() => {
@@ -109,8 +110,7 @@ export default function QuotationFormPage() {
     validUntil: '',
     paymentTerms: ['Net 30 Days'],
     deliveryTerms: ['Ex-works Ahmedabad'],
-    termsAndConditions:
-      '1. Prices are ex-works and exclusive of freight.\n2. Delivery within 4–6 weeks from receipt of PO.\n3. Payment as per agreed commercial payment terms.\n4. Standard warranty: 12 months from invoice date.',
+    termsAndConditions: '',
     taxTreatment: 'INTRA_STATE',
     items: [],
   });
@@ -229,7 +229,7 @@ export default function QuotationFormPage() {
     toast.success(`Inquiry ${matchedInq.InquiryNo} selected · Client & items loaded`);
   };
 
-  // ── Column Resizing State for Product Grid ──
+  // ── Column Resizing State for Product Grid (via shared hook) ──
   const MIN_COL_WIDTHS = useMemo(
     () => ({
       index: 44,
@@ -244,66 +244,28 @@ export default function QuotationFormPage() {
     []
   );
 
-  const [colWidths, setColWidths] = useState({
-    index: 48,
-    product: 340,
-    quantity: 80,
-    rate: 140,
-    otherCharges: 130,
-    tax: 110,
-    amount: 150,
-    actions: 96,
-  });
+  const INITIAL_COL_WIDTHS = useMemo(
+    () => ({
+      index: 48,
+      product: 340,
+      quantity: 80,
+      rate: 140,
+      otherCharges: 130,
+      tax: 110,
+      amount: 150,
+      actions: 96,
+    }),
+    []
+  );
 
-  const [resizingCol, setResizingCol] = useState(null);
-
-  const handleStartResize = (e, colKey) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const thElement = e.currentTarget.closest('th');
-    const startWidth = thElement
-      ? Math.round(thElement.getBoundingClientRect().width)
-      : (colWidths[colKey] || 100);
-
-    const startX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-
-    setResizingCol(colKey);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const onMouseMove = (moveEvent) => {
-      const currentX =
-        moveEvent.clientX ??
-        (moveEvent.touches && moveEvent.touches[0] ? moveEvent.touches[0].clientX : startX);
-      const delta = currentX - startX;
-      const minW = MIN_COL_WIDTHS[colKey] || 50;
-      const newWidth = Math.max(minW, Math.round(startWidth + delta));
-
-      setColWidths((prev) => ({
-        ...prev,
-        [colKey]: newWidth,
-      }));
-    };
-
-    const onMouseUp = () => {
-      setResizingCol(null);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      window.removeEventListener('touchmove', onMouseMove);
-      window.removeEventListener('touchend', onMouseUp);
-    };
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    window.addEventListener('touchmove', onMouseMove, { passive: false });
-    window.addEventListener('touchend', onMouseUp);
-  };
+  const { colWidths, resizingCol, handleStartResize } = useColumnResize(
+    INITIAL_COL_WIDTHS,
+    MIN_COL_WIDTHS
+  );
 
   // Initialize form on mount
   useEffect(() => {
+    ensureClientsLoaded?.();
     if (isRevisionMode && targetQuotation) {
       const latestRev =
         targetQuotation.revisions?.[targetQuotation.currentRevision] ||
@@ -404,12 +366,67 @@ export default function QuotationFormPage() {
     }));
   }, []);
 
+  // Client Selection Options (for Direct Quotations without Inquiry)
+  const clientSelectOptions = useMemo(() => {
+    return [
+      { value: '', label: '-- Select Client Company --' },
+      ...clients.map((c) => ({
+        value: c.clientId || c.id,
+        label: `${c.companyName || 'Unnamed Client'}${c.clientCode ? ` (${c.clientCode})` : ''}`,
+      })),
+    ];
+  }, [clients]);
+
+  const handleSelectClient = (selectedClientId) => {
+    if (!selectedClientId) {
+      setFormData((prev) => ({
+        ...prev,
+        clientId: '',
+        clientName: '',
+        clientAddress: '',
+        contactPerson: '',
+        contactEmail: '',
+        contactPhone: '',
+      }));
+      return;
+    }
+
+    const client = clients.find(
+      (c) =>
+        (c.clientId && String(c.clientId) === String(selectedClientId)) ||
+        (c.id && String(c.id) === String(selectedClientId)) ||
+        c.companyName === selectedClientId
+    );
+
+    if (!client) return;
+
+    const defaultAddr = client.addresses?.[0]?.addressLine1
+      ? `${client.addresses[0].addressLine1}, ${client.addresses[0].city || ''} ${client.addresses[0].pincode || ''}`.trim()
+      : client.address || 'Plot 12, GIDC, Ahmedabad';
+
+    const defaultContact = client.contacts?.[0]?.firstName
+      ? `${client.contacts[0].firstName} ${client.contacts[0].lastName || ''}`.trim()
+      : client.contactPerson || '';
+
+    setFormData((prev) => ({
+      ...prev,
+      clientId: client.clientId || client.id,
+      clientName: client.companyName || '',
+      clientAddress: defaultAddr,
+      contactPerson: defaultContact,
+      contactEmail: client.contacts?.[0]?.email || client.email || '',
+      contactPhone: client.contacts?.[0]?.mobile1 || client.phone || '',
+    }));
+
+    toast.success(`Client ${client.companyName} selected`);
+  };
+
   // Client Address & Contact Dropdown Options
   const matchedClient = useMemo(() => {
     return clients.find(
       (c) =>
-        (c.clientId && c.clientId === formData.clientId) ||
-        (c.companyName || '').toLowerCase() === (formData.clientName || '').toLowerCase()
+        (formData.clientId && (c.clientId === formData.clientId || c.id === formData.clientId)) ||
+        (formData.clientName && (c.companyName || '').toLowerCase() === formData.clientName.toLowerCase())
     );
   }, [clients, formData.clientId, formData.clientName]);
 
@@ -534,15 +551,60 @@ export default function QuotationFormPage() {
     navigate(isRevisionMode ? `/quotations/${id}` : '/quotations');
   };
 
-  // Save handler
+  // Scroll to first invalid compulsory field helper
+  const scrollToField = (fieldId, errorMessage) => {
+    toast.error(errorMessage);
+    setTimeout(() => {
+      const el = document.getElementById(fieldId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const focusable = el.querySelector('input, textarea, select, button') || el;
+        focusable?.focus?.();
+      }
+    }, 50);
+  };
+
+  // Save handler with validation & auto-scroll
   const handleSave = (statusToSet = 'Draft') => {
-    if (formData.items.length === 0) {
-      toast.error('Please add at least one product line to the quotation.');
+    // 1. Revision Mode Validations
+    if (isRevisionMode) {
+      if (!formData.revisionDate) {
+        scrollToField('field-revision-date', 'Revision Date is required.');
+        return;
+      }
+      if (!formData.revisionReason?.trim()) {
+        scrollToField('field-revision-reason', 'Revision reason is required when creating a new revision.');
+        return;
+      }
+    }
+
+    // 2. Validity Date
+    if (!formData.validUntil) {
+      scrollToField('field-valid-until', 'Please specify the quotation validity date (Valid Until).');
       return;
     }
 
-    if (isRevisionMode && !formData.revisionReason.trim()) {
-      toast.error('Revision reason is required when creating a new revision.');
+    // 3. Currency
+    if (!formData.currency) {
+      scrollToField('field-currency', 'Please select a currency.');
+      return;
+    }
+
+    // 4. Client Company (if not inquiry-linked and not selected)
+    if (!formData.inquiryNo && !formData.clientId && !formData.clientName?.trim()) {
+      scrollToField('field-client-company', 'Please select a Client Company.');
+      return;
+    }
+
+    // 5. Billing / Shipping Address
+    if (!formData.clientAddress?.trim()) {
+      scrollToField('field-client-address', 'Billing / Shipping address is required.');
+      return;
+    }
+
+    // 6. Product lines
+    if (formData.items.length === 0) {
+      scrollToField('field-products-section', 'Please add at least one product line to the quotation.');
       return;
     }
 
@@ -650,40 +712,47 @@ export default function QuotationFormPage() {
                   disabled
                   value={`Rev ${formData.revisionNo}`}
                 />
-                <DatePicker
-                  label="Revision Date"
-                  required
-                  value={formData.revisionDate}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, revisionDate: e.target.value }))}
-                />
+                <div id="field-revision-date">
+                  <DatePicker
+                    label="Revision Date"
+                    required
+                    value={formData.revisionDate}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, revisionDate: e.target.value }))}
+                  />
+                </div>
               </>
             )}
 
             {/* Valid Until */}
-            <DatePicker
-              label="Valid Until"
-              value={formData.validUntil}
-              onChange={(e) => setFormData((prev) => ({ ...prev, validUntil: e.target.value }))}
-            />
+            <div id="field-valid-until">
+              <DatePicker
+                label="Valid Until"
+                required
+                value={formData.validUntil}
+                onChange={(e) => setFormData((prev) => ({ ...prev, validUntil: e.target.value }))}
+              />
+            </div>
 
             {/* Currency */}
-            <SearchableSelect
-              label="Currency"
-              required
-              options={[
-                { value: 'INR', label: 'INR (₹ - Indian Rupee)' },
-                { value: 'USD', label: 'USD ($ - US Dollar)' },
-                { value: 'EUR', label: 'EUR (€ - Euro)' },
-                { value: 'GBP', label: 'GBP (£ - British Pound)' },
-              ]}
-              value={formData.currency}
-              onChange={(e) => setFormData((prev) => ({ ...prev, currency: e.target.value }))}
-            />
+            <div id="field-currency">
+              <SearchableSelect
+                label="Currency"
+                required
+                options={[
+                  { value: 'INR', label: 'INR (₹ - Indian Rupee)' },
+                  { value: 'USD', label: 'USD ($ - US Dollar)' },
+                  { value: 'EUR', label: 'EUR (€ - Euro)' },
+                  { value: 'GBP', label: 'GBP (£ - British Pound)' },
+                ]}
+                value={formData.currency}
+                onChange={(e) => setFormData((prev) => ({ ...prev, currency: e.target.value }))}
+              />
+            </div>
           </div>
 
           {/* Revision Reason (ONLY in Revision Mode) */}
           {isRevisionMode && (
-            <div className="pt-2">
+            <div id="field-revision-reason" className="pt-2">
               <Textarea
                 label="Revision Reason"
                 required
@@ -697,18 +766,34 @@ export default function QuotationFormPage() {
 
           {/* Client Information Fields */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-border">
-            <Input
-              label="Client Company"
-              disabled
-              value={formData.clientName || '— Select an inquiry above —'}
-            />
-            <SearchableSelect
-              label="Billing / Shipping Address"
-              required
-              options={clientAddressOptions}
-              value={formData.clientAddress}
-              onChange={(e) => setFormData((prev) => ({ ...prev, clientAddress: e.target.value }))}
-            />
+            <div id="field-client-company">
+              {formData.inquiryNo ? (
+                <Input
+                  label="Client Company"
+                  disabled
+                  value={formData.clientName}
+                  hint="Auto-linked from selected Inquiry"
+                />
+              ) : (
+                <SearchableSelect
+                  label="Client Company"
+                  required
+                  options={clientSelectOptions}
+                  value={formData.clientId || ''}
+                  placeholder="-- Select Client Company --"
+                  onChange={(e) => handleSelectClient(e.target.value)}
+                />
+              )}
+            </div>
+            <div id="field-client-address">
+              <SearchableSelect
+                label="Billing / Shipping Address"
+                required
+                options={clientAddressOptions}
+                value={formData.clientAddress}
+                onChange={(e) => setFormData((prev) => ({ ...prev, clientAddress: e.target.value }))}
+              />
+            </div>
             <SearchableSelect
               label="Contact Person"
               options={clientContactOptions}
@@ -720,244 +805,246 @@ export default function QuotationFormPage() {
       </CollapsibleCard>
 
       {/* ── SECTION 2: PRODUCTS & PRICING ── */}
-      <CollapsibleCard
-        title="2. Products & Pricing"
-        subtitle="Precision products, unit rates, other charges, and tax breakdown"
-        icon={<IconPackage size={18} className="text-primary" />}
-        defaultOpen={true}
-        padding="none"
-        bodyClassName="p-0 space-y-0"
-        actions={
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={handleOpenAddDrawer}
-            icon={IconAdd}
-          >
-            Add Product
-          </Button>
-        }
-      >
-        {/* Resizable Product Lines Grid Table */}
-        <div className="overflow-x-auto">
-          <TableContainer>
-            <colgroup>
-              <col style={{ width: `${colWidths.index}px` }} />
-              <col style={{ width: `${colWidths.product}px` }} />
-              <col style={{ width: `${colWidths.quantity}px` }} />
-              <col style={{ width: `${colWidths.rate}px` }} />
-              <col style={{ width: `${colWidths.otherCharges}px` }} />
-              <col style={{ width: `${colWidths.tax}px` }} />
-              <col style={{ width: `${colWidths.amount}px` }} />
-              <col style={{ width: `${colWidths.actions}px` }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <Th
-                  style={{ width: `${colWidths.index}px` }}
-                  className="text-center"
-                >
-                  #
-                </Th>
-                <Th
-                  style={{ width: `${colWidths.product}px` }}
-                  isResizing={resizingCol === 'product'}
-                  resizeHandler={(e) => handleStartResize(e, 'product')}
-                >
-                  PRODUCT / VARIANT & SPECIFICATIONS
-                </Th>
-                <Th
-                  style={{ width: `${colWidths.quantity}px` }}
-                  isResizing={resizingCol === 'quantity'}
-                  resizeHandler={(e) => handleStartResize(e, 'quantity')}
-                  className="text-center"
-                >
-                  QTY
-                </Th>
-                <Th
-                  style={{ width: `${colWidths.rate}px` }}
-                  isResizing={resizingCol === 'rate'}
-                  resizeHandler={(e) => handleStartResize(e, 'rate')}
-                  className="text-right"
-                >
-                  RATE ({formData.currency})
-                </Th>
-                <Th
-                  style={{ width: `${colWidths.otherCharges}px` }}
-                  isResizing={resizingCol === 'otherCharges'}
-                  resizeHandler={(e) => handleStartResize(e, 'otherCharges')}
-                  className="text-right"
-                >
-                  OTHER CHARGES
-                </Th>
-                <Th
-                  style={{ width: `${colWidths.tax}px` }}
-                  isResizing={resizingCol === 'tax'}
-                  resizeHandler={(e) => handleStartResize(e, 'tax')}
-                  className="text-center"
-                >
-                  TAX %
-                </Th>
-                <Th
-                  style={{ width: `${colWidths.amount}px` }}
-                  isResizing={resizingCol === 'amount'}
-                  resizeHandler={(e) => handleStartResize(e, 'amount')}
-                  className="text-right"
-                >
-                  LINE AMOUNT
-                </Th>
-                <Th
-                  style={{ width: `${colWidths.actions}px` }}
-                  className="text-right"
-                >
-                  ACTIONS
-                </Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {formData.items.length === 0 ? (
+      <div id="field-products-section">
+        <CollapsibleCard
+          title="2. Products & Pricing"
+          subtitle="Precision products, unit rates, other charges, and tax breakdown"
+          icon={<IconPackage size={18} className="text-primary" />}
+          defaultOpen={true}
+          padding="none"
+          bodyClassName="p-0 space-y-0"
+          actions={
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleOpenAddDrawer}
+              icon={IconAdd}
+            >
+              Add Product
+            </Button>
+          }
+        >
+          {/* Resizable Product Lines Grid Table */}
+          <div className="overflow-x-auto">
+            <TableContainer>
+              <colgroup>
+                <col style={{ width: `${colWidths.index}px` }} />
+                <col style={{ width: `${colWidths.product}px` }} />
+                <col style={{ width: `${colWidths.quantity}px` }} />
+                <col style={{ width: `${colWidths.rate}px` }} />
+                <col style={{ width: `${colWidths.otherCharges}px` }} />
+                <col style={{ width: `${colWidths.tax}px` }} />
+                <col style={{ width: `${colWidths.amount}px` }} />
+                <col style={{ width: `${colWidths.actions}px` }} />
+              </colgroup>
+              <thead>
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-text-muted text-xs">
-                    No products added to this quotation yet. Click &quot;Add Product&quot; above to select items.
-                  </td>
+                  <Th
+                    style={{ width: `${colWidths.index}px` }}
+                    className="text-center"
+                  >
+                    #
+                  </Th>
+                  <Th
+                    style={{ width: `${colWidths.product}px` }}
+                    isResizing={resizingCol === 'product'}
+                    resizeHandler={(e) => handleStartResize(e, 'product')}
+                  >
+                    PRODUCT / VARIANT & SPECIFICATIONS
+                  </Th>
+                  <Th
+                    style={{ width: `${colWidths.quantity}px` }}
+                    isResizing={resizingCol === 'quantity'}
+                    resizeHandler={(e) => handleStartResize(e, 'quantity')}
+                    className="text-center"
+                  >
+                    QTY
+                  </Th>
+                  <Th
+                    style={{ width: `${colWidths.rate}px` }}
+                    isResizing={resizingCol === 'rate'}
+                    resizeHandler={(e) => handleStartResize(e, 'rate')}
+                    className="text-right"
+                  >
+                    RATE ({formData.currency})
+                  </Th>
+                  <Th
+                    style={{ width: `${colWidths.otherCharges}px` }}
+                    isResizing={resizingCol === 'otherCharges'}
+                    resizeHandler={(e) => handleStartResize(e, 'otherCharges')}
+                    className="text-right"
+                  >
+                    OTHER CHARGES
+                  </Th>
+                  <Th
+                    style={{ width: `${colWidths.tax}px` }}
+                    isResizing={resizingCol === 'tax'}
+                    resizeHandler={(e) => handleStartResize(e, 'tax')}
+                    className="text-center"
+                  >
+                    TAX %
+                  </Th>
+                  <Th
+                    style={{ width: `${colWidths.amount}px` }}
+                    isResizing={resizingCol === 'amount'}
+                    resizeHandler={(e) => handleStartResize(e, 'amount')}
+                    className="text-right"
+                  >
+                    LINE AMOUNT
+                  </Th>
+                  <Th
+                    style={{ width: `${colWidths.actions}px` }}
+                    className="text-right"
+                  >
+                    ACTIONS
+                  </Th>
                 </tr>
-              ) : (
-                formData.items.map((item, idx) => {
-                  const lineAmount =
-                    (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
-                    (Number(item.otherCharges) || 0);
+              </thead>
+              <tbody className="divide-y divide-border">
+                {formData.items.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-text-muted text-xs">
+                      No products added to this quotation yet. Click &quot;Add Product&quot; above to select items.
+                    </td>
+                  </tr>
+                ) : (
+                  formData.items.map((item, idx) => {
+                    const lineAmount =
+                      (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
+                      (Number(item.otherCharges) || 0);
 
-                  return (
-                    <tr key={item.id || idx} className="hover:bg-surface/50 transition-colors">
-                      <Td className="text-center font-mono text-xs text-text-muted">
-                        {idx + 1}
-                      </Td>
+                    return (
+                      <tr key={item.id || idx} className="hover:bg-surface/50 transition-colors">
+                        <Td className="text-center font-mono text-xs text-text-muted">
+                          {idx + 1}
+                        </Td>
 
-                      <Td className="text-xs">
-                        <div className="font-bold text-heading truncate">
-                          {item.productName}
-                        </div>
-                        <div className="font-mono text-2xs text-primary font-medium truncate">
-                          {item.itemCode || 'ITM'} · {item.variantName}
-                        </div>
-                        {item.technicalDetails && (
-                          <div className="text-3xs text-text-muted truncate max-w-sm" title={item.technicalDetails}>
-                            {item.technicalDetails}
+                        <Td className="text-xs">
+                          <div className="font-bold text-heading truncate">
+                            {item.productName}
                           </div>
-                        )}
-                        {Array.isArray(item.options) && item.options.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {item.options.map((opt, oIdx) => (
-                              <span
-                                key={oIdx}
-                                className="inline-flex items-center px-1.5 py-0.2 rounded text-3xs font-medium bg-surface text-text-muted border border-border"
-                              >
-                                {opt.replace(' (Standard)', '')}
-                              </span>
-                            ))}
+                          <div className="font-mono text-2xs text-primary font-medium truncate">
+                            {item.itemCode || 'ITM'} · {item.variantName}
                           </div>
-                        )}
-                      </Td>
+                          {item.technicalDetails && (
+                            <div className="text-3xs text-text-muted truncate max-w-sm" title={item.technicalDetails}>
+                              {item.technicalDetails}
+                            </div>
+                          )}
+                          {Array.isArray(item.options) && item.options.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {item.options.map((opt, oIdx) => (
+                                <span
+                                  key={oIdx}
+                                  className="inline-flex items-center px-1.5 py-0.2 rounded text-3xs font-medium bg-surface text-text-muted border border-border"
+                                >
+                                  {opt.replace(' (Standard)', '')}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </Td>
 
-                      <Td className="text-center font-mono font-semibold text-xs text-heading">
-                        {item.quantity}
-                      </Td>
+                        <Td className="text-center font-mono font-semibold text-xs text-heading">
+                          {item.quantity}
+                        </Td>
 
-                      <Td className="text-right font-mono text-xs text-heading">
-                        {formatCurrency(item.rate, formData.currency)}
-                      </Td>
+                        <Td className="text-right font-mono text-xs text-heading">
+                          {formatCurrency(item.rate, formData.currency)}
+                        </Td>
 
-                      <Td className="text-right font-mono text-xs text-text-muted">
-                        {Number(item.otherCharges) > 0
-                          ? formatCurrency(item.otherCharges, formData.currency)
-                          : '—'}
-                      </Td>
+                        <Td className="text-right font-mono text-xs text-text-muted">
+                          {Number(item.otherCharges) > 0
+                            ? formatCurrency(item.otherCharges, formData.currency)
+                            : '—'}
+                        </Td>
 
-                      <Td className="text-center">
-                        <Badge variant="neutral" size="sm">
-                          {item.taxPercent}% GST
-                        </Badge>
-                      </Td>
+                        <Td className="text-center">
+                          <Badge variant="neutral" size="sm">
+                            {item.taxPercent}% GST
+                          </Badge>
+                        </Td>
 
-                      <Td className="text-right font-mono font-bold text-xs text-heading">
-                        {formatCurrency(lineAmount, formData.currency)}
-                      </Td>
+                        <Td className="text-right font-mono font-bold text-xs text-heading">
+                          {formatCurrency(lineAmount, formData.currency)}
+                        </Td>
 
-                      <Td className="text-right whitespace-nowrap">
-                        <TableActions
-                          onEdit={() => handleStartEditItem(item, idx)}
-                          onDelete={() => handleRemoveItem(idx)}
-                          editTooltip="Edit Product"
-                          deleteTooltip="Remove Product"
-                          className="justify-end shrink-0"
-                        />
-                      </Td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </TableContainer>
-        </div>
-
-        {/* ── Totals Summary Widget ── */}
-        <div className="p-4 sm:p-5 bg-surface/30 border-t border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="max-w-md space-y-1.5">
-            <span className="text-xs font-bold text-heading uppercase tracking-wider block">
-              Applicable Tax Regime & Commercial Treatment
-            </span>
-            <SearchableSelect
-              options={taxTreatmentOptions}
-              value={formData.taxTreatment}
-              onChange={(e) => setFormData((prev) => ({ ...prev, taxTreatment: e.target.value }))}
-            />
+                        <Td className="text-right whitespace-nowrap">
+                          <TableActions
+                            onEdit={() => handleStartEditItem(item, idx)}
+                            onDelete={() => handleRemoveItem(idx)}
+                            editTooltip="Edit Product"
+                            deleteTooltip="Remove Product"
+                            className="justify-end shrink-0"
+                          />
+                        </Td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </TableContainer>
           </div>
 
-          <div className="w-full md:w-80 bg-card dark:bg-card-dark rounded-xl border border-border p-4 shadow-xs space-y-2 text-xs">
-            <div className="flex justify-between items-center text-text-muted">
-              <span>Taxable Subtotal:</span>
-              <span className="font-mono font-semibold text-heading">
-                {formatCurrency(totals.subtotal, formData.currency)}
+          {/* ── Totals Summary Widget ── */}
+          <div className="p-4 sm:p-5 bg-surface/30 border-t border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div className="max-w-md space-y-1.5">
+              <span className="text-xs font-bold text-heading uppercase tracking-wider block">
+                Applicable Tax Regime & Commercial Treatment
               </span>
+              <SearchableSelect
+                options={taxTreatmentOptions}
+                value={formData.taxTreatment}
+                onChange={(e) => setFormData((prev) => ({ ...prev, taxTreatment: e.target.value }))}
+              />
             </div>
 
-            {formData.taxTreatment === 'INTRA_STATE' && (
-              <>
-                <div className="flex justify-between items-center text-text-muted text-2xs">
-                  <span>CGST (Output):</span>
-                  <span className="font-mono">{formatCurrency(totals.cgst, formData.currency)}</span>
-                </div>
-                <div className="flex justify-between items-center text-text-muted text-2xs">
-                  <span>SGST (Output):</span>
-                  <span className="font-mono">{formatCurrency(totals.sgst, formData.currency)}</span>
-                </div>
-              </>
-            )}
-
-            {formData.taxTreatment === 'INTER_STATE' && (
-              <div className="flex justify-between items-center text-text-muted text-2xs">
-                <span>IGST (Output):</span>
-                <span className="font-mono">{formatCurrency(totals.igst, formData.currency)}</span>
+            <div className="w-full md:w-80 bg-card dark:bg-card-dark rounded-xl border border-border p-4 shadow-xs space-y-2 text-xs">
+              <div className="flex justify-between items-center text-text-muted">
+                <span>Taxable Subtotal:</span>
+                <span className="font-mono font-semibold text-heading">
+                  {formatCurrency(totals.subtotal, formData.currency)}
+                </span>
               </div>
-            )}
 
-            <div className="flex justify-between items-center text-text-muted">
-              <span>Total Tax:</span>
-              <span className="font-mono font-semibold text-heading">
-                {formatCurrency(totals.totalTax, formData.currency)}
-              </span>
-            </div>
+              {formData.taxTreatment === 'INTRA_STATE' && (
+                <>
+                  <div className="flex justify-between items-center text-text-muted text-2xs">
+                    <span>CGST (Output):</span>
+                    <span className="font-mono">{formatCurrency(totals.cgst, formData.currency)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-text-muted text-2xs">
+                    <span>SGST (Output):</span>
+                    <span className="font-mono">{formatCurrency(totals.sgst, formData.currency)}</span>
+                  </div>
+                </>
+              )}
 
-            <div className="pt-2 border-t border-border flex justify-between items-center font-bold text-sm text-heading">
-              <span>Grand Total:</span>
-              <span className="font-mono text-primary text-base">
-                {formatCurrency(totals.grandTotal, formData.currency)}
-              </span>
+              {formData.taxTreatment === 'INTER_STATE' && (
+                <div className="flex justify-between items-center text-text-muted text-2xs">
+                  <span>IGST (Output):</span>
+                  <span className="font-mono">{formatCurrency(totals.igst, formData.currency)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center text-text-muted">
+                <span>Total Tax:</span>
+                <span className="font-mono font-semibold text-heading">
+                  {formatCurrency(totals.totalTax, formData.currency)}
+                </span>
+              </div>
+
+              <div className="pt-2 border-t border-border flex justify-between items-center font-bold text-sm text-heading">
+                <span>Grand Total:</span>
+                <span className="font-mono text-primary text-base">
+                  {formatCurrency(totals.grandTotal, formData.currency)}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </CollapsibleCard>
+        </CollapsibleCard>
+      </div>
 
       {/* ── SECTION 3: COMMERCIAL TERMS & CONDITIONS ── */}
       <CollapsibleCard
@@ -975,7 +1062,12 @@ export default function QuotationFormPage() {
               searchPlaceholder="Search payment terms..."
               options={PAYMENT_TERMS_OPTIONS}
               value={formData.paymentTerms}
-              onChange={(newVals) => setFormData((prev) => ({ ...prev, paymentTerms: newVals }))}
+              name="paymentTerms"
+              maxDisplayTags={10}
+              onChange={(e) => {
+                const val = Array.isArray(e) ? e : e?.target?.value || [];
+                setFormData((prev) => ({ ...prev, paymentTerms: val }));
+              }}
             />
 
             {/* Multi-Select Delivery Terms */}
@@ -985,7 +1077,12 @@ export default function QuotationFormPage() {
               searchPlaceholder="Search delivery terms..."
               options={DELIVERY_TERMS_OPTIONS}
               value={formData.deliveryTerms}
-              onChange={(newVals) => setFormData((prev) => ({ ...prev, deliveryTerms: newVals }))}
+              name="deliveryTerms"
+              maxDisplayTags={10}
+              onChange={(e) => {
+                const val = Array.isArray(e) ? e : e?.target?.value || [];
+                setFormData((prev) => ({ ...prev, deliveryTerms: val }));
+              }}
             />
           </div>
 
@@ -1074,9 +1171,9 @@ export default function QuotationFormPage() {
           </div>
 
           {/* Row 3: Quantity, Unit Rate, Other Charges, Tax % */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <Input
-              label="Quantity *"
+              label="Quantity"
               type="number"
               min="1"
               required
@@ -1085,7 +1182,7 @@ export default function QuotationFormPage() {
             />
 
             <Input
-              label={`Unit Rate (${formData.currency}) *`}
+              label={`Unit Rate (${formData.currency})`}
               type="number"
               step="0.01"
               required

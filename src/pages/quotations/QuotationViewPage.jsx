@@ -5,7 +5,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   IconBack,
   IconEdit,
@@ -14,10 +14,8 @@ import {
   IconSend,
   IconUpload,
   IconAdd,
-  IconDownload,
   IconFileText,
   IconWarning,
-  IconInfo,
   IconQuotation,
 } from '../../constants/icons';
 import {
@@ -31,6 +29,7 @@ import {
   Th,
   Td,
   Select,
+  SearchableSelect,
 } from '../../components/ui';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { formatCurrency } from '../../mocks/quotations';
@@ -41,6 +40,7 @@ import RecordPOModal from './components/RecordPOModal';
 import AddNegotiationModal from './components/AddNegotiationModal';
 import UploadDocumentModal from './components/UploadDocumentModal';
 import SendQuotationMailModal from './components/SendQuotationMailModal';
+import useColumnResize from '../../hooks/useColumnResize';
 
 export default function QuotationViewPage() {
   const { id } = useParams();
@@ -73,6 +73,47 @@ export default function QuotationViewPage() {
     if (!quotation || !quotation.revisions || quotation.revisions.length === 0) return null;
     return quotation.revisions[selectedRevIndex] || quotation.revisions[latestRevIndex];
   }, [quotation, selectedRevIndex, latestRevIndex]);
+
+  // Options for Revision dropdown
+  const revisionSelectOptions = useMemo(() => {
+    return (quotation?.revisions || []).map((r, idx) => ({
+      value: String(idx),
+      label: `Revision ${r.revisionNo} ${idx === latestRevIndex ? '(Latest)' : ''}`,
+    }));
+  }, [quotation?.revisions, latestRevIndex]);
+
+  // Column Resizing for Quoted Products Table
+  const MIN_PRODUCT_COL_WIDTHS = useMemo(
+    () => ({
+      index: 44,
+      product: 240,
+      quantity: 70,
+      rate: 110,
+      otherCharges: 110,
+      tax: 90,
+      amount: 130,
+    }),
+    []
+  );
+
+  const INITIAL_PRODUCT_COL_WIDTHS = useMemo(
+    () => ({
+      index: 48,
+      product: 360,
+      quantity: 80,
+      rate: 140,
+      otherCharges: 130,
+      tax: 100,
+      amount: 150,
+    }),
+    []
+  );
+
+  const {
+    colWidths: productColWidths,
+    resizingCol: resizingProductCol,
+    handleStartResize: handleStartProductResize,
+  } = useColumnResize(INITIAL_PRODUCT_COL_WIDTHS, MIN_PRODUCT_COL_WIDTHS);
 
   if (!quotation) {
     return (
@@ -170,15 +211,6 @@ export default function QuotationViewPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setIsPoModalOpen(true)}
-              icon={<IconCheck size={14} />}
-            >
-              Record PO
-            </Button>
-
-            <Button
-              variant="secondary"
-              size="sm"
               onClick={() => navigate(`/quotations/${quotation.id}/new-revision`)}
               icon={<IconEdit size={14} />}
             >
@@ -239,17 +271,16 @@ export default function QuotationViewPage() {
 
         <div className="flex items-center gap-2 self-end sm:self-auto pb-2">
           <span className="text-2xs text-text-muted font-medium whitespace-nowrap">Viewing:</span>
-          <Select
-            className="text-xs py-1 px-2.5 font-mono w-44"
-            value={String(selectedRevIndex)}
-            onChange={(e) => setSelectedRevIndex(Number(e.target.value))}
-          >
-            {(quotation.revisions || []).map((r, idx) => (
-              <option key={r.revisionNo} value={idx}>
-                Revision {r.revisionNo} {idx === latestRevIndex ? '(Latest)' : ''}
-              </option>
-            ))}
-          </Select>
+          <div className="w-56">
+            <SearchableSelect
+              size="sm"
+              options={revisionSelectOptions}
+              value={String(selectedRevIndex)}
+              onChange={(e) => setSelectedRevIndex(Number(e.target.value))}
+              placeholder="Select revision..."
+              searchPlaceholder="Search revision..."
+            />
+          </div>
         </div>
       </div>
 
@@ -312,7 +343,7 @@ export default function QuotationViewPage() {
             </Card>
           </div>
 
-          {/* Product Lines Grid */}
+          {/* Product Lines Grid (Resizable Columns) */}
           <Card
             title={`Quoted Products (Revision ${activeRevision?.revisionNo || 0})`}
             subtitle="Engineered items, unit rates, other charges, and tax calculations"
@@ -320,15 +351,65 @@ export default function QuotationViewPage() {
           >
             <div className="overflow-x-auto">
               <TableContainer>
+                <colgroup>
+                  <col style={{ width: `${productColWidths.index}px` }} />
+                  <col style={{ width: `${productColWidths.product}px` }} />
+                  <col style={{ width: `${productColWidths.quantity}px` }} />
+                  <col style={{ width: `${productColWidths.rate}px` }} />
+                  <col style={{ width: `${productColWidths.otherCharges}px` }} />
+                  <col style={{ width: `${productColWidths.tax}px` }} />
+                  <col style={{ width: `${productColWidths.amount}px` }} />
+                </colgroup>
                 <thead>
                   <tr>
-                    <Th className="w-12 text-center">#</Th>
-                    <Th className="min-w-[240px]">PRODUCT / VARIANT</Th>
-                    <Th className="w-20 text-center">QTY</Th>
-                    <Th className="w-32 text-right">RATE ({quotation.currency})</Th>
-                    <Th className="w-32 text-right">OTHER CHARGES</Th>
-                    <Th className="w-24 text-center">TAX %</Th>
-                    <Th className="w-36 text-right">LINE AMOUNT</Th>
+                    <Th style={{ width: `${productColWidths.index}px` }} className="text-center">#</Th>
+                    <Th
+                      style={{ width: `${productColWidths.product}px` }}
+                      isResizing={resizingProductCol === 'product'}
+                      resizeHandler={(e) => handleStartProductResize(e, 'product')}
+                    >
+                      PRODUCT / VARIANT
+                    </Th>
+                    <Th
+                      style={{ width: `${productColWidths.quantity}px` }}
+                      isResizing={resizingProductCol === 'quantity'}
+                      resizeHandler={(e) => handleStartProductResize(e, 'quantity')}
+                      className="text-center"
+                    >
+                      QTY
+                    </Th>
+                    <Th
+                      style={{ width: `${productColWidths.rate}px` }}
+                      isResizing={resizingProductCol === 'rate'}
+                      resizeHandler={(e) => handleStartProductResize(e, 'rate')}
+                      className="text-right"
+                    >
+                      RATE ({quotation.currency})
+                    </Th>
+                    <Th
+                      style={{ width: `${productColWidths.otherCharges}px` }}
+                      isResizing={resizingProductCol === 'otherCharges'}
+                      resizeHandler={(e) => handleStartProductResize(e, 'otherCharges')}
+                      className="text-right"
+                    >
+                      OTHER CHARGES
+                    </Th>
+                    <Th
+                      style={{ width: `${productColWidths.tax}px` }}
+                      isResizing={resizingProductCol === 'tax'}
+                      resizeHandler={(e) => handleStartProductResize(e, 'tax')}
+                      className="text-center"
+                    >
+                      TAX %
+                    </Th>
+                    <Th
+                      style={{ width: `${productColWidths.amount}px` }}
+                      isResizing={resizingProductCol === 'amount'}
+                      resizeHandler={(e) => handleStartProductResize(e, 'amount')}
+                      className="text-right"
+                    >
+                      LINE AMOUNT
+                    </Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -506,7 +587,7 @@ export default function QuotationViewPage() {
               </Button>
             </div>
           ) : (
-            <div className="space-y-3 relative before:absolute before:inset-0 before:left-5 before:w-0.5 before:bg-border before:z-0">
+            <div className="max-h-[500px] overflow-y-auto pr-2 space-y-3 relative before:absolute before:inset-0 before:left-5 before:w-0.5 before:bg-border before:z-0 scrollbar-thin">
               {quotation.negotiations.map((stg) => (
                 <div
                   key={stg.stageNo}
