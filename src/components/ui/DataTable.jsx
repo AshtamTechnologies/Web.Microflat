@@ -43,12 +43,20 @@ export default function DataTable({
   const startRecord = resolvedTotal === 0 ? 0 : pageIndex * pageSize + 1;
   const endRecord = Math.min((pageIndex + 1) * pageSize, resolvedTotal);
 
+  const totalCenterSize = typeof table.getCenterTotalSize === 'function' ? table.getCenterTotalSize() : 0;
+
   return (
     <div className={`space-y-4 ${className}`}>
       {/* ── DESKTOP VIEW (>= md): TanStack Table ── */}
       <div className={renderMobileCard ? 'hidden md:block' : 'block'}>
         <Card padding="none" className="overflow-hidden border border-border bg-bg shadow-2xs">
-          <TableContainer tableClassName="w-full text-left border-collapse text-xs table-fixed">
+          <TableContainer
+            tableStyle={{
+              width: '100%',
+              minWidth: totalCenterSize > 0 ? `${totalCenterSize}px` : undefined,
+            }}
+            tableClassName="w-full text-left border-collapse text-xs table-fixed"
+          >
             <thead className="bg-surface/90 border-b border-border">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>

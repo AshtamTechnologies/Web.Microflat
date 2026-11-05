@@ -75,6 +75,7 @@ export default function SpecParametersPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [columnSizing, setColumnSizing] = useState({});
 
   // Debounce search input by 350ms
   useEffect(() => {
@@ -273,6 +274,7 @@ export default function SpecParametersPage() {
         id: 'index',
         header: '#',
         size: 60,
+        minSize: 50,
         enableSorting: false,
         cell: ({ row }) => (
           <span className="font-mono text-xs text-text-muted">
@@ -284,6 +286,7 @@ export default function SpecParametersPage() {
         id: 'parameterName',
         header: 'PARAMETER NAME',
         size: 240,
+        minSize: 140,
         cell: ({ row }) => (
           <span className="font-semibold text-heading text-xs">
             {row.original.parameterName}
@@ -294,6 +297,7 @@ export default function SpecParametersPage() {
         id: 'unitSymbol',
         header: 'UNIT',
         size: 110,
+        minSize: 80,
         cell: ({ row }) =>
           row.original.unitSymbol ? (
             <span className="inline-block px-2 py-0.5 font-mono text-2xs font-semibold rounded bg-surface border border-border text-heading">
@@ -307,6 +311,7 @@ export default function SpecParametersPage() {
         id: 'toleranceUnitSymbol',
         header: 'TOLERANCE UNIT',
         size: 130,
+        minSize: 100,
         cell: ({ row }) =>
           row.original.toleranceUnitSymbol ? (
             <span className="inline-block px-2 py-0.5 font-mono text-2xs font-semibold rounded bg-surface border border-border text-heading">
@@ -320,6 +325,7 @@ export default function SpecParametersPage() {
         id: 'isActive',
         header: 'STATUS',
         size: 130,
+        minSize: 100,
         cell: ({ row }) => (
           <StatusBadge status={row.original.isActive} size="sm" />
         ),
@@ -328,6 +334,7 @@ export default function SpecParametersPage() {
         id: 'createdOn',
         header: 'CREATED ON',
         size: 150,
+        minSize: 120,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
             {formatDate(row.original.createdOn || row.original.createdAt)}
@@ -338,6 +345,7 @@ export default function SpecParametersPage() {
         id: 'lastUpdatedOn',
         header: 'LAST UPDATED',
         size: 150,
+        minSize: 120,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
             {row.original.lastUpdatedOn ? formatDate(row.original.lastUpdatedOn) : '—'}
@@ -348,6 +356,8 @@ export default function SpecParametersPage() {
         id: 'actions',
         header: 'ACTIONS',
         size: 100,
+        minSize: 90,
+        enableResizing: false,
         cell: ({ row }) => (
           <TableActions
             onView={() => handleOpenView(row.original)}
@@ -371,7 +381,11 @@ export default function SpecParametersPage() {
         pageIndex: (pagination.pageNumber || 1) - 1,
         pageSize: pagination.pageSize || 10,
       },
+      columnSizing,
     },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
     manualPagination: true,
     manualFiltering: true,
     getCoreRowModel: getCoreRowModel(),
@@ -763,4 +777,3 @@ export default function SpecParametersPage() {
     </div>
   );
 }
-

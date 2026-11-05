@@ -75,6 +75,7 @@ export default function StandardsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [columnSizing, setColumnSizing] = useState({});
 
   // Debounce search input by 350ms
   useEffect(() => {
@@ -284,6 +285,7 @@ export default function StandardsPage() {
         id: 'index',
         header: '#',
         size: 60,
+        minSize: 50,
         enableSorting: false,
         cell: ({ row }) => (
           <span className="font-mono text-xs text-text-muted">
@@ -295,6 +297,7 @@ export default function StandardsPage() {
         id: 'standardCode',
         header: 'STANDARD CODE',
         size: 200,
+        minSize: 130,
         cell: ({ row }) => (
           <span className="font-semibold text-heading text-xs">
             {row.original.standardCode}
@@ -305,6 +308,7 @@ export default function StandardsPage() {
         id: 'description',
         header: 'DESCRIPTION',
         size: 260,
+        minSize: 150,
         cell: ({ row }) => (
           <span
             className="text-xs text-text-muted line-clamp-1 break-words"
@@ -318,6 +322,7 @@ export default function StandardsPage() {
         id: 'isActive',
         header: 'STATUS',
         size: 130,
+        minSize: 100,
         cell: ({ row }) => (
           <StatusBadge status={row.original.isActive} size="sm" />
         ),
@@ -326,6 +331,7 @@ export default function StandardsPage() {
         id: 'createdOn',
         header: 'CREATED ON',
         size: 150,
+        minSize: 120,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
             {formatDate(row.original.createdOn || row.original.createdAt)}
@@ -336,6 +342,7 @@ export default function StandardsPage() {
         id: 'lastUpdatedOn',
         header: 'LAST UPDATED',
         size: 150,
+        minSize: 120,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
             {row.original.lastUpdatedOn ? formatDate(row.original.lastUpdatedOn) : '—'}
@@ -346,6 +353,8 @@ export default function StandardsPage() {
         id: 'actions',
         header: 'ACTIONS',
         size: 100,
+        minSize: 90,
+        enableResizing: false,
         cell: ({ row }) => (
           <TableActions
             onView={() => handleOpenView(row.original)}
@@ -369,7 +378,11 @@ export default function StandardsPage() {
         pageIndex: (pagination.pageNumber || 1) - 1,
         pageSize: pagination.pageSize || 10,
       },
+      columnSizing,
     },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
     manualPagination: true,
     manualFiltering: true,
     getCoreRowModel: getCoreRowModel(),

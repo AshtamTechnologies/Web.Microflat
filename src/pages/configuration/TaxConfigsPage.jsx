@@ -1100,20 +1100,19 @@ export default function TaxConfigsPage() {
                   <th className="py-2.5 px-3">Tax Name</th>
                   <th className="py-2.5 px-3">Applicable Rate</th>
                   <th className="py-2.5 px-3">Effective Since</th>
-                  <th className="py-2.5 px-3 text-right">Detail ID</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoadingApplicable ? (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-text-muted">
+                    <td colSpan={3} className="py-8 text-center text-text-muted">
                       <span className="w-4 h-4 border-2 border-primary/20 border-t-primary rounded-full animate-spin inline-block mb-1" />
                       <p>Fetching applicable taxes...</p>
                     </td>
                   </tr>
                 ) : applicableList.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-text-muted">
+                    <td colSpan={3} className="py-8 text-center text-text-muted">
                       No active taxes applicable on {formatDate(applicableDate)}.
                     </td>
                   </tr>
@@ -1128,9 +1127,6 @@ export default function TaxConfigsPage() {
                       </td>
                       <td className="py-2.5 px-3 font-mono text-text-muted">
                         {formatDate(item.effectiveDate)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-text-muted">
-                        #{item.taxConfigDetailId}
                       </td>
                     </tr>
                   ))

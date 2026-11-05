@@ -72,6 +72,7 @@ export default function GradesPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [columnSizing, setColumnSizing] = useState({});
 
   // Debounce search input by 350ms
   useEffect(() => {
@@ -266,6 +267,7 @@ export default function GradesPage() {
         id: 'index',
         header: '#',
         size: 60,
+        minSize: 50,
         enableSorting: false,
         cell: ({ row }) => (
           <span className="font-mono text-xs text-text-muted">
@@ -277,6 +279,7 @@ export default function GradesPage() {
         id: 'gradeCode',
         header: 'GRADE CODE',
         size: 200,
+        minSize: 130,
         cell: ({ row }) => (
           <span className="font-semibold text-heading text-xs">
             {row.original.gradeCode}
@@ -287,6 +290,7 @@ export default function GradesPage() {
         id: 'isActive',
         header: 'STATUS',
         size: 140,
+        minSize: 100,
         cell: ({ row }) => (
           <StatusBadge status={row.original.isActive} size="sm" />
         ),
@@ -295,6 +299,7 @@ export default function GradesPage() {
         id: 'createdOn',
         header: 'CREATED ON',
         size: 160,
+        minSize: 120,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
             {formatDate(row.original.createdOn || row.original.createdAt)}
@@ -305,6 +310,7 @@ export default function GradesPage() {
         id: 'lastUpdatedOn',
         header: 'LAST UPDATED',
         size: 160,
+        minSize: 120,
         cell: ({ row }) => (
           <span className="font-mono tabular-nums text-xs text-text-muted">
             {row.original.lastUpdatedOn ? formatDate(row.original.lastUpdatedOn) : '—'}
@@ -315,6 +321,8 @@ export default function GradesPage() {
         id: 'actions',
         header: 'ACTIONS',
         size: 100,
+        minSize: 90,
+        enableResizing: false,
         cell: ({ row }) => (
           <TableActions
             onView={() => handleOpenView(row.original)}
@@ -338,7 +346,11 @@ export default function GradesPage() {
         pageIndex: (pagination.pageNumber || 1) - 1,
         pageSize: pagination.pageSize || 10,
       },
+      columnSizing,
     },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
     manualPagination: true,
     manualFiltering: true,
     getCoreRowModel: getCoreRowModel(),
@@ -678,4 +690,3 @@ export default function GradesPage() {
     </div>
   );
 }
-
