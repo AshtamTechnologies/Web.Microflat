@@ -36,6 +36,9 @@ import {
   IconDocument,
   IconPackageCheck,
   IconReceipt,
+  IconVendor,
+  IconCompany,
+  IconClient,
   IconLock,
 } from '../../constants/icons';
 
@@ -81,9 +84,17 @@ const YEAR_FORMAT_OPTIONS = [
 
 const RESET_COUNTER_OPTIONS = [
   { value: 'YEARLY', label: 'Yearly (Resets on Jan 1st)' },
+  { value: 'FINANCIAL_YEAR', label: 'Financial Year (Resets on Apr 1st)' },
   { value: 'NEVER', label: 'Never (Continuous Sequential)' },
-  { value: 'MONTHLY', label: 'Monthly (Resets on 1st of month)' },
 ];
+
+function formatResetLabel(val) {
+  const v = (val || '').toUpperCase();
+  if (v === 'FINANCIAL_YEAR') return 'Financial Year';
+  if (v === 'YEARLY') return 'Yearly';
+  if (v === 'NEVER') return 'Never';
+  return val || 'Yearly';
+}
 
 // Fallback modules matching backend requirement if API has not seeded or is offline
 const FALLBACK_MODULES = [
@@ -94,18 +105,23 @@ const FALLBACK_MODULES = [
   { id: 5, moduleId: 5, moduleCode: 'ORDER_CONFIRMATION', moduleName: 'Order Confirmation', defaultPrefix: 'ORD' },
   { id: 6, moduleId: 6, moduleCode: 'PROJECT', moduleName: 'Project', defaultPrefix: 'PRJ' },
   { id: 7, moduleId: 7, moduleCode: 'INVOICE', moduleName: 'Invoice', defaultPrefix: 'INV' },
+  { id: 8, moduleId: 8, moduleCode: 'VENDOR', moduleName: 'Vendor Management', defaultPrefix: 'VEN' },
+  { id: 9, moduleId: 9, moduleCode: 'COMPANY', moduleName: 'Company Registration', defaultPrefix: 'CMP' },
 ];
 
 // Icon mapping helper for modules
-function getModuleIcon(code = '') {
-  const c = (code || '').toUpperCase();
+function getModuleIcon(code = '', name = '') {
+  const c = `${code} ${name}`.toUpperCase();
+  if (c.includes('VENDOR') || c.includes('SUPPLIER')) return IconVendor;
+  if (c.includes('COMPANY') || c.includes('ORGANIZATION') || c.includes('CORP')) return IconCompany;
   if (c.includes('PO') || c.includes('PURCHASE_ORDER')) return IconShoppingCart;
   if (c.includes('PR') || c.includes('REQUISITION')) return IconPR;
-  if (c.includes('INQ')) return IconInquiry;
+  if (c.includes('INQ') || c.includes('INQUIRY')) return IconInquiry;
   if (c.includes('QTN') || c.includes('QUOTATION')) return IconDocument;
-  if (c.includes('ORDER')) return IconPackageCheck;
-  if (c.includes('PROJ')) return IconLayers;
-  if (c.includes('INV')) return IconReceipt;
+  if (c.includes('ORDER') || c.includes('CONFIRMATION')) return IconPackageCheck;
+  if (c.includes('PROJ') || c.includes('PROJECT')) return IconLayers;
+  if (c.includes('INV') || c.includes('INVOICE') || c.includes('BILL')) return IconReceipt;
+  if (c.includes('CLIENT') || c.includes('CUSTOMER')) return IconClient;
   return IconSeriesSetup;
 }
 
@@ -179,7 +195,7 @@ export default function SeriesSetupPage() {
         key,
         label: m.moduleName || code,
         shortLabel: code || m.moduleName,
-        icon: getModuleIcon(code),
+        icon: getModuleIcon(code, m.moduleName),
         path: `/configuration/series/${key}`,
         moduleId: m.id,
         moduleCode: code,
@@ -206,6 +222,7 @@ export default function SeriesSetupPage() {
       moduleCode: 'PO',
       moduleName: 'Purchase Order',
       defaultPrefix: 'PO',
+      icon: IconShoppingCart,
     };
   }, [rawDocType, sidebarItems]);
 
@@ -412,8 +429,8 @@ export default function SeriesSetupPage() {
     // 4. Reset Counter & Year Format check
     const reset = (values.resetCounter || '').toUpperCase();
     const yFmt = (values.yearFormat || '').toUpperCase();
-    if ((reset === 'YEARLY' || reset === 'MONTHLY') && yFmt === 'NONE') {
-      errs.yearFormat = 'A counter that resets YEARLY or MONTHLY needs YearFormat YY or YYYY, otherwise numbers would repeat.';
+    if ((reset === 'YEARLY' || reset === 'FINANCIAL_YEAR') && yFmt === 'NONE') {
+      errs.yearFormat = 'A counter that resets YEARLY or FINANCIAL_YEAR needs Year Format YY or YYYY, otherwise numbers would repeat.';
     }
 
     // 5. Effective Date
@@ -493,8 +510,13 @@ export default function SeriesSetupPage() {
     }
   };
 
-  // Open Edit Modal (only for unused versions)
+  // Open Edit Modal (only for scheduled, unused versions)
   const handleOpenEditModal = (version) => {
+    const statusInfo = getStatusInfo(version);
+    if (statusInfo.isCurrent || statusInfo.isExpired) {
+      toast.error(`Cannot edit a ${statusInfo.label.toLowerCase()} series version.`);
+      return;
+    }
     if (version.isUsed) {
       toast.error('This version has already issued numbers and cannot be edited.');
       return;
@@ -684,10 +706,10 @@ export default function SeriesSetupPage() {
     }),
     columnHelper.accessor('resetCounter', {
       header: 'Reset',
-      size: 90,
+      size: 110,
       cell: (info) => (
         <span className="text-text whitespace-nowrap">
-          {info.getValue() || 'YEARLY'}
+          {formatResetLabel(info.getValue())}
         </span>
       ),
     }),
@@ -746,13 +768,26 @@ export default function SeriesSetupPage() {
       size: 100,
       cell: (info) => {
         const ver = info.row.original;
+        const statusInfo = getStatusInfo(ver);
+        const isCurrentOrExpired = statusInfo.isCurrent || statusInfo.isExpired;
+        const isEditDisabled = !isAdmin || ver.isUsed || isCurrentOrExpired;
+
         return (
           <TableActions
             onView={() => setViewingVersion(ver)}
-            onEdit={isAdmin && !ver.isUsed ? () => handleOpenEditModal(ver) : undefined}
+            onEdit={isAdmin ? () => handleOpenEditModal(ver) : undefined}
+            editDisabled={isEditDisabled}
             onDelete={isAdmin && !ver.isUsed ? () => handleOpenDelete(ver) : undefined}
             viewTitle="View series version"
-            editTitle={ver.isUsed ? 'Cannot edit version that is in use' : 'Edit series version'}
+            editTitle={
+              statusInfo.isCurrent
+                ? 'Current active series cannot be edited'
+                : statusInfo.isExpired
+                ? 'Expired series cannot be edited'
+                : ver.isUsed
+                ? 'Cannot edit version that is in use'
+                : 'Edit series version'
+            }
             deleteTitle={ver.isUsed ? 'Cannot delete version that is in use' : 'Delete series version'}
           />
         );
@@ -1164,7 +1199,7 @@ export default function SeriesSetupPage() {
                       </div>
                       <div>
                         <span className="text-2xs text-text-muted block">Reset</span>
-                        <span className="text-heading truncate block">{ver.resetCounter || 'Yearly'}</span>
+                        <span className="text-heading truncate block">{formatResetLabel(ver.resetCounter)}</span>
                       </div>
                     </div>
 
@@ -1185,13 +1220,23 @@ export default function SeriesSetupPage() {
                           <IconView size={13} className="mr-1.5" />
                           View
                         </Button>
-                        {isAdmin && !ver.isUsed && (
+                        {isAdmin && (
                           <Button
                             type="button"
                             variant="secondary"
                             size="sm"
                             onClick={() => handleOpenEditModal(ver)}
+                            disabled={ver.isUsed || statusInfo.isCurrent || statusInfo.isExpired}
                             className="text-xs"
+                            title={
+                              statusInfo.isCurrent
+                                ? 'Current active series cannot be edited'
+                                : statusInfo.isExpired
+                                ? 'Expired series cannot be edited'
+                                : ver.isUsed
+                                ? 'Cannot edit version that is in use'
+                                : 'Edit series version'
+                            }
                           >
                             <IconEdit size={13} className="mr-1.5" />
                             Edit
@@ -1471,7 +1516,7 @@ export default function SeriesSetupPage() {
 
                 <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
                   <span className="view-field-label mf-detail-label">Reset Frequency</span>
-                  <span className="text-heading truncate block font-medium">{viewingVersion.resetCounter || 'YEARLY'}</span>
+                  <span className="text-heading truncate block font-medium">{formatResetLabel(viewingVersion.resetCounter)}</span>
                 </div>
               </div>
 
@@ -1489,7 +1534,7 @@ export default function SeriesSetupPage() {
                 >
                   Close
                 </CancelButton>
-                {isAdmin && !viewingVersion.isUsed && (
+                {isAdmin && (
                   <Button
                     type="button"
                     variant="primary"
@@ -1499,6 +1544,16 @@ export default function SeriesSetupPage() {
                       setViewingVersion(null);
                       handleOpenEditModal(ver);
                     }}
+                    disabled={viewingVersion.isUsed || statusInfo.isCurrent || statusInfo.isExpired}
+                    title={
+                      statusInfo.isCurrent
+                        ? 'Current active series cannot be edited'
+                        : statusInfo.isExpired
+                        ? 'Expired series cannot be edited'
+                        : viewingVersion.isUsed
+                        ? 'Cannot edit version that is in use'
+                        : 'Edit series version'
+                    }
                     className="justify-center font-semibold shadow-2xs"
                   >
                     <IconEdit size={15} className="mr-1.5 shrink-0" aria-hidden="true" />

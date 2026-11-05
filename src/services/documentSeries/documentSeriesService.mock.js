@@ -12,6 +12,8 @@ const mockModules = [
   { id: 4, moduleId: 4, moduleCode: 'QUOTATION', moduleName: 'Quotation', isActive: true },
   { id: 5, moduleId: 5, moduleCode: 'ORDER_CONFIRMATION', moduleName: 'Order Confirmation', isActive: true },
   { id: 6, moduleId: 6, moduleCode: 'PROJECT', moduleName: 'Project', isActive: true },
+  { id: 7, moduleId: 7, moduleCode: 'VENDOR', moduleName: 'Vendor Management', isActive: true },
+  { id: 8, moduleId: 8, moduleCode: 'COMPANY', moduleName: 'Company Registration', isActive: true },
 ];
 
 let memorySeries = mockSeries.map((s, idx) => ({

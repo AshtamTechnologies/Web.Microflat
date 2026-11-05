@@ -37,6 +37,7 @@ export default function TableActions({
   className = '',
   align = DEFAULT_TABLE_ACTIONS_ALIGN,
   disabled = false,
+  editDisabled = false,
   extraActions,
 }) {
   const resolvedViewTooltip = viewTooltip || viewTitle || 'View';
@@ -64,10 +65,10 @@ export default function TableActions({
           icon={IconEdit}
           size="sm"
           variant="ghost"
-          onClick={onEdit}
+          onClick={editDisabled ? undefined : onEdit}
           title={resolvedEditTooltip}
           aria-label={editAriaLabel}
-          disabled={disabled}
+          disabled={disabled || editDisabled}
           className="hover:text-primary hover:bg-surface"
         />
       )}
@@ -86,4 +87,3 @@ export default function TableActions({
     </div>
   );
 }
-

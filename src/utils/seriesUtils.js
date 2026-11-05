@@ -96,15 +96,31 @@ export function getSeriesStatus(version, versions = [], asOf = new Date()) {
  */
 export function buildSampleNumber(f = {}, date = new Date()) {
   const d = typeof date === 'string' ? new Date(date) : (date instanceof Date && !isNaN(date.getTime()) ? date : new Date());
-  const yyyy = String(d.getFullYear());
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yearNum = d.getFullYear();
+  const monthIndex = d.getMonth(); // 0 = Jan, 1 = Feb, 2 = Mar, 3 = Apr, ...
 
   const yFmt = (f.yearFormat || 'YYYY').toUpperCase();
-  let year = yFmt === 'YYYY' ? yyyy : yFmt === 'YY' ? yyyy.slice(2) : '';
+  const reset = (f.resetCounter || 'YEARLY').toUpperCase();
 
-  const reset = (f.resetCounter || '').toUpperCase();
-  if (year && reset === 'MONTHLY') {
-    year += mm;
+  let yearStr = '';
+  if (yFmt !== 'NONE' && yFmt !== 'NO YEAR') {
+    if (reset === 'FINANCIAL_YEAR') {
+      // If Jan-Mar (0, 1, 2), financial start year is previous calendar year; else current calendar year
+      const startYr = monthIndex < 3 ? yearNum - 1 : yearNum;
+      const endYr = startYr + 1;
+      const endYrSuffix = String(endYr).slice(2);
+
+      if (yFmt === 'YY') {
+        const startYrSuffix = String(startYr).slice(2);
+        yearStr = `${startYrSuffix}-${endYrSuffix}`;
+      } else {
+        // YYYY
+        yearStr = `${startYr}-${endYrSuffix}`;
+      }
+    } else {
+      // YEARLY or NEVER
+      yearStr = yFmt === 'YY' ? String(yearNum).slice(2) : String(yearNum);
+    }
   }
 
   const start = f.startNumber ?? f.startingNumber ?? 1;
@@ -114,7 +130,7 @@ export function buildSampleNumber(f = {}, date = new Date()) {
   const prefix = (f.prefix || '').toUpperCase();
   const sep = f.separator === 'None' || f.separator === undefined || f.separator === null ? '' : f.separator;
 
-  return year ? `${prefix}${sep}${year}${sep}${running}` : `${prefix}${sep}${running}`;
+  return yearStr ? `${prefix}${sep}${yearStr}${sep}${running}` : `${prefix}${sep}${running}`;
 }
 
 /**
@@ -144,14 +160,24 @@ export function formatSeriesPattern(version) {
   const prefix = (version.prefix || 'DOC').trim().toUpperCase();
   const sep = version.separator === 'None' || version.separator === '' || version.separator === null || version.separator === undefined ? '' : version.separator;
   const yFmt = (version.yearFormat || 'YYYY').toUpperCase();
-  const yearFormat = yFmt === 'NONE' || yFmt === 'NO YEAR' ? '' : yFmt;
+  const reset = (version.resetCounter || '').toUpperCase();
+
+  let yearPattern = '';
+  if (yFmt !== 'NONE' && yFmt !== 'NO YEAR') {
+    if (reset === 'FINANCIAL_YEAR') {
+      yearPattern = yFmt === 'YY' ? 'YY-YY' : 'YYYY-YY';
+    } else {
+      yearPattern = yFmt;
+    }
+  }
+
   const numLength = Math.max(1, Math.min(10, Number(version.numberLength) || 1));
   const startNum = Number(version.startNumber ?? version.startingNumber ?? 1);
   const paddedSeq = String(startNum).padStart(numLength, '0');
 
   const segments = [prefix];
-  if (yearFormat) {
-    segments.push(yearFormat);
+  if (yearPattern) {
+    segments.push(yearPattern);
   }
   segments.push(paddedSeq);
 
