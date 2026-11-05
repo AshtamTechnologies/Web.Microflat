@@ -200,7 +200,7 @@ export default function SeriesSetupPage() {
         moduleId: m.id,
         moduleCode: code,
         moduleName: m.moduleName || code,
-        defaultPrefix: (code.length >= 2 && code.length <= 6 ? code : code.slice(0, 3) || 'DOC').toUpperCase(),
+        defaultPrefix: (code.length >= 1 && code.length <= 10 ? code : code.slice(0, 3) || 'DOC').toUpperCase(),
       };
     });
   }, [modules]);
@@ -401,12 +401,14 @@ export default function SeriesSetupPage() {
     const errs = {};
     const todayStr = normalizeDateString(new Date());
 
-    // 1. Prefix: 2 to 6 letters A-Z only
+    // 1. Prefix: 1 to 10 characters (letters and special characters)
     const cleanPrefix = (values.prefix || '').trim();
     if (!cleanPrefix) {
       errs.prefix = 'Prefix is required.';
-    } else if (!/^[A-Za-z]{2,6}$/.test(cleanPrefix)) {
-      errs.prefix = 'Prefix must be 2 to 6 capital letters (e.g. PO).';
+    } else if (cleanPrefix.length < 1 || cleanPrefix.length > 10) {
+      errs.prefix = 'Prefix must be between 1 and 10 characters.';
+    } else if (/\s/.test(cleanPrefix)) {
+      errs.prefix = 'Prefix cannot contain spaces.';
     }
 
     // 2. Number Length: 1 to 10
@@ -783,10 +785,10 @@ export default function SeriesSetupPage() {
               statusInfo.isCurrent
                 ? 'Current active series cannot be edited'
                 : statusInfo.isExpired
-                ? 'Expired series cannot be edited'
-                : ver.isUsed
-                ? 'Cannot edit version that is in use'
-                : 'Edit series version'
+                  ? 'Expired series cannot be edited'
+                  : ver.isUsed
+                    ? 'Cannot edit version that is in use'
+                    : 'Edit series version'
             }
             deleteTitle={ver.isUsed ? 'Cannot delete version that is in use' : 'Delete series version'}
           />
@@ -914,14 +916,14 @@ export default function SeriesSetupPage() {
                     disabled={!isAdmin || isSubmitting}
                     value={form.prefix}
                     onChange={(e) => {
-                      const clean = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+                      const clean = e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 10);
                       setForm((prev) => ({ ...prev, prefix: clean }));
                       if (errors.prefix) setErrors((prev) => ({ ...prev, prefix: null }));
                     }}
                     placeholder="e.g. PO"
-                    maxLength={6}
+                    maxLength={10}
                     error={errors.prefix}
-                    hint="2-6 letters (A-Z), automatically uppercased"
+                    hint="1-10 characters (letters and special characters), automatically uppercased"
                     className="font-mono uppercase font-bold"
                   />
                 </div>
@@ -1136,11 +1138,10 @@ export default function SeriesSetupPage() {
                 return (
                   <div
                     key={ver.id}
-                    className={`p-3.5 sm:p-4 rounded-xl border transition-all space-y-3 ${
-                      statusInfo.isCurrent
+                    className={`p-3.5 sm:p-4 rounded-xl border transition-all space-y-3 ${statusInfo.isCurrent
                         ? 'border-primary/40 bg-primary/5 shadow-2xs'
                         : 'border-border bg-surface/40'
-                    }`}
+                      }`}
                   >
                     {/* Header: Effective Date & Status Badge */}
                     <div className="flex items-center justify-between gap-2">
@@ -1232,10 +1233,10 @@ export default function SeriesSetupPage() {
                               statusInfo.isCurrent
                                 ? 'Current active series cannot be edited'
                                 : statusInfo.isExpired
-                                ? 'Expired series cannot be edited'
-                                : ver.isUsed
-                                ? 'Cannot edit version that is in use'
-                                : 'Edit series version'
+                                  ? 'Expired series cannot be edited'
+                                  : ver.isUsed
+                                    ? 'Cannot edit version that is in use'
+                                    : 'Edit series version'
                             }
                           >
                             <IconEdit size={13} className="mr-1.5" />
@@ -1276,12 +1277,13 @@ export default function SeriesSetupPage() {
                   required
                   value={editForm.prefix}
                   onChange={(e) => {
-                    const clean = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+                    const clean = e.target.value.toUpperCase().replace(/\s/g, '').slice(0, 10);
                     setEditForm((prev) => ({ ...prev, prefix: clean }));
                     if (editErrors.prefix) setEditErrors((prev) => ({ ...prev, prefix: null }));
                   }}
-                  maxLength={6}
+                  maxLength={10}
                   error={editErrors.prefix}
+                  hint="1-10 characters (letters and special characters), automatically uppercased"
                   className="font-mono uppercase font-bold"
                 />
               </div>
@@ -1549,10 +1551,10 @@ export default function SeriesSetupPage() {
                       statusInfo.isCurrent
                         ? 'Current active series cannot be edited'
                         : statusInfo.isExpired
-                        ? 'Expired series cannot be edited'
-                        : viewingVersion.isUsed
-                        ? 'Cannot edit version that is in use'
-                        : 'Edit series version'
+                          ? 'Expired series cannot be edited'
+                          : viewingVersion.isUsed
+                            ? 'Cannot edit version that is in use'
+                            : 'Edit series version'
                     }
                     className="justify-center font-semibold shadow-2xs"
                   >
