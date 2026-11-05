@@ -15,6 +15,7 @@ export { default as SearchableSelect } from './SearchableSelect';
 export { default as SearchableMultiSelect } from './SearchableMultiSelect';
 export { default as ConfirmModal }     from './ConfirmModal';
 export { default as DatePicker }       from './DatePicker';
+export { default as TimePicker }       from './TimePicker';
 export { default as RichTextEditor }   from './RichTextEditor';
 export { default as TagInput }         from './TagInput';
 export { default as Textarea }         from './Textarea';

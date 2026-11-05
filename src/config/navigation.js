@@ -43,6 +43,7 @@ import {
   IconCurrency,
   IconList,
   IconAdd,
+  IconMeeting,
 } from '../constants/icons';
 
 export const navigation = [
@@ -78,6 +79,17 @@ export const navigation = [
             },
           },
         ],
+      },
+      {
+        label: 'Meetings',
+        icon: IconMeeting,
+        path: '/meetings',
+        roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+        quickAction: {
+          icon: IconAdd,
+          title: 'Schedule Meeting',
+          path: '/meetings/new',
+        },
       },
       {
         label: 'Inquiry',

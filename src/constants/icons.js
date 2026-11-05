@@ -229,6 +229,7 @@ export const IconUpload = UploadCloud; // Outliers merged to UploadCloud
 export const IconUploadCloud = UploadCloud;
 export const IconDownload = Download;
 export const IconCalendar = Calendar;
+export const IconMeeting = Calendar;
 export const IconRefresh = RefreshCw; // Change status / refresh
 
 /* ── 3. PAGINATION, CAROUSEL & SORTING ICONS ── */

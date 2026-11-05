@@ -5,6 +5,9 @@ import DelegationPage from './pages/delegation/DelegationPage';
 import AllDelegationsPage from './pages/delegation/AllDelegationsPage';
 import DelegationFormPage from './pages/delegation/DelegationFormPage';
 import DelegationViewPage from './pages/delegation/DelegationViewPage';
+import MeetingPage from './pages/meetings/MeetingPage';
+import MeetingFormPage from './pages/meetings/MeetingFormPage';
+import MeetingViewPage from './pages/meetings/MeetingViewPage';
 import AppLayout from './components/layout/AppLayout';
 import UsersPage from './pages/users/UsersPage';
 import { UsersProvider } from './context/UsersContext';
@@ -203,6 +206,12 @@ export default function App() {
               <Route path="/delegation/new" element={<DelegationFormPage />} />
               <Route path="/delegation/:id" element={<DelegationViewPage />} />
               <Route path="/delegation/:id/edit" element={<DelegationFormPage />} />
+
+              {/* Meeting Routes */}
+              <Route path="/meetings" element={<MeetingPage />} />
+              <Route path="/meetings/new" element={<MeetingFormPage />} />
+              <Route path="/meetings/:id" element={<MeetingViewPage />} />
+              <Route path="/meetings/:id/edit" element={<MeetingFormPage />} />
               <Route path="/users" element={<UsersPage />} />
               <Route path="/users/:id" element={<UserViewPage />} />
               <Route path="/vendors" element={<VendorsPage />} />
