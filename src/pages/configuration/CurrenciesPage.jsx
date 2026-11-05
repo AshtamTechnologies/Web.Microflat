@@ -129,6 +129,7 @@ export default function CurrenciesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Table pagination state (client-side)
+  const [columnSizing, setColumnSizing] = useState({});
   const [pagination, setPagination] = useState({
     pageIndex: 0,
     pageSize: 10,
@@ -404,7 +405,11 @@ export default function CurrenciesPage() {
     columns,
     state: {
       pagination,
+      columnSizing,
     },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),

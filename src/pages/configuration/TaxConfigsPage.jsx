@@ -543,13 +543,18 @@ export default function TaxConfigsPage() {
     pageIndex: 0,
     pageSize: 10,
   });
+  const [columnSizing, setColumnSizing] = useState({});
 
   const table = useReactTable({
     data: taxConfigs,
     columns,
     state: {
       pagination: tablePagination,
+      columnSizing,
     },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
     onPaginationChange: (updater) => {
       setTablePagination((old) => {
         const next = typeof updater === 'function' ? updater(old) : updater;

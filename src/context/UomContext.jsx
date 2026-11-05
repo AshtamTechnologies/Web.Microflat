@@ -196,6 +196,7 @@ export function UomProvider({ children }) {
         isLoading,
         error,
         fetchUoms,
+        fetchUomList: fetchUoms,
         fetchUomById,
         getUomById,
         addUom,

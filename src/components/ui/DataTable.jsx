@@ -21,6 +21,7 @@ import EmptyState from './EmptyState';
  *   totalCount?: number (optional total for display; falls back to row count)
  *   entityName?: string (e.g. 'records', 'vendors', 'bank accounts')
  *   renderMobileCard?: (row: any) => React.ReactNode (optional mobile list renderer)
+ *   showPagination?: boolean (optional, defaults to true; set false for client lists or tree tables without pagination)
  *   className?: string
  */
 export default function DataTable({
@@ -33,6 +34,7 @@ export default function DataTable({
   totalCount,
   entityName = 'records',
   renderMobileCard,
+  showPagination = true,
   className = '',
 }) {
   const pageIndex = table.getState().pagination?.pageIndex ?? 0;
@@ -191,7 +193,7 @@ export default function DataTable({
           </TableContainer>
 
           {/* ── Standard Table Pagination Bar ── */}
-          {!isLoading && resolvedTotal > 0 && (
+          {showPagination && !isLoading && resolvedTotal > 0 && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-border bg-surface/30 text-xs text-text-muted">
               <div>
                 Showing{' '}
@@ -263,7 +265,7 @@ export default function DataTable({
           )}
 
           {/* Mobile pagination summary */}
-          {!isLoading && resolvedTotal > 0 && (
+          {showPagination && !isLoading && resolvedTotal > 0 && (
             <div className="flex items-center justify-between text-xs text-text-muted px-1 pt-2">
               <span>
                 Page {pageIndex + 1} of {Math.max(1, table.getPageCount())} ({resolvedTotal} {entityName})

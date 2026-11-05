@@ -3,14 +3,11 @@ import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
-  flexRender,
+  getPaginationRowModel,
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
   IconAdd,
-  IconArrowDown,
-  IconArrowUp,
-  IconArrowUpDown,
   IconClose,
   IconEdit,
   IconSearch,
@@ -24,14 +21,12 @@ import {
   CancelButton,
   Input,
   Modal,
-  TableContainer,
-  Th,
-  Td,
   StatusSwitch,
   PageHeader,
   FilterBar,
   TableActions,
   IconButton,
+  DataTable,
 } from '../../components/ui';
 import { useUomContext } from '../../context/UomContext';
 import { formatDate } from '../../utils/dateUtils';
@@ -49,57 +44,78 @@ export default function UomPage() {
     uomList = [],
     isLoading,
     fetchUoms,
+    fetchUomList,
     fetchUomById,
     addUom,
     updateUom,
     updateUomStatus,
   } = useUomContext();
 
-  // Search & Filter state
+  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   // TanStack table state
-  const [sorting, setSorting] = useState([{ id: 'uomName', desc: false }]);
+  const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
 
-  // Modal states
+  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUom, setEditingUom] = useState(null);
-  const [viewingUom, setViewingUom] = useState(null); // View modal state
+  const [viewingUom, setViewingUom] = useState(null);
   const [isFetchingDetail, setIsFetchingDetail] = useState(false);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Trigger backend API filter query when status filter changes
+  // Initial fetch
   useEffect(() => {
-    const params = {};
-    if (statusFilter === 'ACTIVE') {
-      params.isActive = true;
-    } else if (statusFilter === 'INACTIVE') {
-      params.isActive = false;
+    const fetchFn = fetchUoms || fetchUomList;
+    if (typeof fetchFn === 'function') {
+      fetchFn();
     }
-    fetchUoms(params);
-  }, [statusFilter, fetchUoms]);
+  }, [fetchUoms, fetchUomList]);
+
+  /* ── Client Filtered Data ── */
+  const filteredData = useMemo(() => {
+    return uomList.filter((uom) => {
+      // Search
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        (uom.uomName && uom.uomName.toLowerCase().includes(q)) ||
+        (uom.description && uom.description.toLowerCase().includes(q));
+
+      // Status
+      const matchesStatus =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'ACTIVE' && uom.isActive) ||
+        (statusFilter === 'INACTIVE' && !uom.isActive);
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [uomList, searchQuery, statusFilter]);
 
   /* ── Form Validation ── */
   function validateField(name, value) {
-    const targetId = editingUom?.uomId || editingUom?.id;
+    const targetId = editingUom?.id ?? editingUom?.uomId;
 
     switch (name) {
       case 'uomName': {
         const str = typeof value === 'string' ? value.trim() : '';
         if (!str) return 'UOM name is required.';
-        if (str.length > 100) return 'UOM name cannot exceed 100 characters.';
+        if (str.length > 50) return 'UOM name cannot exceed 50 characters.';
 
-        // Unique check (case-insensitive)
+        // Check duplicate name
         const duplicate = uomList.find((u) => {
-          const currentId = u.uomId || u.id;
-          if (editingUom && currentId === targetId) return false;
-          return u.uomName?.toLowerCase() === str.toLowerCase();
+          const uid = u.id ?? u.uomId;
+          if (editingUom && String(uid) === String(targetId)) return false;
+          return (
+            u.uomName &&
+            u.uomName.trim().toLowerCase() === str.toLowerCase()
+          );
         });
-        if (duplicate) return 'A UOM with this name already exists.';
+        if (duplicate) return 'A unit with this name already exists.';
         return '';
       }
       default:
@@ -109,8 +125,8 @@ export default function UomPage() {
 
   function validateAll(data) {
     const errors = {};
-    const err = validateField('uomName', data.uomName);
-    if (err) errors.uomName = err;
+    const nameErr = validateField('uomName', data.uomName);
+    if (nameErr) errors.uomName = nameErr;
     return errors;
   }
 
@@ -122,9 +138,6 @@ export default function UomPage() {
     setIsModalOpen(true);
   }
 
-  /**
-   * Fetches fresh UOM details by ID via GET /api/uoms/{id} and populates Edit form
-   */
   async function handleOpenEdit(uom) {
     const id = uom.id ?? uom.uomId;
     setEditingUom(uom);
@@ -148,15 +161,12 @@ export default function UomPage() {
         });
       }
     } catch {
-      // Toast notification is handled in context
+      // toast is handled in context
     } finally {
       setIsFetchingDetail(false);
     }
   }
 
-  /**
-   * Fetches fresh UOM details by ID via GET /api/uoms/{id} and opens View modal
-   */
   async function handleOpenView(uom) {
     const id = uom.id ?? uom.uomId;
     setViewingUom(uom);
@@ -168,7 +178,7 @@ export default function UomPage() {
         setViewingUom(fresh);
       }
     } catch {
-      // Toast notification is handled in context
+      // toast is handled in context
     } finally {
       setIsFetchingDetail(false);
     }
@@ -183,10 +193,7 @@ export default function UomPage() {
     setIsFetchingDetail(false);
   }
 
-  /**
-   * Handles creation (POST /api/uoms) and update (PUT /api/uoms/{id}).
-   * Status updates are sent via PATCH /api/uoms/{id}/status.
-   */
+  /* ── Form Submit with Status Patching ── */
   async function handleFormSubmit(e) {
     if (e) e.preventDefault();
     const errors = validateAll(formData);
@@ -199,62 +206,39 @@ export default function UomPage() {
     try {
       const payload = {
         uomName: formData.uomName.trim(),
-        description: formData.description.trim(),
+        description: formData.description ? formData.description.trim() : null,
       };
 
       if (editingUom) {
         const id = editingUom.id ?? editingUom.uomId;
-        // 1. Update UOM name & description via PUT /api/uoms/{id}
+        // 1. Update UOM details
         await updateUom(id, payload);
 
-        // 2. If status was modified, update via PATCH /api/uoms/{id}/status
+        // 2. If status was modified, update via status patch
         if (Boolean(editingUom.isActive) !== Boolean(formData.isActive)) {
           await updateUomStatus(id, formData.isActive);
         }
       } else {
-        // 1. Create new UOM via POST /api/uoms
+        // 1. Create new UOM
         const created = await addUom(payload);
         const newId = created?.id ?? created?.uomId;
 
-        // 2. If user toggled status to inactive during creation, update via PATCH /api/uoms/{id}/status
+        // 2. If status set to inactive during creation, update via status patch
         if (newId && formData.isActive === false) {
           await updateUomStatus(newId, false);
         }
       }
 
-      setIsModalOpen(false);
-      setEditingUom(null);
-      setFormData(INITIAL_FORM);
-      setFormErrors({});
-    } catch (err) {
-      if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
-        setFormErrors(err.fieldErrors);
-      }
+      handleCloseModal();
+      fetchUomList();
+    } catch {
+      // error handled in context
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  /* ── Filtered Data Computation ── */
-  const filteredData = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-
-    return uomList.filter((uom) => {
-      const matchesSearch =
-        !q ||
-        uom.uomName?.toLowerCase().includes(q) ||
-        (uom.description && uom.description.toLowerCase().includes(q));
-
-      const matchesStatus =
-        statusFilter === 'ALL' ||
-        (statusFilter === 'ACTIVE' && uom.isActive) ||
-        (statusFilter === 'INACTIVE' && !uom.isActive);
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [uomList, searchQuery, statusFilter]);
-
-  /* ── TanStack Table Columns ── */
+  /* ── Table Columns ── */
   const columns = useMemo(
     () => [
       columnHelper.accessor('uomName', {
@@ -366,6 +350,7 @@ export default function UomPage() {
     onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
   });
 
   return (
@@ -433,227 +418,121 @@ export default function UomPage() {
         </div>
       </FilterBar>
 
-      {/* ── Desktop View (md+): Data Table ── */}
-      <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden shadow-2xs">
-        <TableContainer
-          tableStyle={{
-            width: '100%',
-            minWidth: `${table.getCenterTotalSize()}px`,
-          }}
-        >
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  const isSorted = header.column.getIsSorted();
-                  return (
-                    <Th
-                      key={header.id}
-                      style={{ width: header.getSize() }}
-                      isResizing={header.column.getIsResizing()}
-                      resizeHandler={
-                        header.column.getCanResize()
-                          ? header.getResizeHandler()
-                          : undefined
-                      }
-                    >
-                      <div
-                        className={`flex items-center gap-1.5 ${
-                          header.column.getCanSort()
-                            ? 'cursor-pointer select-none'
-                            : ''
-                        }`}
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        <span className="truncate">
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                        </span>
-                        {header.column.getCanSort() && (
-                          <span className="text-text-muted/60 transition-opacity">
-                            {isSorted === 'asc' ? (
-                              <IconArrowUp size={13} className="text-primary" />
-                            ) : isSorted === 'desc' ? (
-                              <IconArrowDown
-                                size={13}
-                                className="text-primary"
-                              />
-                            ) : (
-                              <IconArrowUpDown
-                                size={12}
-                                className="opacity-0 group-hover/th:opacity-100"
-                              />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </Th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
-
-          <tbody className="divide-y divide-border bg-bg">
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <tr key={`skeleton-${i}`} className="animate-pulse">
-                  <Td>
-                    <div className="h-4 bg-surface rounded w-36" />
-                  </Td>
-                  <Td>
-                    <div className="h-4 bg-surface rounded w-64" />
-                  </Td>
-                  <Td>
-                    <div className="h-5 bg-surface rounded w-16" />
-                  </Td>
-                  <Td>
-                    <div className="h-4 bg-surface rounded w-20" />
-                  </Td>
-                  <Td className="text-right">
-                    <div className="h-7 bg-surface rounded w-16 ml-auto" />
-                  </Td>
-                </tr>
-              ))
-            ) : table.getRowModel().rows.length > 0 ? (
-              table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="hover:bg-surface/50 transition-colors duration-100"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <Td key={cell.id} style={{ width: cell.column.getSize() }}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </Td>
-                  ))}
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-12 text-center text-text-muted text-sm"
-                >
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <IconUOM size={32} className="text-text-muted/50" />
-                    <p className="font-semibold text-heading">
-                      No units of measurement found
-                    </p>
-                    <p className="text-xs">
-                      {searchQuery || statusFilter !== 'ALL'
-                        ? 'Try resetting your search or status filter.'
-                        : 'Click "+ Add UOM" to create your first unit.'}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </TableContainer>
-      </div>
-
-      {/* ── Mobile View (< md): Card List ── */}
-      <div className="block md:hidden space-y-3">
-        {isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={`uom-skel-${i}`}
-              className="bg-bg border border-border rounded-xl p-4 animate-pulse space-y-3"
+      {/* ── Centralized DataTable ── */}
+      <DataTable
+        table={table}
+        columns={columns}
+        isLoading={isLoading}
+        totalCount={filteredData.length}
+        entityName="units of measurement"
+        emptyTitle="No units of measurement found"
+        emptyDescription={
+          searchQuery || statusFilter !== 'ALL'
+            ? 'Try resetting your search or status filter.'
+            : 'Click "+ Add UOM" to create your first unit.'
+        }
+        emptyAction={
+          searchQuery || statusFilter !== 'ALL' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('ALL');
+              }}
+              className="text-xs text-primary"
             >
-              <div className="flex justify-between items-center">
-                <div className="h-5 bg-surface rounded w-28" />
-                <div className="h-5 bg-surface rounded w-16" />
-              </div>
-              <div className="h-4 bg-surface rounded w-3/4" />
-            </div>
-          ))
-        ) : filteredData.length > 0 ? (
-          filteredData.map((uom) => {
-            const id = uom.id ?? uom.uomId;
-            return (
-              <div
-                key={id}
-                className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-1 min-w-0">
-                    <h3
-                      className={`text-sm font-semibold ${
-                        uom.isActive
-                          ? 'text-heading'
-                          : 'text-text-muted line-through'
-                      }`}
-                    >
-                      {uom.uomName}
-                    </h3>
-                    {uom.description && (
-                      <p className="text-xs text-text-muted">
-                        {uom.description}
-                      </p>
-                    )}
-                  </div>
-
-                  <span
-                    className={[
-                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
+              Clear filters
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleOpenAdd}
+              className="text-xs"
+            >
+              <IconAdd size={14} className="mr-1.5" />
+              Add UOM
+            </Button>
+          )
+        }
+        renderMobileCard={(row) => {
+          const uom = row.original;
+          const id = uom.id ?? uom.uomId;
+          return (
+            <div
+              key={id}
+              className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1 min-w-0">
+                  <h3
+                    className={`text-sm font-semibold ${
                       uom.isActive
-                        ? 'bg-success/10 text-success border border-success/20'
-                        : 'bg-danger/10 text-danger border border-danger/20',
-                    ].join(' ')}
+                        ? 'text-heading'
+                        : 'text-text-muted line-through'
+                    }`}
                   >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        uom.isActive ? 'bg-success' : 'bg-danger'
-                      }`}
-                      aria-hidden="true"
-                    />
-                    {uom.isActive ? 'Active' : 'Inactive'}
-                  </span>
+                    {uom.uomName}
+                  </h3>
+                  {uom.description && (
+                    <p className="text-xs text-text-muted">
+                      {uom.description}
+                    </p>
+                  )}
                 </div>
 
-                <div className="flex items-center justify-between text-2xs text-text-muted pt-2 border-t border-border">
-                  <span className="font-mono">
-                    Created: {formatDate(uom.createdOn || uom.createdAt)}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleOpenView(uom)}
-                      className="text-xs"
-                    >
-                      <IconView size={13} className="mr-1.5" />
-                      View
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleOpenEdit(uom)}
-                      className="text-xs"
-                    >
-                      <IconEdit size={13} className="mr-1.5" />
-                      Edit
-                    </Button>
-                  </div>
+                <span
+                  className={[
+                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
+                    uom.isActive
+                      ? 'bg-success/10 text-success border border-success/20'
+                      : 'bg-danger/10 text-danger border border-danger/20',
+                  ].join(' ')}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      uom.isActive ? 'bg-success' : 'bg-danger'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  {uom.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-2xs text-text-muted pt-2 border-t border-border">
+                <span className="font-mono">
+                  Created: {formatDate(uom.createdOn || uom.createdAt)}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleOpenView(uom)}
+                    className="text-xs"
+                  >
+                    <IconView size={13} className="mr-1.5" />
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleOpenEdit(uom)}
+                    className="text-xs"
+                  >
+                    <IconEdit size={13} className="mr-1.5" />
+                    Edit
+                  </Button>
                 </div>
               </div>
-            );
-          })
-        ) : (
-          <div className="bg-bg border border-border rounded-xl p-8 text-center text-text-muted">
-            <IconUOM size={28} className="mx-auto text-text-muted/50 mb-2" />
-            <p className="font-semibold text-heading text-sm">No units found</p>
-            <p className="text-xs mt-1">Click &quot;+ Add UOM&quot; to create one.</p>
-          </div>
-        )}
-      </div>
+            </div>
+          );
+        }}
+      />
 
       {/* ── Add / Edit UOM Modal ── */}
       <Modal

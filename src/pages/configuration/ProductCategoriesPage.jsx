@@ -36,9 +36,7 @@ import {
   Badge,
   Modal,
   ConfirmModal,
-  TableContainer,
-  Th,
-  Td,
+  DataTable,
   StatusSwitch,
   PageHeader,
   FilterBar,
@@ -706,135 +704,23 @@ export default function ProductCategoriesPage() {
         </div>
       </FilterBar>
 
-      {/* ── Desktop View (md+): Hierarchical Resizable Table ── */}
-      <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden shadow-2xs">
-        <TableContainer
-          tableStyle={{
-            width: '100%',
-            minWidth: `${table.getCenterTotalSize()}px`,
-          }}
-        >
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  const isSorted = header.column.getIsSorted();
-                  return (
-                    <Th
-                      key={header.id}
-                      style={{ width: header.getSize() }}
-                      isResizing={header.column.getIsResizing()}
-                      resizeHandler={
-                        header.column.getCanResize()
-                          ? header.getResizeHandler()
-                          : undefined
-                      }
-                    >
-                      <div
-                        className={`flex items-center gap-1.5 ${
-                          header.column.getCanSort() ? 'cursor-pointer select-none' : ''
-                        }`}
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        <span className="truncate">
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                        </span>
-                        {header.column.getCanSort() && (
-                          <span className="text-text-muted/60 transition-opacity">
-                            {isSorted === 'asc' ? (
-                              <IconArrowUp size={13} className="text-primary" />
-                            ) : isSorted === 'desc' ? (
-                              <IconArrowDown size={13} className="text-primary" />
-                            ) : (
-                              <IconArrowUpDown
-                                size={12}
-                                className="opacity-0 group-hover/th:opacity-100"
-                              />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </Th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
-
-          <tbody className="divide-y divide-border bg-bg">
-            {isLoading ? (
-              // Skeleton loading rows
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={`skeleton-${i}`} className="animate-pulse">
-                  <Td><div className="h-4 bg-surface rounded w-24" /></Td>
-                  <Td><div className="h-4 bg-surface rounded w-52" /></Td>
-                  <Td><div className="h-4 bg-surface rounded w-32" /></Td>
-                  <Td><div className="h-5 bg-surface rounded w-16" /></Td>
-                  <Td><div className="h-4 bg-surface rounded w-24" /></Td>
-                  <Td className="text-right"><div className="h-7 bg-surface rounded w-24 ml-auto" /></Td>
-                </tr>
-              ))
-            ) : table.getRowModel().rows.length > 0 ? (
-              table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="hover:bg-surface/50 transition-colors duration-100"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <Td
-                      key={cell.id}
-                      style={{ width: cell.column.getSize() }}
-                    >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </Td>
-                  ))}
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-12 text-center text-text-muted text-sm"
-                >
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <IconProductCategories size={32} className="text-text-muted/50" />
-                    <p className="font-semibold text-heading">
-                      No categories match your filters
-                    </p>
-                    <p className="text-xs">
-                      {searchQuery || statusFilter !== 'ALL'
-                        ? 'Try resetting your search query or status filter.'
-                        : 'Click "+ Add Category" to set up your product hierarchy.'}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </TableContainer>
-      </div>
-
-      {/* ── Mobile View (< md): Touch-friendly Card List ── */}
-      <div className="block md:hidden space-y-3">
-        {isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div key={`m-skel-${i}`} className="bg-bg border border-border rounded-xl p-4 animate-pulse space-y-3">
-              <div className="flex justify-between items-center">
-                <div className="h-5 bg-surface rounded w-24" />
-                <div className="h-5 bg-surface rounded w-16" />
-              </div>
-              <div className="h-4 bg-surface rounded w-3/4" />
-              <div className="h-8 bg-surface rounded w-full" />
-            </div>
-          ))
-        ) : visibleRows.length > 0 ? (
-          visibleRows.map((cat) => (
+      {/* ── Centralized Data Table & Mobile List ── */}
+      <DataTable
+        table={table}
+        columns={columns}
+        isLoading={isLoading}
+        totalCount={visibleRows.length}
+        showPagination={false}
+        entityName="categories"
+        emptyTitle="No categories match your filters"
+        emptyDescription={
+          searchQuery || statusFilter !== 'ALL'
+            ? 'Try resetting your search query or status filter.'
+            : 'Click "+ Add Category" to set up your product hierarchy.'
+        }
+        renderMobileCard={(row) => {
+          const cat = row.original || row;
+          return (
             <div
               key={cat.categoryId || cat.id}
               className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
@@ -922,15 +808,9 @@ export default function ProductCategoriesPage() {
                 </div>
               </div>
             </div>
-          ))
-        ) : (
-          <div className="bg-bg border border-border rounded-xl p-8 text-center text-text-muted">
-            <IconProductCategories size={28} className="mx-auto text-text-muted/50 mb-2" />
-            <p className="font-semibold text-heading text-sm">No categories found</p>
-            <p className="text-xs mt-1">Try adjusting your filters or add a new category.</p>
-          </div>
-        )}
-      </div>
+          );
+        }}
+      />
 
       {/* ── Add / Edit Category Modal ── */}
       <Modal

@@ -36,6 +36,7 @@ const columnHelper = createColumnHelper();
 export default function ProcessFlowsPage() {
   const navigate = useNavigate();
   const [sorting, setSorting] = useState([{ id: 'moduleCode', desc: false }]);
+  const [columnSizing, setColumnSizing] = useState({});
 
   const {
     filteredFlows,
@@ -152,7 +153,13 @@ export default function ProcessFlowsPage() {
   const table = useReactTable({
     data: filteredFlows,
     columns,
-    state: { sorting },
+    state: {
+      sorting,
+      columnSizing,
+    },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -193,11 +200,10 @@ export default function ProcessFlowsPage() {
               key={st}
               type="button"
               onClick={() => setStatusFilter(st)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                statusFilter === st
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${statusFilter === st
                   ? 'bg-primary text-white shadow-2xs'
                   : 'text-text-muted hover:text-heading hover:bg-surface'
-              }`}
+                }`}
             >
               {st === 'ALL' ? 'All' : st === 'ACTIVE' ? 'Active' : 'Inactive'}
             </button>

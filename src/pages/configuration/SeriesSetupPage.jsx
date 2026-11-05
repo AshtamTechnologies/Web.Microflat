@@ -14,6 +14,12 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  createColumnHelper,
+} from '@tanstack/react-table';
 import toast from 'react-hot-toast';
 import {
   IconAdd,
@@ -44,9 +50,7 @@ import {
   Badge,
   Modal,
   ConfirmModal,
-  TableContainer,
-  Th,
-  Td,
+  DataTable,
   TableActions,
 } from '../../components/ui';
 import SubSidebar from '../../components/layout/SubSidebar';
@@ -133,6 +137,7 @@ export default function SeriesSetupPage() {
     addVersion,
     updateVersion,
     deleteVersion,
+    isLoading,
   } = useSeriesContext();
 
   // State: Dynamic modules from GET /api/modules?isActive=true
@@ -611,6 +616,165 @@ export default function SeriesSetupPage() {
     };
   };
 
+  const [sorting, setSorting] = useState([]);
+  const [columnSizing, setColumnSizing] = useState({});
+
+  const columnHelper = useMemo(() => createColumnHelper(), []);
+
+  const columns = useMemo(() => [
+    columnHelper.accessor('effectiveDate', {
+      header: 'Effective Date',
+      size: 130,
+      cell: (info) => (
+        <span className="font-mono font-semibold text-heading tabular-nums whitespace-nowrap">
+          {formatDate(info.getValue())}
+        </span>
+      ),
+    }),
+    columnHelper.accessor('prefix', {
+      header: 'Prefix',
+      size: 90,
+      cell: (info) => (
+        <span className="font-mono font-bold text-primary whitespace-nowrap">
+          {info.getValue()}
+        </span>
+      ),
+    }),
+    columnHelper.accessor('separator', {
+      header: 'Separator',
+      size: 90,
+      cell: (info) => {
+        const val = info.getValue();
+        return val === '' || val === 'None' ? (
+          <span className="text-text-muted/60 italic text-2xs">None</span>
+        ) : (
+          <span className="inline-block px-2 py-0.5 rounded bg-surface border border-border text-xs font-semibold text-heading">
+            {val}
+          </span>
+        );
+      },
+    }),
+    columnHelper.accessor('yearFormat', {
+      header: 'Year Format',
+      size: 110,
+      cell: (info) => (
+        <span className="font-mono text-text whitespace-nowrap">
+          {info.getValue() || 'NONE'}
+        </span>
+      ),
+    }),
+    columnHelper.accessor('numberLength', {
+      header: 'Length',
+      size: 80,
+      cell: (info) => (
+        <span className="font-mono tabular-nums text-text whitespace-nowrap">
+          {info.getValue()}
+        </span>
+      ),
+    }),
+    columnHelper.accessor((row) => row.startNumber || row.startingNumber, {
+      id: 'startNumber',
+      header: 'Start Number',
+      size: 110,
+      cell: (info) => (
+        <span className="font-mono tabular-nums text-text whitespace-nowrap">
+          {info.getValue()}
+        </span>
+      ),
+    }),
+    columnHelper.accessor('resetCounter', {
+      header: 'Reset',
+      size: 90,
+      cell: (info) => (
+        <span className="text-text whitespace-nowrap">
+          {info.getValue() || 'YEARLY'}
+        </span>
+      ),
+    }),
+    columnHelper.accessor((row) => {
+      return row.sampleNumber || formatSeriesNumber(
+        row,
+        row.startNumber || row.startingNumber,
+        row.effectiveDate ? new Date(row.effectiveDate) : new Date()
+      );
+    }, {
+      id: 'example',
+      header: 'Example',
+      size: 150,
+      cell: (info) => (
+        <span className="inline-block bg-surface/90 px-2.5 py-1 rounded-md border border-border text-xs font-mono font-bold text-heading tabular-nums whitespace-nowrap">
+          {info.getValue()}
+        </span>
+      ),
+    }),
+    columnHelper.accessor((row) => getStatusInfo(row).label, {
+      id: 'status',
+      header: 'Status',
+      size: 100,
+      cell: (info) => {
+        const statusInfo = getStatusInfo(info.row.original);
+        return (
+          <Badge variant={statusInfo.variant} className="text-xs px-2.5 py-0.5">
+            {statusInfo.label}
+          </Badge>
+        );
+      },
+    }),
+    columnHelper.accessor('isUsed', {
+      header: 'In Use',
+      size: 80,
+      cell: (info) => info.getValue() ? (
+        <Badge variant="neutral" className="text-2xs px-2 py-0.5 font-mono">
+          Yes
+        </Badge>
+      ) : (
+        <span className="text-text-muted/60 text-2xs">No</span>
+      ),
+    }),
+    columnHelper.accessor('createdOn', {
+      header: 'Created On',
+      size: 110,
+      cell: (info) => (
+        <span className="font-mono text-2xs text-text-muted tabular-nums whitespace-nowrap">
+          {formatDate(info.getValue())}
+        </span>
+      ),
+    }),
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      size: 100,
+      cell: (info) => {
+        const ver = info.row.original;
+        return (
+          <TableActions
+            onView={() => setViewingVersion(ver)}
+            onEdit={isAdmin && !ver.isUsed ? () => handleOpenEditModal(ver) : undefined}
+            onDelete={isAdmin && !ver.isUsed ? () => handleOpenDelete(ver) : undefined}
+            viewTitle="View series version"
+            editTitle={ver.isUsed ? 'Cannot edit version that is in use' : 'Edit series version'}
+            deleteTitle={ver.isUsed ? 'Cannot delete version that is in use' : 'Delete series version'}
+          />
+        );
+      },
+    }),
+  ], [isAdmin, versions]);
+
+  const table = useReactTable({
+    data: versions,
+    columns,
+    state: {
+      sorting,
+      columnSizing,
+    },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onSortingChange: setSorting,
+    onColumnSizingChange: setColumnSizing,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
   const TypeIcon = currentModule.icon || IconSeriesSetup;
   const todayMinDate = normalizeDateString(new Date());
 
@@ -916,257 +1080,129 @@ export default function SeriesSetupPage() {
               </Badge>
             </div>
 
-            {/* Empty State */}
-            {versions.length === 0 ? (
-              <div className="py-12 text-center text-xs text-text-muted border border-dashed border-border rounded-xl bg-surface/20 space-y-2">
-                <IconLayers size={24} className="mx-auto text-text-muted/60" />
-                <p className="font-semibold text-heading text-sm">No series configured yet</p>
-                <p>Add the initial series version for {currentModule.label} using the form above.</p>
-              </div>
-            ) : (
-              <>
-                {/* ── Mobile View: Cards (< md screens) ── */}
-                <div className="max-h-[480px] overflow-y-auto pr-1 space-y-3 block md:hidden">
-                  {versions.map((ver) => {
-                    const statusInfo = getStatusInfo(ver);
-                    const sampleNum = ver.sampleNumber || formatSeriesNumber(
-                      ver,
-                      ver.startNumber || ver.startingNumber,
-                      ver.effectiveDate ? new Date(ver.effectiveDate) : new Date()
-                    );
+            <DataTable
+              table={table}
+              columns={columns}
+              isLoading={isLoading}
+              totalCount={versions.length}
+              showPagination={false}
+              entityName="series versions"
+              emptyTitle="No series configured yet"
+              emptyDescription={`Add the initial series version for ${currentModule.label} using the form above.`}
+              renderMobileCard={(row) => {
+                const ver = row.original || row;
+                const statusInfo = getStatusInfo(ver);
+                const sampleNum = ver.sampleNumber || formatSeriesNumber(
+                  ver,
+                  ver.startNumber || ver.startingNumber,
+                  ver.effectiveDate ? new Date(ver.effectiveDate) : new Date()
+                );
 
-                    return (
-                      <div
-                        key={ver.id}
-                        className={`p-3.5 sm:p-4 rounded-xl border transition-all space-y-3 ${
-                          statusInfo.isCurrent
-                            ? 'border-primary/40 bg-primary/5 shadow-2xs'
-                            : 'border-border bg-surface/40'
-                        }`}
-                      >
-                        {/* Header: Effective Date & Status Badge */}
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <span className="text-2xs uppercase font-bold tracking-wider text-text-muted block">
-                              Effective Date
-                            </span>
-                            <span className="font-mono font-bold text-sm text-heading tabular-nums">
-                              {formatDate(ver.effectiveDate)}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5">
-                            {ver.isUsed && (
-                              <Badge variant="neutral" className="text-2xs px-2 py-0.5 font-mono">
-                                In Use
-                              </Badge>
-                            )}
-                            <Badge variant={statusInfo.variant} className="text-xs px-2.5 py-0.5 font-medium">
-                              {statusInfo.label}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        {/* Example Number Box */}
-                        <div className="bg-bg/95 px-3 py-2 rounded-lg border border-border/80 flex items-center justify-between gap-2">
-                          <span className="text-2xs text-text-muted font-medium">Example Number:</span>
-                          <span className="font-mono font-bold text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20 break-all">
-                            {sampleNum}
-                          </span>
-                        </div>
-
-                        {/* Specs Grid */}
-                        <div className="grid grid-cols-3 gap-2 text-xs py-2 px-1 border-t border-b border-border/60 bg-bg/40 rounded-lg">
-                          <div>
-                            <span className="text-2xs text-text-muted block">Prefix</span>
-                            <span className="font-mono font-bold text-heading">{ver.prefix}</span>
-                          </div>
-                          <div>
-                            <span className="text-2xs text-text-muted block">Separator</span>
-                            <span className="font-mono text-heading">
-                              {ver.separator === '' || ver.separator === 'None' ? 'None' : ver.separator}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-2xs text-text-muted block">Year Fmt</span>
-                            <span className="font-mono text-heading">{ver.yearFormat || 'None'}</span>
-                          </div>
-                          <div>
-                            <span className="text-2xs text-text-muted block">Length</span>
-                            <span className="font-mono text-heading tabular-nums">{ver.numberLength} digits</span>
-                          </div>
-                          <div>
-                            <span className="text-2xs text-text-muted block">Start No</span>
-                            <span className="font-mono text-heading tabular-nums">{ver.startNumber || ver.startingNumber}</span>
-                          </div>
-                          <div>
-                            <span className="text-2xs text-text-muted block">Reset</span>
-                            <span className="text-heading truncate block">{ver.resetCounter || 'Yearly'}</span>
-                          </div>
-                        </div>
-
-                        {/* Audit Details & Actions */}
-                        <div className="flex items-center justify-between gap-2.5 pt-1">
-                          <div className="text-2xs text-text-muted truncate">
-                            {ver.createdBy ? `By ${ver.createdBy} • ` : ''}{formatDate(ver.createdOn)}
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setViewingVersion(ver)}
-                              className="text-xs"
-                            >
-                              <IconView size={13} className="mr-1.5" />
-                              View
-                            </Button>
-                            {isAdmin && !ver.isUsed && (
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => handleOpenEditModal(ver)}
-                                className="text-xs"
-                              >
-                                <IconEdit size={13} className="mr-1.5" />
-                                Edit
-                              </Button>
-                            )}
-                          </div>
-                        </div>
+                return (
+                  <div
+                    key={ver.id}
+                    className={`p-3.5 sm:p-4 rounded-xl border transition-all space-y-3 ${
+                      statusInfo.isCurrent
+                        ? 'border-primary/40 bg-primary/5 shadow-2xs'
+                        : 'border-border bg-surface/40'
+                    }`}
+                  >
+                    {/* Header: Effective Date & Status Badge */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="text-2xs uppercase font-bold tracking-wider text-text-muted block">
+                          Effective Date
+                        </span>
+                        <span className="font-mono font-bold text-sm text-heading tabular-nums">
+                          {formatDate(ver.effectiveDate)}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
 
-                {/* ── Desktop View: Data Table (>= md screens) ── */}
-                <div className="hidden md:block w-full max-h-[480px] overflow-y-auto overflow-x-auto border border-border rounded-xl">
-                  <TableContainer tableClassName="table-auto w-full min-w-[1020px]">
-                    <thead className="sticky top-0 z-10 bg-surface shadow-2xs">
-                      <tr className="border-b border-border text-left text-xs font-semibold text-text-muted">
-                        <Th className="py-3 px-4 whitespace-nowrap">EFFECTIVE DATE</Th>
-                        <Th className="py-3 px-3 whitespace-nowrap">PREFIX</Th>
-                        <Th className="py-3 px-3 text-center whitespace-nowrap">SEPARATOR</Th>
-                        <Th className="py-3 px-3 whitespace-nowrap">YEAR FORMAT</Th>
-                        <Th className="py-3 px-3 text-center whitespace-nowrap">LENGTH</Th>
-                        <Th className="py-3 px-3 text-center whitespace-nowrap">START NUMBER</Th>
-                        <Th className="py-3 px-3 whitespace-nowrap">RESET</Th>
-                        <Th className="py-3 px-4 whitespace-nowrap">EXAMPLE</Th>
-                        <Th className="py-3 px-4 text-center whitespace-nowrap">STATUS</Th>
-                        <Th className="py-3 px-4 text-center whitespace-nowrap">IN USE</Th>
-                        <Th className="py-3 px-4 whitespace-nowrap">CREATED ON</Th>
-                        <Th className="py-3 px-4 text-center whitespace-nowrap">ACTIONS</Th>
-                      </tr>
-                    </thead>
+                      <div className="flex items-center gap-1.5">
+                        {ver.isUsed && (
+                          <Badge variant="neutral" className="text-2xs px-2 py-0.5 font-mono">
+                            In Use
+                          </Badge>
+                        )}
+                        <Badge variant={statusInfo.variant} className="text-xs px-2.5 py-0.5 font-medium">
+                          {statusInfo.label}
+                        </Badge>
+                      </div>
+                    </div>
 
-                    <tbody className="divide-y divide-border bg-bg text-xs">
-                      {versions.map((ver) => {
-                        const statusInfo = getStatusInfo(ver);
-                        const sampleNum = ver.sampleNumber || formatSeriesNumber(
-                          ver,
-                          ver.startNumber || ver.startingNumber,
-                          ver.effectiveDate ? new Date(ver.effectiveDate) : new Date()
-                        );
+                    {/* Example Number Box */}
+                    <div className="bg-bg/95 px-3 py-2 rounded-lg border border-border/80 flex items-center justify-between gap-2">
+                      <span className="text-2xs text-text-muted font-medium">Example Number:</span>
+                      <span className="font-mono font-bold text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20 break-all">
+                        {sampleNum}
+                      </span>
+                    </div>
 
-                        return (
-                          <tr
-                            key={ver.id}
-                            className={`transition-colors hover:bg-surface/50 ${
-                              statusInfo.isCurrent ? 'bg-primary/5' : ''
-                            }`}
+                    {/* Specs Grid */}
+                    <div className="grid grid-cols-3 gap-2 text-xs py-2 px-1 border-t border-b border-border/60 bg-bg/40 rounded-lg">
+                      <div>
+                        <span className="text-2xs text-text-muted block">Prefix</span>
+                        <span className="font-mono font-bold text-heading">{ver.prefix}</span>
+                      </div>
+                      <div>
+                        <span className="text-2xs text-text-muted block">Separator</span>
+                        <span className="font-mono text-heading">
+                          {ver.separator === '' || ver.separator === 'None' ? 'None' : ver.separator}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-2xs text-text-muted block">Year Fmt</span>
+                        <span className="font-mono text-heading">{ver.yearFormat || 'None'}</span>
+                      </div>
+                      <div>
+                        <span className="text-2xs text-text-muted block">Length</span>
+                        <span className="font-mono text-heading tabular-nums">{ver.numberLength} digits</span>
+                      </div>
+                      <div>
+                        <span className="text-2xs text-text-muted block">Start No</span>
+                        <span className="font-mono text-heading tabular-nums">{ver.startNumber || ver.startingNumber}</span>
+                      </div>
+                      <div>
+                        <span className="text-2xs text-text-muted block">Reset</span>
+                        <span className="text-heading truncate block">{ver.resetCounter || 'Yearly'}</span>
+                      </div>
+                    </div>
+
+                    {/* Audit Details & Actions */}
+                    <div className="flex items-center justify-between gap-2.5 pt-1">
+                      <div className="text-2xs text-text-muted truncate">
+                        {ver.createdBy ? `By ${ver.createdBy} • ` : ''}{formatDate(ver.createdOn)}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setViewingVersion(ver)}
+                          className="text-xs"
+                        >
+                          <IconView size={13} className="mr-1.5" />
+                          View
+                        </Button>
+                        {isAdmin && !ver.isUsed && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleOpenEditModal(ver)}
+                            className="text-xs"
                           >
-                            {/* Effective Date */}
-                            <Td className="py-3.5 px-4 font-mono font-semibold text-heading tabular-nums whitespace-nowrap">
-                              {formatDate(ver.effectiveDate)}
-                            </Td>
-
-                            {/* Prefix */}
-                            <Td className="py-3.5 px-3 font-mono font-bold text-primary whitespace-nowrap">
-                              {ver.prefix}
-                            </Td>
-
-                            {/* Separator */}
-                            <Td className="py-3.5 px-3 text-center font-mono text-text-muted whitespace-nowrap">
-                              {ver.separator === '' || ver.separator === 'None' ? (
-                                <span className="text-text-muted/60 italic text-2xs">None</span>
-                              ) : (
-                                <span className="inline-block px-2 py-0.5 rounded bg-surface border border-border text-xs font-semibold text-heading">
-                                  {ver.separator}
-                                </span>
-                              )}
-                            </Td>
-
-                            {/* Year Format */}
-                            <Td className="py-3.5 px-3 font-mono text-text whitespace-nowrap">
-                              {ver.yearFormat || 'NONE'}
-                            </Td>
-
-                            {/* Number Length */}
-                            <Td className="py-3.5 px-3 text-center font-mono tabular-nums text-text whitespace-nowrap">
-                              {ver.numberLength}
-                            </Td>
-
-                            {/* Starting Number */}
-                            <Td className="py-3.5 px-3 text-center font-mono tabular-nums text-text whitespace-nowrap">
-                              {ver.startNumber || ver.startingNumber}
-                            </Td>
-
-                            {/* Reset Counter */}
-                            <Td className="py-3.5 px-3 text-text whitespace-nowrap">
-                              {ver.resetCounter || 'YEARLY'}
-                            </Td>
-
-                            {/* Example Number */}
-                            <Td className="py-3.5 px-4 font-mono font-bold text-heading tabular-nums whitespace-nowrap">
-                              <span className="inline-block bg-surface/90 px-2.5 py-1 rounded-md border border-border text-xs">
-                                {sampleNum}
-                              </span>
-                            </Td>
-
-                            {/* Status Badge */}
-                            <Td className="py-3.5 px-4 text-center whitespace-nowrap">
-                              <Badge variant={statusInfo.variant} className="text-xs px-2.5 py-0.5">
-                                {statusInfo.label}
-                              </Badge>
-                            </Td>
-
-                            {/* In Use Flag */}
-                            <Td className="py-3.5 px-4 text-center whitespace-nowrap">
-                              {ver.isUsed ? (
-                                <Badge variant="neutral" className="text-2xs px-2 py-0.5 font-mono">
-                                  Yes
-                                </Badge>
-                              ) : (
-                                <span className="text-text-muted/60 text-2xs">No</span>
-                              )}
-                            </Td>
-
-                            {/* Created On */}
-                            <Td className="py-3.5 px-4 font-mono text-2xs text-text-muted tabular-nums whitespace-nowrap">
-                              {formatDate(ver.createdOn)}
-                            </Td>
-
-                            {/* Actions Column */}
-                            <Td className="py-3.5 px-4 text-center whitespace-nowrap">
-                              <TableActions
-                                onView={() => setViewingVersion(ver)}
-                                onEdit={isAdmin && !ver.isUsed ? () => handleOpenEditModal(ver) : undefined}
-                                onDelete={isAdmin && !ver.isUsed ? () => handleOpenDelete(ver) : undefined}
-                                viewTitle="View series version"
-                                editTitle={ver.isUsed ? 'Cannot edit version that is in use' : 'Edit series version'}
-                                deleteTitle={ver.isUsed ? 'Cannot delete version that is in use' : 'Delete series version'}
-                              />
-                            </Td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </TableContainer>
-                </div>
-              </>
-            )}
+                            <IconEdit size={13} className="mr-1.5" />
+                            Edit
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
+            />
           </Card>
         </div>
       </div>

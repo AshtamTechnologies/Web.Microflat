@@ -3,14 +3,11 @@ import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
-  flexRender,
+  getPaginationRowModel,
   createColumnHelper,
 } from '@tanstack/react-table';
 import {
   IconAdd,
-  IconArrowDown,
-  IconArrowUp,
-  IconArrowUpDown,
   IconClose,
   IconEdit,
   IconRegions,
@@ -24,14 +21,12 @@ import {
   CancelButton,
   Input,
   Modal,
-  TableContainer,
-  Th,
-  Td,
   StatusSwitch,
   PageHeader,
   FilterBar,
   TableActions,
   IconButton,
+  DataTable,
 } from '../../components/ui';
 import { useRegionsContext } from '../../context/RegionsContext';
 import { formatDate } from '../../utils/dateUtils';
@@ -54,15 +49,15 @@ export default function RegionsPage() {
     updateRegionStatus,
   } = useRegionsContext();
 
-  // Search & Status Filter state
+  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'INACTIVE'
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
-  // TanStack table state for sorting and resizing
-  const [sorting, setSorting] = useState([{ id: 'regionName', desc: false }]);
+  // TanStack table state
+  const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
 
-  // Modal states
+  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRegion, setEditingRegion] = useState(null);
   const [viewingRegion, setViewingRegion] = useState(null);
@@ -71,32 +66,47 @@ export default function RegionsPage() {
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Trigger backend API filter query when status filter changes
+  // Initial fetch
   useEffect(() => {
-    const params = {};
-    if (statusFilter === 'ACTIVE') {
-      params.isActive = true;
-    } else if (statusFilter === 'INACTIVE') {
-      params.isActive = false;
-    }
-    fetchRegions(params);
-  }, [statusFilter, fetchRegions]);
+    fetchRegions();
+  }, [fetchRegions]);
+
+  /* ── Client Filtered Data ── */
+  const filteredData = useMemo(() => {
+    return regions.filter((reg) => {
+      // Search
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q || (reg.regionName && reg.regionName.toLowerCase().includes(q));
+
+      // Status
+      const matchesStatus =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'ACTIVE' && reg.isActive) ||
+        (statusFilter === 'INACTIVE' && !reg.isActive);
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [regions, searchQuery, statusFilter]);
 
   /* ── Form Validation ── */
   function validateField(name, value) {
-    const targetId = editingRegion?.regionId ?? editingRegion?.id;
+    const targetId = editingRegion?.id ?? editingRegion?.regionId;
 
     switch (name) {
       case 'regionName': {
         const str = typeof value === 'string' ? value.trim() : '';
         if (!str) return 'Region name is required.';
-        if (str.length > 100) return 'Region name cannot exceed 100 characters.';
+        if (str.length > 50) return 'Region name cannot exceed 50 characters.';
 
-        // Unique check (case-insensitive)
+        // Check duplicate name
         const duplicate = regions.find((r) => {
-          const currentId = r.regionId ?? r.id;
-          if (editingRegion && String(currentId) === String(targetId)) return false;
-          return r.regionName?.toLowerCase() === str.toLowerCase();
+          const rid = r.id ?? r.regionId;
+          if (editingRegion && String(rid) === String(targetId)) return false;
+          return (
+            r.regionName &&
+            r.regionName.trim().toLowerCase() === str.toLowerCase()
+          );
         });
         if (duplicate) return 'A region with this name already exists.';
         return '';
@@ -108,8 +118,8 @@ export default function RegionsPage() {
 
   function validateAll(data) {
     const errors = {};
-    const err = validateField('regionName', data.regionName);
-    if (err) errors.regionName = err;
+    const nameErr = validateField('regionName', data.regionName);
+    if (nameErr) errors.regionName = nameErr;
     return errors;
   }
 
@@ -121,15 +131,12 @@ export default function RegionsPage() {
     setIsModalOpen(true);
   }
 
-  /**
-   * Fetches fresh region details by ID via GET /api/regions/{id} and populates Edit form
-   */
-  async function handleOpenEdit(reg) {
-    const id = reg.id ?? reg.regionId;
-    setEditingRegion(reg);
+  async function handleOpenEdit(region) {
+    const id = region.id ?? region.regionId;
+    setEditingRegion(region);
     setFormData({
-      regionName: reg.regionName || '',
-      isActive: Boolean(reg.isActive),
+      regionName: region.regionName || '',
+      isActive: Boolean(region.isActive),
     });
     setFormErrors({});
     setIsModalOpen(true);
@@ -145,18 +152,15 @@ export default function RegionsPage() {
         });
       }
     } catch {
-      // Toast notification is handled in context
+      // toast is handled in context
     } finally {
       setIsFetchingDetail(false);
     }
   }
 
-  /**
-   * Fetches fresh region details by ID via GET /api/regions/{id} and opens View modal
-   */
-  async function handleOpenView(reg) {
-    const id = reg.id ?? reg.regionId;
-    setViewingRegion(reg);
+  async function handleOpenView(region) {
+    const id = region.id ?? region.regionId;
+    setViewingRegion(region);
     setIsFetchingDetail(true);
 
     try {
@@ -165,7 +169,7 @@ export default function RegionsPage() {
         setViewingRegion(fresh);
       }
     } catch {
-      // Toast notification is handled in context
+      // toast is handled in context
     } finally {
       setIsFetchingDetail(false);
     }
@@ -180,10 +184,7 @@ export default function RegionsPage() {
     setIsFetchingDetail(false);
   }
 
-  /**
-   * Handles creation (POST /api/regions) and update (PUT /api/regions/{id}).
-   * Status updates are sent via PATCH /api/regions/{id}/status.
-   */
+  /* ── Form Submit with Status Patching ── */
   async function handleFormSubmit(e) {
     if (e) e.preventDefault();
     const errors = validateAll(formData);
@@ -200,62 +201,41 @@ export default function RegionsPage() {
 
       if (editingRegion) {
         const id = editingRegion.id ?? editingRegion.regionId;
-        // 1. Update region name via PUT /api/regions/{id}
+        // 1. Update region details
         await updateRegion(id, payload);
 
-        // 2. If status was modified, update via PATCH /api/regions/{id}/status
+        // 2. If status was modified, update via status patch
         if (Boolean(editingRegion.isActive) !== Boolean(formData.isActive)) {
           await updateRegionStatus(id, formData.isActive);
         }
       } else {
-        // 1. Create new region via POST /api/regions
+        // 1. Create new region
         const created = await addRegion(payload);
         const newId = created?.id ?? created?.regionId;
 
-        // 2. If user toggled status to inactive during creation, update via PATCH /api/regions/{id}/status
+        // 2. If status set to inactive during creation, update via status patch
         if (newId && formData.isActive === false) {
           await updateRegionStatus(newId, false);
         }
       }
 
-      setIsModalOpen(false);
-      setEditingRegion(null);
-      setFormData(INITIAL_FORM);
-      setFormErrors({});
-    } catch (err) {
-      if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
-        setFormErrors(err.fieldErrors);
-      }
+      handleCloseModal();
+      fetchRegions();
+    } catch {
+      // error handled in context
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  /* ── Filtered Data Computation ── */
-  const filteredData = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-
-    return regions.filter((reg) => {
-      const matchesSearch =
-        !q || reg.regionName?.toLowerCase().includes(q);
-
-      const matchesStatus =
-        statusFilter === 'ALL' ||
-        (statusFilter === 'ACTIVE' && reg.isActive) ||
-        (statusFilter === 'INACTIVE' && !reg.isActive);
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [regions, searchQuery, statusFilter]);
-
-  /* ── TanStack Table Columns ── */
+  /* ── Table Columns ── */
   const columns = useMemo(
     () => [
       columnHelper.accessor('regionName', {
         id: 'regionName',
         header: 'REGION NAME',
-        size: 380,
-        minSize: 220,
+        size: 320,
+        minSize: 200,
         cell: ({ row }) => {
           const reg = row.original;
           return (
@@ -346,6 +326,7 @@ export default function RegionsPage() {
     onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
   });
 
   return (
@@ -413,225 +394,122 @@ export default function RegionsPage() {
         </div>
       </FilterBar>
 
-      {/* ── Desktop View (md+): Data Table ── */}
-      <div className="hidden md:block rounded-xl border border-border bg-bg overflow-hidden shadow-2xs">
-        <TableContainer
-          tableStyle={{
-            width: '100%',
-            minWidth: `${table.getCenterTotalSize()}px`,
-          }}
-        >
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  const isSorted = header.column.getIsSorted();
-                  return (
-                    <Th
-                      key={header.id}
-                      style={{ width: header.getSize() }}
-                      isResizing={header.column.getIsResizing()}
-                      resizeHandler={
-                        header.column.getCanResize()
-                          ? header.getResizeHandler()
-                          : undefined
-                      }
-                    >
-                      <div
-                        className={`flex items-center gap-1.5 ${
-                          header.column.getCanSort()
-                            ? 'cursor-pointer select-none'
-                            : ''
-                        }`}
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        <span className="truncate">
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                        </span>
-                        {header.column.getCanSort() && (
-                          <span className="text-text-muted/60 transition-opacity">
-                            {isSorted === 'asc' ? (
-                              <IconArrowUp size={13} className="text-primary" />
-                            ) : isSorted === 'desc' ? (
-                              <IconArrowDown
-                                size={13}
-                                className="text-primary"
-                              />
-                            ) : (
-                              <IconArrowUpDown
-                                size={12}
-                                className="opacity-0 group-hover/th:opacity-100"
-                              />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </Th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
-
-          <tbody className="divide-y divide-border bg-bg">
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <tr key={`skeleton-${i}`} className="animate-pulse">
-                  <Td>
-                    <div className="h-4 bg-surface rounded w-48" />
-                  </Td>
-                  <Td>
-                    <div className="h-5 bg-surface rounded w-16" />
-                  </Td>
-                  <Td>
-                    <div className="h-4 bg-surface rounded w-24" />
-                  </Td>
-                  <Td className="text-right">
-                    <div className="h-7 bg-surface rounded w-16 ml-auto" />
-                  </Td>
-                </tr>
-              ))
-            ) : table.getRowModel().rows.length > 0 ? (
-              table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="hover:bg-surface/50 transition-colors duration-100"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <Td key={cell.id} style={{ width: cell.column.getSize() }}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </Td>
-                  ))}
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-12 text-center text-text-muted text-sm"
-                >
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <IconRegions size={32} className="text-text-muted/50" />
-                    <p className="font-semibold text-heading">
-                      No regions found
-                    </p>
-                    <p className="text-xs">
-                      {searchQuery || statusFilter !== 'ALL'
-                        ? 'Try resetting your search or status filter.'
-                        : 'Click "+ Add Region" to create your first region.'}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </TableContainer>
-      </div>
-
-      {/* ── Mobile View (< md): Card List ── */}
-      <div className="block md:hidden space-y-3">
-        {isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={`reg-skel-${i}`}
-              className="bg-bg border border-border rounded-xl p-4 animate-pulse space-y-3"
+      {/* ── Centralized DataTable ── */}
+      <DataTable
+        table={table}
+        columns={columns}
+        isLoading={isLoading}
+        totalCount={filteredData.length}
+        entityName="regions"
+        emptyTitle="No regions found"
+        emptyDescription={
+          searchQuery || statusFilter !== 'ALL'
+            ? 'Try resetting your search or status filter.'
+            : 'Click "+ Add Region" to create your first region.'
+        }
+        emptyAction={
+          searchQuery || statusFilter !== 'ALL' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('ALL');
+              }}
+              className="text-xs text-primary"
             >
-              <div className="flex justify-between items-center">
-                <div className="h-5 bg-surface rounded w-36" />
-                <div className="h-5 bg-surface rounded w-16" />
-              </div>
-              <div className="h-4 bg-surface rounded w-24" />
-            </div>
-          ))
-        ) : filteredData.length > 0 ? (
-          filteredData.map((reg) => {
-            const id = reg.id ?? reg.regionId;
-            return (
-              <div
-                key={id}
-                className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-1 min-w-0">
-                    <h3
-                      className={`text-sm font-semibold ${
-                        reg.isActive
-                          ? 'text-heading'
-                          : 'text-text-muted line-through'
-                      }`}
-                    >
-                      {reg.regionName}
-                    </h3>
-                  </div>
-
-                  <span
-                    className={[
-                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
+              Clear filters
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleOpenAdd}
+              className="text-xs"
+            >
+              <IconAdd size={14} className="mr-1.5" />
+              Add Region
+            </Button>
+          )
+        }
+        renderMobileCard={(row) => {
+          const reg = row.original;
+          const id = reg.id ?? reg.regionId;
+          return (
+            <div
+              key={id}
+              className="bg-bg border border-border rounded-xl p-4 shadow-2xs space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1 min-w-0">
+                  <h3
+                    className={`text-sm font-semibold ${
                       reg.isActive
-                        ? 'bg-success/10 text-success border border-success/20'
-                        : 'bg-danger/10 text-danger border border-danger/20',
-                    ].join(' ')}
+                        ? 'text-heading'
+                        : 'text-text-muted line-through'
+                    }`}
                   >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        reg.isActive ? 'bg-success' : 'bg-danger'
-                      }`}
-                      aria-hidden="true"
-                    />
-                    {reg.isActive ? 'Active' : 'Inactive'}
-                  </span>
+                    {reg.regionName}
+                  </h3>
                 </div>
 
-                <div className="flex items-center justify-between text-2xs text-text-muted pt-2 border-t border-border">
-                  <span className="font-mono">
-                    Created: {formatDate(reg.createdOn || reg.createdAt)}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleOpenView(reg)}
-                      className="text-xs"
-                    >
-                      <IconView size={13} className="mr-1.5" />
-                      View
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleOpenEdit(reg)}
-                      className="text-xs"
-                    >
-                      <IconEdit size={13} className="mr-1.5" />
-                      Edit
-                    </Button>
-                  </div>
+                <span
+                  className={[
+                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium shrink-0 select-none',
+                    reg.isActive
+                      ? 'bg-success/10 text-success border border-success/20'
+                      : 'bg-danger/10 text-danger border border-danger/20',
+                  ].join(' ')}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      reg.isActive ? 'bg-success' : 'bg-danger'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  {reg.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-2xs text-text-muted pt-2 border-t border-border">
+                <span className="font-mono">
+                  Created: {formatDate(reg.createdOn || reg.createdAt)}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleOpenView(reg)}
+                    className="text-xs"
+                  >
+                    <IconView size={13} className="mr-1.5" />
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleOpenEdit(reg)}
+                    className="text-xs"
+                  >
+                    <IconEdit size={13} className="mr-1.5" />
+                    Edit
+                  </Button>
                 </div>
               </div>
-            );
-          })
-        ) : (
-          <div className="bg-bg border border-border rounded-xl p-8 text-center text-text-muted">
-            <IconRegions size={28} className="mx-auto text-text-muted/50 mb-2" />
-            <p className="font-semibold text-heading text-sm">No regions found</p>
-            <p className="text-xs mt-1">Click &quot;+ Add Region&quot; to create one.</p>
-          </div>
-        )}
-      </div>
+            </div>
+          );
+        }}
+      />
 
       {/* ── Add / Edit Region Modal ── */}
       <Modal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        title={editingRegion ? 'Edit Region' : 'Add Region'}
+        title={editingRegion ? 'Edit Region' : 'Add New Region'}
         maxWidth="max-w-md"
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
@@ -648,7 +526,7 @@ export default function RegionsPage() {
             name="regionName"
             type="text"
             label="Region Name"
-            placeholder="e.g. West Region, North Region, Export Market"
+            placeholder="e.g. North Zone, West Region, South India"
             required
             value={formData.regionName}
             disabled={isSubmitting || isFetchingDetail}
@@ -731,7 +609,7 @@ export default function RegionsPage() {
                     {viewingRegion.regionName}
                   </h3>
                   <p className="text-xs text-text-muted mt-1">
-                    Territory Configuration
+                    Region Configuration
                   </p>
                 </div>
               </div>
@@ -755,7 +633,7 @@ export default function RegionsPage() {
 
             {/* Details Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
                 <span className="view-field-label mf-detail-label">
                   Region Name
                 </span>
@@ -769,12 +647,14 @@ export default function RegionsPage() {
                   Created Date
                 </span>
                 <span className="font-mono text-xs text-text-muted">
-                  {formatDate(viewingRegion.createdOn || viewingRegion.createdAt)}
+                  {formatDate(
+                    viewingRegion.createdOn || viewingRegion.createdAt
+                  )}
                 </span>
               </div>
 
               {viewingRegion.lastUpdatedOn && (
-                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">
+                <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1 sm:col-span-2">
                   <span className="view-field-label mf-detail-label">
                     Last Updated
                   </span>
