@@ -108,12 +108,11 @@ export async function getStatesByCountry(countryId) {
 
 /**
  * 4. GET /api/companies/{id} — View single company with its bank accounts (no attachments).
- * Accepts numeric ID or extracts integer from string like 'COMP-001' or '1'.
+ * Accepts numeric ID or valid identifier.
  */
 export async function getCompanyById(id) {
   try {
-    const numericId = String(id).replace(/^\D+/g, '') || id;
-    const response = await axiosInstance.get(COMPANY_ENDPOINTS.BY_ID(numericId));
+    const response = await axiosInstance.get(COMPANY_ENDPOINTS.BY_ID(id));
     return companyDetailFromApi(response.data);
   } catch (err) {
     throw normalizeApiError(err);
@@ -141,9 +140,8 @@ export async function createCompany(formData) {
  */
 export async function updateCompany(id, formData) {
   try {
-    const numericId = String(id).replace(/^\D+/g, '') || id;
     const payload = companyToApiPayload(formData);
-    const response = await axiosInstance.put(COMPANY_ENDPOINTS.BY_ID(numericId), payload);
+    const response = await axiosInstance.put(COMPANY_ENDPOINTS.BY_ID(id), payload);
     return companyDetailFromApi(response.data);
   } catch (err) {
     throw normalizeApiError(err);
@@ -157,8 +155,7 @@ export async function updateCompany(id, formData) {
  */
 export async function updateCompanyStatus(id, isActive) {
   try {
-    const numericId = String(id).replace(/^\D+/g, '') || id;
-    const response = await axiosInstance.patch(COMPANY_ENDPOINTS.STATUS(numericId), {
+    const response = await axiosInstance.patch(COMPANY_ENDPOINTS.STATUS(id), {
       isActive: Boolean(isActive),
     });
     return companyDetailFromApi(response.data);
@@ -173,8 +170,7 @@ export async function updateCompanyStatus(id, isActive) {
  */
 export async function deleteCompany(id) {
   try {
-    const numericId = String(id).replace(/^\D+/g, '') || id;
-    await axiosInstance.delete(COMPANY_ENDPOINTS.BY_ID(numericId));
+    await axiosInstance.delete(COMPANY_ENDPOINTS.BY_ID(id));
     return true;
   } catch (err) {
     throw normalizeApiError(err);
@@ -191,8 +187,7 @@ export async function deleteCompany(id) {
  */
 export async function getCompanyBankDetails(companyId) {
   try {
-    const numericCompanyId = String(companyId).replace(/^\D+/g, '') || companyId;
-    const response = await axiosInstance.get(COMPANY_ENDPOINTS.BANK_DETAILS_BY_COMPANY(numericCompanyId));
+    const response = await axiosInstance.get(COMPANY_ENDPOINTS.BANK_DETAILS_BY_COMPANY(companyId));
     return Array.isArray(response.data) ? response.data.map(bankDetailFromApi) : [];
   } catch (err) {
     throw normalizeApiError(err);

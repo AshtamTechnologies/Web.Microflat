@@ -3,7 +3,14 @@
  */
 
 import React, { useMemo, useEffect } from 'react';
-import { CollapsibleCard, Input, StatusSwitch, SearchableSelect } from '../../../components/ui';
+import {
+  CollapsibleCard,
+  Input,
+  StatusSwitch,
+  SearchableSelect,
+  Button,
+  IconButton,
+} from '../../../components/ui';
 import {
   IconBuilding2,
   IconUser,
@@ -12,6 +19,8 @@ import {
   IconMapPin,
   IconHash,
   IconWebsite,
+  IconAdd,
+  IconDelete,
 } from '../../../constants/icons';
 import { useCountryState } from '../../../context/CountryStateContext';
 
@@ -23,8 +32,7 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
       errors.contactPersonMobile ||
       errors.email ||
       errors.website ||
-      errors.phone1 ||
-      errors.phone2 ||
+      errors.cinNo ||
       errors.gstNo
   );
 
@@ -95,6 +103,47 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
     const raw = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
     const stateVal = typeof raw === 'object' && raw !== null ? raw.value || '' : raw || '';
     onChange('state', stateVal);
+  };
+
+  const phones = Array.isArray(form.phones) ? form.phones : [];
+
+  const handlePhoneChange = (index, field, value) => {
+    const updated = phones.map((p, idx) => {
+      if (idx !== index) return p;
+      return { ...p, [field]: value };
+    });
+    onChange('phones', updated);
+  };
+
+  const handleSetPrimary = (index) => {
+    const updated = phones.map((p, idx) => ({
+      ...p,
+      isPrimary: idx === index,
+    }));
+    onChange('phones', updated);
+  };
+
+  const handleAddPhone = () => {
+    if (phones.length >= 20) return;
+    const isFirst = phones.length === 0;
+    const updated = [
+      ...phones,
+      { phoneLabel: 'Office', phoneNumber: '', isPrimary: isFirst },
+    ];
+    onChange('phones', updated);
+  };
+
+  const handleRemovePhone = (index) => {
+    if (phones.length <= 1) {
+      onChange('phones', [{ phoneLabel: 'Office', phoneNumber: '', isPrimary: true }]);
+      return;
+    }
+    const removedWasPrimary = phones[index]?.isPrimary;
+    const updated = phones.filter((_, idx) => idx !== index);
+    if (removedWasPrimary && updated.length > 0) {
+      updated[0].isPrimary = true;
+    }
+    onChange('phones', updated);
   };
 
   return (
@@ -203,7 +252,7 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
             />
           </div>
 
-          {/* Row 3: GST No. + Phone 1 (Landline) + Phone 2 (Landline) */}
+          {/* Row 3: GST No. + CIN No. + Account Status */}
           <div>
             <label className="mf-label" htmlFor="gstNo">
               GST No.
@@ -219,35 +268,19 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
             />
           </div>
 
-          {/* Row 3: Phone 1 (Landline) + Phone 2 (Landline) + Account Status */}
           <div>
-            <label className="mf-label" htmlFor="phone1">
-              Phone 1 (Landline) <span className="mf-required">*</span>
+            <label className="mf-label" htmlFor="cinNo">
+              CIN No.
             </label>
             <Input
-              id="phone1"
-              type="tel"
-              placeholder="Landline number (e.g. 0265 2345678)"
-              value={form.phone1 || ''}
-              onChange={(e) => onChange('phone1', e.target.value)}
-              error={errors.phone1}
-              icon={IconPhone}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="mf-label" htmlFor="phone2">
-              Phone 2 (Landline)
-            </label>
-            <Input
-              id="phone2"
-              type="tel"
-              placeholder="Landline number (e.g. 0265 2345679)"
-              value={form.phone2 || ''}
-              onChange={(e) => onChange('phone2', e.target.value)}
-              error={errors.phone2}
-              icon={IconPhone}
+              id="cinNo"
+              placeholder="e.g. U29100GJ2010PTC012345"
+              value={form.cinNo || ''}
+              onChange={(e) => onChange('cinNo', e.target.value.replace(/\s/g, '').toUpperCase())}
+              error={errors.cinNo}
+              icon={IconHash}
+              maxLength={21}
+              className="uppercase font-mono"
             />
           </div>
 
@@ -263,6 +296,108 @@ export default function CompanyDetailsTab({ form, onChange, errors }) {
                 size="md"
               />
             </div>
+          </div>
+        </div>
+      </CollapsibleCard>
+
+      {/* ── 2. Official Phone Numbers Grid ── */}
+      <CollapsibleCard
+        title="Official Phone Numbers"
+        subtitle="Manage office, landline, and department numbers"
+        icon={<IconPhone size={16} />}
+        hasError={Boolean(errors.phones)}
+        defaultOpen={true}
+      >
+        <div className="space-y-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-border/80 text-text-muted">
+                  <th className="py-2 px-3 font-semibold w-1/4">Label</th>
+                  <th className="py-2 px-3 font-semibold w-2/5">Phone Number</th>
+                  <th className="py-2 px-3 font-semibold w-24 text-center">Primary</th>
+                  <th className="py-2 px-3 font-semibold w-16 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {phones.map((phone, idx) => {
+                  const phoneError = errors.phones?.[idx];
+                  return (
+                    <tr key={idx} className="hover:bg-surface/40 transition-colors">
+                      <td className="py-2 px-3 align-top">
+                        <Input
+                          placeholder="e.g. Office, Landline"
+                          value={phone.phoneLabel || ''}
+                          onChange={(e) => handlePhoneChange(idx, 'phoneLabel', e.target.value)}
+                          maxLength={50}
+                          size="sm"
+                        />
+                      </td>
+                      <td className="py-2 px-3 align-top">
+                        <Input
+                          type="tel"
+                          placeholder="e.g. 079 2658 1234 or +91 98250 11111"
+                          value={phone.phoneNumber || ''}
+                          onChange={(e) => handlePhoneChange(idx, 'phoneNumber', e.target.value)}
+                          error={phoneError}
+                          maxLength={20}
+                          size="sm"
+                          icon={IconPhone}
+                        />
+                      </td>
+                      <td className="py-2 px-3 align-middle text-center">
+                        <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="radio"
+                            name="primaryPhoneSelection"
+                            checked={Boolean(phone.isPrimary)}
+                            onChange={() => handleSetPrimary(idx)}
+                            className="text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                          />
+                          <span className="text-2xs text-text-muted">
+                            {phone.isPrimary ? (
+                              <span className="font-semibold text-primary">Primary</span>
+                            ) : (
+                              'Set'
+                            )}
+                          </span>
+                        </label>
+                      </td>
+                      <td className="py-2 px-3 align-middle text-right">
+                        <IconButton
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          icon={IconDelete}
+                          title="Remove phone number"
+                          aria-label="Remove phone number"
+                          onClick={() => handleRemovePhone(idx)}
+                          disabled={phones.length <= 1 && !phone.phoneNumber}
+                          className="text-text-muted hover:text-danger hover:bg-danger/10"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={IconAdd}
+              onClick={handleAddPhone}
+              disabled={phones.length >= 20}
+              className="text-xs"
+            >
+              Add Phone Number
+            </Button>
+            <span className="text-2xs text-text-muted">
+              {phones.length} / 20 numbers • Blank rows are ignored on save
+            </span>
           </div>
         </div>
       </CollapsibleCard>

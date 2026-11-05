@@ -116,19 +116,17 @@ export function CompanyProvider({ children }) {
     (id) => {
       if (!id) return null;
       const target = String(id).toLowerCase().trim();
-      const numTarget = target.replace(/^\D+/g, '');
 
       return (
         companiesRef.current.find((c) => {
-          const compIdStr = String(c.id || '').toLowerCase().trim();
-          const compNumStr = String(c.companyId || '').toLowerCase().trim();
-          const compCodeStr = String(c.companyCode || '').toLowerCase().trim();
+          const compIdStr = String(c.id ?? '').toLowerCase().trim();
+          const compNumStr = String(c.companyId ?? '').toLowerCase().trim();
+          const compCodeStr = String(c.companyCode ?? '').toLowerCase().trim();
 
           return (
             compIdStr === target ||
             compNumStr === target ||
-            compCodeStr === target ||
-            (numTarget && (compNumStr === numTarget || compIdStr.replace(/^\D+/g, '') === numTarget))
+            compCodeStr === target
           );
         }) || null
       );
@@ -141,13 +139,35 @@ export function CompanyProvider({ children }) {
    */
   const fetchCompanyById = useCallback(async (id) => {
     if (!id) return null;
+    let targetId = id;
+
+    // If id passed is a string code (e.g. 'COMP-001'), resolve it to the numeric companyId from loaded companies
+    const existing = companiesRef.current.find(
+      (c) =>
+        String(c.companyCode || '').toLowerCase().trim() === String(id).toLowerCase().trim() ||
+        String(c.id || '').toLowerCase().trim() === String(id).toLowerCase().trim() ||
+        String(c.companyId || '').toLowerCase().trim() === String(id).toLowerCase().trim()
+    );
+    if (existing && existing.companyId) {
+      targetId = existing.companyId;
+    }
+
     try {
-      const company = await companyService.getCompanyById(id);
+      const company = await companyService.getCompanyById(targetId);
       if (company) {
         setCompanies((prev) => {
-          const exists = prev.some((c) => String(c.id) === String(company.id) || String(c.companyId) === String(company.companyId));
+          const exists = prev.some(
+            (c) =>
+              String(c.companyId || c.id) === String(company.companyId || company.id) ||
+              (company.companyCode && c.companyCode === company.companyCode)
+          );
           return exists
-            ? prev.map((c) => (String(c.id) === String(company.id) || String(c.companyId) === String(company.companyId) ? company : c))
+            ? prev.map((c) =>
+                String(c.companyId || c.id) === String(company.companyId || company.id) ||
+                (company.companyCode && c.companyCode === company.companyCode)
+                  ? company
+                  : c
+              )
             : [company, ...prev];
         });
       }

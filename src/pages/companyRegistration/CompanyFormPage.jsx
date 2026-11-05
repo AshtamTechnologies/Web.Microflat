@@ -32,8 +32,8 @@ const INITIAL_FORM = {
   contactPersonMobile: '',
   email: '',
   website: '',
-  phone1: '',
-  phone2: '',
+  cinNo: '',
+  phones: [{ phoneLabel: 'Office', phoneNumber: '', isPrimary: true }],
   gstNo: '',
   address1: '',
   address2: '',
@@ -45,6 +45,8 @@ const INITIAL_FORM = {
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CIN_REGEX = /^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$/;
+const PHONE_REGEX = /^\+?[0-9][0-9 ()\-]{5,19}$/;
 
 export default function CompanyFormPage() {
   const { id } = useParams();
@@ -67,9 +69,38 @@ export default function CompanyFormPage() {
         try {
           const existing = (fetchCompanyById && (await fetchCompanyById(id))) || getCompanyById(id);
           if (existing && isMounted) {
+            let existingPhones = [];
+            if (Array.isArray(existing.phones) && existing.phones.length > 0) {
+              existingPhones = existing.phones.map((p) => ({
+                companyPhoneId: p.companyPhoneId,
+                phoneLabel: p.phoneLabel || '',
+                phoneNumber: p.phoneNumber || '',
+                isPrimary: Boolean(p.isPrimary),
+              }));
+            } else if (existing.phone1) {
+              existingPhones.push({
+                phoneLabel: 'Office',
+                phoneNumber: existing.phone1,
+                isPrimary: true,
+              });
+              if (existing.phone2) {
+                existingPhones.push({
+                  phoneLabel: 'Landline',
+                  phoneNumber: existing.phone2,
+                  isPrimary: false,
+                });
+              }
+            }
+
+            if (existingPhones.length === 0) {
+              existingPhones = [{ phoneLabel: 'Office', phoneNumber: '', isPrimary: true }];
+            }
+
             setForm({
               ...INITIAL_FORM,
               ...existing,
+              cinNo: existing.cinNo || '',
+              phones: existingPhones,
               country: existing.countryId || existing.country || '',
               countryId: existing.countryId || null,
               state: existing.stateId || existing.state || '',
@@ -82,7 +113,7 @@ export default function CompanyFormPage() {
                 [existing.firstName, existing.lastName].filter(Boolean).join(' ') ||
                 '',
               contactPersonEmail: existing.contactPersonEmail || existing.email || '',
-              contactPersonMobile: existing.contactPersonMobile || existing.phone1 || '',
+              contactPersonMobile: existing.contactPersonMobile || existing.primaryPhone || existing.phone1 || '',
             });
           } else if (isMounted) {
             toast.error('Company not found');
@@ -129,7 +160,44 @@ export default function CompanyFormPage() {
     } else if (!EMAIL_REGEX.test(form.email.trim())) {
       errs.email = 'Please enter a valid email address';
     }
-    if (!form.phone1?.trim()) errs.phone1 = 'Primary landline phone number is required';
+
+    // CIN validation (optional, 21 characters format)
+    if (form.cinNo?.trim()) {
+      const cinClean = form.cinNo.replace(/\s/g, '').toUpperCase();
+      if (!CIN_REGEX.test(cinClean)) {
+        errs.cinNo = 'CIN must be a valid 21-character alphanumeric code (e.g. U29100GJ2010PTC012345)';
+      }
+    }
+
+    // Phones validation
+    if (Array.isArray(form.phones)) {
+      const seenNumbers = new Set();
+      const phoneErrors = [];
+      let hasPhoneError = false;
+
+      form.phones.forEach((p, idx) => {
+        const num = p.phoneNumber?.trim();
+        if (num) {
+          if (!PHONE_REGEX.test(num)) {
+            phoneErrors[idx] = 'Must be 6–20 digits (+, spaces, () and - allowed)';
+            hasPhoneError = true;
+          } else {
+            const normalizedNum = num.replace(/[\s()\-]/g, '');
+            if (seenNumbers.has(normalizedNum)) {
+              phoneErrors[idx] = 'Duplicate phone number';
+              hasPhoneError = true;
+            } else {
+              seenNumbers.add(normalizedNum);
+            }
+          }
+        }
+      });
+
+      if (hasPhoneError) {
+        errs.phones = phoneErrors;
+      }
+    }
+
     if (!String(form.country || '').trim()) errs.country = 'Country is required';
     if (!String(form.state || '').trim()) errs.state = 'State is required';
     if (!form.city?.trim()) errs.city = 'City is required';

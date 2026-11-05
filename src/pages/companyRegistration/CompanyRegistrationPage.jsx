@@ -96,7 +96,7 @@ export default function CompanyRegistrationPage() {
         size: 130,
         cell: (info) => {
           const row = info.row.original;
-          const targetId = row.companyId || row.id;
+          const targetId = row.companyId ?? row.id;
           return (
             <Link
               to={`/company-registration/${targetId}`}
@@ -113,7 +113,7 @@ export default function CompanyRegistrationPage() {
         size: 240,
         cell: (info) => {
           const row = info.row.original;
-          const targetId = row.companyId || row.id;
+          const targetId = row.companyId ?? row.id;
           const person = row.contactPersonName;
           return (
             <div className="min-w-0">
@@ -151,9 +151,17 @@ export default function CompanyRegistrationPage() {
 
       columnHelper.accessor('email', {
         header: 'CONTACT INFO',
-        size: 200,
+        size: 210,
         cell: (info) => {
           const row = info.row.original;
+          const phone = row.primaryPhone || row.phone1;
+          const additionalCount = (row.phones || []).filter(
+            (p) => p.phoneNumber && p.phoneNumber !== phone
+          ).length;
+          const allPhonesTooltip = (row.phones || [])
+            .map((p) => `${p.phoneLabel ? `${p.phoneLabel}: ` : ''}${p.phoneNumber}`)
+            .join(', ');
+
           return (
             <div className="space-y-0.5 text-2xs text-text-muted">
               {row.email && (
@@ -162,10 +170,15 @@ export default function CompanyRegistrationPage() {
                   <span className="truncate">{row.email}</span>
                 </div>
               )}
-              {row.phone1 && (
-                <div className="flex items-center gap-1 font-mono">
+              {phone && (
+                <div className="flex items-center gap-1.5 font-mono" title={allPhonesTooltip || phone}>
                   <IconPhone size={11} className="shrink-0" />
-                  <span>{row.phone1}</span>
+                  <span>{phone}</span>
+                  {additionalCount > 0 && (
+                    <span className="text-3xs font-sans px-1 py-0.2 rounded bg-surface border border-border text-primary font-semibold">
+                      +{additionalCount}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -174,14 +187,25 @@ export default function CompanyRegistrationPage() {
       }),
 
       columnHelper.accessor('gstNo', {
-        header: 'GST NO.',
-        size: 150,
+        header: 'GST / CIN',
+        size: 170,
         cell: (info) => {
-          const val = info.getValue();
+          const row = info.row.original;
+          const gst = row.gstNo;
+          const cin = row.cinNo;
           return (
-            <span className="font-mono tabular-nums text-xs text-text font-medium">
-              {val || '—'}
-            </span>
+            <div className="space-y-0.5 font-mono tabular-nums text-xs">
+              {gst ? (
+                <div className="text-text font-medium">{gst}</div>
+              ) : (
+                <div className="text-text-muted italic text-2xs">No GST</div>
+              )}
+              {cin && (
+                <div className="text-2xs text-text-muted truncate font-mono" title={`CIN: ${cin}`}>
+                  CIN: {cin}
+                </div>
+              )}
+            </div>
           );
         },
       }),
@@ -201,7 +225,7 @@ export default function CompanyRegistrationPage() {
         enableResizing: false,
         cell: (info) => {
           const row = info.row.original;
-          const targetId = row.companyId || row.id;
+          const targetId = row.companyId ?? row.id;
           return (
             <TableActions
               onView={() => navigate(`/company-registration/${targetId}`)}
@@ -302,7 +326,7 @@ export default function CompanyRegistrationPage() {
           const person = comp.contactPersonName;
           const stateLabel = getStateName(comp.country, comp.state) || comp.state;
 
-          const targetId = comp.companyId || comp.id;
+          const targetId = comp.companyId ?? comp.id;
 
           return (
             <div className="p-4 space-y-3 bg-bg border border-border rounded-xl shadow-2xs hover:border-primary/40 transition-colors">
@@ -353,7 +377,7 @@ export default function CompanyRegistrationPage() {
                   <span className="block text-2xs uppercase tracking-wider font-medium text-text-muted">
                     Contact
                   </span>
-                  <span className="text-heading truncate block">{comp.email || comp.phone1 || '—'}</span>
+                  <span className="text-heading truncate block">{comp.email || comp.primaryPhone || comp.phone1 || '—'}</span>
                 </div>
               </div>
 
@@ -361,7 +385,7 @@ export default function CompanyRegistrationPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => navigate(`/company-registration/${comp.id}`)}
+                  onClick={() => navigate(`/company-registration/${targetId}`)}
                   className="flex-1 text-xs"
                 >
                   <IconView size={14} className="mr-1.5" />
@@ -370,7 +394,7 @@ export default function CompanyRegistrationPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => navigate(`/company-registration/${comp.id}/edit`)}
+                  onClick={() => navigate(`/company-registration/${targetId}/edit`)}
                   className="flex-1 text-xs"
                 >
                   <IconEdit size={14} className="mr-1.5" />

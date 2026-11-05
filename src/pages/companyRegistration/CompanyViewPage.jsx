@@ -28,7 +28,6 @@ import {
   IconClock,
   IconCopy,
   IconCheck,
-  IconShieldCheck,
   IconUser,
 } from '../../constants/icons';
 
@@ -131,7 +130,7 @@ export default function CompanyViewPage() {
       <PageHeader
         title={company.companyName}
         icon={<IconBuilding2 className="h-6 w-6 text-primary" aria-hidden="true" />}
-        subtitle={`Company ID: ${company.id} • Registered Office & Legal Profile`}
+        subtitle={`Company ID: ${company.companyCode || company.companyId || company.id} • Registered Office & Legal Profile`}
         backButton={
           <Button
             type="button"
@@ -176,7 +175,7 @@ export default function CompanyViewPage() {
                 </h2>
               </div>
               <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
-                {company.id}
+                {company.companyCode || company.companyId || company.id}
               </span>
             </div>
 
@@ -207,6 +206,30 @@ export default function CompanyViewPage() {
                 </div>
               </div>
 
+              {/* CIN Number with 1-click Copy */}
+              <div>
+                <span className="view-field-label">CIN (Corporate Identification No.)</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border text-heading font-semibold">
+                    {company.cinNo || '—'}
+                  </span>
+                  {company.cinNo && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(company.cinNo, 'CIN Number')}
+                      className="text-text-muted hover:text-primary p-0.5 rounded transition-colors"
+                      title="Copy CIN"
+                    >
+                      {copiedField === 'CIN Number' ? (
+                        <IconCheck size={14} className="text-success" />
+                      ) : (
+                        <IconCopy size={14} />
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <DetailField
                 label="Account Status"
                 value={
@@ -218,7 +241,7 @@ export default function CompanyViewPage() {
 
               <DetailField
                 label="Company Email"
-                value={company.email}
+                value={company.companyEmail || company.email}
                 isEmail
                 icon={IconMail}
               />
@@ -237,21 +260,36 @@ export default function CompanyViewPage() {
                 icon={IconWebsite}
               />
 
-              <DetailField
-                label="Primary Phone (Line 1)"
-                value={company.phone1 || '—'}
-                isPhone={Boolean(company.phone1)}
-                mono
-                icon={IconPhone}
-              />
-
-              <DetailField
-                label="Secondary Phone (Line 2)"
-                value={company.phone2 || '—'}
-                isPhone={Boolean(company.phone2)}
-                mono
-                icon={IconPhone}
-              />
+              {/* Official Phone Numbers Grid */}
+              <div className="sm:col-span-2 pt-3 border-t border-border/60">
+                <span className="view-field-label block mb-2">Official Phone Numbers</span>
+                {company.phones && company.phones.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {company.phones.map((p, idx) => (
+                      <div
+                        key={p.companyPhoneId || idx}
+                        className="flex items-center justify-between p-2 rounded-lg bg-surface/50 border border-border text-xs"
+                      >
+                        <div className="min-w-0">
+                          <span className="text-3xs uppercase tracking-wider text-text-muted block font-semibold">
+                            {p.phoneLabel || 'Phone'}
+                          </span>
+                          <span className="font-mono text-heading font-medium">
+                            {p.phoneNumber}
+                          </span>
+                        </div>
+                        {p.isPrimary && (
+                          <Badge variant="primary" size="sm" className="text-3xs px-1.5 py-0">
+                            Primary
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-text-muted italic">No official phone numbers registered</span>
+                )}
+              </div>
             </div>
           </Card>
 
@@ -306,39 +344,57 @@ export default function CompanyViewPage() {
               <span className="text-2xs font-mono text-text-muted">Official Headquarters</span>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-start gap-3 p-3.5 rounded-xl bg-surface/50 border border-border">
-                <IconMapPin size={18} className="text-primary shrink-0 mt-0.5" />
-                <div className="text-xs space-y-1.5 min-w-0">
-                  <p className="font-semibold text-heading leading-relaxed">
-                    {fullAddress || 'No registered office address provided.'}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 text-2xs pt-1">
-                    {company.city && (
-                      <div className="bg-bg p-1.5 rounded border border-border/80">
-                        <span className="text-text-muted block">City</span>
-                        <span className="font-semibold text-heading">{company.city}</span>
-                      </div>
-                    )}
-                    {stateName && (
-                      <div className="bg-bg p-1.5 rounded border border-border/80">
-                        <span className="text-text-muted block">State</span>
-                        <span className="font-semibold text-heading">{stateName}</span>
-                      </div>
-                    )}
-                    {countryName && (
-                      <div className="bg-bg p-1.5 rounded border border-border/80">
-                        <span className="text-text-muted block">Country</span>
-                        <span className="font-semibold text-heading">{countryName}</span>
-                      </div>
-                    )}
-                    {company.pinCode && (
-                      <div className="bg-bg p-1.5 rounded border border-border/80">
-                        <span className="text-text-muted block">Postal PIN</span>
-                        <span className="font-mono font-semibold text-heading">{company.pinCode}</span>
-                      </div>
-                    )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-sm">
+              <DetailField
+                label="Address Line 1"
+                value={company.address1 || '—'}
+                valueClassName="font-medium text-heading"
+              />
+              <DetailField
+                label="Address Line 2"
+                value={company.address2 || '—'}
+                valueClassName="font-medium text-heading"
+              />
+              <DetailField
+                label="City"
+                value={company.city || '—'}
+              />
+              <DetailField
+                label="State"
+                value={stateName || '—'}
+              />
+              <DetailField
+                label="Country"
+                value={countryName || '—'}
+              />
+              <DetailField
+                label="PIN / Postal Code"
+                value={company.pinCode || '—'}
+                mono
+              />
+
+              {/* Full Postal Address Strip with Copy */}
+              <div className="sm:col-span-2 pt-3 border-t border-border/60">
+                <span className="view-field-label block mb-1.5">Full Postal Address</span>
+                <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-surface/50 border border-border text-xs">
+                  <div className="flex items-center gap-2 text-heading font-medium min-w-0">
+                    <IconMapPin size={14} className="text-primary shrink-0" />
+                    <span className="truncate">{fullAddress || 'No registered office address provided.'}</span>
                   </div>
+                  {fullAddress && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(fullAddress, 'Full Address')}
+                      className="text-text-muted hover:text-primary p-1 rounded transition-colors shrink-0"
+                      title="Copy full address"
+                    >
+                      {copiedField === 'Full Address' ? (
+                        <IconCheck size={14} className="text-success" />
+                      ) : (
+                        <IconCopy size={14} />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -353,16 +409,12 @@ export default function CompanyViewPage() {
                   Registration & System Audit
                 </h3>
               </div>
-              <span className="inline-flex items-center gap-1 text-2xs font-semibold text-success bg-success/10 px-2 py-0.5 rounded-full border border-success/20">
-                <IconShieldCheck size={12} />
-                Verified Master
-              </span>
             </div>
 
             <div className="space-y-2.5 text-xs">
               <div className="p-2.5 rounded-lg bg-surface/40 border border-border/60 flex items-center justify-between">
-                <span className="text-text-muted">Master Entity ID</span>
-                <span className="font-mono font-bold text-primary">{company.id}</span>
+                <span className="text-text-muted">Company ID</span>
+                <span className="font-mono font-bold text-primary">{company.companyCode || company.companyId || company.id}</span>
               </div>
               <div className="p-2.5 rounded-lg bg-surface/40 border border-border/60 flex items-center justify-between">
                 <span className="text-text-muted">Record Status</span>

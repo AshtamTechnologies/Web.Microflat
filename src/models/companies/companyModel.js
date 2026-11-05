@@ -10,39 +10,63 @@
  */
 export function companyListItemFromApi(apiItem) {
   if (!apiItem) return null;
-  const companyId = apiItem.companyId;
-  const companyCode = apiItem.companyCode || (companyId ? `COMP-${String(companyId).padStart(3, '0')}` : '');
+  const companyId =
+    apiItem.companyId !== undefined && apiItem.companyId !== null
+      ? apiItem.companyId
+      : apiItem.CompanyId !== undefined && apiItem.CompanyId !== null
+        ? apiItem.CompanyId
+        : apiItem.id !== undefined && apiItem.id !== null && !isNaN(Number(apiItem.id))
+          ? Number(apiItem.id)
+          : apiItem.Id !== undefined && apiItem.Id !== null && !isNaN(Number(apiItem.Id))
+            ? Number(apiItem.Id)
+            : null;
+
+  const companyCode =
+    apiItem.companyCode ||
+    apiItem.CompanyCode ||
+    (companyId ? `COMP-${String(companyId).padStart(3, '0')}` : '');
+
+  const phones = Array.isArray(apiItem.phones) ? apiItem.phones : [];
+  const primaryPhone =
+    apiItem.primaryPhone ||
+    phones.find((p) => p.isPrimary)?.phoneNumber ||
+    phones[0]?.phoneNumber ||
+    apiItem.phone1 ||
+    null;
 
   return {
     // Both id & companyId supported for compatibility with DataTable and Links
-    id: companyCode || companyId,
-    companyId,
+    id: companyId ?? companyCode,
+    companyId: companyId ?? (typeof apiItem.id === 'number' ? apiItem.id : null),
     companyCode,
-    companyName: apiItem.companyName || '',
-    gstNo: apiItem.gstNo || '',
-    companyEmail: apiItem.companyEmail || '',
-    email: apiItem.companyEmail || '', // UI compatibility alias
-    phone1: apiItem.phone1 || '',
+    companyName: apiItem.companyName || apiItem.CompanyName || '',
+    gstNo: apiItem.gstNo || apiItem.GstNo || '',
+    cinNo: apiItem.cinNo || apiItem.CinNo || null,
+    companyEmail: apiItem.companyEmail || apiItem.CompanyEmail || '',
+    email: apiItem.companyEmail || apiItem.CompanyEmail || '', // UI compatibility alias
+    primaryPhone,
+    phones,
+    phone1: primaryPhone || '', // Backward compatibility alias
     phone2: apiItem.phone2 || null,
-    contactPersonName: apiItem.contactPersonName || '',
-    contactPersonMobile: apiItem.contactPersonMobile || '',
-    contactPersonEmail: apiItem.contactPersonEmail || '',
-    city: apiItem.city || '',
-    stateName: apiItem.stateName || '',
-    state: apiItem.stateName || apiItem.stateId || '', // UI compatibility alias
-    countryName: apiItem.countryName || '',
-    country: apiItem.countryName || apiItem.countryId || '', // UI compatibility alias
-    zipCode: apiItem.zipCode || '',
-    pinCode: apiItem.zipCode || '', // UI compatibility alias
-    address1: apiItem.address1 || '',
-    address2: apiItem.address2 || '',
-    isActive: Boolean(apiItem.isActive),
-    bankDetailCount: apiItem.bankDetailCount || 0,
-    createdOn: apiItem.createdOn,
-    createdAt: apiItem.createdOn, // UI compatibility alias
-    lastUpdatedOn: apiItem.lastUpdatedOn,
-    updatedAt: apiItem.lastUpdatedOn, // UI compatibility alias
-    lastUpdatedByName: apiItem.lastUpdatedByName || '',
+    contactPersonName: apiItem.contactPersonName || apiItem.ContactPersonName || '',
+    contactPersonMobile: apiItem.contactPersonMobile || apiItem.ContactPersonMobile || '',
+    contactPersonEmail: apiItem.contactPersonEmail || apiItem.ContactPersonEmail || '',
+    city: apiItem.city || apiItem.City || '',
+    stateName: apiItem.stateName || apiItem.StateName || '',
+    state: apiItem.stateName || apiItem.stateId || apiItem.StateId || '', // UI compatibility alias
+    countryName: apiItem.countryName || apiItem.CountryName || '',
+    country: apiItem.countryName || apiItem.countryId || apiItem.CountryId || '', // UI compatibility alias
+    zipCode: apiItem.zipCode || apiItem.ZipCode || '',
+    pinCode: apiItem.zipCode || apiItem.ZipCode || '', // UI compatibility alias
+    address1: apiItem.address1 || apiItem.Address1 || '',
+    address2: apiItem.address2 || apiItem.Address2 || '',
+    isActive: Boolean(apiItem.isActive ?? apiItem.IsActive),
+    bankDetailCount: apiItem.bankDetailCount ?? apiItem.BankDetailCount ?? 0,
+    createdOn: apiItem.createdOn || apiItem.CreatedOn,
+    createdAt: apiItem.createdOn || apiItem.CreatedOn, // UI compatibility alias
+    lastUpdatedOn: apiItem.lastUpdatedOn || apiItem.LastUpdatedOn,
+    updatedAt: apiItem.lastUpdatedOn || apiItem.LastUpdatedOn, // UI compatibility alias
+    lastUpdatedByName: apiItem.lastUpdatedByName || apiItem.LastUpdatedByName || '',
     raw: apiItem,
   };
 }
@@ -56,15 +80,17 @@ export function companyDetailFromApi(apiItem) {
 
   return {
     ...base,
-    website: apiItem.website || '',
-    countryId: apiItem.countryId || null,
-    stateId: apiItem.stateId || null,
+    cinNo: apiItem.cinNo || apiItem.CinNo || null,
+    website: apiItem.website || apiItem.Website || '',
+    countryId: apiItem.countryId ?? apiItem.CountryId ?? null,
+    stateId: apiItem.stateId ?? apiItem.StateId ?? null,
+    phones: Array.isArray(apiItem.phones) ? apiItem.phones : base.phones || [],
     bankDetails: Array.isArray(apiItem.bankDetails)
       ? apiItem.bankDetails.map(bankDetailFromApi)
       : [],
-    lastUpdatedBy: apiItem.lastUpdatedBy || null,
-    lastUpdatedByName: apiItem.lastUpdatedByName || '',
-    lastUpdatedOn: apiItem.lastUpdatedOn || apiItem.createdOn || null,
+    lastUpdatedBy: apiItem.lastUpdatedBy ?? apiItem.LastUpdatedBy ?? null,
+    lastUpdatedByName: apiItem.lastUpdatedByName || apiItem.LastUpdatedByName || '',
+    lastUpdatedOn: apiItem.lastUpdatedOn || apiItem.LastUpdatedOn || apiItem.createdOn || null,
   };
 }
 
@@ -75,13 +101,30 @@ export function companyDetailFromApi(apiItem) {
  * @returns {object} CompanyRequest
  */
 export function companyToApiPayload(form) {
+  // Normalize phones array: remove blank numbers, keep phoneLabel, phoneNumber, isPrimary
+  const rawPhones = Array.isArray(form.phones) ? form.phones : [];
+  const validPhones = rawPhones
+    .filter((p) => p && p.phoneNumber && String(p.phoneNumber).trim() !== '')
+    .map((p) => ({
+      phoneLabel: p.phoneLabel ? String(p.phoneLabel).trim() : null,
+      phoneNumber: String(p.phoneNumber).trim(),
+      isPrimary: Boolean(p.isPrimary),
+    }));
+
+  // If none is marked primary but we have phones, mark the first one as primary
+  if (validPhones.length > 0 && !validPhones.some((p) => p.isPrimary)) {
+    validPhones[0].isPrimary = true;
+  }
+
+  const cin = form.cinNo ? String(form.cinNo).replace(/\s/g, '').toUpperCase() : null;
+
   return {
     companyName: String(form.companyName || '').trim(),
     gstNo: form.gstNo ? String(form.gstNo).trim().toUpperCase() : null,
+    cinNo: cin || null,
     companyEmail: String(form.email || form.companyEmail || '').trim().toLowerCase(),
     website: form.website ? String(form.website).trim() : null,
-    phone1: String(form.phone1 || '').trim(),
-    phone2: form.phone2 ? String(form.phone2).trim() : null,
+    phones: validPhones,
     contactPersonName: String(form.contactPersonName || '').trim(),
     contactPersonMobile: String(form.contactPersonMobile || '').trim(),
     contactPersonEmail: String(form.contactPersonEmail || '').trim().toLowerCase(),

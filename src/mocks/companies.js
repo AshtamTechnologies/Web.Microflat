@@ -4,12 +4,21 @@
 
 export const INITIAL_COMPANIES = [
   {
-    id: 'COMP-001',
+    id: 1,
+    companyId: 1,
+    companyCode: 'COMP-001',
     companyName: 'Micro-Flat Datasoft Pvt. Ltd.',
     contactPersonName: 'Krupal Bhoi',
     contactPersonEmail: 'krupal.bhoi@microflat.com',
     contactPersonMobile: '+91 98250 12345',
     email: 'contact@microflat.com',
+    companyEmail: 'contact@microflat.com',
+    cinNo: 'U29100GJ2010PTC012345',
+    primaryPhone: '0265 2345678',
+    phones: [
+      { companyPhoneId: 1, phoneLabel: 'Office', phoneNumber: '0265 2345678', isPrimary: true, sortOrder: 0 },
+      { companyPhoneId: 2, phoneLabel: 'Landline', phoneNumber: '0265 2345679', isPrimary: false, sortOrder: 1 },
+    ],
     phone1: '0265 2345678',
     phone2: '0265 2345679',
     gstNo: '24AAACM1234F1Z5',
