@@ -19,6 +19,7 @@ export function useMeetingForm(id) {
 
   const [formData, setFormData] = useState({
     meetingTitle: '',
+    title: '',
     meetingType: 'Internal', // 'Internal' | 'Client' | 'Vendor'
     inquiryId: '',
     inquiryNumber: '',
@@ -48,8 +49,10 @@ export function useMeetingForm(id) {
           if (data.status !== 'Scheduled') {
             setError(`Cannot edit this meeting because its status is ${data.status}.`);
           }
+          const meetingTitle = data.meetingTitle || data.title || '';
           setFormData({
-            meetingTitle: data.meetingTitle || '',
+            meetingTitle,
+            title: meetingTitle,
             meetingType: data.meetingType || 'Internal',
             inquiryId: data.inquiryId ? String(data.inquiryId) : '',
             inquiryNumber: data.inquiryNumber || '',
@@ -75,11 +78,18 @@ export function useMeetingForm(id) {
   }, [id, isEdit]);
 
   const setField = useCallback((field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'title') updated.meetingTitle = value;
+      if (field === 'meetingTitle') updated.title = value;
+      return updated;
+    });
     setFieldErrors((prev) => {
-      if (prev[field]) {
+      if (prev[field] || (field === 'title' && prev.meetingTitle) || (field === 'meetingTitle' && prev.title)) {
         const next = { ...prev };
         delete next[field];
+        delete next.title;
+        delete next.meetingTitle;
         return next;
       }
       return prev;
@@ -88,8 +98,10 @@ export function useMeetingForm(id) {
 
   const validate = useCallback(() => {
     const errors = {};
-    if (!formData.meetingTitle.trim()) {
+    const title = (formData.meetingTitle || formData.title || '').trim();
+    if (!title) {
       errors.meetingTitle = 'Meeting title is required.';
+      errors.title = 'Meeting title is required.';
     }
     if (!formData.meetingDate) {
       errors.meetingDate = 'Meeting date is required.';
@@ -106,18 +118,22 @@ export function useMeetingForm(id) {
 
   const handleSubmit = useCallback(
     async (e) => {
-      if (e) e.preventDefault();
+      if (e && typeof e.preventDefault === 'function') e.preventDefault();
       if (!validate()) return false;
 
       setSubmitting(true);
       setError(null);
       try {
+        const payload = {
+          ...formData,
+          meetingTitle: (formData.meetingTitle || formData.title || '').trim(),
+        };
+
         if (isEdit) {
-          await updateMeeting(id, formData);
+          await updateMeeting(id, payload);
         } else {
-          await scheduleMeeting(formData, user || {});
+          await scheduleMeeting(payload, user || {});
         }
-        navigate('/meetings');
         return true;
       } catch (err) {
         setError(err?.message || 'Failed to save meeting.');
@@ -126,7 +142,7 @@ export function useMeetingForm(id) {
         setSubmitting(false);
       }
     },
-    [validate, isEdit, id, formData, user, navigate]
+    [validate, isEdit, id, formData, user]
   );
 
   return {
@@ -138,6 +154,6 @@ export function useMeetingForm(id) {
     submitting,
     error,
     handleSubmit,
+    submit: handleSubmit,
   };
 }
-

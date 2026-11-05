@@ -1,13 +1,11 @@
 /**
- * MeetingTable.jsx — Reusable TanStack DataTable for Meetings overview.
+ * MeetingTable.jsx — TanStack DataTable presentation for Meetings module.
  *
- * Implements:
- *   - TanStack Table integration with pagination and sorting
- *   - No avatars: clean attendee count badge with participant tooltip
- *   - Proportional column widths to prevent title squishing / truncation
- *   - Standard TableActions with uniform icon buttons
- *   - Formatted 12h AM/PM time intervals and standard dates
- *   - Responsive mobile card view via renderMobileCard
+ * Conforms to Section 5.4i of Frontend-API-Guide.md:
+ * - Columns: Meeting Title, Date & Time, Type, Reference (Inquiry #), Attendees (count), Status, Actions.
+ * - Supports both attendeeCount number and attendees array from backend responses.
+ * - Draggable resizable columns with optimal sizing.
+ * - Fully responsive with mobile card view (< md).
  */
 
 import { useMemo } from 'react';
@@ -20,7 +18,6 @@ import {
   DataTable,
   Badge,
   StatusBadge,
-  TableActions,
   IconButton,
   Button,
   Card,
@@ -32,6 +29,8 @@ import {
   IconUsers,
   IconCheck,
   IconClose,
+  IconView,
+  IconEdit,
 } from '../../../constants/icons';
 import { formatDate } from '../../../utils/dateUtils';
 
@@ -50,16 +49,18 @@ function formatTime12(timeStr) {
 export default function MeetingTable({
   meetings = [],
   loading = false,
-  onView,
-  onEdit,
-  onComplete,
-  onCancel,
+  onView = () => {},
+  onEdit = () => {},
+  onComplete = () => {},
+  onCancel = () => {},
 }) {
   const columns = useMemo(() => {
     return [
       {
         id: 'title',
         header: 'MEETING TITLE',
+        minSize: 180,
+        size: 230,
         cell: ({ row }) => {
           const m = row.original;
           return (
@@ -81,11 +82,12 @@ export default function MeetingTable({
             </div>
           );
         },
-        size: 320,
       },
       {
         id: 'dateTime',
         header: 'DATE & TIME',
+        minSize: 135,
+        size: 145,
         cell: ({ row }) => {
           const m = row.original;
           return (
@@ -104,11 +106,12 @@ export default function MeetingTable({
             </div>
           );
         },
-        size: 180,
       },
       {
         id: 'type',
         header: 'TYPE',
+        minSize: 85,
+        size: 90,
         cell: ({ row }) => {
           const type = row.original.meetingType;
           return (
@@ -117,8 +120,8 @@ export default function MeetingTable({
                 type === 'Client'
                   ? 'primary'
                   : type === 'Vendor'
-                  ? 'warning'
-                  : 'neutral'
+                    ? 'warning'
+                    : 'neutral'
               }
               size="sm"
             >
@@ -126,13 +129,14 @@ export default function MeetingTable({
             </Badge>
           );
         },
-        size: 110,
       },
       {
         id: 'reference',
         header: 'REFERENCE',
+        minSize: 90,
+        size: 100,
         cell: ({ row }) => {
-          const ref = row.original.inquiryNumber;
+          const ref = row.original.inquiryNumber || row.original.inquiryNo;
           return ref ? (
             <span className="font-mono text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20 whitespace-nowrap inline-block">
               {ref}
@@ -141,13 +145,18 @@ export default function MeetingTable({
             <span className="text-xs text-text-muted italic">General</span>
           );
         },
-        size: 130,
       },
       {
         id: 'attendees',
         header: 'ATTENDEES',
+        minSize: 105,
+        size: 110,
         cell: ({ row }) => {
-          const count = row.original.attendees?.length || 0;
+          const count =
+            row.original.attendeeCount !== undefined && row.original.attendeeCount !== null
+              ? Number(row.original.attendeeCount)
+              : row.original.attendees?.length || 0;
+
           const attendeeNames = (row.original.attendees || [])
             .map((a) => a.name || a.externalName)
             .filter(Boolean)
@@ -156,7 +165,7 @@ export default function MeetingTable({
           return (
             <div
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-border text-xs font-medium text-text whitespace-nowrap cursor-default"
-              title={attendeeNames || 'No attendees'}
+              title={attendeeNames || `${count} Attendees`}
             >
               <IconUsers className="w-3.5 h-3.5 text-primary shrink-0" />
               <span>
@@ -165,59 +174,76 @@ export default function MeetingTable({
             </div>
           );
         },
-        size: 140,
       },
       {
         id: 'status',
         header: 'STATUS',
+        minSize: 95,
+        size: 100,
         cell: ({ row }) => {
           return <StatusBadge status={row.original.status} size="sm" />;
         },
-        size: 120,
       },
       {
         id: 'actions',
         header: 'ACTIONS',
+        minSize: 145,
+        size: 150,
+        enableSorting: false,
+        enableResizing: false,
         cell: ({ row }) => {
           const m = row.original;
           const isScheduled = m.status === 'Scheduled';
 
           return (
-            <TableActions
-              onView={() => onView(m)}
-              viewTooltip="View Details"
-              onEdit={isScheduled ? () => onEdit(m) : undefined}
-              editTooltip="Edit Schedule"
-              extraActions={
-                isScheduled ? (
-                  <>
-                    <IconButton
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      icon={IconCheck}
-                      title="Mark as Completed"
-                      aria-label="Mark as Completed"
-                      onClick={() => onComplete(m)}
-                      className="text-text-muted hover:text-success hover:bg-success/10 transition-colors"
-                    />
-                    <IconButton
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      icon={IconClose}
-                      title="Cancel Meeting"
-                      aria-label="Cancel Meeting"
-                      onClick={() => onCancel(m)}
-                      className="text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
-                    />
-                  </>
-                ) : null
-              }
-            />
+            <div className="flex items-center justify-end gap-1 w-full">
+              <IconButton
+                type="button"
+                size="sm"
+                variant="ghost"
+                icon={IconView}
+                title="View Details"
+                aria-label="View Details"
+                onClick={() => onView(m)}
+                className="text-text-muted hover:text-primary hover:bg-surface transition-colors shrink-0"
+              />
+              {isScheduled && (
+                <>
+                  <IconButton
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    icon={IconEdit}
+                    title="Edit Schedule"
+                    aria-label="Edit Schedule"
+                    onClick={() => onEdit(m)}
+                    className="text-text-muted hover:text-primary hover:bg-surface transition-colors shrink-0"
+                  />
+                  <IconButton
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    icon={IconCheck}
+                    title="Mark as Completed"
+                    aria-label="Mark as Completed"
+                    onClick={() => onComplete(m)}
+                    className="text-text-muted hover:text-success hover:bg-success/10 transition-colors shrink-0"
+                  />
+                  <IconButton
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    icon={IconClose}
+                    title="Cancel Meeting"
+                    aria-label="Cancel Meeting"
+                    onClick={() => onCancel(m)}
+                    className="text-text-muted hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
+                  />
+                </>
+              )}
+            </div>
           );
         },
-        size: 140,
       },
     ];
   }, [onView, onEdit, onComplete, onCancel]);
@@ -227,6 +253,8 @@ export default function MeetingTable({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
     initialState: {
       pagination: {
         pageSize: 10,
@@ -238,7 +266,11 @@ export default function MeetingTable({
   const renderMobileCard = (row) => {
     const m = row.original;
     const isScheduled = m.status === 'Scheduled';
-    const attendeesCount = m.attendees?.length || 0;
+    const attendeesCount =
+      m.attendeeCount !== undefined && m.attendeeCount !== null
+        ? Number(m.attendeeCount)
+        : m.attendees?.length || 0;
+    const ref = m.inquiryNumber || m.inquiryNo;
 
     return (
       <Card key={m.id} padding="md" className="space-y-3 bg-bg border border-border shadow-2xs">
@@ -262,10 +294,10 @@ export default function MeetingTable({
           <StatusBadge status={m.status} size="sm" />
         </div>
 
-        {/* 2-Column Info Grid */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        {/* Date, Time & Reference Grid */}
+        <div className="grid grid-cols-2 gap-2 text-xs py-1">
           <div>
-            <span className="text-2xs text-text-muted block">Date & Time</span>
+            <span className="text-2xs text-text-muted block">Schedule</span>
             <div className="flex items-center gap-1 font-medium text-text mt-0.5">
               <IconCalendar className="w-3 h-3 text-text-muted shrink-0" />
               <span>{formatDate(m.meetingDate)}</span>
@@ -290,9 +322,9 @@ export default function MeetingTable({
               >
                 {m.meetingType}
               </Badge>
-              {m.inquiryNumber && (
+              {ref && (
                 <span className="font-mono text-2xs text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
-                  {m.inquiryNumber}
+                  {ref}
                 </span>
               )}
             </div>

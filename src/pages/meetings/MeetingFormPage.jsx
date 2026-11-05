@@ -293,15 +293,23 @@ export default function MeetingFormPage() {
 
       {/* Section 4: Meeting Attendees */}
       <Card>
-        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
-          <IconUsers className="w-5 h-5 text-primary" />
-          <h2 className="text-base font-semibold text-heading">Meeting Attendees</h2>
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <IconUsers className="w-5 h-5 text-primary" />
+            <h2 className="text-base font-semibold text-heading">Meeting Attendees</h2>
+          </div>
+          {isEdit && (
+            <span className="text-2xs sm:text-xs text-text-muted bg-surface px-2.5 py-1 rounded-md border border-border">
+              Read-only while editing
+            </span>
+          )}
         </div>
 
         <AttendeeManager
           attendees={formData.attendees}
           onChange={(newAttendees) => setField('attendees', newAttendees)}
           userOptions={userOptions}
+          readOnly={isEdit}
         />
       </Card>
 

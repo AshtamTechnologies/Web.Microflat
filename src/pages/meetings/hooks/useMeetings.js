@@ -5,7 +5,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   getMeetings,
-  getMeetingCounts,
   changeMeetingStatus,
 } from '../../../services/meetings/meetingsService';
 import { useAuthContext } from '../../../context/AuthContext';
@@ -32,23 +31,33 @@ export function useMeetings() {
     setLoading(true);
     setError(null);
     try {
-      const [list, countsData] = await Promise.all([
-        getMeetings({
-          search,
-          status: statusFilter,
-          meetingType: meetingTypeFilter,
-          fromDate,
-          toDate,
-          tab: activeTab,
-          mine: activeTab === 'mine',
-          currentUserId,
-          currentUserEmail,
-          currentUserName,
-        }),
-        getMeetingCounts(currentUserId, currentUserEmail, currentUserName),
-      ]);
+      // 1 single API call to load meetings matching all current criteria
+      const list = await getMeetings({
+        search,
+        status: statusFilter,
+        meetingType: meetingTypeFilter,
+        fromDate,
+        toDate,
+        mine: activeTab === 'mine',
+        currentUserId,
+        currentUserEmail,
+        currentUserName,
+      });
+
       setMeetings(list);
-      setCounts(countsData);
+
+      // Compute status counts in memory from returned data (no redundant network requests)
+      const scheduled = list.filter((m) => m.status === 'Scheduled').length;
+      const completed = list.filter((m) => m.status === 'Completed').length;
+      const cancelled = list.filter((m) => m.status === 'Cancelled').length;
+
+      setCounts({
+        all: list.length,
+        mine: activeTab === 'mine' ? list.length : 0,
+        scheduled,
+        completed,
+        cancelled,
+      });
     } catch (err) {
       setError(err?.message || 'Failed to load meetings.');
     } finally {
@@ -63,15 +72,17 @@ export function useMeetings() {
   const hasActiveFilters = useMemo(() => {
     return (
       Boolean(search.trim()) ||
+      activeTab !== 'all' ||
       statusFilter !== 'ALL' ||
       meetingTypeFilter !== 'ALL' ||
       Boolean(fromDate) ||
       Boolean(toDate)
     );
-  }, [search, statusFilter, meetingTypeFilter, fromDate, toDate]);
+  }, [search, activeTab, statusFilter, meetingTypeFilter, fromDate, toDate]);
 
   const resetFilters = useCallback(() => {
     setSearch('');
+    setActiveTab('all');
     setStatusFilter('ALL');
     setMeetingTypeFilter('ALL');
     setFromDate('');
@@ -97,6 +108,8 @@ export function useMeetings() {
   return {
     activeTab,
     setActiveTab,
+    scopeFilter: activeTab,
+    setScopeFilter: setActiveTab,
     search,
     setSearch,
     statusFilter,
@@ -118,4 +131,3 @@ export function useMeetings() {
     handleCancel,
   };
 }
-

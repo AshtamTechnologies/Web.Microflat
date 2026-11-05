@@ -70,6 +70,8 @@ import * as delegationService from './delegation/delegationService';
 
 import * as geographyService from './geography/geographyService';
 
+import * as meetingsService from './meetings/meetingsService';
+
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 export const authService = useMock ? mockAuth : realAuth;
@@ -94,4 +96,5 @@ export const taxConfigService = useMock ? mockTaxConfigs : realTaxConfigs;
 export const productService = realProducts;
 export { delegationService };
 export { geographyService };
+export { meetingsService };
 export const isMockApi = useMock;

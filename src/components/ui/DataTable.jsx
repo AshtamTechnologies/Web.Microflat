@@ -45,7 +45,12 @@ export default function DataTable({
   const startRecord = resolvedTotal === 0 ? 0 : pageIndex * pageSize + 1;
   const endRecord = Math.min((pageIndex + 1) * pageSize, resolvedTotal);
 
-  const totalCenterSize = typeof table.getCenterTotalSize === 'function' ? table.getCenterTotalSize() : 0;
+  const totalCenterSize =
+    typeof table.getTotalSize === 'function'
+      ? table.getTotalSize()
+      : typeof table.getCenterTotalSize === 'function'
+        ? table.getCenterTotalSize()
+        : 0;
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -174,18 +179,26 @@ export default function DataTable({
                     key={row.id}
                     className="transition-colors hover:bg-surface/50"
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <Td
-                        key={cell.id}
-                        style={{ width: cell.column.getSize() }}
-                        className="py-3 px-4"
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </Td>
-                    ))}
+                    {row.getVisibleCells().map((cell) => {
+                      const isActionsCol =
+                        cell.column.id === 'actions' ||
+                        cell.column.id === 'action' ||
+                        (typeof cell.column.columnDef.header === 'string' &&
+                          cell.column.columnDef.header.toUpperCase() === 'ACTIONS');
+
+                      return (
+                        <Td
+                          key={cell.id}
+                          style={{ width: cell.column.getSize() }}
+                          className={`py-3 px-4 ${isActionsCol ? 'text-right' : ''}`}
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </Td>
+                      );
+                    })}
                   </tr>
                 ))
               )}

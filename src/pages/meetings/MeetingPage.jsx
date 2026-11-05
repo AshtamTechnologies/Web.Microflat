@@ -1,7 +1,12 @@
 /**
- * MeetingPage.jsx — Main Meetings overview and management page.
+ * MeetingPage.jsx — Main list view for scheduling, tracking, and managing meetings.
  *
- * Route: /meetings
+ * Conforms to Section 5.4i of Frontend-API-Guide.md:
+ * - Real API integration via meetingsService with offline mock fallback.
+ * - Single-table TanStack DataTable with pagination, responsive cards, and full column sizing.
+ * - Toolbar with search, scope filter (All vs My Meetings), status, type, and date filters.
+ * - Responsive filter grid for small screens (prevents stacking into 5 massive rows on mobile).
+ * - Status transition modals for Completing and Cancelling meetings.
  */
 
 import { useState } from 'react';
@@ -12,7 +17,6 @@ import {
   TableToolbar,
   SearchableSelect,
   DatePicker,
-  EmptyState,
 } from '../../components/ui';
 import {
   IconCalendar,
@@ -22,6 +26,11 @@ import { useMeetings } from './hooks/useMeetings';
 import MeetingTable from './components/MeetingTable';
 import CompleteMeetingModal from './components/CompleteMeetingModal';
 import CancelMeetingModal from './components/CancelMeetingModal';
+
+const SCOPE_FILTERS = [
+  { value: 'all', label: 'All Meetings' },
+  { value: 'mine', label: 'My Meetings' },
+];
 
 const STATUS_FILTERS = [
   { value: 'ALL', label: 'All Statuses' },
@@ -40,6 +49,8 @@ const TYPE_FILTERS = [
 export default function MeetingPage() {
   const navigate = useNavigate();
   const {
+    scopeFilter,
+    setScopeFilter,
     search,
     setSearch,
     statusFilter,
@@ -51,7 +62,6 @@ export default function MeetingPage() {
     toDate,
     setToDate,
     meetings,
-    counts,
     loading,
     error,
     hasActiveFilters,
@@ -110,7 +120,7 @@ export default function MeetingPage() {
         }
       />
 
-      {/* Table Toolbar & Inline Filters */}
+      {/* Table Toolbar & Inline Responsive Filters */}
       <TableToolbar
         searchValue={search}
         onSearchChange={setSearch}
@@ -119,37 +129,57 @@ export default function MeetingPage() {
         onReset={resetFilters}
         resetLabel="Reset Filters"
       >
-        <div className="w-full sm:w-44">
-          <SearchableSelect
-            placeholder="All Statuses"
-            searchPlaceholder="Search status..."
-            options={STATUS_FILTERS}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e?.target?.value ?? e)}
-          />
-        </div>
-        <div className="w-full sm:w-44">
-          <SearchableSelect
-            placeholder="All Types"
-            searchPlaceholder="Search type..."
-            options={TYPE_FILTERS}
-            value={meetingTypeFilter}
-            onChange={(e) => setMeetingTypeFilter(e?.target?.value ?? e)}
-          />
-        </div>
-        <div className="w-full sm:w-44 min-w-[170px]">
-          <DatePicker
-            placeholder="From Date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e?.target?.value ?? e)}
-          />
-        </div>
-        <div className="w-full sm:w-44 min-w-[170px]">
-          <DatePicker
-            placeholder="To Date"
-            value={toDate}
-            onChange={(e) => setToDate(e?.target?.value ?? e)}
-          />
+        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
+          {/* Scope: All vs My Meetings */}
+          <div className="col-span-1 sm:w-36 min-w-0">
+            <SearchableSelect
+              placeholder="All Meetings"
+              searchPlaceholder="Search scope..."
+              options={SCOPE_FILTERS}
+              value={scopeFilter}
+              onChange={(e) => setScopeFilter(e?.target?.value ?? e)}
+            />
+          </div>
+
+          {/* Status Filter */}
+          <div className="col-span-1 sm:w-36 min-w-0">
+            <SearchableSelect
+              placeholder="All Statuses"
+              searchPlaceholder="Search status..."
+              options={STATUS_FILTERS}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e?.target?.value ?? e)}
+            />
+          </div>
+
+          {/* Type Filter */}
+          <div className="col-span-2 sm:col-span-1 sm:w-36 min-w-0">
+            <SearchableSelect
+              placeholder="All Types"
+              searchPlaceholder="Search type..."
+              options={TYPE_FILTERS}
+              value={meetingTypeFilter}
+              onChange={(e) => setMeetingTypeFilter(e?.target?.value ?? e)}
+            />
+          </div>
+
+          {/* From Date */}
+          <div className="col-span-1 sm:w-44 sm:min-w-[170px] min-w-0">
+            <DatePicker
+              placeholder="From Date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e?.target?.value ?? e)}
+            />
+          </div>
+
+          {/* To Date */}
+          <div className="col-span-1 sm:w-44 sm:min-w-[170px] min-w-0">
+            <DatePicker
+              placeholder="To Date"
+              value={toDate}
+              onChange={(e) => setToDate(e?.target?.value ?? e)}
+            />
+          </div>
         </div>
       </TableToolbar>
 
@@ -163,15 +193,13 @@ export default function MeetingPage() {
       {/* TanStack DataTable View */}
       {meetings.length === 0 && !loading ? (
         <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-2xs">
-          <EmptyState
-            title="No meetings found"
-            description={
-              hasActiveFilters
-                ? 'No meetings match your current search or filter criteria.'
-                : 'No meetings scheduled yet. Click below to schedule your first meeting.'
-            }
-            actionLabel={hasActiveFilters ? 'Clear Filters' : 'Schedule Meeting'}
-            onAction={hasActiveFilters ? resetFilters : () => navigate('/meetings/new')}
+          <MeetingTable
+            meetings={[]}
+            loading={false}
+            onView={(m) => navigate(`/meetings/${m.id}`)}
+            onEdit={(m) => navigate(`/meetings/${m.id}/edit`)}
+            onComplete={(meeting) => setSelectedForComplete(meeting)}
+            onCancel={(meeting) => setSelectedForCancel(meeting)}
           />
         </div>
       ) : (
@@ -180,26 +208,25 @@ export default function MeetingPage() {
           loading={loading}
           onView={(m) => navigate(`/meetings/${m.id}`)}
           onEdit={(m) => navigate(`/meetings/${m.id}/edit`)}
-          onComplete={(m) => setSelectedForComplete(m)}
-          onCancel={(m) => setSelectedForCancel(m)}
+          onComplete={(meeting) => setSelectedForComplete(meeting)}
+          onCancel={(meeting) => setSelectedForCancel(meeting)}
         />
       )}
 
-      {/* Complete Meeting Modal */}
+      {/* Status Transition Modals */}
       <CompleteMeetingModal
         isOpen={Boolean(selectedForComplete)}
+        meeting={selectedForComplete}
         onClose={() => setSelectedForComplete(null)}
         onConfirm={onConfirmComplete}
-        meetingTitle={selectedForComplete?.meetingTitle}
         loading={actionLoading}
       />
 
-      {/* Cancel Meeting Modal */}
       <CancelMeetingModal
         isOpen={Boolean(selectedForCancel)}
+        meeting={selectedForCancel}
         onClose={() => setSelectedForCancel(null)}
         onConfirm={onConfirmCancel}
-        meetingTitle={selectedForCancel?.meetingTitle}
         loading={actionLoading}
       />
     </div>
