@@ -33,6 +33,24 @@ export const NEGOTIATION_MODES = [
   'Other',
 ];
 
+export const QUOTATION_DOC_TYPES = [
+  { value: 'Signed Quotation', label: 'Signed Quotation' },
+  { value: 'Client PO', label: 'Client PO' },
+  { value: 'Negotiation attachment', label: 'Negotiation attachment' },
+  { value: 'Technical Drawing', label: 'Technical Drawing' },
+  { value: 'Other Document', label: 'Other Document' },
+];
+
+/**
+ * Formats byte count into readable KB / MB string for quotation attachments.
+ */
+export function formatDocumentFileSize(bytes) {
+  if (!bytes || bytes <= 0) return '320 KB';
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.max(1, Math.round(kb))} KB`;
+  return `${(kb / 1024).toFixed(2)} MB`;
+}
+
 export const CURRENCY_SYMBOLS = {
   INR: '₹',
   USD: '$',
@@ -162,6 +180,8 @@ export const INITIAL_QUOTATIONS = [
             variantName: '1000 × 630 mm · Gr-0',
             itemCode: 'SP-GR-1000x630-GR0',
             technicalDetails: 'Indian Black Granite · Hand Lapped · IS-7327-2003 · Flatness 5.0 µm',
+            description:
+              'Precision Granite Surface Plate manufactured from high-density Indian Black Granite, hand-lapped to IS-7327-2003 Grade 0 accuracy.\nVariant Specs: Size: 1000 × 630 mm · Grade: Gr-0 · Flatness: 5.0 µm.',
             quantity: 2,
             rate: 48500,
             taxPercent: 18,
@@ -203,6 +223,8 @@ export const INITIAL_QUOTATIONS = [
             variantName: '1000 × 630 mm · Gr-0',
             itemCode: 'SP-GR-1000x630-GR0',
             technicalDetails: 'Indian Black Granite · Hand Lapped · IS-7327-2003 · Flatness 5.0 µm',
+            description:
+              'Precision Granite Surface Plate manufactured from high-density Indian Black Granite, hand-lapped to IS-7327-2003 Grade 0 accuracy.\nVariant Specs: Size: 1000 × 630 mm · Grade: Gr-0 · Flatness: 5.0 µm.',
             quantity: 2,
             rate: 47000,
             taxPercent: 18,
@@ -244,6 +266,8 @@ export const INITIAL_QUOTATIONS = [
             variantName: '1000 × 630 mm · Gr-0',
             itemCode: 'SP-GR-1000x630-GR0',
             technicalDetails: 'Indian Black Granite · Hand Lapped · IS-7327-2003 · Flatness 5.0 µm',
+            description:
+              'Precision Granite Surface Plate manufactured from high-density Indian Black Granite, hand-lapped to IS-7327-2003 Grade 0 accuracy.\nVariant Specs: Size: 1000 × 630 mm · Grade: Gr-0 · Flatness: 5.0 µm.',
             quantity: 2,
             rate: 48500,
             taxPercent: 18,
@@ -392,6 +416,8 @@ export const INITIAL_QUOTATIONS = [
             variantName: '1600 × 1000 mm · Gr-1',
             itemCode: 'SP-GR-1600x1000-GR1',
             technicalDetails: 'Indian Black Granite · Hand Lapped · IS-7327-2003',
+            description:
+              'Precision Granite Surface Plate manufactured from high-density Indian Black Granite, stress-relieved and hand-lapped to meet IS-7327-2003 Grade 1 accuracy.\nVariant Specs: Size: 1600 × 1000 mm · Grade: Gr-1 · Flatness: 12.0 µm.',
             quantity: 1,
             rate: 178220,
             taxPercent: 18,

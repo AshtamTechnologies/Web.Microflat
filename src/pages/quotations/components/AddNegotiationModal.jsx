@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Modal, Button, CancelButton, Input, SearchableSelect, Textarea } from '../../../components/ui';
+import { Modal, Button, CancelButton } from '../../../components/ui';
 import { useQuotationsContext } from '../../../context/QuotationsContext';
 import { useUsersContext } from '../../../context/UsersContext';
-import { NEGOTIATION_MODES } from '../../../mocks/quotations';
 import { IconCheck } from '../../../constants/icons';
+import NegotiationStageFields from './NegotiationStageFields';
 
 export default function AddNegotiationModal({ isOpen, onClose, quotation }) {
   const { addNegotiationStage } = useQuotationsContext();
@@ -36,8 +36,6 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation }) {
     }
   }, [isOpen, getInitialData]);
 
-  const modeOptions = NEGOTIATION_MODES.map((m) => ({ value: m, label: m }));
-
   const revisionOptions = (quotation?.revisions || []).map((r) => ({
     value: String(r.revisionNo),
     label: `Revision ${r.revisionNo}`,
@@ -65,67 +63,16 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation }) {
       isOpen={isOpen}
       onClose={handleCancel}
       title={`Add Negotiation Stage · Stage ${nextStageNo}`}
-      maxWidth="max-w-xl"
+      maxWidth="max-w-2xl"
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          <Input
-            label="Stage No"
-            disabled
-            value={`Stage ${nextStageNo}`}
-          />
-          <Input
-            label="Date & Time"
-            type="datetime-local"
-            required
-            value={stageData.dateTime}
-            onChange={(e) => setStageData((prev) => ({ ...prev, dateTime: e.target.value }))}
-          />
-          <SearchableSelect
-            label="Linked Revision"
-            options={revisionOptions}
-            value={stageData.revisionNo}
-            onChange={(e) => setStageData((prev) => ({ ...prev, revisionNo: e.target.value }))}
-          />
-          <SearchableSelect
-            label="Interaction Mode"
-            options={modeOptions}
-            value={stageData.mode}
-            onChange={(e) => setStageData((prev) => ({ ...prev, mode: e.target.value }))}
-          />
-          <SearchableSelect
-            label="Handled By"
-            options={userOptions.length > 0 ? userOptions : [{ value: 'Janvi Motwani', label: 'Janvi Motwani' }]}
-            value={stageData.handledBy}
-            onChange={(e) => setStageData((prev) => ({ ...prev, handledBy: e.target.value }))}
-          />
-          <Input
-            label="Client Contact Person"
-            value={stageData.clientContact}
-            onChange={(e) => setStageData((prev) => ({ ...prev, clientContact: e.target.value }))}
-          />
-          <Input
-            label="Our Offer (₹)"
-            type="number"
-            placeholder="e.g. 275000"
-            value={stageData.ourOffer}
-            onChange={(e) => setStageData((prev) => ({ ...prev, ourOffer: e.target.value }))}
-          />
-          <Input
-            label="Client Counter (₹)"
-            type="number"
-            placeholder="e.g. 260000"
-            value={stageData.clientCounter}
-            onChange={(e) => setStageData((prev) => ({ ...prev, clientCounter: e.target.value }))}
-          />
-        </div>
-
-        <Textarea
-          label="Discussion Summary / Notes"
-          rows={3}
-          placeholder="Details discussed during this negotiation session..."
-          value={stageData.discussion}
-          onChange={(e) => setStageData((prev) => ({ ...prev, discussion: e.target.value }))}
+        <NegotiationStageFields
+          stageNo={nextStageNo}
+          stageData={stageData}
+          onChange={setStageData}
+          revisionOptions={revisionOptions}
+          userOptions={userOptions}
+          currency={quotation?.currency || 'INR'}
         />
 
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">

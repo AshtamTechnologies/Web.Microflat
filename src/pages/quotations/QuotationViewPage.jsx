@@ -18,6 +18,10 @@ import {
   IconFileText,
   IconWarning,
   IconQuotation,
+  IconChevronDown,
+  IconChevronUp,
+  IconPhone,
+  IconMail,
 } from '../../constants/icons';
 import {
   PageHeader,
@@ -32,7 +36,7 @@ import {
   SearchableSelect,
 } from '../../components/ui';
 import { useQuotationsContext } from '../../context/QuotationsContext';
-import { formatCurrency } from '../../mocks/quotations';
+import { TAX_TREATMENTS, calculateQuotationTotals, formatCurrency } from '../../mocks/quotations';
 import { formatDate } from '../../utils/dateUtils';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import RecordPOModal from './components/RecordPOModal';
@@ -57,6 +61,7 @@ export default function QuotationViewPage() {
 
   // Active Tab: 'overview' | 'revisions' | 'negotiation' | 'documents' | 'mail'
   const [activeTab, setActiveTab] = useState('overview');
+  const [expandedDescIds, setExpandedDescIds] = useState(() => new Set());
 
   // Active Revision to view (defaults to latest)
   const [selectedRevIndex, setSelectedRevIndex] = useState(() => {
@@ -72,6 +77,48 @@ export default function QuotationViewPage() {
     if (!quotation || !quotation.revisions || quotation.revisions.length === 0) return null;
     return quotation.revisions[selectedRevIndex] || quotation.revisions[latestRevIndex];
   }, [quotation, selectedRevIndex, latestRevIndex]);
+
+  const activeTaxTreatment = activeRevision?.taxTreatment || quotation?.taxTreatment || 'INTRA_STATE';
+  const activeTaxTreatmentLabel = useMemo(() => {
+    return TAX_TREATMENTS.find((t) => t.value === activeTaxTreatment)?.label || activeTaxTreatment;
+  }, [activeTaxTreatment]);
+
+  const activeTotalsBreakdown = useMemo(() => {
+    return calculateQuotationTotals(activeRevision?.items || [], activeTaxTreatment);
+  }, [activeRevision?.items, activeTaxTreatment]);
+
+  const itemsWithDescription = useMemo(() => {
+    return (activeRevision?.items || []).filter((it) => Boolean(it.description?.trim()));
+  }, [activeRevision?.items]);
+
+  const allDescriptionsExpanded = useMemo(() => {
+    if (itemsWithDescription.length === 0) return false;
+    return (activeRevision?.items || []).every((it, idx) =>
+      !it.description?.trim() || expandedDescIds.has(it.id || `row-${idx}`)
+    );
+  }, [activeRevision?.items, itemsWithDescription.length, expandedDescIds]);
+
+  const handleToggleDescription = (key) => {
+    setExpandedDescIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleToggleAllDescriptions = () => {
+    if (allDescriptionsExpanded) {
+      setExpandedDescIds(new Set());
+    } else {
+      const allKeys = new Set(
+        (activeRevision?.items || [])
+          .map((it, idx) => (it.description?.trim() ? (it.id || `row-${idx}`) : null))
+          .filter(Boolean)
+      );
+      setExpandedDescIds(allKeys);
+    }
+  };
 
   // Options for Revision dropdown
   const revisionSelectOptions = useMemo(() => {
@@ -293,68 +340,97 @@ export default function QuotationViewPage() {
         </div>
       </div>
 
-      {/* ── TAB 1: OVERVIEW ── */}
+      {/* ── TAB 1: OVERVIEW (Option A Balanced Grid + Terms After Quoted Products) ── */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Client Info */}
-            <Card title="Client Details">
-              <div className="space-y-3">
+          {/* Top Summary Grid: Client & Contact (7 cols) + Quotation Summary (5 cols) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Client & Contact Details */}
+            <Card title="Client & Contact Details" className="lg:col-span-7">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <DetailField label="Client Company" value={quotation.clientName} />
-                <DetailField label="Address" value={quotation.clientAddress || '—'} />
+                <DetailField label="Contact Person" value={quotation.contactPerson || '—'} />
                 <DetailField
-                  label="Contact"
-                  value={
-                    quotation.contactPerson
-                      ? `${quotation.contactPerson} · ${quotation.contactPhone || quotation.contactEmail || ''}`
-                      : '—'
-                  }
+                  label="Phone"
+                  value={quotation.contactPhone}
+                  icon={IconPhone}
+                  isPhone={Boolean(quotation.contactPhone)}
+                  mono
+                />
+                <DetailField
+                  label="Email"
+                  value={quotation.contactEmail}
+                  icon={IconMail}
+                  isEmail={Boolean(quotation.contactEmail)}
+                />
+                <DetailField
+                  label="Billing / Shipping Address"
+                  value={quotation.clientAddress || '—'}
+                  className="sm:col-span-2"
                 />
               </div>
             </Card>
 
-            {/* Commercial Terms */}
-            <Card title="Commercial & Delivery Terms">
-              <div className="space-y-3">
+            {/* Quotation Summary */}
+            <Card title="Quotation Summary" className="lg:col-span-5">
+              <div className="grid grid-cols-2 gap-4">
                 <DetailField
-                  label="Payment Terms"
-                  value={
-                    Array.isArray(quotation.paymentTerms)
-                      ? quotation.paymentTerms.join(', ')
-                      : (quotation.paymentTerms || 'Net 30 Days')
-                  }
+                  label="Inquiry Ref"
+                  value={quotation.inquiryNo || 'Direct / Manual'}
+                  mono
                 />
                 <DetailField
-                  label="Currency & Validity"
-                  value={`${quotation.currency} · Valid until ${
-                    quotation.validUntil ? formatDate(quotation.validUntil) : '—'
-                  }`}
+                  label="Revision Date"
+                  value={activeRevision?.revisionDate ? formatDate(activeRevision.revisionDate) : '—'}
+                  mono
                 />
                 <DetailField
-                  label="Delivery Terms"
-                  value={
-                    Array.isArray(quotation.deliveryTerms)
-                      ? quotation.deliveryTerms.join(', ')
-                      : (quotation.deliveryTerms || 'Ex-works Ahmedabad, 4–6 weeks')
-                  }
+                  label="Valid Until"
+                  value={quotation.validUntil ? formatDate(quotation.validUntil) : '—'}
+                  mono
                 />
-                {quotation.termsAndConditions && (
-                  <div className="pt-2 border-t border-border">
-                    <span className="text-3xs font-bold text-text-muted uppercase tracking-wider block mb-1">
-                      Terms & Conditions Clauses
-                    </span>
-                    <p className="text-xs text-heading whitespace-pre-line bg-surface/40 p-2.5 rounded-lg border border-border/60 font-mono">
-                      {quotation.termsAndConditions}
-                    </p>
-                  </div>
+                <DetailField
+                  label="Currency"
+                  value={activeRevision?.currency || quotation.currency || 'INR'}
+                  mono
+                />
+                <DetailField
+                  label="Tax Regime"
+                  value={activeTaxTreatmentLabel}
+                />
+                <DetailField
+                  label="Last Updated By"
+                  value={quotation.lastUpdatedBy || '—'}
+                />
+                {activeRevision?.revisionReason && (
+                  <DetailField
+                    label="Revision Notes"
+                    value={activeRevision.revisionReason}
+                    className="col-span-2 pt-2 border-t border-border/60"
+                  />
                 )}
               </div>
             </Card>
           </div>
 
-          {/* Product Lines Grid (Resizable Columns) */}
+          {/* Quoted Products Grid (Resizable Columns + Click-to-Toggle Description) */}
           <Card
-            title={`Quoted Products (Revision ${activeRevision?.revisionNo || 0})`}
+            title={
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <span>Quoted Products (Revision {activeRevision?.revisionNo || 0})</span>
+                {itemsWithDescription.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleToggleAllDescriptions}
+                    icon={allDescriptionsExpanded ? IconChevronUp : IconChevronDown}
+                  >
+                    {allDescriptionsExpanded ? 'Hide All Descriptions' : 'Show All Descriptions'}
+                  </Button>
+                )}
+              </div>
+            }
             subtitle="Engineered items, unit rates, other charges, and tax calculations"
             bodyClassName="p-0"
           >
@@ -426,13 +502,16 @@ export default function QuotationViewPage() {
                     const lineAmount =
                       (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
                       (Number(item.otherCharges) || 0);
+                    const itemKey = item.id || `row-${idx}`;
+                    const hasDescription = Boolean(item.description?.trim());
+                    const isDescExpanded = hasDescription && expandedDescIds.has(itemKey);
 
                     return (
-                      <tr key={item.id || idx} className="hover:bg-surface/50 transition-colors">
-                        <Td className="text-center font-mono text-xs text-text-muted">
+                      <tr key={itemKey} className="hover:bg-surface/50 transition-colors">
+                        <Td className="text-center font-mono text-xs text-text-muted align-top">
                           {idx + 1}
                         </Td>
-                        <Td className="text-xs">
+                        <Td className="text-xs align-top">
                           <div className="font-bold text-heading">{item.productName}</div>
                           <div className="font-mono text-2xs text-primary font-medium">
                             {item.itemCode || 'ITM'} · {item.variantName}
@@ -454,22 +533,42 @@ export default function QuotationViewPage() {
                               ))}
                             </div>
                           )}
+
+                          {hasDescription && (
+                            <div className="mt-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleDescription(itemKey)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-3xs font-semibold text-primary bg-primary/8 hover:bg-primary/15 border border-primary/20 transition-colors cursor-pointer"
+                              >
+                                <IconFileText size={11} />
+                                <span>{isDescExpanded ? 'Hide Description' : 'Description'}</span>
+                                {isDescExpanded ? <IconChevronUp size={11} /> : <IconChevronDown size={11} />}
+                              </button>
+
+                              {isDescExpanded && (
+                                <div className="mt-1.5 p-2.5 rounded-lg border border-border bg-surface/60 text-2xs text-heading whitespace-pre-line leading-relaxed max-w-xl">
+                                  {item.description}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </Td>
-                        <Td className="text-center font-mono font-bold text-xs text-heading">
+                        <Td className="text-center font-mono font-bold text-xs text-heading align-top">
                           {item.quantity}
                         </Td>
-                        <Td className="text-right font-mono text-xs text-heading">
+                        <Td className="text-right font-mono text-xs text-heading align-top">
                           {formatCurrency(item.rate, quotation.currency)}
                         </Td>
-                        <Td className="text-right font-mono text-xs text-text-muted">
+                        <Td className="text-right font-mono text-xs text-text-muted align-top">
                           {Number(item.otherCharges) > 0
                             ? formatCurrency(item.otherCharges, quotation.currency)
                             : '—'}
                         </Td>
-                        <Td className="text-center font-mono text-xs text-text-muted">
+                        <Td className="text-center font-mono text-xs text-text-muted align-top">
                           {item.taxPercent}%
                         </Td>
-                        <Td className="text-right font-mono font-bold text-xs text-heading">
+                        <Td className="text-right font-mono font-bold text-xs text-heading align-top">
                           {formatCurrency(lineAmount, quotation.currency)}
                         </Td>
                       </tr>
@@ -479,9 +578,52 @@ export default function QuotationViewPage() {
               </TableContainer>
             </div>
 
-            {/* Totals Summary */}
-            <div className="p-4 bg-surface/30 border-t border-border flex justify-end">
-              <div className="w-80 space-y-2 text-xs">
+            {/* Totals & Tax Breakdown Summary (Utilizes Full Footer Width) */}
+            <div className="p-4 sm:p-5 bg-surface/30 border-t border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-2xs font-bold text-text-muted uppercase tracking-wider">
+                    Tax Regime:
+                  </span>
+                  <Badge variant="neutral" size="sm">
+                    {activeTaxTreatmentLabel}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap text-2xs text-text-muted">
+                  <span>
+                    Items:{' '}
+                    <strong className="font-mono text-heading">
+                      {(activeRevision?.items || []).length}
+                    </strong>
+                  </span>
+                  {activeTaxTreatment === 'INTRA_STATE' && (
+                    <>
+                      <span>
+                        CGST:{' '}
+                        <strong className="font-mono text-heading">
+                          {formatCurrency(activeTotalsBreakdown.cgst, quotation.currency)}
+                        </strong>
+                      </span>
+                      <span>
+                        SGST:{' '}
+                        <strong className="font-mono text-heading">
+                          {formatCurrency(activeTotalsBreakdown.sgst, quotation.currency)}
+                        </strong>
+                      </span>
+                    </>
+                  )}
+                  {activeTaxTreatment === 'INTER_STATE' && (
+                    <span>
+                      IGST:{' '}
+                      <strong className="font-mono text-heading">
+                        {formatCurrency(activeTotalsBreakdown.igst, quotation.currency)}
+                      </strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="w-full md:w-80 space-y-2 text-xs">
                 <div className="flex justify-between text-text-muted">
                   <span>Subtotal:</span>
                   <span className="font-mono font-semibold text-heading">
@@ -501,6 +643,63 @@ export default function QuotationViewPage() {
                   </span>
                 </div>
               </div>
+            </div>
+          </Card>
+
+          {/* Commercial & Delivery Terms (Shown AFTER Quoted Products) */}
+          <Card
+            title="Commercial & Delivery Terms"
+            subtitle="Agreed payment milestones, delivery schedule, and contractual clauses"
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <DetailField label="Payment Terms">
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {(Array.isArray(quotation.paymentTerms)
+                      ? quotation.paymentTerms
+                      : [quotation.paymentTerms || 'Net 30 Days']
+                    )
+                      .filter(Boolean)
+                      .map((term, idx) => (
+                        <Badge key={idx} variant="neutral" size="sm">
+                          {term}
+                        </Badge>
+                      ))}
+                  </div>
+                </DetailField>
+
+                <DetailField
+                  label="Currency & Validity"
+                  value={`${quotation.currency} · Valid until ${
+                    quotation.validUntil ? formatDate(quotation.validUntil) : '—'
+                  }`}
+                />
+
+                <DetailField label="Delivery Terms">
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {(Array.isArray(quotation.deliveryTerms)
+                      ? quotation.deliveryTerms
+                      : [quotation.deliveryTerms || 'Ex-works Ahmedabad, 4–6 weeks']
+                    )
+                      .filter(Boolean)
+                      .map((term, idx) => (
+                        <Badge key={idx} variant="neutral" size="sm">
+                          {term}
+                        </Badge>
+                      ))}
+                  </div>
+                </DetailField>
+              </div>
+
+              {quotation.termsAndConditions && (
+                <div className="pt-3 border-t border-border">
+                  <DetailField label="Terms & Conditions Clauses">
+                    <div className="text-xs text-heading leading-relaxed whitespace-pre-line bg-surface/40 p-3 rounded-lg border border-border/60 mt-1">
+                      {quotation.termsAndConditions}
+                    </div>
+                  </DetailField>
+                </div>
+              )}
             </div>
           </Card>
         </div>

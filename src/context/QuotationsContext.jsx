@@ -9,6 +9,20 @@ import { INITIAL_QUOTATIONS, calculateQuotationTotals } from '../mocks/quotation
 const QuotationsContext = createContext(null);
 const STORAGE_KEY = 'microflat_quotations_data';
 
+function mapStagedDocuments(docs = [], revisionNo = 0, defaultStage = '—') {
+  const today = new Date().toISOString().split('T')[0];
+  return (docs || []).map((doc, idx) => ({
+    id: doc.id || `doc-${Date.now()}-${idx}`,
+    fileName: doc.fileName || 'Quotation_Attachment.pdf',
+    documentType: doc.documentType || 'Quotation',
+    revisionNo: doc.revisionNo !== undefined ? Number(doc.revisionNo) : revisionNo,
+    linkedStage: doc.linkedStage || defaultStage,
+    uploadedAt: doc.uploadedAt || today,
+    fileSize: doc.fileSize || '250 KB',
+    remarks: doc.remarks || '',
+  }));
+}
+
 export function QuotationsProvider({ children }) {
   const [quotations, setQuotations] = useState(() => {
     try {
@@ -96,7 +110,7 @@ export function QuotationsProvider({ children }) {
         lastUpdatedAt: new Date().toISOString(),
         revisions: [rev0],
         negotiations: [],
-        documents: [],
+        documents: mapStagedDocuments(payload.documents, 0),
         mailLogs: [],
       };
 
@@ -107,7 +121,7 @@ export function QuotationsProvider({ children }) {
     [getNextQuotationNo]
   );
 
-  // Create a new revision (Revision N+1)
+  // Create a new revision (Revision N+1), optionally logging a negotiation stage & attachments atomically
   const createRevision = useCallback((quotationId, payload) => {
     setQuotations((prev) =>
       prev.map((q) => {
@@ -129,6 +143,29 @@ export function QuotationsProvider({ children }) {
           grandTotal: totals.grandTotal,
         };
 
+        const existingNegotiations = q.negotiations || [];
+        let nextNegotiations = existingNegotiations;
+        let defaultDocStage = '—';
+
+        if (payload.newNegotiation) {
+          const nextStageNo = existingNegotiations.length + 1;
+          defaultDocStage = `Stage ${nextStageNo}`;
+          const newStage = {
+            stageNo: nextStageNo,
+            dateTime: payload.newNegotiation.dateTime || new Date().toISOString().slice(0, 16),
+            mode: payload.newNegotiation.mode || 'Call',
+            handledBy: payload.newNegotiation.handledBy || 'Current User',
+            clientContact: payload.newNegotiation.clientContact || payload.contactPerson || q.contactPerson,
+            ourOffer: Number(payload.newNegotiation.ourOffer) || 0,
+            clientCounter: Number(payload.newNegotiation.clientCounter) || 0,
+            revisionNo: nextRevNo,
+            discussion: payload.newNegotiation.discussion || '',
+          };
+          nextNegotiations = [...existingNegotiations, newStage];
+        }
+
+        const stagedDocs = mapStagedDocuments(payload.newDocuments, nextRevNo, defaultDocStage);
+
         return {
           ...q,
           currentRevision: nextRevNo,
@@ -144,6 +181,8 @@ export function QuotationsProvider({ children }) {
           lastUpdatedBy: payload.lastUpdatedBy || 'Current User',
           lastUpdatedAt: new Date().toISOString(),
           revisions: [...q.revisions, newRevision],
+          negotiations: nextNegotiations,
+          documents: [...(q.documents || []), ...stagedDocs],
         };
       })
     );

@@ -1,15 +1,8 @@
 import { useState } from 'react';
 import { Modal, Button, CancelButton, Input, SearchableSelect } from '../../../components/ui';
 import { useQuotationsContext } from '../../../context/QuotationsContext';
+import { QUOTATION_DOC_TYPES, formatDocumentFileSize } from '../../../mocks/quotations';
 import { IconUploadCloud } from '../../../constants/icons';
-
-const DOC_TYPES = [
-  { value: 'Signed Quotation', label: 'Signed Quotation' },
-  { value: 'Client PO', label: 'Client PO' },
-  { value: 'Negotiation attachment', label: 'Negotiation attachment' },
-  { value: 'Technical Drawing', label: 'Technical Drawing' },
-  { value: 'Other Document', label: 'Other Document' },
-];
 
 export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
   const { uploadDocument } = useQuotationsContext();
@@ -19,6 +12,7 @@ export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
   );
   const [stage, setStage] = useState('—');
   const [fileName, setFileName] = useState('');
+  const [fileSize, setFileSize] = useState('');
   const [remarks, setRemarks] = useState('');
 
   const revisionOptions = (quotation?.revisions || []).map((r) => ({
@@ -36,7 +30,9 @@ export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
 
   function handleFileChange(e) {
     if (e.target.files && e.target.files[0]) {
-      setFileName(e.target.files[0].name);
+      const f = e.target.files[0];
+      setFileName(f.name);
+      setFileSize(formatDocumentFileSize(f.size));
     }
   }
 
@@ -47,9 +43,12 @@ export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
       documentType: docType,
       revisionNo: Number(revisionNo),
       linkedStage: stage,
-      fileSize: '320 KB',
+      fileSize: fileSize || '320 KB',
       remarks,
     });
+    setFileName('');
+    setFileSize('');
+    setRemarks('');
     onClose();
   }
 
@@ -64,7 +63,7 @@ export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
         <SearchableSelect
           label="Document Type"
           required
-          options={DOC_TYPES}
+          options={QUOTATION_DOC_TYPES}
           value={docType}
           onChange={(e) => setDocType(e.target.value)}
         />

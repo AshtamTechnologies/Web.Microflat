@@ -18,6 +18,8 @@ export const INQUIRY_CATALOG_PRODUCTS = [
     itemCodePrefix: 'SP-GR',
     defaultUom: 'Nos',
     standardInfo: 'Indian Black Granite · Hand Lapped · IS-7327-2003',
+    description:
+      'Precision Granite Surface Plate manufactured from high-density Indian Black Granite, stress-relieved naturally over geological age and precision hand-lapped to meet IS-7327-2003 flatness accuracy. Non-magnetic, rust-proof, and thermally stable for metrology & inspection rooms.',
     variants: [
       {
         id: 'var-gsp-1',
@@ -73,6 +75,8 @@ export const INQUIRY_CATALOG_PRODUCTS = [
     itemCodePrefix: 'SP-CI',
     defaultUom: 'Nos',
     standardInfo: 'Close-grained Plain Cast Iron · Hand Scraped · IS-2285',
+    description:
+      'Close-grained FG-220 Cast Iron Surface Plate, heavily ribbed for maximum rigidity and stress-relieved to prevent distortion. Precision hand-scraped top working surface conforming to IS-2285 for layout, marking, and blue-matching inspection.',
     variants: [
       {
         id: 'var-cisp-1',
@@ -110,6 +114,8 @@ export const INQUIRY_CATALOG_PRODUCTS = [
     itemCodePrefix: 'SE-GR',
     defaultUom: 'Nos',
     standardInfo: 'Indian Black Granite · Lapped Faces · IS-5268',
+    description:
+      'Precision Granite Triangular / I-Beam Straight Edge crafted from Indian Black Granite with two precision hand-lapped working faces conforming to IS-5268. Ideal for checking straightness and flatness of machine tool slideways and surface tables.',
     variants: [
       {
         id: 'var-gse-1',
@@ -138,6 +144,8 @@ export const INQUIRY_CATALOG_PRODUCTS = [
     itemCodePrefix: 'AP-GR',
     defaultUom: 'Nos',
     standardInfo: 'Indian Black Granite · 6 Faces Finished · IS-6985',
+    description:
+      'Six-face finished Granite Master Square & Angle Plate made from select Indian Black Granite, hand-lapped for high squareness and parallelism accuracy per IS-6985. Used for checking perpendicularity on CMMs and coordinate axes.',
     variants: [
       {
         id: 'var-gap-1',
@@ -166,6 +174,8 @@ export const INQUIRY_CATALOG_PRODUCTS = [
     itemCodePrefix: 'CS-GR',
     defaultUom: 'Nos',
     standardInfo: 'Black Granite Base with Hard Chrome Column',
+    description:
+      'Precision Granite Comparator Stand featuring a hand-lapped Indian Black Granite base and rigid hard-chrome plated steel column with fine micro-adjustment bracket for dial/electronic gauge comparative measurements.',
     variants: [
       {
         id: 'var-cs-1',
@@ -190,4 +200,21 @@ export const INQUIRY_CATALOG_PRODUCTS = [
 ];
 
 export const CUSTOM_SIZE_VARIANT_VALUE = '__custom_size__';
+
+/**
+ * Resolves a clean default product description for a selected catalog product (and optional variant).
+ */
+export function buildCatalogProductDescription(product, variant = null) {
+  if (!product) return '';
+  const baseDesc = product.description || product.standardInfo || product.productName || '';
+  if (!variant) return baseDesc;
+  const variantSpecs = [
+    variant.size ? `Size: ${variant.size}` : null,
+    variant.grade ? `Grade: ${variant.grade}` : null,
+    variant.flatness ? `Flatness/Accuracy: ${variant.flatness}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc;
+}
 

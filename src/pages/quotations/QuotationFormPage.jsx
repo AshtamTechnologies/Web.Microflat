@@ -11,23 +11,21 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   IconBack,
-  IconSave,
   IconAdd,
-  IconTrash,
   IconCheck,
   IconQuotation,
   IconPackage,
   IconInfo,
   IconFileText,
-  IconEdit,
-  IconClose,
+  IconChevronDown,
+  IconChevronUp,
+  IconMessageSquare,
+  IconRotateCcw,
 } from '../../constants/icons';
 import {
   PageHeader,
-  Card,
   CollapsibleCard,
   Input,
-  Select,
   DatePicker,
   SearchableSelect,
   SearchableMultiSelect,
@@ -46,6 +44,7 @@ import {
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useClientsContext } from '../../context/ClientsContext';
+import { useUsersContext } from '../../context/UsersContext';
 import {
   TAX_SLABS,
   TAX_TREATMENTS,
@@ -57,8 +56,11 @@ import {
 import {
   INQUIRY_CATALOG_CATEGORIES,
   INQUIRY_CATALOG_PRODUCTS,
+  buildCatalogProductDescription,
 } from '../../mocks/inquiryCatalog';
 import useColumnResize from '../../hooks/useColumnResize';
+import NegotiationStageFields from './components/NegotiationStageFields';
+import QuotationDocumentsSection from './components/QuotationDocumentsSection';
 
 const CATALOG_OPTIONS = [
   'Rexine Cover (Standard)',
@@ -85,11 +87,20 @@ export default function QuotationFormPage() {
 
   const { inquiries = [] } = useInquiriesContext();
   const { clients = [], ensureClientsLoaded } = useClientsContext();
+  const { allUsers = [], users = [] } = useUsersContext();
+  const userList = allUsers.length > 0 ? allUsers : users;
 
   const isRevisionMode = Boolean(id);
   const targetQuotation = useMemo(() => {
     return isRevisionMode ? getQuotationById(id) : null;
   }, [isRevisionMode, id, getQuotationById]);
+
+  const userOptions = useMemo(() => {
+    return userList.map((u) => {
+      const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email;
+      return { value: name, label: name };
+    });
+  }, [userList]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -114,6 +125,26 @@ export default function QuotationFormPage() {
     items: [],
   });
 
+  // Staged Document Attachments & Expandable Product Descriptions
+  const [stagedDocuments, setStagedDocuments] = useState([]);
+  const [expandedDescIds, setExpandedDescIds] = useState(() => new Set());
+
+  // Revision-Mode Negotiation State
+  const [logNegotiationStage, setLogNegotiationStage] = useState(false);
+  const [negotiationStageData, setNegotiationStageData] = useState(() => {
+    const now = new Date();
+    const defaultDateTime = `${now.toISOString().split('T')[0]}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    return {
+      dateTime: defaultDateTime,
+      mode: 'Call',
+      handledBy: 'Janvi Motwani',
+      clientContact: '',
+      ourOffer: '',
+      clientCounter: '',
+      discussion: '',
+    };
+  });
+
   // Drawer & Line Item Builder State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
@@ -126,6 +157,8 @@ export default function QuotationFormPage() {
   const [drawerTax, setDrawerTax] = useState(18);
   const [drawerOtherCharges, setDrawerOtherCharges] = useState('0');
   const [drawerOptions, setDrawerOptions] = useState(['Rexine Cover (Standard)']);
+  const [drawerDescription, setDrawerDescription] = useState('');
+  const [isDescriptionEdited, setIsDescriptionEdited] = useState(false);
 
   // Available unquoted inquiries list for the Inquiry dropdown
   const availableInquiries = useMemo(() => {
@@ -196,21 +229,27 @@ export default function QuotationFormPage() {
       : matchedInq.ContactPerson || '';
 
     // Map items from inquiry
-    const mappedItems = (matchedInq.items || []).map((it, idx) => ({
-      id: `it-${Date.now()}-${idx}`,
-      categoryId: it.categoryId || 'cat-sp',
-      productId: it.productId || 'prod-gsp',
-      productName: it.productName || it.itemName || 'Precision Plate',
-      variantId: it.variantId || '',
-      variantName: it.variantName || 'Standard Size',
-      itemCode: it.itemCode || 'ITM-01',
-      technicalDetails: it.technicalDetails || it.specification || '',
-      quantity: Number(it.quantity) || 1,
-      rate: 35000,
-      otherCharges: 0,
-      taxPercent: 18,
-      options: Array.isArray(it.options) ? it.options : ['Rexine Cover (Standard)'],
-    }));
+    const mappedItems = (matchedInq.items || []).map((it, idx) => {
+      const catProd = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === it.productId);
+      const catVar = catProd?.variants?.find((v) => v.id === it.variantId);
+      const fallbackDesc = catProd ? buildCatalogProductDescription(catProd, catVar) : '';
+      return {
+        id: `it-${Date.now()}-${idx}`,
+        categoryId: it.categoryId || 'cat-sp',
+        productId: it.productId || 'prod-gsp',
+        productName: it.productName || it.itemName || 'Precision Plate',
+        variantId: it.variantId || '',
+        variantName: it.variantName || 'Standard Size',
+        itemCode: it.itemCode || 'ITM-01',
+        technicalDetails: it.technicalDetails || it.specification || '',
+        description: it.description || it.specification || fallbackDesc || '',
+        quantity: Number(it.quantity) || 1,
+        rate: 35000,
+        otherCharges: 0,
+        taxPercent: 18,
+        options: Array.isArray(it.options) ? it.options : ['Rexine Cover (Standard)'],
+      };
+    });
 
     setFormData((prev) => ({
       ...prev,
@@ -295,6 +334,12 @@ export default function QuotationFormPage() {
         taxTreatment: targetQuotation.taxTreatment || 'INTRA_STATE',
         items: latestRev?.items?.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })) || [],
       });
+
+      setNegotiationStageData((prev) => ({
+        ...prev,
+        handledBy: userOptions[0]?.value || prev.handledBy || 'Janvi Motwani',
+        clientContact: targetQuotation.contactPerson || prev.clientContact || '',
+      }));
     } else if (!isRevisionMode) {
       const nextNo = getNextQuotationNo();
       setFormData((prev) => ({
@@ -454,6 +499,42 @@ export default function QuotationFormPage() {
     return calculateQuotationTotals(formData.items, formData.taxTreatment);
   }, [formData.items, formData.taxTreatment]);
 
+  // Expand / Collapse Product Description Helpers
+  const getItemDescKey = useCallback((item, idx) => item.id || `row-${idx}`, []);
+
+  const itemsWithDescription = useMemo(() => {
+    return formData.items.filter((it) => Boolean(it.description?.trim()));
+  }, [formData.items]);
+
+  const allDescriptionsExpanded = useMemo(() => {
+    if (itemsWithDescription.length === 0) return false;
+    return formData.items.every((it, idx) =>
+      !it.description?.trim() || expandedDescIds.has(getItemDescKey(it, idx))
+    );
+  }, [formData.items, itemsWithDescription.length, expandedDescIds, getItemDescKey]);
+
+  const handleToggleDescription = (key) => {
+    setExpandedDescIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleToggleAllDescriptions = () => {
+    if (allDescriptionsExpanded) {
+      setExpandedDescIds(new Set());
+    } else {
+      const allKeys = new Set(
+        formData.items
+          .map((it, idx) => (it.description?.trim() ? getItemDescKey(it, idx) : null))
+          .filter(Boolean)
+      );
+      setExpandedDescIds(allKeys);
+    }
+  };
+
   // Open Drawer for Add Product
   const handleOpenAddDrawer = () => {
     setEditingIndex(null);
@@ -465,6 +546,8 @@ export default function QuotationFormPage() {
     setDrawerTax(18);
     setDrawerOtherCharges('0');
     setDrawerOptions(['Rexine Cover (Standard)']);
+    setDrawerDescription('');
+    setIsDescriptionEdited(false);
     setIsDrawerOpen(true);
   };
 
@@ -479,7 +562,36 @@ export default function QuotationFormPage() {
     setDrawerTax(item.taxPercent !== undefined ? Number(item.taxPercent) : 18);
     setDrawerOtherCharges(String(item.otherCharges || 0));
     setDrawerOptions(Array.isArray(item.options) ? item.options : ['Rexine Cover (Standard)']);
+    const existingDesc = item.description ?? item.technicalDetails ?? '';
+    setDrawerDescription(existingDesc);
+    setIsDescriptionEdited(Boolean(item.description));
     setIsDrawerOpen(true);
+  };
+
+  // Handle Drawer Product / Variant Selection (auto-fetches product description)
+  const handleDrawerProductChange = (prodId) => {
+    setDrawerProduct(prodId);
+    setDrawerVariant('');
+    const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === prodId) || null;
+    if (prod && !drawerCategory) {
+      setDrawerCategory(prod.categoryId || '');
+    }
+    if (!isDescriptionEdited) {
+      setDrawerDescription(buildCatalogProductDescription(prod, null));
+    }
+  };
+
+  const handleDrawerVariantChange = (varId) => {
+    setDrawerVariant(varId);
+    const variant = activeProductObj?.variants?.find((v) => v.id === varId) || null;
+    if (!isDescriptionEdited && activeProductObj) {
+      setDrawerDescription(buildCatalogProductDescription(activeProductObj, variant));
+    }
+  };
+
+  const handleResetDrawerDescription = () => {
+    setDrawerDescription(buildCatalogProductDescription(activeProductObj, activeVariantObj));
+    setIsDescriptionEdited(false);
   };
 
   // Toggle Catalog Option
@@ -496,6 +608,8 @@ export default function QuotationFormPage() {
       return;
     }
 
+    const defaultDesc = buildCatalogProductDescription(activeProductObj, activeVariantObj);
+
     const payload = {
       categoryId: drawerCategory || activeProductObj?.categoryId || 'cat-sp',
       productId: activeProductObj?.id || 'prod-custom',
@@ -504,6 +618,7 @@ export default function QuotationFormPage() {
       variantName: activeVariantObj?.variantName || 'Standard Variant',
       itemCode: activeVariantObj?.itemCode || activeProductObj?.itemCodePrefix || 'ITM-01',
       technicalDetails: activeVariantObj?.technicalDetails || activeProductObj?.standardInfo || '',
+      description: drawerDescription.trim() || defaultDesc,
       quantity: Math.max(1, Number(drawerQty) || 1),
       rate: Number(drawerRate) || 0,
       otherCharges: Number(drawerOtherCharges) || 0,
@@ -575,6 +690,16 @@ export default function QuotationFormPage() {
         scrollToField('field-revision-reason', 'Revision reason is required when creating a new revision.');
         return;
       }
+      if (logNegotiationStage) {
+        if (!negotiationStageData.dateTime) {
+          scrollToField('field-neg-datetime', 'Negotiation Date & Time is required.');
+          return;
+        }
+        if (!negotiationStageData.discussion?.trim()) {
+          scrollToField('field-neg-discussion', 'Please enter discussion summary for the negotiation stage.');
+          return;
+        }
+      }
     }
 
     // 2. Validity Date
@@ -607,22 +732,28 @@ export default function QuotationFormPage() {
       return;
     }
 
-    const payload = {
-      ...formData,
-      status: statusToSet,
-    };
-
     if (isRevisionMode) {
+      const payload = {
+        ...formData,
+        status: statusToSet,
+        newNegotiation: logNegotiationStage ? negotiationStageData : null,
+        newDocuments: stagedDocuments,
+      };
       createRevision(targetQuotation.id, payload);
       navigate(`/quotations/${targetQuotation.id}`);
     } else {
+      const payload = {
+        ...formData,
+        status: statusToSet,
+        documents: stagedDocuments,
+      };
       const newQuote = createQuotation(payload);
       navigate(`/quotations/${newQuote.id}`);
     }
   };
 
   return (
-    <div className="w-full space-y-6 pb-24">
+    <div className="w-full min-w-0 space-y-6 pb-24">
       {/* ── Top PageHeader (Quotation No shown only once in the input) ── */}
       <PageHeader
         title={
@@ -648,7 +779,7 @@ export default function QuotationFormPage() {
           </Button>
         }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <CancelButton onClick={handleCancel} size="sm">
               Cancel
             </CancelButton>
@@ -810,15 +941,28 @@ export default function QuotationFormPage() {
           padding="none"
           bodyClassName="p-0 space-y-0"
           actions={
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={handleOpenAddDrawer}
-              icon={IconAdd}
-            >
-              Add Product
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {itemsWithDescription.length > 0 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleToggleAllDescriptions}
+                  icon={allDescriptionsExpanded ? IconChevronUp : IconChevronDown}
+                >
+                  {allDescriptionsExpanded ? 'Hide All Descriptions' : 'Show All Descriptions'}
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleOpenAddDrawer}
+                icon={IconAdd}
+              >
+                Add Product
+              </Button>
+            </div>
           }
         >
           {/* Resizable Product Lines Grid Table */}
@@ -909,14 +1053,17 @@ export default function QuotationFormPage() {
                     const lineAmount =
                       (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
                       (Number(item.otherCharges) || 0);
+                    const itemKey = getItemDescKey(item, idx);
+                    const hasDescription = Boolean(item.description?.trim());
+                    const isDescExpanded = hasDescription && expandedDescIds.has(itemKey);
 
                     return (
-                      <tr key={item.id || idx} className="hover:bg-surface/50 transition-colors">
-                        <Td className="text-center font-mono text-xs text-text-muted">
+                      <tr key={itemKey} className="hover:bg-surface/50 transition-colors">
+                        <Td className="text-center font-mono text-xs text-text-muted align-top">
                           {idx + 1}
                         </Td>
 
-                        <Td className="text-xs">
+                        <Td className="text-xs align-top">
                           <div className="font-bold text-heading truncate">
                             {item.productName}
                           </div>
@@ -938,6 +1085,26 @@ export default function QuotationFormPage() {
                                   {opt.replace(' (Standard)', '')}
                                 </span>
                               ))}
+                            </div>
+                          )}
+
+                          {hasDescription && (
+                            <div className="mt-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleDescription(itemKey)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-3xs font-semibold text-primary bg-primary/8 hover:bg-primary/15 border border-primary/20 transition-colors cursor-pointer"
+                              >
+                                <IconFileText size={11} />
+                                <span>{isDescExpanded ? 'Hide Description' : 'Description'}</span>
+                                {isDescExpanded ? <IconChevronUp size={11} /> : <IconChevronDown size={11} />}
+                              </button>
+
+                              {isDescExpanded && (
+                                <div className="mt-1.5 p-2.5 rounded-lg border border-border bg-surface/60 text-2xs text-heading whitespace-pre-line leading-relaxed max-w-lg">
+                                  {item.description}
+                                </div>
+                              )}
                             </div>
                           )}
                         </Td>
@@ -1042,9 +1209,124 @@ export default function QuotationFormPage() {
         </CollapsibleCard>
       </div>
 
-      {/* ── SECTION 3: COMMERCIAL TERMS & CONDITIONS ── */}
+      {/* ── SECTION 3 (REVISION MODE ONLY): NEGOTIATION HISTORY & STAGE ── */}
+      {isRevisionMode && targetQuotation && (
+        <CollapsibleCard
+          title="3. Negotiation & Client Counter-Offer"
+          subtitle="Review previous commercial discussions and optionally log a new negotiation stage with this revision"
+          icon={<IconMessageSquare size={18} className="text-primary" />}
+          defaultOpen={true}
+          badge={
+            (targetQuotation.negotiations || []).length > 0 ? (
+              <Badge variant="neutral" size="sm">
+                {targetQuotation.negotiations.length} Previous Stage{targetQuotation.negotiations.length === 1 ? '' : 's'}
+              </Badge>
+            ) : null
+          }
+        >
+          <div className="space-y-5">
+            {/* Previous Negotiation History (Read-Only Reference) */}
+            {(targetQuotation.negotiations || []).length > 0 ? (
+              <div className="space-y-2">
+                <span className="text-2xs font-bold text-text-muted uppercase tracking-wider block">
+                  Previous Negotiation History
+                </span>
+                <div className="max-h-56 overflow-y-auto pr-1 space-y-2.5 scrollbar-thin">
+                  {targetQuotation.negotiations.map((stg) => (
+                    <div
+                      key={stg.stageNo}
+                      className="p-3 rounded-xl border border-border bg-surface/40 text-xs space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-heading">
+                            Stage {stg.stageNo} · {stg.mode}
+                          </span>
+                          <Badge variant="neutral" size="sm">
+                            Rev {stg.revisionNo}
+                          </Badge>
+                          <span className="text-2xs text-text-muted">
+                            {stg.handledBy} with <strong>{stg.clientContact}</strong>
+                          </span>
+                        </div>
+                        <span className="font-mono text-2xs text-text-muted">
+                          {stg.dateTime?.replace('T', ' ')}
+                        </span>
+                      </div>
+                      <p className="text-heading text-xs">{stg.discussion}</p>
+                      {(stg.ourOffer || stg.clientCounter) && (
+                        <div className="flex items-center gap-4 pt-1 border-t border-border/60 text-2xs">
+                          <span>
+                            Our Offer:{' '}
+                            <strong className="font-mono text-heading">
+                              {formatCurrency(stg.ourOffer, formData.currency)}
+                            </strong>
+                          </span>
+                          <span>
+                            Client Counter:{' '}
+                            <strong className="font-mono text-primary">
+                              {formatCurrency(stg.clientCounter, formData.currency)}
+                            </strong>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl border border-dashed border-border bg-surface/20 text-xs text-text-muted">
+                No negotiation stages recorded for this quotation yet.
+              </div>
+            )}
+
+            {/* Optional Toggle to Log New Stage with this Revision */}
+            <div className="pt-3 border-t border-border space-y-4">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <Checkbox
+                  checked={logNegotiationStage}
+                  onChange={(e) => setLogNegotiationStage(e.target.checked)}
+                />
+                <span className="text-xs font-bold text-heading">
+                  Log a new negotiation stage with Revision {formData.revisionNo}
+                </span>
+                <span className="text-2xs text-text-muted">(Optional)</span>
+              </label>
+
+              {logNegotiationStage && (
+                <div className="p-4 rounded-xl border border-border bg-surface/40">
+                  <NegotiationStageFields
+                    stageNo={(targetQuotation.negotiations?.length || 0) + 1}
+                    stageData={negotiationStageData}
+                    onChange={setNegotiationStageData}
+                    lockedRevisionLabel={`Revision ${formData.revisionNo}`}
+                    userOptions={userOptions}
+                    currency={formData.currency}
+                    suggestedOffer={totals.grandTotal}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </CollapsibleCard>
+      )}
+
+      {/* ── SECTION 3 / 4: DOCUMENTS & ATTACHMENTS ── */}
+      <QuotationDocumentsSection
+        sectionNumber={isRevisionMode ? 4 : 3}
+        stagedDocuments={stagedDocuments}
+        onAddDocument={(doc) => setStagedDocuments((prev) => [...prev, doc])}
+        onRemoveDocument={(docId) =>
+          setStagedDocuments((prev) => prev.filter((d) => d.id !== docId))
+        }
+        revisionNo={formData.revisionNo}
+        isRevisionMode={isRevisionMode}
+        existingDocuments={targetQuotation?.documents || []}
+      />
+
+      {/* ── SECTION 4 / 5: COMMERCIAL TERMS & CONDITIONS ── */}
       <CollapsibleCard
-        title="3. Commercial Terms & Conditions"
+        title={`${isRevisionMode ? 5 : 4}. Commercial Terms & Conditions`}
         subtitle="Select applicable payment and delivery terms, and specify custom quotation clauses"
         icon={<IconFileText size={18} className="text-primary" />}
         defaultOpen={true}
@@ -1100,7 +1382,7 @@ export default function QuotationFormPage() {
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         title={editingIndex !== null ? 'Edit Product Line' : 'Add Product to Quotation'}
-        subtitle="Configure catalog item, commercial unit rate, and extra charges"
+        subtitle="Configure catalog item, description, commercial unit rate, and extra charges"
         width="max-w-xl"
         footer={
           <div className="flex items-center justify-end gap-3 w-full">
@@ -1130,6 +1412,7 @@ export default function QuotationFormPage() {
                 setDrawerCategory(e.target.value);
                 setDrawerProduct('');
                 setDrawerVariant('');
+                if (!isDescriptionEdited) setDrawerDescription('');
               }}
             />
 
@@ -1139,10 +1422,7 @@ export default function QuotationFormPage() {
               options={productOptions}
               value={drawerProduct}
               placeholder="-- Select Product --"
-              onChange={(e) => {
-                setDrawerProduct(e.target.value);
-                setDrawerVariant('');
-              }}
+              onChange={(e) => handleDrawerProductChange(e.target.value)}
             />
           </div>
 
@@ -1155,7 +1435,7 @@ export default function QuotationFormPage() {
               value={drawerVariant}
               placeholder={activeProductObj ? '-- Choose Size / Variant --' : 'Select product first'}
               disabled={!activeProductObj}
-              onChange={(e) => setDrawerVariant(e.target.value)}
+              onChange={(e) => handleDrawerVariantChange(e.target.value)}
             />
 
             <Input
@@ -1242,6 +1522,35 @@ export default function QuotationFormPage() {
             </div>
           )}
 
+          {/* Product Description Section (Auto-fetched & Editable) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-heading uppercase tracking-wider">
+                Product Description
+              </label>
+              {isDescriptionEdited && activeProductObj && (
+                <button
+                  type="button"
+                  onClick={handleResetDrawerDescription}
+                  className="inline-flex items-center gap-1 text-3xs font-semibold text-primary hover:underline cursor-pointer"
+                >
+                  <IconRotateCcw size={11} />
+                  Reset to Default
+                </button>
+              )}
+            </div>
+            <Textarea
+              rows={3}
+              placeholder="Select a product to auto-fetch its description, or enter a custom quotation description..."
+              value={drawerDescription}
+              onChange={(e) => {
+                setDrawerDescription(e.target.value);
+                setIsDescriptionEdited(true);
+              }}
+              hint="Auto-populated from the selected product & variant; you can customize it for this quotation."
+            />
+          </div>
+
           {/* Catalog Options Checkboxes (from 3rd image) */}
           <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between">
@@ -1277,32 +1586,37 @@ export default function QuotationFormPage() {
       </Drawer>
 
       {/* ── STICKY BOTTOM ACTIONS BAR ── */}
-      <FormActionsBar>
-        <div className="flex items-center justify-between w-full">
-          <div className="text-xs text-text-muted hidden sm:block">
+      <FormActionsBar
+        leftContent={
+          <div className="text-xs text-text-muted">
             {formData.items.length} line item{formData.items.length === 1 ? '' : 's'} · Total:{' '}
             <strong className="text-heading font-mono">
               {formatCurrency(totals.grandTotal, formData.currency)}
             </strong>
           </div>
+        }
+      >
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+          <CancelButton onClick={handleCancel} className="w-full sm:w-auto justify-center">
+            Cancel
+          </CancelButton>
 
-          <div className="flex items-center gap-3 ml-auto">
-            <CancelButton onClick={handleCancel}>
-              Cancel
-            </CancelButton>
+          <Button
+            variant="secondary"
+            onClick={() => handleSave('Draft')}
+            className="w-full sm:w-auto justify-center"
+          >
+            Save as Draft
+          </Button>
 
-            <Button variant="secondary" onClick={() => handleSave('Draft')}>
-              Save as Draft
-            </Button>
-
-            <Button
-              variant="primary"
-              onClick={() => handleSave('Sent')}
-              icon={<IconCheck size={16} />}
-            >
-              Save & Mark as Sent
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            onClick={() => handleSave('Sent')}
+            icon={<IconCheck size={16} />}
+            className="w-full sm:w-auto justify-center"
+          >
+            Save & Mark as Sent
+          </Button>
         </div>
       </FormActionsBar>
     </div>
