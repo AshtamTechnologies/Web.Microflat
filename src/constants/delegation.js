@@ -106,22 +106,22 @@ export const DELEGATION_REASON_OPTIONS = DELEGATION_REASONS.map((reason) => ({
 
 /**
  * Status definitions mapped to Badge variants:
- * Active -> success
- * Scheduled -> info
- * Ended -> neutral
+ * InForce   -> success
+ * Upcoming  -> info
+ * Expired   -> neutral
  * Cancelled -> danger
  */
 export const DELEGATION_STATUS = {
-  Active: {
-    label: 'Active',
+  InForce: {
+    label: 'In Force',
     variant: 'success',
   },
-  Scheduled: {
-    label: 'Scheduled',
+  Upcoming: {
+    label: 'Upcoming',
     variant: 'info',
   },
-  Ended: {
-    label: 'Ended',
+  Expired: {
+    label: 'Expired',
     variant: 'neutral',
   },
   Cancelled: {
@@ -129,4 +129,19 @@ export const DELEGATION_STATUS = {
     variant: 'danger',
   },
 };
+
+export const DELEGATION_STATUS_OPTIONS = [
+  { value: 'ALL', label: 'All Statuses' },
+  { value: 'InForce', label: 'In Force' },
+  { value: 'Upcoming', label: 'Upcoming' },
+  { value: 'Expired', label: 'Expired' },
+  { value: 'Cancelled', label: 'Cancelled' },
+];
+
+/**
+ * Controls whether Admins can see Edit/Cancel/Reinstate/Delete actions
+ * on delegations received by them in "My Delegation -> Received" and its View page.
+ * Flip to true to restore Admin management actions on received delegations.
+ */
+export const ALLOW_ADMIN_MANAGE_RECEIVED_DELEGATIONS = false;
 

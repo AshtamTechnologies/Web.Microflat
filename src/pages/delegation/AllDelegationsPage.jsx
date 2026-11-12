@@ -30,24 +30,17 @@ import {
   IconWarning,
   IconRefresh,
 } from '../../constants/icons';
-import { listAllDelegations } from '../../services/delegation/delegationService';
+import { listDelegations } from '../../services/delegation/delegationService';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 import { getDelegationStatus } from '../../utils/delegationUtils';
 import {
   DELEGATION_STATUS,
-  getApprovalPageLabel,
+  DELEGATION_STATUS_OPTIONS,
 } from '../../constants/delegation';
-import { useUserOptions, getUserName } from '../../context/UsersContext';
+import { useUserOptions } from '../../context/UsersContext';
 import { useAuthContext } from '../../context/AuthContext';
 import CancelDelegationModal from './components/CancelDelegationModal';
-
-const STATUS_FILTER_OPTIONS = [
-  { value: 'ALL', label: 'All Statuses' },
-  { value: 'Active', label: 'Active' },
-  { value: 'Scheduled', label: 'Scheduled' },
-  { value: 'Ended', label: 'Ended' },
-  { value: 'Cancelled', label: 'Cancelled' },
-];
+import ReinstateDelegationModal from './components/ReinstateDelegationModal';
 
 export default function AllDelegationsPage() {
   const navigate = useNavigate();
@@ -63,6 +56,7 @@ export default function AllDelegationsPage() {
   const [toUser, setToUser] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedForCancel, setSelectedForCancel] = useState(null);
+  const [selectedForReinstate, setSelectedForReinstate] = useState(null);
 
   // Filter options for Delegator (From) and Delegate (To)
   const fromOptions = useMemo(
@@ -101,14 +95,15 @@ export default function AllDelegationsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await listAllDelegations({
-        includeEnded: true,
-        search,
-        delegatorId: fromUser,
-        delegateId: toUser,
-        status: statusFilter,
+      const res = await listDelegations({
+        search: search.trim() || undefined,
+        delegatorUserId: fromUser !== 'ALL' ? fromUser : undefined,
+        delegateUserId: toUser !== 'ALL' ? toUser : undefined,
+        status: statusFilter !== 'ALL' ? statusFilter : undefined,
+        pageNumber: 1,
+        pageSize: 50,
       });
-      setDelegations(res);
+      setDelegations(res.items || []);
     } catch (err) {
       setError(err?.message || 'Failed to load delegations.');
     } finally {
@@ -126,7 +121,7 @@ export default function AllDelegationsPage() {
       {
         id: 'delegator',
         header: 'DELEGATING USER',
-        accessorFn: (row) => getUserName(row.delegatorId),
+        accessorFn: (row) => row.delegatorName || `User #${row.delegatorUserId}`,
         cell: ({ getValue, row }) => {
           const name = getValue();
           return (
@@ -134,86 +129,109 @@ export default function AllDelegationsPage() {
               <span className="font-semibold text-heading truncate block" title={name}>
                 {name}
               </span>
-              <span className="text-2xs text-text-muted font-mono block">
-                ID: {row.original.delegatorId}
-              </span>
+              {row.original.delegatorEmail && (
+                <span className="text-2xs text-text-muted truncate block" title={row.original.delegatorEmail}>
+                  {row.original.delegatorEmail}
+                </span>
+              )}
             </div>
           );
         },
-        size: 190,
+        size: 165,
       },
       {
         id: 'delegate',
-        header: 'DELEGATE (TO)',
-        accessorFn: (row) => getUserName(row.delegateId),
+        header: 'DELEGATE(S)',
+        accessorFn: (row) => {
+          const names = [...new Set((row.assignments || []).map((a) => a.delegateName).filter(Boolean))];
+          return names.length > 0 ? names.join(', ') : 'Assigned Delegate';
+        },
         cell: ({ getValue, row }) => {
-          const name = getValue();
+          const names = getValue();
+          const count = row.original.assignments?.length || 0;
           return (
             <div className="min-w-0">
-              <span className="font-semibold text-heading truncate block" title={name}>
-                {name}
+              <span className="font-semibold text-heading truncate block" title={names}>
+                {names}
               </span>
-              <span className="text-2xs text-text-muted font-mono block">
-                ID: {row.original.delegateId}
+              <span className="text-2xs text-text-muted block">
+                {count} assignment{count === 1 ? '' : 's'}
               </span>
             </div>
           );
         },
-        size: 190,
+        size: 165,
       },
       {
         id: 'approvalPage',
-        header: 'APPROVAL PAGE',
+        header: 'APPROVAL PAGES',
         cell: ({ row }) => {
-          const label =
-            row.original.approvalPageLabel ||
-            (row.original.approvalPageKey
-              ? getApprovalPageLabel(row.original.approvalPageKey)
-              : 'Approval Access');
+          const labels = [
+            ...new Set(
+              (row.original.assignments || [])
+                .map((a) => a.moduleName || a.moduleCode)
+                .filter(Boolean)
+            ),
+          ];
+          const display = labels.length > 0 ? labels : ['Approval Access'];
           return (
-            <Badge variant="role" size="sm" className="font-semibold">
-              {label}
-            </Badge>
+            <div className="flex flex-wrap gap-1">
+              {display.map((label) => (
+                <Badge key={label} variant="role" size="sm" className="font-semibold">
+                  {label}
+                </Badge>
+              ))}
+            </div>
           );
         },
-        size: 190,
+        size: 170,
       },
       {
         id: 'period',
         header: 'PERIOD',
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-heading whitespace-nowrap">
-            {formatDate(row.original.fromDate)} to {formatDate(row.original.toDate)}
-          </span>
+          <div className="whitespace-nowrap">
+            <span className="font-mono text-xs text-heading block">
+              {formatDate(row.original.startDate)} to {formatDate(row.original.endDate)}
+            </span>
+            {row.original.dayCount > 0 && (
+              <span className="text-2xs text-text-muted">
+                {row.original.dayCount} day{row.original.dayCount === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
         ),
-        size: 190,
+        size: 170,
       },
       {
         id: 'status',
         header: 'STATUS',
         cell: ({ row }) => {
           const status = getDelegationStatus(row.original, today);
-          const meta = DELEGATION_STATUS[status] || DELEGATION_STATUS.Ended;
+          const meta = DELEGATION_STATUS[status] || DELEGATION_STATUS.Expired;
           return (
             <Badge variant={meta.variant} size="md">
               {meta.label}
             </Badge>
           );
         },
-        size: 110,
+        size: 100,
       },
       {
         id: 'actions',
-        header: 'ACTIONS',
+        header: () => <div className="text-right pr-2">ACTIONS</div>,
         cell: ({ row }) => {
           const d = row.original;
           const status = getDelegationStatus(d, today);
-          const canCancel =
-            (String(d.delegatorId) === String(user?.id || user?.userId || 'u1') || isAdmin) &&
-            (status === 'Active' || status === 'Scheduled');
+          const canManage =
+            String(d.delegatorUserId) === String(user?.id || user?.userId || '') || isAdmin;
+          const canEdit = canManage && (d.canEdit || status === 'InForce' || status === 'Upcoming');
+          const canCancel = canManage && (status === 'InForce' || status === 'Upcoming');
+          const canReinstate =
+            canManage && status === 'Cancelled' && (!d.endDate || d.endDate >= today);
 
           return (
-            <div className="flex items-center justify-start gap-1">
+            <div className="flex items-center justify-end gap-1 pr-2">
               <IconButton
                 type="button"
                 size="sm"
@@ -224,17 +242,19 @@ export default function AllDelegationsPage() {
                 onClick={() => navigate(`/delegation/${d.id}`, { state: { from: '/delegation/all' } })}
                 className="text-text-muted hover:text-primary hover:bg-primary/10"
               />
-              <IconButton
-                type="button"
-                size="sm"
-                variant="ghost"
-                icon={IconEdit}
-                title="Edit delegation"
-                aria-label="Edit delegation"
-                onClick={() => navigate(`/delegation/${d.id}/edit`, { state: { from: '/delegation/all' } })}
-                className="text-text-muted hover:text-primary hover:bg-primary/10"
-              />
-              {canCancel ? (
+              {canEdit && (
+                <IconButton
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  icon={IconEdit}
+                  title="Edit delegation"
+                  aria-label="Edit delegation"
+                  onClick={() => navigate(`/delegation/${d.id}/edit`, { state: { from: '/delegation/all' } })}
+                  className="text-text-muted hover:text-primary hover:bg-primary/10"
+                />
+              )}
+              {canCancel && (
                 <IconButton
                   type="button"
                   size="sm"
@@ -245,13 +265,24 @@ export default function AllDelegationsPage() {
                   onClick={() => setSelectedForCancel(d)}
                   className="text-text-muted hover:text-danger hover:bg-danger/10"
                 />
-              ) : (
-                <div className="w-7 h-7" aria-hidden="true" />
+              )}
+              {canReinstate && (
+                <IconButton
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  icon={IconRefresh}
+                  title="Reinstate delegation"
+                  aria-label="Reinstate delegation"
+                  onClick={() => setSelectedForReinstate(d)}
+                  className="text-text-muted hover:text-success hover:bg-success/10"
+                />
               )}
             </div>
           );
         },
-        size: 100,
+        size: 145,
+        minSize: 130,
       },
     ];
   }, [today, user, isAdmin, navigate]);
@@ -271,13 +302,22 @@ export default function AllDelegationsPage() {
   // Mobile stacked cards for small screens
   const renderMobileCard = (row) => {
     const d = row.original;
-    const delegatorName = getUserName(d.delegatorId);
-    const delegateName = getUserName(d.delegateId);
+    const delegatorName = d.delegatorName || `User #${d.delegatorUserId}`;
+    const delegateNames =
+      [...new Set((d.assignments || []).map((a) => a.delegateName).filter(Boolean))].join(', ') ||
+      'Assigned Delegate';
+    const moduleLabels = [
+      ...new Set((d.assignments || []).map((a) => a.moduleName || a.moduleCode).filter(Boolean)),
+    ];
+    const displayLabels = moduleLabels.length > 0 ? moduleLabels : ['Approval Access'];
     const status = getDelegationStatus(d, today);
-    const meta = DELEGATION_STATUS[status] || DELEGATION_STATUS.Ended;
-    const canCancel =
-      (String(d.delegatorId) === String(user?.id || user?.userId || 'u1') || isAdmin) &&
-      (status === 'Active' || status === 'Scheduled');
+    const meta = DELEGATION_STATUS[status] || DELEGATION_STATUS.Expired;
+    const canManage =
+      String(d.delegatorUserId) === String(user?.id || user?.userId || '') || isAdmin;
+    const canEdit = canManage && (d.canEdit || status === 'InForce' || status === 'Upcoming');
+    const canCancel = canManage && (status === 'InForce' || status === 'Upcoming');
+    const canReinstate =
+      canManage && status === 'Cancelled' && (!d.endDate || d.endDate >= today);
 
     return (
       <Card key={d.id} padding="md" className="space-y-3 bg-bg border border-border shadow-2xs">
@@ -287,7 +327,7 @@ export default function AllDelegationsPage() {
             <div className="flex items-center gap-1.5 text-xs flex-wrap font-medium">
               <span className="font-bold text-heading">{delegatorName}</span>
               <span className="text-text-muted font-normal">&rarr;</span>
-              <span className="font-bold text-heading">{delegateName}</span>
+              <span className="font-bold text-heading">{delegateNames}</span>
             </div>
             <span className="text-2xs text-text-muted font-mono block mt-0.5">
               ID: {d.id}
@@ -300,14 +340,18 @@ export default function AllDelegationsPage() {
 
         {/* Handover Details */}
         <div className="space-y-2.5 text-xs">
-          {/* Approval Page Authority — Dedicated full-width line to prevent overlap */}
+          {/* Approval Page Authority */}
           <div>
             <span className="text-2xs uppercase tracking-wider text-text-muted font-semibold block mb-1">
               Approval Authority
             </span>
-            <Badge variant="role" size="sm" className="font-semibold max-w-full">
-              {d.approvalPageLabel || (d.approvalPageKey ? getApprovalPageLabel(d.approvalPageKey) : 'Approval Access')}
-            </Badge>
+            <div className="flex flex-wrap gap-1">
+              {displayLabels.map((label) => (
+                <Badge key={label} variant="role" size="sm" className="font-semibold max-w-full">
+                  {label}
+                </Badge>
+              ))}
+            </div>
           </div>
 
           {/* Period & Reason — Clean 2-column layout */}
@@ -316,8 +360,8 @@ export default function AllDelegationsPage() {
               <span className="text-2xs uppercase tracking-wider text-text-muted font-semibold block mb-0.5">
                 Period
               </span>
-              <span className="font-mono text-heading text-2xs block truncate" title={`${formatDate(d.fromDate)} – ${formatDate(d.toDate)}`}>
-                {formatDate(d.fromDate)} &ndash; {formatDate(d.toDate)}
+              <span className="font-mono text-heading text-2xs block truncate" title={`${formatDate(d.startDate)} – ${formatDate(d.endDate)}`}>
+                {formatDate(d.startDate)} &ndash; {formatDate(d.endDate)}
               </span>
             </div>
             <div className="min-w-0">
@@ -331,15 +375,8 @@ export default function AllDelegationsPage() {
           </div>
         </div>
 
-        {/* Note */}
-        {d.note && (
-          <p className="text-xs text-text-muted bg-surface/50 p-2.5 rounded-control border border-border/60 leading-relaxed break-words">
-            {d.note}
-          </p>
-        )}
-
         {/* Card Actions */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-border/40">
           <Button
             type="button"
             variant="secondary"
@@ -350,16 +387,18 @@ export default function AllDelegationsPage() {
           >
             Details
           </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            icon={IconEdit}
-            onClick={() => navigate(`/delegation/${d.id}/edit`, { state: { from: '/delegation/all' } })}
-            className="text-xs"
-          >
-            Edit
-          </Button>
+          {canEdit && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={IconEdit}
+              onClick={() => navigate(`/delegation/${d.id}/edit`, { state: { from: '/delegation/all' } })}
+              className="text-xs"
+            >
+              Edit
+            </Button>
+          )}
           {canCancel && (
             <Button
               type="button"
@@ -370,6 +409,18 @@ export default function AllDelegationsPage() {
               className="text-xs"
             >
               Cancel
+            </Button>
+          )}
+          {canReinstate && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={IconRefresh}
+              onClick={() => setSelectedForReinstate(d)}
+              className="text-xs"
+            >
+              Reinstate
             </Button>
           )}
         </div>
@@ -437,7 +488,7 @@ export default function AllDelegationsPage() {
             id="filter-status"
             placeholder="All Statuses"
             searchPlaceholder="Search status…"
-            options={STATUS_FILTER_OPTIONS}
+            options={DELEGATION_STATUS_OPTIONS}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           />
@@ -483,6 +534,14 @@ export default function AllDelegationsPage() {
         isOpen={Boolean(selectedForCancel)}
         onClose={() => setSelectedForCancel(null)}
         delegation={selectedForCancel}
+        onSuccess={loadData}
+      />
+
+      {/* ── Reinstate Delegation Modal ── */}
+      <ReinstateDelegationModal
+        isOpen={Boolean(selectedForReinstate)}
+        onClose={() => setSelectedForReinstate(null)}
+        delegation={selectedForReinstate}
         onSuccess={loadData}
       />
     </div>

@@ -177,10 +177,20 @@ function NavItem({ item, collapsed, onClick }) {
 }
 
 /* ── Submenu Item Active Resolver ────────────────────────────── */
-function isSubNavActive(itemPath, currentPath, allSiblingPaths = []) {
+function isSubNavActive(itemPath, currentPath, allSiblingPaths = [], fromPath = null) {
   if (!itemPath || !currentPath) return false;
   // Exact match
   if (currentPath === itemPath) return true;
+
+  // If navigated from a specific sibling (e.g. /delegation/all -> /delegation/new),
+  // keep that originating sibling active when on a shared sub-route.
+  if (
+    fromPath &&
+    Array.isArray(allSiblingPaths) &&
+    allSiblingPaths.includes(fromPath)
+  ) {
+    return itemPath === fromPath;
+  }
 
   // If another sibling in the same group has an exact match or a longer/more-specific prefix match,
   // this item should not be marked active.
@@ -210,7 +220,12 @@ function SubNavItem({ item, allSiblingPaths, onClick }) {
   const navigate = useNavigate();
   const location = useLocation();
   const Icon = item.icon;
-  const isActive = isSubNavActive(item.path, location.pathname, allSiblingPaths);
+  const isActive = isSubNavActive(
+    item.path,
+    location.pathname,
+    allSiblingPaths,
+    location.state?.from
+  );
 
   return (
     <div className="relative group/subnav-item flex items-center">
@@ -264,7 +279,9 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
   const Icon = item.icon;
 
   const childPaths = useMemo(() => item.children?.map((c) => c.path) || [], [item.children]);
-  const isChildActive = item.children?.some((c) => isSubNavActive(c.path, location.pathname, childPaths));
+  const isChildActive = item.children?.some((c) =>
+    isSubNavActive(c.path, location.pathname, childPaths, location.state?.from)
+  );
   const [open, setOpen] = useState(isChildActive);
   const [isFlyoutOpen, setIsFlyoutOpen] = useState(false);
   const [flyoutCoords, setFlyoutCoords] = useState(null);
@@ -390,7 +407,12 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
               <div className="p-1.5 space-y-0.5 overflow-y-auto min-h-0">
                 {item.children?.map((child) => {
                   const ChildIcon = child.icon;
-                  const isLinkActive = isSubNavActive(child.path, location.pathname, childPaths);
+                  const isLinkActive = isSubNavActive(
+                    child.path,
+                    location.pathname,
+                    childPaths,
+                    location.state?.from
+                  );
 
                   return (
                     <NavLink

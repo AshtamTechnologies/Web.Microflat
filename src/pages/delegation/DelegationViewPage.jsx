@@ -21,17 +21,18 @@ import {
   IconUserCheck,
   IconClock,
   IconError,
+  IconRefresh,
 } from '../../constants/icons';
 import { getDelegation } from '../../services/delegation/delegationService';
 import { formatDate, formatDateTime, getTodayISO } from '../../utils/dateUtils';
 import { getDelegationStatus } from '../../utils/delegationUtils';
 import {
   DELEGATION_STATUS,
-  getApprovalPageLabel,
+  ALLOW_ADMIN_MANAGE_RECEIVED_DELEGATIONS,
 } from '../../constants/delegation';
-import { getUserName } from '../../context/UsersContext';
 import { useAuthContext } from '../../context/AuthContext';
 import CancelDelegationModal from './components/CancelDelegationModal';
+import ReinstateDelegationModal from './components/ReinstateDelegationModal';
 
 export default function DelegationViewPage() {
   const { id } = useParams();
@@ -44,8 +45,8 @@ export default function DelegationViewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isReinstateModalOpen, setIsReinstateModalOpen] = useState(false);
 
-  // Check admin role
   const isAdmin = useMemo(() => {
     const roles = Array.isArray(user?.roles) ? user?.roles : [user?.roles];
     return roles.some((r) => {
@@ -69,8 +70,26 @@ export default function DelegationViewPage() {
   }, [id]);
 
   useEffect(() => {
-    loadDelegation();
-  }, [loadDelegation]);
+    let active = true;
+    async function fetchRecord() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await getDelegation(id);
+        if (active) setDelegation(res);
+      } catch (err) {
+        if (active) setError(err?.message || `Delegation record "${id}" was not found.`);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    fetchRecord();
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const returnPath = location.state?.from || '/delegation';
 
   if (loading) {
     return (
@@ -90,7 +109,7 @@ export default function DelegationViewPage() {
           </div>
           <h2 className="text-lg font-bold text-heading">Delegation Not Found</h2>
           <p className="text-sm text-text-muted">
-            The requested delegation record with ID "{id}" does not exist or has been removed.
+            {error || `The requested delegation record with ID "${id}" does not exist or has been removed.`}
           </p>
           <Button variant="primary" size="sm" onClick={() => navigate('/delegation')}>
             Back to Delegations
@@ -101,36 +120,49 @@ export default function DelegationViewPage() {
   }
 
   const statusKey = getDelegationStatus(delegation, today);
-  const statusMeta = DELEGATION_STATUS[statusKey] || DELEGATION_STATUS.Ended;
+  const statusMeta = DELEGATION_STATUS[statusKey] || DELEGATION_STATUS.Expired;
 
-  const delegatorName = getUserName(delegation.delegatorId);
-  const delegateName = getUserName(delegation.delegateId);
+  const delegatorName = delegation.delegatorName || `User #${delegation.delegatorUserId}`;
+  const assignments = Array.isArray(delegation.assignments) ? delegation.assignments : [];
+  const delegateNames = [...new Set(assignments.map((a) => a.delegateName).filter(Boolean))];
+  const delegateSummary =
+    delegateNames.length > 0 ? delegateNames.join(', ') : 'Assigned Delegate(s)';
 
-  const isGivenByMe = String(delegation.delegatorId) === String(user?.id || user?.userId || 'u1');
-  const isReceivedByMe = String(delegation.delegateId) === String(user?.id || user?.userId || 'u1');
+  const currentUserId = String(user?.id || user?.userId || '');
+  const isGivenByMe = currentUserId && String(delegation.delegatorUserId) === currentUserId;
+  const isReceivedByMe =
+    currentUserId && assignments.some((a) => String(a.delegateUserId) === currentUserId);
 
   const pageTitle = isGivenByMe
-    ? `Delegation to ${delegateName}`
+    ? `Delegation to ${delegateSummary}`
     : isReceivedByMe
     ? `Delegation from ${delegatorName}`
-    : `Delegation: ${delegatorName} → ${delegateName}`;
+    : `Delegation: ${delegatorName} → ${delegateSummary}`;
 
-  const pageSubtitle = `From: ${delegatorName} • To: ${delegateName} • Period: ${formatDate(delegation.fromDate)} to ${formatDate(delegation.toDate)} (Inclusive)`;
+  const pageSubtitle = `From: ${delegatorName} • Period: ${formatDate(delegation.startDate)} to ${formatDate(delegation.endDate)}${
+    delegation.dayCount > 0 ? ` (${delegation.dayCount} day${delegation.dayCount === 1 ? '' : 's'})` : ''
+  }`;
 
   const hideEdit = Boolean(location.state?.hideEdit);
-  const returnPath = location.state?.from || '/delegation';
   const backLabel = returnPath.startsWith('/delegation/all')
     ? 'Back to All Delegations'
     : 'Back to Delegations';
 
+  const isFromReceivedTab = Boolean(location.state?.from?.includes('tab=received'));
+  const isFromAllDelegations = returnPath.startsWith('/delegation/all');
+  const isReceivedContext =
+    isFromReceivedTab || (!isFromAllDelegations && isReceivedByMe && !isGivenByMe);
+  const canManage =
+    isGivenByMe || (isAdmin && (!isReceivedContext || ALLOW_ADMIN_MANAGE_RECEIVED_DELEGATIONS));
   const canEdit =
     !hideEdit &&
-    (isGivenByMe || isAdmin) &&
-    (statusKey === 'Active' || statusKey === 'Scheduled');
-
-  const canCancel =
-    (isGivenByMe || isAdmin) &&
-    (statusKey === 'Active' || statusKey === 'Scheduled');
+    canManage &&
+    (delegation.canEdit || statusKey === 'InForce' || statusKey === 'Upcoming');
+  const canCancel = canManage && (statusKey === 'InForce' || statusKey === 'Upcoming');
+  const canReinstate =
+    canManage &&
+    statusKey === 'Cancelled' &&
+    (!delegation.endDate || delegation.endDate >= today);
 
   const handleBack = () => {
     navigate(returnPath);
@@ -155,14 +187,9 @@ export default function DelegationViewPage() {
           </Button>
         }
         badge={
-          <div className="flex items-center gap-2">
-            <Badge variant={statusMeta.variant} size="md" className="font-semibold">
-              {statusMeta.label}
-            </Badge>
-            <span className="font-mono text-2xs text-text-muted bg-surface border border-border px-2 py-0.5 rounded-md">
-              ID: {delegation.id}
-            </span>
-          </div>
+          <Badge variant={statusMeta.variant} size="md" className="font-semibold">
+            {statusMeta.label}
+          </Badge>
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">
@@ -194,20 +221,32 @@ export default function DelegationViewPage() {
                 Cancel Delegation
               </Button>
             )}
+            {canReinstate && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={IconRefresh}
+                onClick={() => setIsReinstateModalOpen(true)}
+                className="text-xs"
+              >
+                Reinstate
+              </Button>
+            )}
           </div>
         }
       />
 
       {/* ── 2-Column Responsive Workspace Layout ── */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* ── LEFT COLUMN (xl:col-span-7): Core Parameters & Handover Scope ── */}
+        {/* ── LEFT COLUMN (xl:col-span-7): Core Parameters & Assignments ── */}
         <div className="xl:col-span-7 space-y-6">
           {/* Core Parameters Card */}
           <Card padding="md" className="bg-bg shadow-2xs space-y-4">
             <div className="border-b border-border pb-3 flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-sm">
                 <IconUserCheck size={17} className="text-primary shrink-0" />
-                <span>Delegation Assignment</span>
+                <span>Delegation Parameters</span>
               </div>
               <span className="text-xs text-text-muted">Handover Details</span>
             </div>
@@ -215,24 +254,13 @@ export default function DelegationViewPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <DetailField
                 label="Whose Work (From Delegator)"
-                value={delegatorName}
+                value={
+                  delegation.delegatorEmail
+                    ? `${delegatorName} (${delegation.delegatorEmail})`
+                    : delegatorName
+                }
                 valueClassName="text-sm font-bold text-heading"
               />
-
-              <DetailField
-                label="Delegated To (Colleague)"
-                value={delegateName}
-                valueClassName="text-sm font-bold text-heading"
-              />
-
-              <div>
-                <span className="view-field-label">Approval Page</span>
-                <div className="mt-1">
-                  <Badge variant="role" size="md" className="font-semibold">
-                    {delegation.approvalPageLabel || getApprovalPageLabel(delegation.approvalPageKey || 'PR_APPROVAL')}
-                  </Badge>
-                </div>
-              </div>
 
               <DetailField
                 label="Reason"
@@ -241,23 +269,57 @@ export default function DelegationViewPage() {
 
               <DetailField
                 label="Start Date (From)"
-                value={formatDate(delegation.fromDate)}
+                value={formatDate(delegation.startDate)}
                 mono
               />
 
               <DetailField
                 label="End Date (To, inclusive)"
-                value={formatDate(delegation.toDate)}
+                value={formatDate(delegation.endDate)}
                 mono
               />
+            </div>
 
-              {delegation.note && (
-                <div className="sm:col-span-2 pt-2 border-t border-border/60">
-                  <span className="view-field-label">Note for Delegate</span>
-                  <p className="mt-1 text-xs text-heading bg-surface/50 p-3 rounded-control border border-border leading-relaxed break-words">
-                    {delegation.note}
-                  </p>
+            {/* Approval Page Assignments */}
+            <div className="pt-3 border-t border-border/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="view-field-label">
+                  Approval Page Assignments ({assignments.length})
+                </span>
+              </div>
+
+              {assignments.length > 0 ? (
+                <div className="space-y-2.5">
+                  {assignments.map((a, idx) => (
+                    <div
+                      key={a.delegationAssignmentId || `${a.moduleId}-${idx}`}
+                      className="p-3 rounded-control border border-border bg-surface/40 space-y-2"
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <Badge variant="role" size="sm" className="font-semibold">
+                          {a.moduleName || a.moduleCode || `Module #${a.moduleId}`}
+                        </Badge>
+                        <div className="text-right">
+                          <span className="text-xs font-semibold text-heading block">
+                            {a.delegateName || `User #${a.delegateUserId}`}
+                          </span>
+                          {a.delegateEmail && (
+                            <span className="text-2xs text-text-muted block">
+                              {a.delegateEmail}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {a.note && (
+                        <p className="text-xs text-text-muted bg-bg p-2 rounded border border-border/60 break-words">
+                          {a.note}
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <p className="text-xs text-text-muted italic">No assignments recorded.</p>
               )}
             </div>
           </Card>
@@ -271,7 +333,7 @@ export default function DelegationViewPage() {
                 <IconClock size={17} className="text-primary shrink-0" />
                 <span>Audit & Lifecycle</span>
               </div>
-              <span className="text-xs text-text-muted">Timestamps & History</span>
+              <span className="text-xs text-text-muted">Status & Duration</span>
             </div>
 
             <div className="space-y-3.5">
@@ -289,43 +351,26 @@ export default function DelegationViewPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-border/50">
                 <DetailField
-                  label="Created By"
-                  value={getUserName(delegation.createdBy)}
+                  label="Duration"
+                  value={
+                    delegation.dayCount > 0
+                      ? `${delegation.dayCount} day${delegation.dayCount === 1 ? '' : 's'}`
+                      : '—'
+                  }
                 />
-                <DetailField
-                  label="Created On"
-                  value={formatDateTime(delegation.createdAt)}
-                  mono
-                />
+                {delegation.createdAt && (
+                  <DetailField
+                    label="Created On"
+                    value={formatDateTime(delegation.createdAt)}
+                    mono
+                  />
+                )}
               </div>
 
-              {delegation.cancelledAt && (
-                <div className="space-y-3 pt-3 border-t border-danger/20 bg-danger/5 p-3 rounded-control border">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-danger">
-                    <IconClose size={14} />
-                    <span>Cancellation Information</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <DetailField
-                      label="Cancelled By"
-                      value={getUserName(delegation.cancelledBy)}
-                      valueClassName="text-danger font-semibold"
-                    />
-                    <DetailField
-                      label="Cancelled On"
-                      value={formatDateTime(delegation.cancelledAt)}
-                      mono
-                      valueClassName="text-danger font-mono"
-                    />
-                    {delegation.cancelReason && (
-                      <DetailField
-                        label="Cancellation Reason"
-                        value={delegation.cancelReason}
-                        className="sm:col-span-2"
-                        valueClassName="text-danger italic"
-                      />
-                    )}
-                  </div>
+              {statusKey === 'Cancelled' && (
+                <div className="p-3 rounded-control border border-danger/20 bg-danger/5 text-xs text-danger">
+                  This delegation is currently cancelled.
+                  {canReinstate && ' You can reinstate it using the Reinstate button above.'}
                 </div>
               )}
             </div>
@@ -342,7 +387,16 @@ export default function DelegationViewPage() {
           loadDelegation();
         }}
       />
+
+      {/* ── Reinstate Delegation Modal ── */}
+      <ReinstateDelegationModal
+        isOpen={isReinstateModalOpen}
+        onClose={() => setIsReinstateModalOpen(false)}
+        delegation={delegation}
+        onSuccess={() => {
+          loadDelegation();
+        }}
+      />
     </div>
   );
 }
-

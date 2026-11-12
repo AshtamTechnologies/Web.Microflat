@@ -1,5 +1,6 @@
 /**
- * useDelegationForm.js — Manages delegation form state, assignment line-items, and submission.
+ * useDelegationForm.js — Manages delegation form state, API lookups, candidate lists,
+ * assignment line-items, and submission.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -8,13 +9,32 @@ import {
   createDelegation,
   updateDelegation,
   getDelegation,
+  getDelegationLookups,
+  getDelegatorCandidates,
+  getDelegateCandidates,
 } from '../../../services/delegation/delegationService';
 import { getTodayISO } from '../../../utils/dateUtils';
 import { useAuthContext } from '../../../context/AuthContext';
 import { ApiError } from '../../../utils/apiError';
-import { getApprovalPageLabel } from '../../../constants/delegation';
+import { DELEGATION_REASONS } from '../../../constants/delegation';
 
 let tempAssignmentCounter = 1;
+
+function mapBackendFieldErrors(fieldErrors = {}) {
+  const mapped = {};
+  Object.entries(fieldErrors).forEach(([key, msg]) => {
+    const lower = key.charAt(0).toLowerCase() + key.slice(1);
+    mapped[lower] = msg;
+    if (lower === 'delegatorUserId') mapped.delegatorUserId = msg;
+    if (lower === 'startDate') mapped.startDate = msg;
+    if (lower === 'endDate') mapped.endDate = msg;
+    if (lower === 'reason') mapped.reason = msg;
+    if (lower === 'assignments' || lower.startsWith('assignments[')) {
+      mapped.assignments = msg;
+    }
+  });
+  return mapped;
+}
 
 /**
  * Hook to manage Delegation form state, approval assignments, and submission.
@@ -22,34 +42,38 @@ let tempAssignmentCounter = 1;
  * @param {{ id?: string, onSuccess?: () => void, onClose?: () => void }} options
  * @returns {object}
  */
-export function useDelegationForm({ id, onSuccess, onClose } = {}) {
+export function useDelegationForm({ id, onSuccess } = {}) {
   const isEdit = Boolean(id);
   const { user } = useAuthContext();
-  const currentUserId = user?.id || user?.userId || 'u1';
-  const currentUserRoles = user?.roles || ['Super Admin'];
+  const currentUserId = user?.id || user?.userId || '';
+  const currentUserRoles = useMemo(() => user?.roles || [], [user?.roles]);
 
   const today = getTodayISO();
 
   const [formData, setFormData] = useState({
-    delegatorId: currentUserId,
-    delegateId: '',
-    approvalPageKey: 'VENDOR_APPROVAL',
-    fromDate: today,
-    toDate: today,
-    reason: 'Leave',
-    note: '',
+    delegatorUserId: currentUserId ? String(currentUserId) : '',
+    startDate: today,
+    endDate: today,
+    reason: '',
+    status: 'Upcoming',
+    canEdit: true,
   });
 
-  // Line items for create mode (e.g. Vendor Approvals -> User A, PR Approvals -> User B)
   const [assignments, setAssignments] = useState([]);
   const [editingAssignmentId, setEditingAssignmentId] = useState(null);
 
-  // Draft inputs for adding a row
   const [draftAssignment, setDraftAssignment] = useState({
-    approvalPageKey: 'VENDOR_APPROVAL',
-    delegateId: '',
+    moduleId: '',
+    delegateUserId: '',
     note: '',
   });
+
+  const [approvalPages, setApprovalPages] = useState([]);
+  const [suggestedReasons, setSuggestedReasons] = useState(DELEGATION_REASONS);
+  const [delegatorCandidates, setDelegatorCandidates] = useState([]);
+  const [delegateCandidates, setDelegateCandidates] = useState([]);
+  const [lookupsLoading, setLookupsLoading] = useState(true);
+  const [delegatesLoading, setDelegatesLoading] = useState(false);
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -57,7 +81,97 @@ export function useDelegationForm({ id, onSuccess, onClose } = {}) {
   const [isLoadingRecord, setIsLoadingRecord] = useState(isEdit);
   const [loadError, setLoadError] = useState(null);
 
-  // Load existing delegation if in Edit mode
+  const isAdmin = useMemo(() => {
+    const roles = Array.isArray(currentUserRoles) ? currentUserRoles : [currentUserRoles];
+    return roles.some((r) => {
+      const name = typeof r === 'string' ? r : r?.roleName || r?.name || '';
+      const norm = name.trim().toLowerCase();
+      return norm === 'admin' || norm === 'super admin';
+    });
+  }, [currentUserRoles]);
+
+  // Load lookups & delegator candidates on mount
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadLookups() {
+      setLookupsLoading(true);
+      try {
+        const [lookupsRes, delegatorsRes] = await Promise.all([
+          getDelegationLookups(),
+          getDelegatorCandidates(),
+        ]);
+
+        if (!isCurrent) return;
+
+        const pages = lookupsRes.approvalPages || [];
+        setApprovalPages(pages);
+
+        if (lookupsRes.suggestedReasons?.length > 0) {
+          setSuggestedReasons(lookupsRes.suggestedReasons);
+        }
+
+        setDelegatorCandidates(delegatorsRes || []);
+
+        if (!isEdit) {
+          setFormData((prev) => {
+            if (prev.delegatorUserId) return prev;
+            const preferred =
+              delegatorsRes.find((u) => String(u.userId) === String(currentUserId)) ||
+              delegatorsRes[0];
+            return {
+              ...prev,
+              delegatorUserId: preferred ? String(preferred.userId) : prev.delegatorUserId,
+            };
+          });
+        }
+      } catch (err) {
+        if (isCurrent) {
+          toast.error(err?.message || 'Failed to load delegation options.');
+        }
+      } finally {
+        if (isCurrent) setLookupsLoading(false);
+      }
+    }
+
+    loadLookups();
+    return () => {
+      isCurrent = false;
+    };
+  }, [isEdit, currentUserId]);
+
+  // Load delegate candidates whenever delegatorUserId changes
+  useEffect(() => {
+    if (!formData.delegatorUserId) {
+      return;
+    }
+
+    let isCurrent = true;
+    async function loadDelegates() {
+      setDelegatesLoading(true);
+      try {
+        const list = await getDelegateCandidates({
+          delegatorUserId: formData.delegatorUserId,
+        });
+        if (isCurrent) {
+          setDelegateCandidates(list || []);
+        }
+      } catch (err) {
+        if (isCurrent) {
+          toast.error(err?.message || 'Failed to load delegate candidates.');
+        }
+      } finally {
+        if (isCurrent) setDelegatesLoading(false);
+      }
+    }
+
+    loadDelegates();
+    return () => {
+      isCurrent = false;
+    };
+  }, [formData.delegatorUserId]);
+
+  // Load existing delegation in Edit mode
   useEffect(() => {
     if (!id) return;
     let isCurrent = true;
@@ -69,14 +183,28 @@ export function useDelegationForm({ id, onSuccess, onClose } = {}) {
         const existing = await getDelegation(id);
         if (isCurrent && existing) {
           setFormData({
-            delegatorId: existing.delegatorId,
-            delegateId: existing.delegateId,
-            approvalPageKey: existing.approvalPageKey || 'VENDOR_APPROVAL',
-            fromDate: existing.fromDate,
-            toDate: existing.toDate,
+            delegatorUserId: String(existing.delegatorUserId || ''),
+            startDate: existing.startDate || today,
+            endDate: existing.endDate || today,
             reason: existing.reason || 'Leave',
-            note: existing.note || '',
+            status: existing.status || 'Upcoming',
+            canEdit: existing.canEdit !== undefined ? Boolean(existing.canEdit) : true,
           });
+          setAssignments(
+            (existing.assignments || []).map((a) => ({
+              id: a.delegationAssignmentId
+                ? `existing-${a.delegationAssignmentId}`
+                : `temp-${tempAssignmentCounter++}`,
+              delegationAssignmentId: a.delegationAssignmentId ?? null,
+              moduleId: String(a.moduleId || ''),
+              moduleCode: a.moduleCode || '',
+              moduleName: a.moduleName || '',
+              delegateUserId: String(a.delegateUserId || ''),
+              delegateName: a.delegateName || '',
+              delegateEmail: a.delegateEmail || '',
+              note: a.note || '',
+            }))
+          );
         }
       } catch (err) {
         if (isCurrent) {
@@ -90,95 +218,149 @@ export function useDelegationForm({ id, onSuccess, onClose } = {}) {
     }
 
     loadExisting();
-
     return () => {
       isCurrent = false;
     };
-  }, [id]);
+  }, [id, today]);
 
-  // Checks whether logged-in user has Admin privileges
-  const isAdmin = useMemo(() => {
-    const roles = Array.isArray(currentUserRoles) ? currentUserRoles : [currentUserRoles];
-    return roles.some((r) => {
-      const name = typeof r === 'string' ? r : r?.roleName || r?.name || '';
-      const norm = name.trim().toLowerCase();
-      return norm === 'admin' || norm === 'super admin';
-    });
-  }, [currentUserRoles]);
+  const approvalPageOptions = useMemo(
+    () =>
+      approvalPages.map((p) => ({
+        value: String(p.moduleId),
+        label: p.moduleName,
+        subLabel: p.approverRoleName ? `Role: ${p.approverRoleName}` : p.moduleCode,
+      })),
+    [approvalPages]
+  );
 
-  // Set top-level form field
+  const delegatorOptions = useMemo(() => {
+    const opts = delegatorCandidates.map((u) => ({
+      value: String(u.userId),
+      label: u.name,
+      subLabel: u.email,
+    }));
+    const currentIdStr = currentUserId ? String(currentUserId) : '';
+    if (currentIdStr && !opts.some((o) => o.value === currentIdStr)) {
+      const displayName = user?.name || user?.fullName || user?.userName || 'Current User';
+      opts.unshift({
+        value: currentIdStr,
+        label: displayName,
+        subLabel: user?.email || '',
+      });
+    }
+    return opts;
+  }, [delegatorCandidates, currentUserId, user]);
+
+  const delegateOptions = useMemo(
+    () =>
+      delegateCandidates.map((u) => ({
+        value: String(u.userId),
+        label: u.name,
+        subLabel: u.email,
+      })),
+    [delegateCandidates]
+  );
+
+  const reasonOptions = useMemo(
+    () =>
+      suggestedReasons.map((r) => ({
+        value: r,
+        label: r,
+      })),
+    [suggestedReasons]
+  );
+
+  const getApprovalPageMeta = useCallback(
+    (moduleId) => approvalPages.find((p) => String(p.moduleId) === String(moduleId)) || null,
+    [approvalPages]
+  );
+
+  const getDelegateMeta = useCallback(
+    (userId) => delegateCandidates.find((u) => String(u.userId) === String(userId)) || null,
+    [delegateCandidates]
+  );
+
   const setFieldValue = useCallback((name, value) => {
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
-      if (name === 'fromDate' && value && next.toDate && value > next.toDate) {
+      if (name === 'startDate' && value && next.toDate && value > next.toDate) {
         next.toDate = value;
       }
       return next;
     });
 
+    if (name === 'delegatorUserId') {
+      setDraftAssignment((prev) => ({ ...prev, delegateUserId: '' }));
+    }
+
     setErrors((prev) => ({ ...prev, [name]: null }));
   }, []);
 
-  // Update draft row input
   const setDraftValue = useCallback((name, value) => {
     setDraftAssignment((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, assignmentDraft: null }));
   }, []);
 
-  // Start editing an assignment from the grid
   const startEditAssignment = useCallback((item) => {
     setEditingAssignmentId(item.id);
     setDraftAssignment({
-      approvalPageKey: item.approvalPageKey,
-      delegateId: item.delegateId,
+      moduleId: String(item.moduleId),
+      delegateUserId: String(item.delegateUserId),
       note: item.note || '',
     });
     setErrors((prev) => ({ ...prev, assignmentDraft: null }));
   }, []);
 
-  // Cancel editing an assignment
   const cancelEditAssignment = useCallback(() => {
     setEditingAssignmentId(null);
     setDraftAssignment({
-      approvalPageKey: 'VENDOR_APPROVAL',
-      delegateId: '',
+      moduleId: '',
+      delegateUserId: '',
       note: '',
     });
     setErrors((prev) => ({ ...prev, assignmentDraft: null }));
   }, []);
 
-  // Add or update assignment line item
   const addAssignment = useCallback(() => {
-    const { approvalPageKey, delegateId, note } = draftAssignment;
+    const { moduleId, delegateUserId, note } = draftAssignment;
 
-    if (!approvalPageKey) {
+    if (!moduleId) {
       setErrors((prev) => ({ ...prev, assignmentDraft: 'Please select an approval page.' }));
       return false;
     }
 
-    if (!delegateId) {
-      setErrors((prev) => ({ ...prev, assignmentDraft: 'Please select a colleague for this approval page.' }));
+    if (!delegateUserId) {
+      setErrors((prev) => ({
+        ...prev,
+        assignmentDraft: 'Please select a colleague for this approval page.',
+      }));
       return false;
     }
 
-    if (String(delegateId).trim() === String(formData.delegatorId || currentUserId).trim()) {
+    if (String(delegateUserId).trim() === String(formData.delegatorUserId).trim()) {
       setErrors((prev) => ({ ...prev, assignmentDraft: 'You cannot delegate work to yourself.' }));
       return false;
     }
 
     if (note && note.length > 250) {
-      setErrors((prev) => ({ ...prev, assignmentDraft: 'Note for the delegate cannot exceed 250 characters.' }));
+      setErrors((prev) => ({
+        ...prev,
+        assignmentDraft: 'Note for the delegate cannot exceed 250 characters.',
+      }));
       return false;
     }
 
-    // Check if approval page is already assigned to a DIFFERENT row
+    const pageMeta = getApprovalPageMeta(moduleId);
+    const delegateMeta = getDelegateMeta(delegateUserId);
+    const moduleLabel = pageMeta?.moduleName || `Module #${moduleId}`;
+
     const exists = assignments.some(
-      (a) => a.id !== editingAssignmentId && a.approvalPageKey === approvalPageKey
+      (a) => a.id !== editingAssignmentId && String(a.moduleId) === String(moduleId)
     );
     if (exists) {
       setErrors((prev) => ({
         ...prev,
-        assignmentDraft: `An assignment for "${getApprovalPageLabel(approvalPageKey)}" has already been added below.`,
+        assignmentDraft: `An assignment for "${moduleLabel}" has already been added below.`,
       }));
       return false;
     }
@@ -189,9 +371,12 @@ export function useDelegationForm({ id, onSuccess, onClose } = {}) {
           a.id === editingAssignmentId
             ? {
                 ...a,
-                approvalPageKey,
-                approvalPageLabel: getApprovalPageLabel(approvalPageKey),
-                delegateId,
+                moduleId: String(moduleId),
+                moduleCode: pageMeta?.moduleCode || a.moduleCode || '',
+                moduleName: moduleLabel,
+                delegateUserId: String(delegateUserId),
+                delegateName: delegateMeta?.name || a.delegateName || '',
+                delegateEmail: delegateMeta?.email || a.delegateEmail || '',
                 note: (note || '').trim(),
               }
             : a
@@ -202,35 +387,42 @@ export function useDelegationForm({ id, onSuccess, onClose } = {}) {
     } else {
       const newRow = {
         id: `temp-${tempAssignmentCounter++}`,
-        approvalPageKey,
-        approvalPageLabel: getApprovalPageLabel(approvalPageKey),
-        delegateId,
+        delegationAssignmentId: null,
+        moduleId: String(moduleId),
+        moduleCode: pageMeta?.moduleCode || '',
+        moduleName: moduleLabel,
+        delegateUserId: String(delegateUserId),
+        delegateName: delegateMeta?.name || '',
+        delegateEmail: delegateMeta?.email || '',
         note: (note || '').trim(),
-        fromDate: formData.fromDate,
-        toDate: formData.toDate,
       };
       setAssignments((prev) => [...prev, newRow]);
     }
 
-    // Reset draft inputs, toggle to other page if possible
-    setDraftAssignment((prev) => ({
-      approvalPageKey: prev.approvalPageKey === 'VENDOR_APPROVAL' ? 'PR_APPROVAL' : 'VENDOR_APPROVAL',
-      delegateId: '',
+    setDraftAssignment({
+      moduleId: '',
+      delegateUserId: '',
       note: '',
-    }));
+    });
     setErrors((prev) => ({ ...prev, assignmentDraft: null, assignments: null }));
     return true;
-  }, [draftAssignment, formData.delegatorId, formData.fromDate, formData.toDate, currentUserId, assignments, editingAssignmentId]);
+  }, [
+    draftAssignment,
+    formData.delegatorUserId,
+    assignments,
+    editingAssignmentId,
+    getApprovalPageMeta,
+    getDelegateMeta,
+  ]);
 
-  // Remove assignment line item
   const removeAssignment = useCallback(
     (idToRemove) => {
       setAssignments((prev) => prev.filter((a) => a.id !== idToRemove));
       if (editingAssignmentId === idToRemove) {
         setEditingAssignmentId(null);
         setDraftAssignment({
-          approvalPageKey: 'VENDOR_APPROVAL',
-          delegateId: '',
+          moduleId: '',
+          delegateUserId: '',
           note: '',
         });
       }
@@ -238,63 +430,48 @@ export function useDelegationForm({ id, onSuccess, onClose } = {}) {
     [editingAssignmentId]
   );
 
-  // Blur handler for inline validation
-  const handleBlur = useCallback(
-    (e) => {
-      const name = e?.target?.name || e;
-      if (!name) return;
-      setTouched((prev) => ({ ...prev, [name]: true }));
-    },
-    []
-  );
+  const handleBlur = useCallback((e) => {
+    const name = e?.target?.name || e;
+    if (!name) return;
+    setTouched((prev) => ({ ...prev, [name]: true }));
+  }, []);
 
-  // Validate form before submission
+  const isInForceEdit = isEdit && formData.status === 'InForce';
+
   const validate = useCallback(() => {
     const newErrors = {};
     const todayISO = getTodayISO();
 
-    if (!formData.fromDate) {
-      newErrors.fromDate = 'Start date is required.';
-    } else if (!isEdit && formData.fromDate < todayISO) {
-      newErrors.fromDate = 'Start date cannot be in the past.';
+    if (!formData.delegatorUserId) {
+      newErrors.delegatorUserId = 'Delegating user is required.';
     }
 
-    if (!formData.toDate) {
-      newErrors.toDate = 'End date is required.';
-    } else if (formData.fromDate && formData.toDate < formData.fromDate) {
-      newErrors.toDate = 'End date cannot be earlier than start date.';
-    } else if (formData.toDate < todayISO) {
-      newErrors.toDate = 'End date cannot be in the past.';
+    if (!formData.startDate) {
+      newErrors.startDate = 'Start date is required.';
+    } else if (!isEdit && formData.startDate < todayISO) {
+      newErrors.startDate = 'Start date cannot be in the past.';
     }
 
-    if (!formData.reason) {
+    if (!formData.endDate) {
+      newErrors.endDate = 'End date is required.';
+    } else if (formData.startDate && formData.endDate < formData.startDate) {
+      newErrors.endDate = 'End date cannot be earlier than start date.';
+    } else if (formData.endDate < todayISO) {
+      newErrors.endDate = 'End date cannot be in the past.';
+    }
+
+    if (!formData.reason || !String(formData.reason).trim()) {
       newErrors.reason = 'Please select a reason.';
     }
 
-    if (formData.note && formData.note.length > 250) {
-      newErrors.note = 'Note cannot exceed 250 characters.';
-    }
-
-    if (isEdit) {
-      if (!formData.delegateId) {
-        newErrors.delegateId = 'Please select a colleague.';
-      } else if (String(formData.delegateId) === String(formData.delegatorId)) {
-        newErrors.delegateId = 'You cannot delegate work to yourself.';
-      }
-      if (!formData.approvalPageKey) {
-        newErrors.approvalPageKey = 'Please select an approval page.';
-      }
-    } else {
-      if (assignments.length === 0) {
-        newErrors.assignments = 'Please add at least one approval page assignment below.';
-      }
+    if (assignments.length === 0) {
+      newErrors.assignments = 'Please add at least one approval page assignment below.';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }, [formData, isEdit, assignments]);
 
-  // Submit action
   const handleSubmit = useCallback(
     async (e) => {
       if (e) e.preventDefault();
@@ -307,64 +484,61 @@ export function useDelegationForm({ id, onSuccess, onClose } = {}) {
 
       setIsSubmitting(true);
       try {
+        const payload = {
+          delegatorUserId: formData.delegatorUserId,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          reason: formData.reason,
+          assignments,
+        };
+
         if (isEdit) {
-          await updateDelegation(
-            id,
-            {
-              ...formData,
-              approvalPageLabel: getApprovalPageLabel(formData.approvalPageKey),
-            },
-            currentUserId,
-            currentUserRoles
-          );
+          await updateDelegation(id, payload);
           toast.success('Delegation updated successfully');
         } else {
-          await createDelegation(
-            {
-              delegatorId: formData.delegatorId || currentUserId,
-              fromDate: formData.fromDate,
-              toDate: formData.toDate,
-              reason: formData.reason,
-              note: formData.note,
-              assignments,
-            },
-            currentUserId,
-            currentUserRoles
-          );
-          toast.success(
-            assignments.length > 1
-              ? `${assignments.length} delegations created successfully`
-              : 'Delegation created successfully'
-          );
+          await createDelegation(payload);
+          toast.success('Delegation created successfully');
         }
         onSuccess?.();
       } catch (err) {
         if (err instanceof ApiError && err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
-          setErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+          const mapped = mapBackendFieldErrors(err.fieldErrors);
+          setErrors((prev) => ({ ...prev, ...mapped }));
           toast.error(err.message || 'Please correct the validation errors.');
         } else {
-          toast.error(err?.message || (isEdit ? 'Failed to update delegation.' : 'Failed to save delegation.'));
+          toast.error(
+            err?.message || (isEdit ? 'Failed to update delegation.' : 'Failed to save delegation.')
+          );
         }
       } finally {
         setIsSubmitting(false);
       }
     },
-    [isSubmitting, validate, isEdit, id, formData, currentUserId, currentUserRoles, assignments, onSuccess]
+    [isSubmitting, validate, isEdit, id, formData, assignments, onSuccess]
   );
 
   return {
     isEdit,
+    isInForceEdit,
     isLoadingRecord,
+    lookupsLoading,
+    delegatesLoading,
     loadError,
     formData,
     assignments,
     draftAssignment,
     editingAssignmentId,
+    approvalPages,
+    approvalPageOptions,
+    delegatorOptions,
+    delegateOptions,
+    reasonOptions,
     errors,
     touched,
     isSubmitting,
     isAdmin,
     currentUserId,
+    getApprovalPageMeta,
     setFieldValue,
     setDraftValue,
     addAssignment,

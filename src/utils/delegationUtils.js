@@ -7,38 +7,42 @@
 import { getTodayISO } from './dateUtils';
 
 /**
- * Derives the current lifecycle status for a delegation record.
- * Status is DERIVED dynamically based on dates and cancellation, NEVER stored.
- *
- * Status rules:
- *   - 'Cancelled': if cancelledAt has a timestamp
- *   - 'Scheduled': if fromDate > today (in the future)
- *   - 'Ended':     if toDate < today (in the past)
- *   - 'Active':    otherwise (today is within [fromDate, toDate] inclusive)
+ * Returns the lifecycle status for a delegation record.
+ * Prefers backend-computed status ('Upcoming' | 'InForce' | 'Expired' | 'Cancelled'),
+ * falling back to date-based derivation when needed.
  *
  * @param {import('../models/delegation/delegationModel').DelegationModel|object} delegation
  * @param {string} [today=getTodayISO()]
- * @returns {'Cancelled'|'Scheduled'|'Ended'|'Active'}
+ * @returns {'Cancelled'|'Upcoming'|'Expired'|'InForce'}
  */
 export function getDelegationStatus(delegation, today = getTodayISO()) {
-  if (!delegation) return 'Ended';
+  if (!delegation) return 'Expired';
 
-  if (delegation.cancelledAt) {
+  if (
+    delegation.status === 'Upcoming' ||
+    delegation.status === 'InForce' ||
+    delegation.status === 'Expired' ||
+    delegation.status === 'Cancelled'
+  ) {
+    return delegation.status;
+  }
+
+  if (delegation.isActive === false || delegation.cancelledAt) {
     return 'Cancelled';
   }
 
-  const from = delegation.fromDate || '';
-  const to = delegation.toDate || '';
+  const from = delegation.startDate || delegation.fromDate || '';
+  const to = delegation.endDate || delegation.toDate || '';
 
   if (from && from > today) {
-    return 'Scheduled';
+    return 'Upcoming';
   }
 
   if (to && to < today) {
-    return 'Ended';
+    return 'Expired';
   }
 
-  return 'Active';
+  return 'InForce';
 }
 
 /**
@@ -49,7 +53,7 @@ export function getDelegationStatus(delegation, today = getTodayISO()) {
  * @returns {boolean}
  */
 export function isDelegationActive(delegation, today = getTodayISO()) {
-  return getDelegationStatus(delegation, today) === 'Active';
+  return getDelegationStatus(delegation, today) === 'InForce';
 }
 
 /**

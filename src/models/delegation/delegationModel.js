@@ -1,38 +1,77 @@
 /**
  * delegationModel.js — Delegation entity typedefs, mappers, and factory functions.
  *
- * All field mapping between future backend API DTOs and the frontend application lives here.
+ * All field mapping between backend API DTOs (/api/delegations) and the frontend application lives here.
  */
 
 import { getTodayISO } from '../../utils/dateUtils';
 
 /**
- * @typedef {Object} DelegationRecordRef
- * @property {string} moduleKey - e.g. 'INQUIRY' | 'PURCHASE_REQUISITION' | 'VENDOR' | 'CLIENT'
- * @property {string|number} recordId - Identifier of the individual record
- * @property {string} label - Human-readable descriptor, e.g. "INQ-2026-000101 – Granite Surface Plate"
+ * @typedef {Object} DelegationAssignment
+ * @property {number|null} [delegationAssignmentId]
+ * @property {number|string} moduleId
+ * @property {string} [moduleCode]
+ * @property {string} [moduleName]
+ * @property {number|string} delegateUserId
+ * @property {string} [delegateName]
+ * @property {string} [delegateEmail]
+ * @property {string} [note]
  */
 
 /**
  * @typedef {Object} DelegationModel
- * @property {string} id
- * @property {string|number} delegatorId
- * @property {string|number} delegateId
- * @property {string} fromDate - Inclusive start date in local YYYY-MM-DD format
- * @property {string} toDate - Inclusive end date in local YYYY-MM-DD format
- * @property {string} reason - One of DELEGATION_REASONS
- * @property {string} [note] - Optional instruction / note for delegate (max 250 chars)
- * @property {string[]} modules - Array of module keys handed over entirely (e.g. ['INQUIRY'])
- * @property {DelegationRecordRef[]} records - Array of single record references
- * @property {string} createdAt - ISO timestamp string
- * @property {string|number} createdBy - User ID who created the record
- * @property {string|null} [cancelledAt] - ISO timestamp string if cancelled
- * @property {string|number|null} [cancelledBy] - User ID who cancelled
- * @property {string|null} [cancelReason] - Cancellation explanation
+ * @property {string|number} id
+ * @property {number|string} delegatorUserId
+ * @property {string} delegatorName
+ * @property {string} delegatorEmail
+ * @property {string} startDate - Inclusive start date in YYYY-MM-DD format
+ * @property {string} endDate - Inclusive end date in YYYY-MM-DD format
+ * @property {number} dayCount
+ * @property {string} reason
+ * @property {string} status - 'Upcoming' | 'InForce' | 'Expired' | 'Cancelled'
+ * @property {boolean} isActive
+ * @property {boolean} canEdit
+ * @property {boolean} canDelete
+ * @property {DelegationAssignment[]} assignments
+ * @property {number} assignmentCount
+ * @property {string} createdAt
+ * @property {string|number} createdBy
  */
 
 /**
- * Maps raw backend/storage delegation object into a clean, normalized DelegationModel.
+ * Maps a raw assignment DTO into a normalized DelegationAssignment.
+ *
+ * @param {object} raw
+ * @returns {DelegationAssignment}
+ */
+export function delegationAssignmentFromApi(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      delegationAssignmentId: null,
+      moduleId: '',
+      moduleCode: '',
+      moduleName: '',
+      delegateUserId: '',
+      delegateName: '',
+      delegateEmail: '',
+      note: '',
+    };
+  }
+
+  return {
+    delegationAssignmentId: raw.delegationAssignmentId ?? raw.id ?? null,
+    moduleId: raw.moduleId ?? '',
+    moduleCode: String(raw.moduleCode || ''),
+    moduleName: String(raw.moduleName || ''),
+    delegateUserId: raw.delegateUserId ?? raw.delegateId ?? '',
+    delegateName: String(raw.delegateName || ''),
+    delegateEmail: String(raw.delegateEmail || ''),
+    note: raw.note ? String(raw.note) : '',
+  };
+}
+
+/**
+ * Maps raw backend delegation DTO into a normalized DelegationModel.
  *
  * @param {object|null|undefined} raw
  * @returns {DelegationModel}
@@ -42,35 +81,36 @@ export function delegationFromApi(raw) {
     return createEmptyDelegation();
   }
 
-  const modules = Array.isArray(raw.modules)
-    ? raw.modules.map(String).filter(Boolean)
-    : [];
-
-  const records = Array.isArray(raw.records)
-    ? raw.records.map((rec) => ({
-        moduleKey: String(rec.moduleKey || ''),
-        recordId: rec.recordId !== undefined && rec.recordId !== null ? String(rec.recordId) : '',
-        label: String(rec.label || ''),
-      }))
+  const assignments = Array.isArray(raw.assignments)
+    ? raw.assignments.map(delegationAssignmentFromApi)
     : [];
 
   return {
-    id: String(raw.id || raw.delegationId || ''),
-    delegatorId: raw.delegatorId !== undefined && raw.delegatorId !== null ? raw.delegatorId : '',
-    delegateId: raw.delegateId !== undefined && raw.delegateId !== null ? raw.delegateId : '',
-    fromDate: String(raw.fromDate || ''),
-    toDate: String(raw.toDate || ''),
-    reason: String(raw.reason || 'Leave'),
-    note: raw.note ? String(raw.note).trim() : '',
-    approvalPageKey: raw.approvalPageKey || (raw.modules?.includes('APPROVALS') ? 'PR_APPROVAL' : '') || '',
-    approvalPageLabel: raw.approvalPageLabel || '',
-    modules,
-    records,
-    createdAt: raw.createdAt || raw.createdOn || new Date().toISOString(),
-    createdBy: raw.createdBy !== undefined && raw.createdBy !== null ? raw.createdBy : '',
-    cancelledAt: raw.cancelledAt || null,
-    cancelledBy: raw.cancelledBy !== undefined && raw.cancelledBy !== null ? raw.cancelledBy : null,
-    cancelReason: raw.cancelReason ? String(raw.cancelReason).trim() : null,
+    id: raw.delegationId ?? raw.id ?? '',
+    delegatorUserId: raw.delegatorUserId ?? raw.delegatorId ?? '',
+    delegatorName: String(raw.delegatorName || ''),
+    delegatorEmail: String(raw.delegatorEmail || ''),
+    startDate: raw.startDate
+      ? String(raw.startDate).slice(0, 10)
+      : raw.fromDate
+        ? String(raw.fromDate).slice(0, 10)
+        : '',
+    endDate: raw.endDate
+      ? String(raw.endDate).slice(0, 10)
+      : raw.toDate
+        ? String(raw.toDate).slice(0, 10)
+        : '',
+    dayCount: typeof raw.dayCount === 'number' ? raw.dayCount : Number(raw.dayCount) || 0,
+    reason: String(raw.reason || ''),
+    status: String(raw.status || ''),
+    isActive: raw.isActive !== undefined ? Boolean(raw.isActive) : raw.status !== 'Cancelled',
+    canEdit: Boolean(raw.canEdit),
+    canDelete: Boolean(raw.canDelete),
+    assignments,
+    assignmentCount:
+      typeof raw.assignmentCount === 'number' ? raw.assignmentCount : assignments.length,
+    createdAt: raw.createdAt || raw.createdOn || '',
+    createdBy: raw.createdBy ?? '',
   };
 }
 
@@ -86,32 +126,48 @@ export function delegationsFromApi(rawList = []) {
 }
 
 /**
- * Maps form/UI model to API payload shape for create/update.
+ * Maps form/UI model to API payload shape for POST/PUT /api/delegations.
  *
  * @param {Partial<DelegationModel>} model
  * @returns {object}
  */
 export function delegationToApi(model) {
-  return {
-    delegatorId: model.delegatorId,
-    delegateId: model.delegateId,
-    fromDate: model.fromDate,
-    toDate: model.toDate,
-    reason: model.reason,
-    note: model.note ? model.note.trim() : '',
-    modules: Array.isArray(model.modules) ? model.modules : [],
-    records: Array.isArray(model.records)
-      ? model.records.map((r) => ({
-          moduleKey: r.moduleKey,
-          recordId: r.recordId,
-          label: r.label,
-        }))
-      : [],
+  const assignments = Array.isArray(model.assignments)
+    ? model.assignments
+        .filter((a) => a && a.moduleId && a.delegateUserId)
+        .map((a) => {
+          const item = {
+            moduleId: Number(a.moduleId),
+            delegateUserId: Number(a.delegateUserId),
+          };
+          const trimmedNote = a.note ? String(a.note).trim() : '';
+          if (trimmedNote) {
+            item.note = trimmedNote;
+          }
+          return item;
+        })
+    : [];
+
+  const payload = {
+    startDate: model.startDate,
+    endDate: model.endDate,
+    reason: model.reason ? String(model.reason).trim() : '',
+    assignments,
   };
+
+  if (
+    model.delegatorUserId !== undefined &&
+    model.delegatorUserId !== null &&
+    model.delegatorUserId !== ''
+  ) {
+    payload.delegatorUserId = Number(model.delegatorUserId);
+  }
+
+  return payload;
 }
 
 /**
- * Factory creating a fresh empty delegation object for form defaults.
+ * Creates a fresh empty DelegationModel for form state initialization.
  *
  * @param {Partial<DelegationModel>} [defaults={}]
  * @returns {DelegationModel}
@@ -120,21 +176,20 @@ export function createEmptyDelegation(defaults = {}) {
   const today = getTodayISO();
   return {
     id: '',
-    delegatorId: defaults.delegatorId || '',
-    delegateId: defaults.delegateId || '',
-    fromDate: defaults.fromDate || today,
-    toDate: defaults.toDate || today,
+    delegatorUserId: defaults.delegatorUserId ?? '',
+    delegatorName: defaults.delegatorName || '',
+    delegatorEmail: defaults.delegatorEmail || '',
+    startDate: defaults.startDate || today,
+    endDate: defaults.endDate || today,
+    dayCount: defaults.dayCount || 1,
     reason: defaults.reason || 'Leave',
-    note: defaults.note || '',
-    approvalPageKey: defaults.approvalPageKey || '',
-    approvalPageLabel: defaults.approvalPageLabel || '',
-    modules: Array.isArray(defaults.modules) ? defaults.modules : ['APPROVALS'],
-    records: Array.isArray(defaults.records) ? defaults.records : [],
-    createdAt: new Date().toISOString(),
-    createdBy: defaults.createdBy || '',
-    cancelledAt: null,
-    cancelledBy: null,
-    cancelReason: null,
+    status: defaults.status || 'Upcoming',
+    isActive: defaults.isActive !== undefined ? defaults.isActive : true,
+    canEdit: defaults.canEdit !== undefined ? defaults.canEdit : true,
+    canDelete: defaults.canDelete !== undefined ? defaults.canDelete : true,
+    assignments: Array.isArray(defaults.assignments) ? defaults.assignments : [],
+    assignmentCount: Array.isArray(defaults.assignments) ? defaults.assignments.length : 0,
+    createdAt: '',
+    createdBy: defaults.createdBy ?? '',
   };
 }
-

@@ -14,17 +14,11 @@ import {
   SearchableSelect,
 } from '../../components/ui';
 import { IconDelegation, IconAdd } from '../../constants/icons';
+import { DELEGATION_STATUS_OPTIONS } from '../../constants/delegation';
 import { useDelegations } from './hooks/useDelegations';
 import DelegationList from './components/DelegationList';
 import CancelDelegationModal from './components/CancelDelegationModal';
-
-const STATUS_FILTER_OPTIONS = [
-  { value: 'ALL', label: 'All Statuses' },
-  { value: 'Active', label: 'Active' },
-  { value: 'Scheduled', label: 'Scheduled' },
-  { value: 'Ended', label: 'Ended' },
-  { value: 'Cancelled', label: 'Cancelled' },
-];
+import ReinstateDelegationModal from './components/ReinstateDelegationModal';
 
 export default function DelegationPage() {
   const navigate = useNavigate();
@@ -45,6 +39,7 @@ export default function DelegationPage() {
   } = useDelegations();
 
   const [selectedForCancel, setSelectedForCancel] = useState(null);
+  const [selectedForReinstate, setSelectedForReinstate] = useState(null);
 
   const tabs = [
     {
@@ -106,7 +101,7 @@ export default function DelegationPage() {
             id="delegation-filter-status"
             placeholder="All Statuses"
             searchPlaceholder="Search status…"
-            options={STATUS_FILTER_OPTIONS}
+            options={DELEGATION_STATUS_OPTIONS}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           />
@@ -131,6 +126,7 @@ export default function DelegationPage() {
           })
         }
         onCancel={setSelectedForCancel}
+        onReinstate={setSelectedForReinstate}
         onNewDelegation={() => navigate('/delegation/new')}
       />
 
@@ -139,6 +135,14 @@ export default function DelegationPage() {
         isOpen={Boolean(selectedForCancel)}
         onClose={() => setSelectedForCancel(null)}
         delegation={selectedForCancel}
+        onSuccess={refresh}
+      />
+
+      {/* ── Reinstate Delegation Modal ── */}
+      <ReinstateDelegationModal
+        isOpen={Boolean(selectedForReinstate)}
+        onClose={() => setSelectedForReinstate(null)}
+        delegation={selectedForReinstate}
         onSuccess={refresh}
       />
     </div>

@@ -27,10 +27,37 @@ import { formatDate, getTodayISO } from '../../../utils/dateUtils';
 import { getDelegationStatus } from '../../../utils/delegationUtils';
 import {
   DELEGATION_STATUS,
-  getApprovalPageLabel,
+  ALLOW_ADMIN_MANAGE_RECEIVED_DELEGATIONS,
 } from '../../../constants/delegation';
-import { getUserName } from '../../../context/UsersContext';
 import { useAuthContext } from '../../../context/AuthContext';
+
+function getAssignmentSummary(delegation, activeTab) {
+  const assignments = Array.isArray(delegation?.assignments) ? delegation.assignments : [];
+
+  if (activeTab === 'received') {
+    return {
+      primaryName: delegation?.delegatorName || `User #${delegation?.delegatorUserId || ''}`,
+      secondaryText: delegation?.delegatorEmail || '',
+    };
+  }
+
+  const uniqueDelegates = [...new Set(assignments.map((a) => a.delegateName).filter(Boolean))];
+  const uniqueEmails = [...new Set(assignments.map((a) => a.delegateEmail).filter(Boolean))];
+
+  return {
+    primaryName: uniqueDelegates.length > 0 ? uniqueDelegates.join(', ') : 'Assigned Delegate',
+    secondaryText:
+      uniqueDelegates.length === 1 && uniqueEmails[0]
+        ? uniqueEmails[0]
+        : `${assignments.length} assignment${assignments.length === 1 ? '' : 's'}`,
+  };
+}
+
+function getModuleLabels(delegation) {
+  const assignments = Array.isArray(delegation?.assignments) ? delegation.assignments : [];
+  const labels = [...new Set(assignments.map((a) => a.moduleName || a.moduleCode).filter(Boolean))];
+  return labels.length > 0 ? labels : ['Approval Access'];
+}
 
 export default function DelegationList({
   delegations = [],
@@ -41,12 +68,12 @@ export default function DelegationList({
   onView,
   onEdit,
   onCancel,
+  onReinstate,
   onNewDelegation,
 }) {
   const { user } = useAuthContext();
   const today = getTodayISO();
 
-  // Check admin role
   const isAdmin = useMemo(() => {
     const roles = Array.isArray(user?.roles) ? user?.roles : [user?.roles];
     return roles.some((r) => {
@@ -56,69 +83,72 @@ export default function DelegationList({
     });
   }, [user]);
 
-  // Table Column Definitions
   const columns = useMemo(() => {
-    const userHeader = activeTab === 'given' ? 'DELEGATE' : 'DELEGATED BY';
+    const userHeader = activeTab === 'given' ? 'DELEGATE(S)' : 'DELEGATED BY';
 
     return [
       {
         id: 'user',
         header: userHeader,
-        accessorFn: (row) =>
-          activeTab === 'given'
-            ? getUserName(row.delegateId)
-            : getUserName(row.delegatorId),
-        cell: ({ getValue, row }) => {
-          const name = getValue();
-          const targetId =
-            activeTab === 'given' ? row.original.delegateId : row.original.delegatorId;
+        accessorFn: (row) => getAssignmentSummary(row, activeTab).primaryName,
+        cell: ({ row }) => {
+          const { primaryName, secondaryText } = getAssignmentSummary(row.original, activeTab);
           return (
             <div className="min-w-0">
-              <span className="font-semibold text-heading truncate block" title={name}>
-                {name}
+              <span className="font-semibold text-heading truncate block" title={primaryName}>
+                {primaryName}
               </span>
-              <span className="text-2xs text-text-muted font-mono block">
-                ID: {targetId}
-              </span>
+              {secondaryText && (
+                <span className="text-2xs text-text-muted truncate block" title={secondaryText}>
+                  {secondaryText}
+                </span>
+              )}
             </div>
           );
         },
-        size: 190,
+        size: 175,
       },
       {
         id: 'scope',
-        header: 'APPROVAL PAGE',
+        header: 'APPROVAL PAGES',
         cell: ({ row }) => {
-          const label =
-            row.original.approvalPageLabel ||
-            (row.original.approvalPageKey
-              ? getApprovalPageLabel(row.original.approvalPageKey)
-              : 'Approval Access');
+          const labels = getModuleLabels(row.original);
           return (
-            <Badge variant="role" size="sm" className="font-semibold">
-              {label}
-            </Badge>
+            <div className="flex flex-wrap gap-1">
+              {labels.map((label) => (
+                <Badge key={label} variant="role" size="sm" className="font-semibold">
+                  {label}
+                </Badge>
+              ))}
+            </div>
           );
         },
-        size: 190,
+        size: 175,
       },
       {
         id: 'period',
         header: 'PERIOD',
-        accessorFn: (row) => `${row.fromDate} to ${row.toDate}`,
+        accessorFn: (row) => `${row.startDate} to ${row.endDate}`,
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-heading whitespace-nowrap">
-            {formatDate(row.original.fromDate)} to {formatDate(row.original.toDate)}
-          </span>
+          <div className="whitespace-nowrap">
+            <span className="font-mono text-xs text-heading block">
+              {formatDate(row.original.startDate)} to {formatDate(row.original.endDate)}
+            </span>
+            {row.original.dayCount > 0 && (
+              <span className="text-2xs text-text-muted">
+                {row.original.dayCount} day{row.original.dayCount === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
         ),
-        size: 200,
+        size: 175,
       },
       {
         id: 'status',
         header: 'STATUS',
         cell: ({ row }) => {
           const status = getDelegationStatus(row.original, today);
-          const meta = DELEGATION_STATUS[status] || DELEGATION_STATUS.Ended;
+          const meta = DELEGATION_STATUS[status] || DELEGATION_STATUS.Expired;
           return (
             <Badge variant={meta.variant} size="md">
               {meta.label}
@@ -129,16 +159,22 @@ export default function DelegationList({
       },
       {
         id: 'actions',
-        header: 'ACTIONS',
+        header: () => <div className="text-right pr-2">ACTIONS</div>,
         cell: ({ row }) => {
           const d = row.original;
           const status = getDelegationStatus(d, today);
-          const canCancel =
-            (activeTab === 'given' || isAdmin) &&
-            (status === 'Active' || status === 'Scheduled');
+          const canManage =
+            activeTab === 'given' || (ALLOW_ADMIN_MANAGE_RECEIVED_DELEGATIONS && isAdmin);
+          const canEdit = canManage && (d.canEdit || status === 'InForce' || status === 'Upcoming');
+          const canCancel = canManage && (status === 'InForce' || status === 'Upcoming');
+          const canReinstate =
+            canManage &&
+            status === 'Cancelled' &&
+            (!d.endDate || d.endDate >= today) &&
+            Boolean(onReinstate);
 
           return (
-            <div className="flex items-center justify-start gap-1">
+            <div className="flex items-center justify-end gap-1 pr-2">
               <IconButton
                 type="button"
                 size="sm"
@@ -149,7 +185,7 @@ export default function DelegationList({
                 onClick={() => onView?.(d)}
                 className="text-text-muted hover:text-primary hover:bg-primary/10"
               />
-              {canCancel && (
+              {canEdit && (
                 <IconButton
                   type="button"
                   size="sm"
@@ -161,7 +197,7 @@ export default function DelegationList({
                   className="text-text-muted hover:text-primary hover:bg-primary/10"
                 />
               )}
-              {canCancel ? (
+              {canCancel && (
                 <IconButton
                   type="button"
                   size="sm"
@@ -172,16 +208,27 @@ export default function DelegationList({
                   onClick={() => onCancel?.(d)}
                   className="text-text-muted hover:text-danger hover:bg-danger/10"
                 />
-              ) : (
-                <div className="w-7 h-7" aria-hidden="true" />
+              )}
+              {canReinstate && (
+                <IconButton
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  icon={IconRefresh}
+                  title="Reinstate delegation"
+                  aria-label="Reinstate delegation"
+                  onClick={() => onReinstate?.(d)}
+                  className="text-text-muted hover:text-success hover:bg-success/10"
+                />
               )}
             </div>
           );
         },
-        size: 100,
+        size: 145,
+        minSize: 130,
       },
     ];
-  }, [activeTab, today, isAdmin, onView, onEdit, onCancel]);
+  }, [activeTab, today, isAdmin, onView, onEdit, onCancel, onReinstate]);
 
   const table = useReactTable({
     data: delegations,
@@ -195,31 +242,35 @@ export default function DelegationList({
     },
   });
 
-  // Mobile Stacked Card Renderer (for screens < md)
   const renderMobileCard = (row) => {
     const d = row.original;
-    const targetName =
-      activeTab === 'given' ? getUserName(d.delegateId) : getUserName(d.delegatorId);
+    const { primaryName } = getAssignmentSummary(d, activeTab);
+    const moduleLabels = getModuleLabels(d);
     const status = getDelegationStatus(d, today);
-    const meta = DELEGATION_STATUS[status] || DELEGATION_STATUS.Ended;
-    const canCancel =
-      (activeTab === 'given' || isAdmin) &&
-      (status === 'Active' || status === 'Scheduled');
+    const meta = DELEGATION_STATUS[status] || DELEGATION_STATUS.Expired;
+    const canManage =
+      activeTab === 'given' || (ALLOW_ADMIN_MANAGE_RECEIVED_DELEGATIONS && isAdmin);
+    const canEdit = canManage && (d.canEdit || status === 'InForce' || status === 'Upcoming');
+    const canCancel = canManage && (status === 'InForce' || status === 'Upcoming');
+    const canReinstate =
+      canManage &&
+      status === 'Cancelled' &&
+      (!d.endDate || d.endDate >= today) &&
+      Boolean(onReinstate);
 
     return (
       <Card key={d.id} padding="md" className="space-y-3 bg-bg border border-border shadow-2xs">
-        {/* Top Header */}
         <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2.5">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
-              {targetName.charAt(0).toUpperCase()}
+              {primaryName.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
               <span className="text-2xs uppercase text-text-muted font-semibold block">
-                {activeTab === 'given' ? 'Delegate' : 'Delegated by'}
+                {activeTab === 'given' ? 'Delegate(s)' : 'Delegated by'}
               </span>
               <span className="font-bold text-sm text-heading truncate block">
-                {targetName}
+                {primaryName}
               </span>
             </div>
           </div>
@@ -228,12 +279,11 @@ export default function DelegationList({
           </Badge>
         </div>
 
-        {/* Period & Reason */}
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
             <span className="text-2xs text-text-muted block">Period</span>
             <span className="font-mono text-heading font-medium text-2xs sm:text-xs">
-              {formatDate(d.fromDate)} – {formatDate(d.toDate)}
+              {formatDate(d.startDate)} – {formatDate(d.endDate)}
             </span>
           </div>
           <div>
@@ -242,23 +292,18 @@ export default function DelegationList({
           </div>
         </div>
 
-        {/* Approval Page Authority */}
         <div>
-          <span className="text-2xs text-text-muted block mb-1">Approval Authority</span>
-          <Badge variant="role" size="sm" className="font-semibold">
-            {d.approvalPageLabel || (d.approvalPageKey ? getApprovalPageLabel(d.approvalPageKey) : 'Approval Access')}
-          </Badge>
+          <span className="text-2xs text-text-muted block mb-1">Approval Pages</span>
+          <div className="flex flex-wrap gap-1">
+            {moduleLabels.map((label) => (
+              <Badge key={label} variant="role" size="sm" className="font-semibold">
+                {label}
+              </Badge>
+            ))}
+          </div>
         </div>
 
-        {/* Note */}
-        {d.note && (
-          <p className="text-xs text-text-muted bg-surface/50 p-2 rounded-control border border-border/60">
-            {d.note}
-          </p>
-        )}
-
-        {/* Card Actions */}
-        <div className="flex items-center justify-end gap-2 pt-1 border-t border-border/40">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-border/40">
           <Button
             type="button"
             variant="secondary"
@@ -269,7 +314,7 @@ export default function DelegationList({
           >
             Details
           </Button>
-          {canCancel && (
+          {canEdit && (
             <Button
               type="button"
               variant="secondary"
@@ -293,12 +338,23 @@ export default function DelegationList({
               Cancel
             </Button>
           )}
+          {canReinstate && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={IconRefresh}
+              onClick={() => onReinstate?.(d)}
+              className="text-xs"
+            >
+              Reinstate
+            </Button>
+          )}
         </div>
       </Card>
     );
   };
 
-  // Error State Display
   if (error && !loading) {
     return (
       <Card padding="lg" className="border border-danger-border bg-danger-bg/20 text-center space-y-3">
@@ -323,7 +379,6 @@ export default function DelegationList({
     );
   }
 
-  // Empty state configuration based on active tab
   const emptyTitle =
     activeTab === 'given'
       ? 'You have no delegations'
@@ -332,7 +387,7 @@ export default function DelegationList({
   const emptyDescription =
     activeTab === 'given'
       ? 'Click New Delegation before you go on leave.'
-      : 'When colleagues delegate their inquiries, requisitions, or approvals to you, they will appear here.';
+      : 'When colleagues delegate their approvals to you, they will appear here.';
 
   const emptyAction =
     activeTab === 'given' ? (
@@ -361,4 +416,3 @@ export default function DelegationList({
     />
   );
 }
-

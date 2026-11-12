@@ -52,7 +52,7 @@ function getInitialCollapsed() {
 
 /* ── Derive a readable page title from the current path ──────────────────── */
 function usePageTitle() {
-  const { pathname } = useLocation();
+  const { pathname, state } = useLocation();
   const map = {};
   navigation.forEach((entry) => {
     const items = entry.items ? entry.items : [entry];
@@ -63,6 +63,9 @@ function usePageTitle() {
       });
     });
   });
+  if (pathname.startsWith('/delegation') && state?.from && map[state.from]) {
+    return map[state.from];
+  }
   return (
     map[pathname] ??
     Object.entries(map)

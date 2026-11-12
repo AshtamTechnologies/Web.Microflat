@@ -6,7 +6,7 @@
  *   - /delegation/:id/edit
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   PageHeader,
@@ -16,7 +16,6 @@ import {
   Input,
   SearchableSelect,
   DatePicker,
-  Textarea,
   Badge,
   IconButton,
   SaveButton,
@@ -29,7 +28,6 @@ import {
   IconDelegation,
   IconBack,
   IconUserCheck,
-  IconUser,
   IconLayers,
   IconAdd,
   IconClose,
@@ -38,13 +36,6 @@ import {
   IconCheck,
 } from '../../constants/icons';
 import { useDelegationForm } from './hooks/useDelegationForm';
-import { useUserOptions, getUserName } from '../../context/UsersContext';
-import { useAuthContext } from '../../context/AuthContext';
-import {
-  APPROVAL_PAGE_OPTIONS,
-  DELEGATION_REASON_OPTIONS,
-  getApprovalPage,
-} from '../../constants/delegation';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 
 export default function DelegationFormPage() {
@@ -53,20 +44,24 @@ export default function DelegationFormPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const returnPath = location.state?.from || '/delegation';
-
-  const { user } = useAuthContext();
-  const { options: userOptions, loading: usersLoading } = useUserOptions();
+  const isFromAllDelegations = returnPath.startsWith('/delegation/all');
 
   const {
+    isInForceEdit,
     isLoadingRecord,
+    lookupsLoading,
+    delegatesLoading,
     loadError,
     formData,
     assignments,
     draftAssignment,
     editingAssignmentId,
+    approvalPageOptions,
+    delegatorOptions,
+    delegateOptions,
     errors,
     isSubmitting,
-    currentUserId,
+    getApprovalPageMeta,
     setFieldValue,
     setDraftValue,
     addAssignment,
@@ -134,24 +129,6 @@ export default function DelegationFormPage() {
     window.addEventListener('touchmove', onMouseMove);
     window.addEventListener('touchend', onMouseUp);
   };
-
-  // Logged-in user display details
-  const currentUserName = user?.name || user?.fullName || getUserName(currentUserId);
-  const firstRole = Array.isArray(user?.roles) ? user.roles[0] : user?.role;
-  const currentUserRole =
-    typeof firstRole === 'object' && firstRole !== null
-      ? firstRole.roleName || firstRole.name || 'User'
-      : typeof firstRole === 'string' && firstRole
-      ? firstRole
-      : 'User';
-
-  // Active colleague options excluding the selected delegating user
-  const delegateOptions = useMemo(() => {
-    const selectedDelegator = String(formData.delegatorId || currentUserId).trim();
-    return userOptions.filter(
-      (opt) => String(opt.value).trim() !== selectedDelegator
-    );
-  }, [userOptions, formData.delegatorId, currentUserId]);
 
   const handleCancel = () => {
     navigate(isEdit ? `/delegation/${id}` : returnPath, {
@@ -236,21 +213,23 @@ export default function DelegationFormPage() {
         subtitle="Delegator details, authority period, and reason."
         icon={<IconUserCheck size={18} />}
         defaultOpen={true}
-        hasError={Boolean(errors.fromDate || errors.toDate || errors.reason)}
+        hasError={Boolean(
+          errors.delegatorUserId || errors.startDate || errors.endDate || errors.reason
+        )}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Col 1: Delegating User (From) */}
           <div>
             <SearchableSelect
-              id="delegatorId"
-              name="delegatorId"
+              id="delegatorUserId"
+              name="delegatorUserId"
               label="Delegating User (From)"
-              value={formData.delegatorId || currentUserId}
-              onChange={(e) => setFieldValue('delegatorId', e.target.value)}
-              options={userOptions}
-              disabled={usersLoading}
-              placeholder={usersLoading ? 'Loading users…' : 'Select delegating user'}
-              error={errors.delegatorId}
+              value={formData.delegatorUserId}
+              onChange={(e) => setFieldValue('delegatorUserId', e.target.value)}
+              options={delegatorOptions}
+              disabled={isEdit || !isFromAllDelegations || lookupsLoading}
+              placeholder={lookupsLoading ? 'Loading users…' : 'Select delegating user'}
+              error={errors.delegatorUserId}
               required
             />
           </div>
@@ -258,14 +237,15 @@ export default function DelegationFormPage() {
           {/* Col 2: From (Start date) */}
           <div>
             <DatePicker
-              id="fromDate"
-              name="fromDate"
+              id="startDate"
+              name="startDate"
               label="From (Start date)"
-              value={formData.fromDate}
+              value={formData.startDate}
               min={isEdit ? undefined : today}
-              onChange={(e) => setFieldValue('fromDate', e.target.value)}
+              disabled={isInForceEdit}
+              onChange={(e) => setFieldValue('startDate', e.target.value)}
               onBlur={handleBlur}
-              error={errors.fromDate}
+              error={errors.startDate}
               required
             />
           </div>
@@ -273,29 +253,29 @@ export default function DelegationFormPage() {
           {/* Col 3: To (End date) */}
           <div>
             <DatePicker
-              id="toDate"
-              name="toDate"
+              id="endDate"
+              name="endDate"
               label="To (End date)"
-              value={formData.toDate}
-              min={formData.fromDate || today}
-              onChange={(e) => setFieldValue('toDate', e.target.value)}
+              value={formData.endDate}
+              min={isInForceEdit ? today : formData.startDate || today}
+              onChange={(e) => setFieldValue('endDate', e.target.value)}
               onBlur={handleBlur}
-              error={errors.toDate}
+              error={errors.endDate}
               required
             />
           </div>
 
           {/* Col 4: Reason */}
           <div>
-            <SearchableSelect
+            <Input
               id="reason"
               name="reason"
               label="Reason"
               value={formData.reason}
               onChange={(e) => setFieldValue('reason', e.target.value)}
               onBlur={handleBlur}
-              options={DELEGATION_REASON_OPTIONS}
-              placeholder="Select reason"
+              placeholder="e.g. Leave, Travel, Training..."
+              maxLength={250}
               error={errors.reason}
               required
             />
@@ -306,112 +286,57 @@ export default function DelegationFormPage() {
       {/* ── Section 2: Approval Authority Handover ── */}
       <CollapsibleCard
         title="Approval Authority Handover"
-        subtitle={
-          isEdit
-            ? 'Review or adjust the delegated approval page and assigned colleague.'
-            : 'Assign each approval page to a colleague with specific handover instructions.'
-        }
+        subtitle="Assign each approval page to a colleague with specific handover instructions."
         icon={<IconLayers size={18} />}
         defaultOpen={true}
-        hasError={Boolean(errors.assignments || errors.approvalPageKey || errors.delegateId)}
+        hasError={Boolean(errors.assignments)}
         badge={
-          !isEdit && assignments.length > 0 ? (
+          assignments.length > 0 ? (
             <Badge variant="role" size="sm">
               {assignments.length} {assignments.length === 1 ? 'assignment' : 'assignments'}
             </Badge>
           ) : null
         }
       >
-        {isEdit ? (
-          /* EDIT MODE: Single Assignment Edit Form */
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+        <div className="space-y-5">
+          {/* Add Assignment Sub-Form */}
+          <div className={`p-4 rounded-xl border transition-colors ${editingAssignmentId ? 'bg-primary/5 border-primary/30' : 'bg-surface/50 border-border'} space-y-3`}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-xs font-bold text-heading uppercase tracking-wider">
+                {editingAssignmentId ? 'Edit Approval Assignment' : 'Add Approval Assignment'}
+              </span>
+              <span className="text-2xs text-text-muted">
+                {editingAssignmentId ? 'Update the colleague or note for this approval page' : 'Each assignment has its own delegate and note'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-start">
+              <div className="lg:col-span-3">
                 <SearchableSelect
-                  id="approvalPageKey"
-                  name="approvalPageKey"
+                  id="draftApprovalPage"
+                  name="moduleId"
                   label="Approval Page"
-                  value={formData.approvalPageKey}
-                  onChange={(e) => setFieldValue('approvalPageKey', e.target.value)}
-                  options={APPROVAL_PAGE_OPTIONS}
-                  placeholder="Select approval page"
-                  error={errors.approvalPageKey}
-                  required
+                  value={draftAssignment.moduleId}
+                  onChange={(e) => setDraftValue('moduleId', e.target.value)}
+                  options={approvalPageOptions}
+                  disabled={lookupsLoading}
+                  placeholder={lookupsLoading ? 'Loading pages…' : 'Select approval page'}
                 />
               </div>
 
-              <div>
+              <div className="lg:col-span-3">
                 <SearchableSelect
-                  id="delegateId"
-                  name="delegateId"
-                  label="Delegate To (Colleague)"
-                  value={formData.delegateId}
-                  onChange={(e) => setFieldValue('delegateId', e.target.value)}
+                  id="draftDelegateId"
+                  label="Delegate To"
+                  value={draftAssignment.delegateUserId}
+                  onChange={(e) => setDraftValue('delegateUserId', e.target.value)}
                   options={delegateOptions}
-                  disabled={usersLoading}
-                  placeholder={usersLoading ? 'Loading users…' : 'Select a colleague'}
-                  error={errors.delegateId}
-                  required
+                  disabled={delegatesLoading}
+                  placeholder={delegatesLoading ? 'Loading users…' : 'Select colleague'}
                 />
               </div>
-            </div>
 
-            <div>
-              <Textarea
-                id="note"
-                name="note"
-                label="Note for the delegate"
-                placeholder="e.g. Please verify vendor tax documents and bank account verification forms."
-                value={formData.note}
-                onChange={(e) => setFieldValue('note', e.target.value)}
-                onBlur={handleBlur}
-                maxLength={250}
-                rows={2}
-                error={errors.note}
-                hint={`${(formData.note || '').length}/250 characters (optional)`}
-              />
-            </div>
-          </div>
-        ) : (
-          /* CREATE MODE: Add Assignment Row & Table */
-          <div className="space-y-5">
-            {/* Add Assignment Sub-Form */}
-            <div className={`p-4 rounded-xl border transition-colors ${editingAssignmentId ? 'bg-primary/5 border-primary/30' : 'bg-surface/50 border-border'} space-y-3`}>
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-xs font-bold text-heading uppercase tracking-wider">
-                  {editingAssignmentId ? 'Edit Approval Assignment' : 'Add Approval Assignment'}
-                </span>
-                <span className="text-2xs text-text-muted">
-                  {editingAssignmentId ? 'Update the colleague or note for this approval page' : 'Each assignment has its own delegate and note'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
-                <div className="sm:col-span-3">
-                  <SearchableSelect
-                    id="draftApprovalPage"
-                    name="approvalPageKey"
-                    label="Approval Page"
-                    value={draftAssignment.approvalPageKey}
-                    onChange={(e) => setDraftValue('approvalPageKey', e.target.value)}
-                    options={APPROVAL_PAGE_OPTIONS}
-                    placeholder="Select approval page"
-                  />
-                </div>
-
-                <div className="sm:col-span-3">
-                  <SearchableSelect
-                    id="draftDelegateId"
-                    label="Delegate To"
-                    value={draftAssignment.delegateId}
-                    onChange={(e) => setDraftValue('delegateId', e.target.value)}
-                    options={delegateOptions}
-                    disabled={usersLoading}
-                    placeholder={usersLoading ? 'Loading users…' : 'Select colleague'}
-                  />
-                </div>
-
-                <div className="sm:col-span-4">
+                <div className="sm:col-span-2 lg:col-span-3">
                   <Input
                     id="draftNote"
                     label="Note for Delegate"
@@ -422,7 +347,7 @@ export default function DelegationFormPage() {
                   />
                 </div>
 
-                <div className="sm:col-span-2 pt-0 sm:pt-6">
+                <div className="sm:col-span-2 lg:col-span-3 pt-0 lg:pt-6">
                   {editingAssignmentId ? (
                     <div className="flex items-center gap-1.5">
                       <Button
@@ -475,8 +400,8 @@ export default function DelegationFormPage() {
 
               {assignments.length > 0 ? (
                 <>
-                  {/* Desktop / Tablet Table View (hidden on small mobile <640px) */}
-                  <div className="hidden sm:block">
+                  {/* Desktop Table View (hidden on mobile/tablet <1024px) */}
+                  <div className="hidden lg:block">
                     <TableContainer tableClassName="table-fixed min-w-full">
                       <thead>
                         <tr>
@@ -518,8 +443,9 @@ export default function DelegationFormPage() {
                       </thead>
                       <tbody className="divide-y divide-border/70 bg-bg">
                         {assignments.map((item) => {
-                          const pageMeta = getApprovalPage(item.approvalPageKey);
-                          const delegateName = getUserName(item.delegateId);
+                          const pageMeta = getApprovalPageMeta(item.moduleId);
+                          const delegateName =
+                            item.delegateName || `User #${item.delegateUserId}`;
                           const isCurrentEditing = editingAssignmentId === item.id;
 
                           return (
@@ -534,11 +460,13 @@ export default function DelegationFormPage() {
                               {/* Approval Page */}
                               <Td style={{ width: `${columnWidths.approvalPage}px` }} className="align-middle">
                                 <Badge variant="role" size="sm" className="font-semibold">
-                                  {pageMeta?.label || item.approvalPageLabel}
+                                  {pageMeta?.moduleName || item.moduleName || `Module #${item.moduleId}`}
                                 </Badge>
-                                {pageMeta?.description && (
+                                {(pageMeta?.approverRoleName || item.moduleCode) && (
                                   <span className="text-2xs text-text-muted truncate block mt-1 leading-tight">
-                                    {pageMeta.description}
+                                    {pageMeta?.approverRoleName
+                                      ? `Role: ${pageMeta.approverRoleName}`
+                                      : item.moduleCode}
                                   </span>
                                 )}
                               </Td>
@@ -549,19 +477,21 @@ export default function DelegationFormPage() {
                                   <span className="font-semibold text-heading truncate block">
                                     {delegateName}
                                   </span>
-                                  <span className="text-2xs text-text-muted font-mono block">
-                                    ID: {item.delegateId}
-                                  </span>
+                                  {item.delegateEmail && (
+                                    <span className="text-2xs text-text-muted truncate block">
+                                      {item.delegateEmail}
+                                    </span>
+                                  )}
                                 </div>
                               </Td>
 
                               {/* Handover Period */}
                               <Td style={{ width: `${columnWidths.period}px` }} className="align-middle">
                                 <span className="font-mono text-xs text-heading whitespace-nowrap block">
-                                  {formatDate(formData.fromDate)}
+                                  {formatDate(formData.startDate)}
                                 </span>
                                 <span className="text-2xs text-text-muted block">
-                                  to {formatDate(formData.toDate)}
+                                  to {formatDate(formData.endDate)}
                                 </span>
                               </Td>
 
@@ -604,11 +534,12 @@ export default function DelegationFormPage() {
                     </TableContainer>
                   </div>
 
-                  {/* Mobile Stacked Card View (visible only on <640px screens) */}
-                  <div className="block sm:hidden space-y-3">
+                  {/* Mobile / Tablet Stacked Card View (visible on <1024px screens) */}
+                  <div className="block lg:hidden space-y-3">
                     {assignments.map((item) => {
-                      const pageMeta = getApprovalPage(item.approvalPageKey);
-                      const delegateName = getUserName(item.delegateId);
+                      const pageMeta = getApprovalPageMeta(item.moduleId);
+                      const delegateName =
+                        item.delegateName || `User #${item.delegateUserId}`;
                       const isCurrentEditing = editingAssignmentId === item.id;
 
                       return (
@@ -622,11 +553,13 @@ export default function DelegationFormPage() {
                           <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2">
                             <div>
                               <Badge variant="role" size="sm" className="font-semibold">
-                                {pageMeta?.label || item.approvalPageLabel}
+                                {pageMeta?.moduleName || item.moduleName || `Module #${item.moduleId}`}
                               </Badge>
-                              {pageMeta?.description && (
+                              {(pageMeta?.approverRoleName || item.moduleCode) && (
                                 <span className="text-2xs text-text-muted block mt-1">
-                                  {pageMeta.description}
+                                  {pageMeta?.approverRoleName
+                                    ? `Role: ${pageMeta.approverRoleName}`
+                                    : item.moduleCode}
                                 </span>
                               )}
                             </div>
@@ -665,7 +598,7 @@ export default function DelegationFormPage() {
                             <div>
                               <span className="text-2xs text-text-muted block">Period</span>
                               <span className="font-mono text-heading text-2xs block mt-0.5">
-                                {formatDate(formData.fromDate)} – {formatDate(formData.toDate)}
+                                {formatDate(formData.startDate)} – {formatDate(formData.endDate)}
                               </span>
                             </div>
                           </div>
@@ -699,7 +632,6 @@ export default function DelegationFormPage() {
               )}
             </div>
           </div>
-        )}
       </CollapsibleCard>
 
       {/* ── Bottom Action Buttons ── */}
