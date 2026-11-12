@@ -13,13 +13,11 @@ import {
   IconArrowUpDown,
   IconChevronDown,
   IconChevronRight,
-  IconClose,
   IconEdit,
   IconFolder,
   IconLayers,
   IconProductCategories,
   IconSave,
-  IconSearch,
   IconView,
   IconWarning,
 } from '../../constants/icons';
@@ -39,9 +37,8 @@ import {
   DataTable,
   StatusSwitch,
   PageHeader,
-  FilterBar,
+  TableToolbar,
   TableActions,
-  IconButton,
 } from '../../components/ui';
 import { formatDate } from '../../utils/dateUtils';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
@@ -55,6 +52,12 @@ import {
 } from '../../utils/treeUtils';
 
 const columnHelper = createColumnHelper();
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Statuses' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'INACTIVE', label: 'Inactive' },
+];
 
 const INITIAL_FORM = {
   categoryCode: '',
@@ -637,72 +640,49 @@ export default function ProductCategoriesPage() {
         }
       />
 
-      {/* ── Toolbar: IconSearch, Status Filter & Tree View Helpers ── */}
-      <FilterBar>
-        {/* Search Input */}
-        <div className="relative flex-1 max-w-md">
-          <Input
-            id="search-product-categories"
-            type="text"
-            placeholder="Search by code or category name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            leftIcon={<IconSearch size={15} />}
-            rightElement={
-              searchQuery ? (
-                <IconButton
-                  icon={IconClose}
-                  size="sm"
-                  variant="ghost"
-                  title="Clear search"
-                  aria-label="Clear search"
-                  onClick={() => setSearchQuery('')}
-                />
-              ) : null
-            }
+      {/* ── Search & Filter Toolbar ── */}
+      <TableToolbar
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by code or category name..."
+        hasActiveFilters={Boolean(searchQuery || statusFilter !== 'ALL')}
+        onReset={() => {
+          setSearchQuery('');
+          setDebouncedSearch('');
+          setStatusFilter('ALL');
+        }}
+      >
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="product-category-status-filter"
+            placeholder="All Statuses"
+            searchPlaceholder="Search statuses..."
+            options={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
           />
         </div>
 
-        {/* Status Filter Chips & Expand Controls */}
-        <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5">
-          <div className="flex items-center p-1 bg-surface rounded-lg border border-border">
-            {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => setStatusFilter(status)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
-                  statusFilter === status
-                    ? 'bg-bg text-heading shadow-2xs font-semibold'
-                    : 'text-text-muted hover:text-text'
-                }`}
-              >
-                {status.toLowerCase()}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1.5 border-l border-border pl-2.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={expandAll}
-            >
-              Expand All
-            </Button>
-            <span className="text-text-muted/40">•</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={collapseAll}
-            >
-              Collapse
-            </Button>
-          </div>
+        <div className="flex items-center gap-1.5 sm:border-l sm:border-border sm:pl-2.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={expandAll}
+          >
+            Expand All
+          </Button>
+          <span className="text-text-muted/40">•</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={collapseAll}
+          >
+            Collapse
+          </Button>
         </div>
-      </FilterBar>
+      </TableToolbar>
 
       {/* ── Centralized Data Table & Mobile List ── */}
       <DataTable
@@ -712,11 +692,39 @@ export default function ProductCategoriesPage() {
         totalCount={visibleRows.length}
         showPagination={false}
         entityName="categories"
-        emptyTitle="No categories match your filters"
+        emptyTitle="No categories found"
         emptyDescription={
           searchQuery || statusFilter !== 'ALL'
             ? 'Try resetting your search query or status filter.'
-            : 'Click "+ Add Category" to set up your product hierarchy.'
+            : 'No product categories have been added yet.'
+        }
+        emptyAction={
+          searchQuery || statusFilter !== 'ALL' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery('');
+                setDebouncedSearch('');
+                setStatusFilter('ALL');
+              }}
+              className="text-xs text-primary"
+            >
+              Clear filters
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => handleOpenAdd()}
+              className="text-xs"
+            >
+              <IconAdd size={14} className="mr-1.5" />
+              Add Category
+            </Button>
+          )
         }
         renderMobileCard={(row) => {
           const cat = row.original || row;

@@ -548,7 +548,18 @@ export default function DocumentTypesPage() {
             >
               Clear filters
             </Button>
-          ) : null
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleOpenAdd}
+              className="text-xs"
+            >
+              <IconAdd size={14} className="mr-1.5" />
+              Add Document Type
+            </Button>
+          )
         }
         renderMobileCard={(row) => {
           const dt = row.original;

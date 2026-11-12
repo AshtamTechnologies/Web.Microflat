@@ -13,7 +13,7 @@ import {
   IconButton,
   TableActions,
 } from '../../../../components/ui';
-import { IconEdit } from '../../../../constants/icons';
+import { IconAdd, IconEdit } from '../../../../constants/icons';
 import { getOutcomeStyle } from '../../../../constants/processFlow';
 import { getFlowIcon } from '../../../../constants/processFlowIcons';
 
@@ -34,6 +34,7 @@ export default function StepsTable({
   steps = [],
   isLoading = false,
   onEdit,
+  onAddStep,
 }) {
   const [sorting, setSorting] = useState([{ id: 'position', desc: false }]);
 
@@ -159,6 +160,20 @@ export default function StepsTable({
         isLoading={isLoading}
         emptyTitle="No steps in this process flow"
         emptyDescription="Add steps to define the workflow stages and milestones."
+        emptyAction={
+          onAddStep ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={onAddStep}
+              className="text-xs"
+            >
+              <IconAdd size={14} className="mr-1.5" />
+              Add Step
+            </Button>
+          ) : null
+        }
         entityName="steps"
         renderMobileCard={(row) => {
           const step = row.original;

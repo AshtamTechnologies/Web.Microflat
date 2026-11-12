@@ -14,6 +14,7 @@ import {
   IconButton,
   StatusBadge,
   TableActions,
+  SearchableSelect,
 } from '../../../components/ui';
 import {
   IconAdd,
@@ -29,6 +30,12 @@ import useProcessFlows from './hooks/useProcessFlows';
 import FlowFormModal from './components/FlowFormModal';
 
 const columnHelper = createColumnHelper();
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Statuses' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'INACTIVE', label: 'Inactive' },
+];
 
 /**
  * ProcessFlowsPage — Admin list of all Process Flows in MicroFlat ERP.
@@ -194,20 +201,15 @@ export default function ProcessFlowsPage() {
           setStatusFilter('ALL');
         }}
       >
-        <div className="flex items-center gap-1.5 bg-surface/60 p-1 rounded-lg border border-border">
-          {['ALL', 'ACTIVE', 'INACTIVE'].map((st) => (
-            <button
-              key={st}
-              type="button"
-              onClick={() => setStatusFilter(st)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${statusFilter === st
-                  ? 'bg-primary text-white shadow-2xs'
-                  : 'text-text-muted hover:text-heading hover:bg-surface'
-                }`}
-            >
-              {st === 'ALL' ? 'All' : st === 'ACTIVE' ? 'Active' : 'Inactive'}
-            </button>
-          ))}
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="process-flow-status-filter"
+            placeholder="All Statuses"
+            searchPlaceholder="Search statuses..."
+            options={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          />
         </div>
       </TableToolbar>
 
@@ -236,17 +238,37 @@ export default function ProcessFlowsPage() {
         columns={columns}
         isLoading={isLoading}
         emptyTitle="No process flows found"
-        emptyDescription="Create your first flow to define milestone stages and transitions."
+        emptyDescription={
+          searchQuery || statusFilter !== 'ALL'
+            ? 'No process flows match your active search and filter criteria.'
+            : 'Create your first flow to define milestone stages and transitions.'
+        }
         emptyAction={
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            icon={IconAdd}
-            onClick={openCreateModal}
-          >
-            Add Flow
-          </Button>
+          searchQuery || statusFilter !== 'ALL' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('ALL');
+              }}
+              className="text-xs text-primary"
+            >
+              Clear filters
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={openCreateModal}
+              className="text-xs"
+            >
+              <IconAdd size={14} className="mr-1.5" />
+              Add Flow
+            </Button>
+          )
         }
         entityName="flows"
         renderMobileCard={(row) => {

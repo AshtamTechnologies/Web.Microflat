@@ -341,18 +341,29 @@ export default function ProcessFlowStepper({
 
           return (
             <React.Fragment key={step.id || idx}>
-              {/* Connector line directly between primary milestone steps */}
+              {/* Connector arrow directly between primary milestone steps */}
               {idx > 0 && (
                 <div
-                  className={`h-0.5 min-w-3 sm:min-w-6 flex-1 rounded-full transition-colors ${
+                  className={`flex items-center min-w-4 sm:min-w-7 flex-1 transition-colors ${
                     isTrackerMode
                       ? idx <= activeStepIndex
-                        ? 'bg-success/70'
-                        : 'bg-border/80'
-                      : 'bg-border/70'
+                        ? 'text-success/75'
+                        : 'text-text-muted/45'
+                      : 'text-text-muted/55'
                   }`}
                   aria-hidden="true"
-                />
+                >
+                  <div className="h-0.5 flex-1 rounded-l-full bg-current" />
+                  <svg
+                    width="8"
+                    height="10"
+                    viewBox="0 0 8 10"
+                    fill="none"
+                    className="shrink-0 -ml-0.5"
+                  >
+                    <path d="M1 1.5L6.5 5L1 8.5V1.5Z" fill="currentColor" />
+                  </svg>
+                </div>
               )}
 
               {/* Primary Step Pill */}

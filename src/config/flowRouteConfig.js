@@ -71,6 +71,26 @@ export const ROUTE_FLOW_CONFIG = [
     defaultStep: 'Accepted',
   },
 
+  // ── 2b. QUOTATIONS ────────────────────────────────────────────────
+  {
+    pattern: /^\/quotations\/new$/,
+    moduleCode: 'QUOTATION',
+    pageType: 'create',
+    defaultStep: 'Draft',
+  },
+  {
+    pattern: /^\/quotations\/[^/]+\/new-revision$/,
+    moduleCode: 'QUOTATION',
+    pageType: 'edit',
+    defaultStep: 'Quotation',
+  },
+  {
+    pattern: /^\/quotations\/[^/]+$/,
+    moduleCode: 'QUOTATION',
+    pageType: 'view',
+    defaultStep: 'Accepted',
+  },
+
   // ── 3. PURCHASE / PURCHASE REQUISITIONS ───────────────────────────
   {
     pattern: /^\/purchase-requisition\/create$/,

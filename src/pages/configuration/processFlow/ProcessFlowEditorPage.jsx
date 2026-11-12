@@ -238,6 +238,7 @@ export default function ProcessFlowEditorPage() {
           steps={steps}
           isLoading={isLoading}
           onEdit={openEditStepModal}
+          onAddStep={openCreateStepModal}
         />
       )}
 
@@ -247,6 +248,8 @@ export default function ProcessFlowEditorPage() {
           steps={steps}
           isLoading={isLoading}
           onEdit={openEditTransitionModal}
+          onAddTransition={openCreateTransitionModal}
+          canAddTransition={activeStepsCount >= 2}
         />
       )}
 

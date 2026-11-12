@@ -13,7 +13,7 @@ import {
   IconButton,
   TableActions,
 } from '../../../../components/ui';
-import { IconEdit, IconArrowRight } from '../../../../constants/icons';
+import { IconAdd, IconEdit, IconArrowRight } from '../../../../constants/icons';
 import { getOutcomeStyle } from '../../../../constants/processFlow';
 
 const columnHelper = createColumnHelper();
@@ -34,6 +34,8 @@ export default function TransitionsTable({
   steps = [],
   isLoading = false,
   onEdit,
+  onAddTransition,
+  canAddTransition = true,
 }) {
   const [sorting, setSorting] = useState([{ id: 'fromStep', desc: false }]);
 
@@ -185,6 +187,26 @@ export default function TransitionsTable({
         isLoading={isLoading}
         emptyTitle="No transitions defined"
         emptyDescription="Connect steps with transitions to model sequential and branching paths."
+        emptyAction={
+          onAddTransition ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={onAddTransition}
+              disabled={!canAddTransition}
+              title={
+                canAddTransition
+                  ? 'Add Transition'
+                  : 'At least 2 active steps are required to create a transition'
+              }
+              className="text-xs"
+            >
+              <IconAdd size={14} className="mr-1.5" />
+              Add Transition
+            </Button>
+          ) : null
+        }
         entityName="transitions"
         renderMobileCard={(row) => {
           const trans = row.original;

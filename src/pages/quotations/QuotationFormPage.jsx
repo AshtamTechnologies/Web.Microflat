@@ -58,7 +58,6 @@ import {
   INQUIRY_CATALOG_CATEGORIES,
   INQUIRY_CATALOG_PRODUCTS,
 } from '../../mocks/inquiryCatalog';
-import QuotationStepper from './components/QuotationStepper';
 import useColumnResize from '../../hooks/useColumnResize';
 
 const CATALOG_OPTIONS = [
@@ -667,9 +666,6 @@ export default function QuotationFormPage() {
           </div>
         }
       />
-
-      {/* Stepper */}
-      <QuotationStepper status="Draft" poReceived={false} />
 
       {/* ── SECTION 1: QUOTATION & CLIENT DETAILS ── */}
       <CollapsibleCard

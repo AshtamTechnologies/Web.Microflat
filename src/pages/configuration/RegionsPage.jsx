@@ -8,10 +8,8 @@ import {
 } from '@tanstack/react-table';
 import {
   IconAdd,
-  IconClose,
   IconEdit,
   IconRegions,
-  IconSearch,
   IconView,
 } from '../../constants/icons';
 
@@ -23,15 +21,21 @@ import {
   Modal,
   StatusSwitch,
   PageHeader,
-  FilterBar,
+  TableToolbar,
   TableActions,
-  IconButton,
   DataTable,
+  SearchableSelect,
 } from '../../components/ui';
 import { useRegionsContext } from '../../context/RegionsContext';
 import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Statuses' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'INACTIVE', label: 'Inactive' },
+];
 
 const INITIAL_FORM = {
   regionName: '',
@@ -349,50 +353,28 @@ export default function RegionsPage() {
         }
       />
 
-      {/* ── Search & Status Filter Toolbar ── */}
-      <FilterBar>
-        {/* Search Input */}
-        <div className="relative flex-1 max-w-md">
-          <Input
-            id="search-regions"
-            type="text"
-            placeholder="Search by region name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            leftIcon={<IconSearch size={15} />}
-            rightElement={
-              searchQuery ? (
-                <IconButton
-                  icon={IconClose}
-                  size="sm"
-                  variant="ghost"
-                  title="Clear search"
-                  aria-label="Clear search"
-                  onClick={() => setSearchQuery('')}
-                />
-              ) : null
-            }
+      {/* ── Search & Filter Toolbar ── */}
+      <TableToolbar
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search by region name..."
+        hasActiveFilters={Boolean(searchQuery || statusFilter !== 'ALL')}
+        onReset={() => {
+          setSearchQuery('');
+          setStatusFilter('ALL');
+        }}
+      >
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="region-status-filter"
+            placeholder="All Statuses"
+            searchPlaceholder="Search statuses..."
+            options={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
           />
         </div>
-
-        {/* Status Filter Chips */}
-        <div className="flex items-center p-1 bg-surface rounded-lg border border-border self-start sm:self-auto">
-          {['ALL', 'ACTIVE', 'INACTIVE'].map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer capitalize ${
-                statusFilter === status
-                  ? 'bg-bg text-heading shadow-2xs font-semibold'
-                  : 'text-text-muted hover:text-text'
-              }`}
-            >
-              {status.toLowerCase()}
-            </button>
-          ))}
-        </div>
-      </FilterBar>
+      </TableToolbar>
 
       {/* ── Centralized DataTable ── */}
       <DataTable

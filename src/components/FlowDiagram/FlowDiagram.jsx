@@ -17,6 +17,7 @@ import { useMemo, useState } from 'react';
 import { computeFlowLayout } from '../../utils/flowLayout';
 import { getFlowIcon } from '../../constants/processFlowIcons';
 import { getOutcomeStyle } from '../../constants/processFlow';
+import { IconAdd } from '../../constants/icons';
 import { Button, EmptyState } from '../ui';
 
 /**

@@ -35,7 +35,6 @@ import {
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { formatCurrency } from '../../mocks/quotations';
 import { formatDate } from '../../utils/dateUtils';
-import QuotationStepper from './components/QuotationStepper';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import RecordPOModal from './components/RecordPOModal';
 import AddNegotiationModal from './components/AddNegotiationModal';
@@ -240,9 +239,6 @@ export default function QuotationViewPage() {
           </div>
         }
       />
-
-      {/* Stepper */}
-      <QuotationStepper status={quotation.status} poReceived={quotation.poReceived} />
 
       {/* Confirmation Sales Order Alert */}
       {quotation.status === 'Confirmed' && (

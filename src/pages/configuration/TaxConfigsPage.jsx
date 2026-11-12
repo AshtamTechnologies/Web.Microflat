@@ -637,12 +637,24 @@ export default function TaxConfigsPage() {
         }
         emptyAction={
           hasActiveFilters ? (
-            <Button variant="secondary" size="sm" onClick={handleResetFilters}>
-              Clear Filters
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleResetFilters}
+              className="text-xs text-primary"
+            >
+              Clear filters
             </Button>
           ) : (
-            <Button variant="primary" size="sm" onClick={handleOpenAdd}>
-              <IconAdd size={14} className="mr-1" />
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleOpenAdd}
+              className="text-xs"
+            >
+              <IconAdd size={14} className="mr-1.5" />
               Add Tax
             </Button>
           )
