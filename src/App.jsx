@@ -43,6 +43,11 @@ import QuotationFormPage from './pages/quotations/QuotationFormPage';
 import QuotationViewPage from './pages/quotations/QuotationViewPage';
 import { QuotationsProvider } from './context/QuotationsContext';
 
+import SalesOrdersPage from './pages/salesOrders/SalesOrdersPage';
+import SalesOrderFormPage from './pages/salesOrders/SalesOrderFormPage';
+import SalesOrderViewPage from './pages/salesOrders/SalesOrderViewPage';
+import { SalesOrdersProvider } from './context/SalesOrdersContext';
+
 import SeriesSetupPage from './pages/configuration/SeriesSetupPage';
 import { SeriesProvider } from './context/SeriesContext';
 
@@ -171,7 +176,9 @@ export default function App() {
                                                   <CompanyBankDetailsProvider>
                                                     <ProcessFlowProvider>
                                                       <QuotationsProvider>
-                                                        <AppLayout />
+                                                        <SalesOrdersProvider>
+                                                          <AppLayout />
+                                                        </SalesOrdersProvider>
                                                       </QuotationsProvider>
                                                     </ProcessFlowProvider>
                                                   </CompanyBankDetailsProvider>
@@ -269,6 +276,12 @@ export default function App() {
               <Route path="/quotations/new" element={<QuotationFormPage />} />
               <Route path="/quotations/:id" element={<QuotationViewPage />} />
               <Route path="/quotations/:id/new-revision" element={<QuotationFormPage />} />
+
+              {/* Sales Order (Order Confirmation) Routes */}
+              <Route path="/sales-orders" element={<SalesOrdersPage />} />
+              <Route path="/sales-orders/new" element={<SalesOrderFormPage />} />
+              <Route path="/sales-orders/:id" element={<SalesOrderViewPage />} />
+              <Route path="/sales-orders/:id/edit" element={<SalesOrderFormPage />} />
 
               {/* Product Routes */}
               <Route path="/products" element={<ProductsPage />} />

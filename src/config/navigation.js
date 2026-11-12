@@ -19,6 +19,7 @@ import {
   IconPR,
   IconInquiry,
   IconQuotation,
+  IconSalesOrder,
   IconProduct,
   IconDelegation,
   IconDashboard,
@@ -101,6 +102,12 @@ export const navigation = [
         label: 'Quotation',
         icon: IconQuotation,
         path: '/quotations',
+        roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+      },
+      {
+        label: 'Sales Orders',
+        icon: IconSalesOrder,
+        path: '/sales-orders',
         roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
       },
       {

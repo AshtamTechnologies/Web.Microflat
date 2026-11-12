@@ -91,6 +91,26 @@ export const ROUTE_FLOW_CONFIG = [
     defaultStep: 'Accepted',
   },
 
+  // ── 2c. ORDER CONFIRMATIONS (SALES ORDERS) ────────────────────────
+  {
+    pattern: /^\/sales-orders\/new$/,
+    moduleCode: 'ORDER_CONFIRMATION',
+    pageType: 'create',
+    defaultStep: 'Draft',
+  },
+  {
+    pattern: /^\/sales-orders\/[^/]+\/edit$/,
+    moduleCode: 'ORDER_CONFIRMATION',
+    pageType: 'edit',
+    defaultStep: 'Draft',
+  },
+  {
+    pattern: /^\/sales-orders\/[^/]+$/,
+    moduleCode: 'ORDER_CONFIRMATION',
+    pageType: 'view',
+    defaultStep: 'Confirmed',
+  },
+
   // ── 3. PURCHASE / PURCHASE REQUISITIONS ───────────────────────────
   {
     pattern: /^\/purchase-requisition\/create$/,

@@ -29,7 +29,6 @@ import {
   TableContainer,
   Th,
   Td,
-  Select,
   SearchableSelect,
 } from '../../components/ui';
 import { useQuotationsContext } from '../../context/QuotationsContext';
@@ -249,13 +248,15 @@ export default function QuotationViewPage() {
               Confirmed on <strong>{formatDate(quotation.confirmedOn || '2026-10-30')}</strong>. A Sales Order can now be generated from this quotation.
             </span>
           </div>
-          <button
+          <Button
             type="button"
-            disabled
-            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-medium text-2xs opacity-80 cursor-not-allowed shrink-0"
+            variant="primary"
+            size="sm"
+            onClick={() => navigate(`/sales-orders/new?quotationId=${quotation.id}`)}
+            className="shrink-0 bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white"
           >
-            Create Sales Order (Coming Soon)
-          </button>
+            Create Sales Order
+          </Button>
         </div>
       )}
 
