@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   IconBack,
@@ -73,6 +73,8 @@ const CATALOG_OPTIONS = [
 
 export default function QuotationFormPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnPath = location.state?.from;
   const { id } = useParams(); // For /quotations/:id/new-revision
   const [searchParams] = useSearchParams();
   const inquiryIdParam = searchParams.get('inquiryId');
@@ -662,8 +664,14 @@ export default function QuotationFormPage() {
 
   // Cancel Handler
   const handleCancel = () => {
-    navigate(isRevisionMode ? `/quotations/${id}` : '/quotations');
+    navigate(returnPath || (isRevisionMode ? `/quotations/${id}` : '/quotations'));
   };
+
+  const backLabel = returnPath?.startsWith('/inquiries/')
+    ? 'Back to Inquiry'
+    : returnPath === '/inquiries'
+      ? 'Back to Inquiries'
+      : `Back to ${isRevisionMode ? 'Quotation' : 'Quotations'}`;
 
   // Scroll to first invalid compulsory field helper
   const scrollToField = (fieldId, errorMessage) => {
@@ -775,7 +783,7 @@ export default function QuotationFormPage() {
             icon={IconBack}
             onClick={handleCancel}
           >
-            Back to {isRevisionMode ? 'Quotation' : 'Quotations'}
+            {backLabel}
           </Button>
         }
         actions={

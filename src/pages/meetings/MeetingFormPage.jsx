@@ -6,8 +6,8 @@
  *   - /meetings/:id/edit
  */
 
-import { useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useMemo, useEffect } from 'react';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import {
   PageHeader,
   Button,
@@ -43,6 +43,10 @@ const MEETING_TYPE_OPTIONS = [
 export default function MeetingFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnPath = location.state?.from;
+  const [searchParams] = useSearchParams();
+  const inquiryIdParam = searchParams.get('inquiryId');
   const { options: userOptions } = useUserOptions();
 
   const {
@@ -55,6 +59,17 @@ export default function MeetingFormPage() {
     setField,
     submit,
   } = useMeetingForm(id);
+
+  useEffect(() => {
+    if (isEdit || !inquiryIdParam || formData.inquiryId) return;
+    const matched = mockInquiries.find(
+      (i) => String(i.id || i.InquiryId) === String(inquiryIdParam)
+    );
+    setField('inquiryId', String(inquiryIdParam));
+    if (matched?.InquiryNo) {
+      setField('inquiryNumber', matched.InquiryNo);
+    }
+  }, [isEdit, inquiryIdParam, formData.inquiryId, setField]);
 
   // Inquiry options for dropdown
   const inquiryOptions = useMemo(() => {
@@ -73,8 +88,16 @@ export default function MeetingFormPage() {
   }
 
   function handleCancel() {
-    navigate('/meetings');
+    navigate(returnPath || '/meetings');
   }
+
+  const backLabel = returnPath?.startsWith('/inquiries/')
+    ? 'Back to Inquiry'
+    : returnPath === '/inquiries'
+      ? 'Back to Inquiries'
+      : isEdit
+        ? 'Back to Details'
+        : 'Back to Meetings';
 
   if (loading) {
     return (
@@ -103,7 +126,7 @@ export default function MeetingFormPage() {
             icon={IconBack}
             onClick={handleCancel}
           >
-            {isEdit ? 'Back to Details' : 'Back to Meetings'}
+            {backLabel}
           </Button>
         }
         actions={

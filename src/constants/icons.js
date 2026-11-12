@@ -63,6 +63,7 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
+  MoreVertical,
   Paperclip,
   FileText,
   FileSpreadsheet,
@@ -174,7 +175,7 @@ export const IconBankDetails = Landmark;
 export const IconPurchaseRequisition = ClipboardList;
 export const IconPR = ClipboardList; // Shorthand alias
 export const IconInquiry = Inbox;
-export const IconQuotation = Receipt;
+export const IconQuotation = FileSpreadsheet;
 export const IconSalesOrder = ClipboardCheck;
 export const IconProduct = PackageCheck;
 export const IconDashboard = LayoutDashboard;
@@ -213,6 +214,7 @@ export const IconDelete = Trash2;
 export const IconTrash = Trash2;
 export const IconView = Eye;
 export const IconEye = Eye;
+export const IconMoreVertical = MoreVertical;
 export const IconClose = X;
 export const IconCancel = X; // Alias for IconClose
 export const IconBack = ArrowLeft;

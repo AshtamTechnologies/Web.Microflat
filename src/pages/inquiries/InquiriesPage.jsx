@@ -6,7 +6,7 @@
  * View preference is remembered across page refreshes and navigation.
  */
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   IconAdd,
   IconEdit,
@@ -15,6 +15,8 @@ import {
   IconView,
   IconListView,
   IconKanbanView,
+  IconQuotation,
+  IconMeeting,
 } from '../../constants/icons';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
@@ -160,6 +162,36 @@ export default function InquiriesPage() {
   useEffect(() => {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
   }, [search, statusFilter, priorityFilter]);
+
+  const getInquiryOverflowActions = useCallback(
+    (inq) => {
+      const inqId = inq.id || inq.InquiryId;
+      return [
+        {
+          label: 'Create Quotation',
+          icon: IconQuotation,
+          onClick: () =>
+            navigate(`/quotations/new?inquiryId=${inqId}`, {
+              state: { from: '/inquiries' },
+            }),
+        },
+        {
+          label: 'Schedule Meeting',
+          icon: IconMeeting,
+          onClick: () =>
+            navigate(`/meetings/new?inquiryId=${inqId}`, {
+              state: { from: '/inquiries' },
+            }),
+        },
+        {
+          label: inq.AssignedTo ? 'Reassign Inquiry' : 'Assign Inquiry',
+          icon: IconUserPlus,
+          onClick: () => setAssignModalInquiry(inq),
+        },
+      ];
+    },
+    [navigate]
+  );
 
   /* ── Column Definitions for TanStack Table ── */
   const columns = useMemo(
@@ -329,38 +361,28 @@ export default function InquiriesPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 140,
-        size: 150,
+        minSize: 136,
+        size: 140,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
           const row = info.row.original;
+          const rowId = row.id || row.InquiryId;
 
           return (
             <TableActions
-              onView={() => navigate(`/inquiries/${row.id || row.InquiryId}`)}
-              onEdit={() => navigate(`/inquiries/${row.id || row.InquiryId}/edit`)}
+              onView={() => navigate(`/inquiries/${rowId}`)}
+              onEdit={() => navigate(`/inquiries/${rowId}/edit`)}
               viewTooltip="View Inquiry Details"
               editTooltip="Edit Inquiry"
               className="justify-end shrink-0"
-              extraActions={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setAssignModalInquiry(row)}
-                  title={row.AssignedTo ? 'Reassign Inquiry' : 'Assign Inquiry'}
-                  className="h-8 w-8 text-text-muted hover:text-primary hover:bg-surface transition-colors shrink-0"
-                >
-                  <IconUserPlus size={15} aria-hidden="true" />
-                </Button>
-              }
+              overflowActions={getInquiryOverflowActions(row)}
             />
           );
         },
       }),
     ],
-    [navigate, userList]
+    [navigate, userList, getInquiryOverflowActions]
   );
 
   /* ── React Table Instance ── */
@@ -574,19 +596,6 @@ export default function InquiriesPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => setAssignModalInquiry(inq)}
-                    className="flex-1 text-xs"
-                  >
-                    <IconUserPlus
-                      size={13}
-                      className="mr-1.5"
-                      aria-hidden="true"
-                    />
-                    {inq.AssignedTo ? 'Reassign' : 'Assign'}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
                     onClick={() =>
                       navigate(`/inquiries/${inq.id || inq.InquiryId}`)
                     }
@@ -614,6 +623,7 @@ export default function InquiriesPage() {
                     />
                     Edit
                   </Button>
+                  <TableActions overflowActions={getInquiryOverflowActions(inq)} />
                 </div>
               </div>
             );

@@ -445,6 +445,7 @@ svg.lucide {
 @media (min-width: 640px) {
   .mf-page-header {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;

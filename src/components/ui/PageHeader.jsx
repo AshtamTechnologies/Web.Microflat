@@ -85,7 +85,7 @@ export default function PageHeader({
         </div>
       )}
       <div className="mf-page-header">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[220px] flex-1">
           <h1 className="mf-page-title flex flex-wrap items-center gap-2">
             {renderIcon()}
             <span className={truncateTitle ? 'truncate' : 'break-words'}>{title}</span>
@@ -101,7 +101,7 @@ export default function PageHeader({
         </div>
 
         {actionsContent && (
-          <div className="mf-page-actions shrink-0">
+          <div className="mf-page-actions max-w-full">
             {actionsContent}
           </div>
         )}

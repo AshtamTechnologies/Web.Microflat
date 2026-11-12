@@ -343,10 +343,10 @@ export default function QuotationViewPage() {
       {/* ── TAB 1: OVERVIEW (Option A Balanced Grid + Terms After Quoted Products) ── */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* Top Summary Grid: Client & Contact (7 cols) + Quotation Summary (5 cols) */}
+          {/* Top Summary Grid: Client & Contact (6 cols) + Quotation Summary (6 cols) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Client & Contact Details */}
-            <Card title="Client & Contact Details" className="lg:col-span-7">
+            <Card title="Client & Contact Details" className="lg:col-span-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <DetailField label="Client Company" value={quotation.clientName} />
                 <DetailField label="Contact Person" value={quotation.contactPerson || '—'} />
@@ -372,8 +372,8 @@ export default function QuotationViewPage() {
             </Card>
 
             {/* Quotation Summary */}
-            <Card title="Quotation Summary" className="lg:col-span-5">
-              <div className="grid grid-cols-2 gap-4">
+            <Card title="Quotation Summary" className="lg:col-span-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <DetailField
                   label="Inquiry Ref"
                   value={quotation.inquiryNo || 'Direct / Manual'}
@@ -406,7 +406,7 @@ export default function QuotationViewPage() {
                   <DetailField
                     label="Revision Notes"
                     value={activeRevision.revisionReason}
-                    className="col-span-2 pt-2 border-t border-border/60"
+                    className="col-span-2 sm:col-span-3 pt-2 border-t border-border/60"
                   />
                 )}
               </div>
@@ -646,55 +646,58 @@ export default function QuotationViewPage() {
             </div>
           </Card>
 
-          {/* Commercial & Delivery Terms (Shown AFTER Quoted Products) */}
+          {/* Commercial Terms & Condition (Shown AFTER Quoted Products) */}
           <Card
-            title="Commercial & Delivery Terms"
+            title="Commercial Terms & Condition"
             subtitle="Agreed payment milestones, delivery schedule, and contractual clauses"
           >
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <DetailField label="Payment Terms">
-                  <div className="flex flex-wrap gap-1.5 pt-0.5">
-                    {(Array.isArray(quotation.paymentTerms)
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  {
+                    label: 'Payment Terms',
+                    items: (Array.isArray(quotation.paymentTerms)
                       ? quotation.paymentTerms
                       : [quotation.paymentTerms || 'Net 30 Days']
-                    )
-                      .filter(Boolean)
-                      .map((term, idx) => (
-                        <Badge key={idx} variant="neutral" size="sm">
-                          {term}
-                        </Badge>
-                      ))}
-                  </div>
-                </DetailField>
-
-                <DetailField
-                  label="Currency & Validity"
-                  value={`${quotation.currency} · Valid until ${
-                    quotation.validUntil ? formatDate(quotation.validUntil) : '—'
-                  }`}
-                />
-
-                <DetailField label="Delivery Terms">
-                  <div className="flex flex-wrap gap-1.5 pt-0.5">
-                    {(Array.isArray(quotation.deliveryTerms)
+                    ).filter(Boolean),
+                  },
+                  {
+                    label: 'Delivery Terms',
+                    items: (Array.isArray(quotation.deliveryTerms)
                       ? quotation.deliveryTerms
                       : [quotation.deliveryTerms || 'Ex-works Ahmedabad, 4–6 weeks']
-                    )
-                      .filter(Boolean)
-                      .map((term, idx) => (
-                        <Badge key={idx} variant="neutral" size="sm">
-                          {term}
-                        </Badge>
-                      ))}
+                    ).filter(Boolean),
+                  },
+                ].map((section) => (
+                  <div
+                    key={section.label}
+                    className="bg-surface/40 border border-border/60 rounded-lg p-3.5"
+                  >
+                    <DetailField label={section.label}>
+                      <ul className="space-y-1.5 mt-1.5">
+                        {section.items.map((term, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-start gap-2 text-xs text-heading leading-relaxed"
+                          >
+                            <IconCheck
+                              size={13}
+                              className="text-primary shrink-0 mt-0.5"
+                              aria-hidden="true"
+                            />
+                            <span>{term}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </DetailField>
                   </div>
-                </DetailField>
+                ))}
               </div>
 
               {quotation.termsAndConditions && (
                 <div className="pt-3 border-t border-border">
                   <DetailField label="Terms & Conditions Clauses">
-                    <div className="text-xs text-heading leading-relaxed whitespace-pre-line bg-surface/40 p-3 rounded-lg border border-border/60 mt-1">
+                    <div className="text-xs text-heading leading-relaxed whitespace-pre-line bg-surface/40 p-3.5 rounded-lg border border-border/60 mt-1">
                       {quotation.termsAndConditions}
                     </div>
                   </DetailField>

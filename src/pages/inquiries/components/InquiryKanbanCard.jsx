@@ -6,8 +6,10 @@ import {
   IconUserPlus,
   IconGrip,
   IconCalendar,
+  IconQuotation,
+  IconMeeting,
 } from '../../../constants/icons';
-import { Badge, Button } from '../../../components/ui';
+import { Badge, Button, TableActions } from '../../../components/ui';
 import { getPriorityBadgeVariant } from '../../../mocks/inquiries';
 import { formatDate } from '../../../utils/dateUtils';
 
@@ -26,6 +28,34 @@ function InquiryKanbanCard({
   const id = inquiry.id || inquiry.InquiryId;
   const isUnassigned = !inquiry.AssignedTo || assigneeName === 'Unassigned';
   const displayDate = inquiry.RequiredByDate || inquiry.InquiryDate || inquiry.CreatedOn;
+
+  const overflowActions = [
+    {
+      label: 'Create Quotation',
+      icon: IconQuotation,
+      onClick: () =>
+        navigate(`/quotations/new?inquiryId=${id}`, {
+          state: { from: '/inquiries' },
+        }),
+    },
+    {
+      label: 'Schedule Meeting',
+      icon: IconMeeting,
+      onClick: () =>
+        navigate(`/meetings/new?inquiryId=${id}`, {
+          state: { from: '/inquiries' },
+        }),
+    },
+    ...(onAssignClick
+      ? [
+          {
+            label: inquiry.AssignedTo ? 'Reassign Inquiry' : 'Assign Inquiry',
+            icon: IconUserPlus,
+            onClick: () => onAssignClick(inquiry),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div
@@ -85,70 +115,53 @@ function InquiryKanbanCard({
         </div>
       )}
 
-      {/* ── Card Bottom: Assignee (Full width visible) + Desktop Hover Actions ── */}
-      <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-border/40 min-h-[26px]">
-        {/* Assignee display */}
-        <div className="flex items-center gap-1.5 min-w-0 text-2xs flex-1">
-          <span className="text-text-muted/70 text-3xs shrink-0">Assigned:</span>
-          <span
-            className={`font-medium truncate ${
-              isUnassigned ? 'text-text-muted/60 italic' : 'text-heading'
-            }`}
-            title={assigneeName}
-          >
-            {assigneeName}
-          </span>
-        </div>
-
-        {/* Quick action buttons on hover (Desktop only: hidden by default so it takes 0 width) */}
-        <div
-          className="hidden sm:group-hover:flex items-center gap-0.5 shrink-0 bg-surface/90 pl-1 rounded-l-md transition-all"
-          onClick={(e) => e.stopPropagation()}
+      {/* ── Assigned Meta (Full width visible) ── */}
+      <div className="flex items-center justify-between gap-2 text-2xs pt-1 border-t border-border/40">
+        <span className="text-text-muted/70 text-3xs shrink-0">Assigned:</span>
+        <span
+          className={`font-medium truncate text-right ${
+            isUnassigned ? 'text-text-muted/60 italic' : 'text-heading'
+          }`}
+          title={assigneeName}
         >
-          {onAssignClick && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              title={inquiry.AssignedTo ? 'Reassign' : 'Assign'}
-              onClick={(e) => {
-                e.stopPropagation();
-                onAssignClick(inquiry);
-              }}
-              className="h-6 w-6 text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer"
-            >
-              <IconUserPlus size={13} />
-            </Button>
-          )}
+          {assigneeName}
+        </span>
+      </div>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="Edit Inquiry"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/inquiries/${id}/edit`);
-            }}
-            className="h-6 w-6 text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer"
-          >
-            <IconEdit size={13} />
-          </Button>
+      {/* ── Card Bottom Actions (Desktop) ── */}
+      <div
+        className="hidden sm:flex items-center justify-end gap-1 pt-1.5 border-t border-border/40"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          title="Edit Inquiry"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/inquiries/${id}/edit`);
+          }}
+          className="h-7 w-7 text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer"
+        >
+          <IconEdit size={13} />
+        </Button>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="View Details"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/inquiries/${id}`);
-            }}
-            className="h-6 w-6 text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer"
-          >
-            <IconEye size={13} />
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          title="View Details"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/inquiries/${id}`);
+          }}
+          className="h-7 w-7 text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer"
+        >
+          <IconEye size={13} />
+        </Button>
+
+        <TableActions overflowActions={overflowActions} />
       </div>
 
       {/* ── Mobile-Only Quick Stage Selector & Actions (sm:hidden) ── */}
@@ -178,22 +191,6 @@ function InquiryKanbanCard({
         )}
 
         <div className="flex items-center gap-0.5 shrink-0">
-          {onAssignClick && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              title={inquiry.AssignedTo ? 'Reassign' : 'Assign'}
-              onClick={(e) => {
-                e.stopPropagation();
-                onAssignClick(inquiry);
-              }}
-              className="h-7 w-7 text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer"
-            >
-              <IconUserPlus size={13} />
-            </Button>
-          )}
-
           <Button
             type="button"
             variant="ghost"
@@ -221,6 +218,8 @@ function InquiryKanbanCard({
           >
             <IconEye size={13} />
           </Button>
+
+          <TableActions overflowActions={overflowActions} />
         </div>
       </div>
     </div>

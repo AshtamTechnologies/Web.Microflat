@@ -29,9 +29,11 @@ import {
   IconLayers,
   IconLocation,
   IconMail,
+  IconMeeting,
   IconMessageSquare,
   IconPackage,
   IconPhone,
+  IconQuotation,
   IconRefresh,
   IconSend,
   IconShieldCheck,
@@ -803,6 +805,38 @@ export default function InquiryViewPage() {
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                navigate(`/meetings/new?inquiryId=${id}`, {
+                  state: { from: `/inquiries/${id}` },
+                })
+              }
+              className="text-xs"
+            >
+              <IconMeeting size={14} className="mr-1.5" />
+              Schedule Meeting
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                navigate(`/quotations/new?inquiryId=${id}`, {
+                  state: { from: `/inquiries/${id}` },
+                })
+              }
+              className="text-xs"
+            >
+              <IconQuotation size={14} className="mr-1.5" />
+              Create Quotation
+            </Button>
+
+            <span className="hidden sm:block h-5 w-px bg-border mx-0.5" aria-hidden="true" />
+
             <Button
               type="button"
               variant="secondary"
