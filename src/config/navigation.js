@@ -45,6 +45,7 @@ import {
   IconList,
   IconAdd,
   IconMeeting,
+  IconEmailTemplates,
 } from '../constants/icons';
 
 export const navigation = [
@@ -255,6 +256,12 @@ export const navigation = [
             icon: IconSeriesSetup,
             path: '/configuration/series',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Email Templates',
+            icon: IconEmailTemplates,
+            path: '/configuration/email-templates',
+            roles: ['ADMIN', 'MANAGER'],
           },
           {
             label: 'Document Types',

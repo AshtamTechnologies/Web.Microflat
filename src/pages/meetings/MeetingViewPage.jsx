@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   PageHeader,
   Button,
@@ -52,10 +52,19 @@ function formatTime12(timeStr) {
 export default function MeetingViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [meeting, setMeeting] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Dynamic return destination & label (e.g. Back to Inquiry if navigated from an inquiry view)
+  const returnUrl =
+    location.state?.from ||
+    (meeting?.inquiryId ? `/inquiries/${meeting.inquiryId}` : '/meetings');
+  const returnLabel =
+    location.state?.fromTitle ||
+    (meeting?.inquiryId ? 'Back to Inquiry' : 'Back to Meetings');
 
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -114,8 +123,8 @@ export default function MeetingViewPage() {
         <div className="p-4 rounded-xl border border-danger/30 bg-danger/10 text-danger text-sm">
           {error || 'Meeting not found.'}
         </div>
-        <Button variant="secondary" onClick={() => navigate('/meetings')}>
-          Back to Meetings
+        <Button variant="secondary" onClick={() => navigate(returnUrl)}>
+          {returnLabel}
         </Button>
       </div>
     );
@@ -143,9 +152,9 @@ export default function MeetingViewPage() {
             variant="secondary"
             size="sm"
             icon={IconBack}
-            onClick={() => navigate('/meetings')}
+            onClick={() => navigate(returnUrl)}
           >
-            Back to Meetings
+            {returnLabel}
           </Button>
         }
         actions={

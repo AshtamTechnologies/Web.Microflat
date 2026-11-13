@@ -27,9 +27,9 @@ function KanbanCard({
 
   const handleDragStart = (e) => {
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(id));
-    // Fallback data for cross-browser reliability
     try {
+      e.dataTransfer.setData('text/plain', String(id));
+      e.dataTransfer.setData('text', String(id)); // Safari / Legacy WebKit fallback
       e.dataTransfer.setData('application/json', JSON.stringify({ id }));
     } catch {
       // ignore
@@ -40,6 +40,13 @@ function KanbanCard({
   const handleDragEnd = (e) => {
     setDropPosition(null);
     if (onDragEnd) onDragEnd(id, item, e);
+  };
+
+  const handleDragEnter = (e) => {
+    if (String(draggedItemId) === String(id)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
   };
 
   const handleDragOver = (e) => {
@@ -69,8 +76,15 @@ function KanbanCard({
     const pos = dropPosition || 'after';
     setDropPosition(null);
 
-    const rawId = e.dataTransfer.getData('text/plain');
-    const incomingId = rawId || draggedItemId;
+    let incomingId = null;
+    try {
+      incomingId = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
+    } catch {
+      // ignore
+    }
+    if (!incomingId) {
+      incomingId = draggedItemId;
+    }
 
     if (incomingId && onCardDrop) {
       onCardDrop(incomingId, id, pos);
@@ -82,12 +96,14 @@ function KanbanCard({
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      style={{ WebkitUserDrag: 'element' }}
       className={`group relative rounded-xl transition-all duration-150 select-none cursor-grab active:cursor-grabbing ${
         isDragging
-          ? 'opacity-40 scale-[0.98] border-2 border-dashed border-primary shadow-inner pointer-events-none'
+          ? 'opacity-40 scale-[0.98] border-2 border-dashed border-primary shadow-inner'
           : 'hover:-translate-y-0.5 hover:shadow-md'
       }`}
     >

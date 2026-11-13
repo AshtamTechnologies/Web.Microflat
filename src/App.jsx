@@ -51,6 +51,8 @@ import { SalesOrdersProvider } from './context/SalesOrdersContext';
 import SeriesSetupPage from './pages/configuration/SeriesSetupPage';
 import { SeriesProvider } from './context/SeriesContext';
 
+import EmailTemplatesPage from './pages/configuration/EmailTemplatesPage';
+import EmailTemplateFormPage from './pages/configuration/EmailTemplateFormPage';
 import DocumentTypesPage from './pages/configuration/DocumentTypesPage';
 import { DocumentTypesProvider } from './context/DocumentTypesContext';
 
@@ -292,6 +294,9 @@ export default function App() {
               {/* Configuration Routes */}
               <Route path="/configuration/series" element={<Navigate to="/configuration/series/po" replace />} />
               <Route path="/configuration/series/:docType" element={<SeriesSetupPage />} />
+              <Route path="/configuration/email-templates" element={<EmailTemplatesPage />} />
+              <Route path="/configuration/email-templates/new" element={<EmailTemplateFormPage />} />
+              <Route path="/configuration/email-templates/:id/edit" element={<EmailTemplateFormPage />} />
               <Route path="/configuration/document-types" element={<DocumentTypesPage />} />
               <Route path="/configuration/product-categories" element={<ProductCategoriesPage />} />
               <Route path="/configuration/grades" element={<GradesPage />} />

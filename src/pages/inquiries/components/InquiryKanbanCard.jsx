@@ -69,7 +69,7 @@ function InquiryKanbanCard({
             className="text-text-muted/40 group-hover:text-text-muted/80 transition-colors shrink-0 -ml-1 cursor-grab"
             title="Drag to change stage"
           >
-            <IconGrip size={14} />
+            <IconGrip size={14} className="pointer-events-none select-none" />
           </span>
           <span className="font-mono text-xs font-bold text-primary hover:underline truncate">
             {inquiry.InquiryNo}

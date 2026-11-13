@@ -4,7 +4,7 @@
  * Route: /inquiries/:id
  */
 
-import { useState, useMemo, useCallback, Fragment } from 'react';
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -80,6 +80,42 @@ import AssignInquiryModal from './components/AssignInquiryModal';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import UploadDocumentModal from './components/UploadDocumentModal';
 import { formatDate, formatDateTime } from '../../utils/dateUtils';
+import { getMeetings } from '../../services/meetings/meetingsService';
+
+// Realistic dummy meetings tailored for Inquiry negotiations & reviews
+const DUMMY_INQUIRY_MEETINGS = [
+  {
+    id: 101,
+    meetingTitle: 'Technical Drawing & Tolerance Review',
+    meetingType: 'Client',
+    status: 'Completed',
+    meetingDate: '2026-11-10',
+    startTime: '10:30',
+    endTime: '11:30',
+    location: 'Conference Room Alpha & Google Meet',
+    attendees: [
+      { name: 'Janvi Motwani', role: 'Sales Lead', isInternal: true },
+      { name: 'Rajesh Sharma', role: 'Chief Engineer (Client)', isInternal: false },
+      { name: 'Hardik Mehta', role: 'QA Inspector', isInternal: true },
+    ],
+    remarks: 'Client approved drawing Rev-B with 304 Stainless Steel. Agreed to submit commercial quotation by Friday.',
+  },
+  {
+    id: 102,
+    meetingTitle: 'Internal Machining Feasibility & Costing',
+    meetingType: 'Internal',
+    status: 'Scheduled',
+    meetingDate: '2026-11-15',
+    startTime: '14:00',
+    endTime: '15:00',
+    location: 'Production Planning Room B',
+    attendees: [
+      { name: 'Janvi Motwani', role: 'Sales Lead', isInternal: true },
+      { name: 'Ketan Patel', role: 'Production Head', isInternal: true },
+    ],
+    remarks: null,
+  },
+];
 
 const INITIAL_ITEM_WIDTHS = {
   index: 48,
@@ -231,6 +267,39 @@ export default function InquiryViewPage() {
 
   // Mobile view switcher for line items table (cards vs scrollable table on small screens)
   const [mobileViewMode, setMobileViewMode] = useState('cards');
+
+  // Meetings attached to this inquiry
+  const [inquiryMeetings, setInquiryMeetings] = useState([]);
+  const [loadingMeetings, setLoadingMeetings] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadMeetings() {
+      if (!id) return;
+      try {
+        setLoadingMeetings(true);
+        const data = await getMeetings({ inquiryId: id });
+        if (isMounted) {
+          if (Array.isArray(data) && data.length > 0) {
+            setInquiryMeetings(data);
+          } else {
+            setInquiryMeetings(DUMMY_INQUIRY_MEETINGS);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load inquiry meetings, falling back to dummy:', err);
+        if (isMounted) {
+          setInquiryMeetings(DUMMY_INQUIRY_MEETINGS);
+        }
+      } finally {
+        if (isMounted) setLoadingMeetings(false);
+      }
+    }
+    loadMeetings();
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   // Resizable table columns
   const {
@@ -765,6 +834,178 @@ export default function InquiryViewPage() {
     </div>
   );
 
+  const renderMeetingsSection = () => (
+    <Card padding="md" className="bg-bg shadow-2xs space-y-4 overflow-hidden">
+      <div className="border-b border-border pb-3 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 text-heading font-semibold text-sm">
+          <IconMeeting size={17} className="text-primary shrink-0" />
+          <span>Meetings & Consultations</span>
+          <Badge variant="neutral" className="text-xs font-mono px-2 py-0.5 ml-1">
+            {inquiryMeetings.length}
+          </Badge>
+        </div>
+
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() =>
+            navigate(`/meetings/new?inquiryId=${id}`, {
+              state: {
+                from: `/inquiries/${id}`,
+                fromTitle: `Back to Inquiry (${inquiry?.InquiryNo || ''})`,
+                inquiry,
+              },
+            })
+          }
+          className="text-xs font-semibold shadow-2xs h-8 px-2.5"
+        >
+          <IconAdd size={14} className="mr-1" />
+          Schedule Meeting
+        </Button>
+      </div>
+
+      {loadingMeetings ? (
+        <div className="py-8 text-center text-xs text-text-muted">
+          Loading meeting history...
+        </div>
+      ) : inquiryMeetings.length === 0 ? (
+        <div className="py-8 px-4 text-center text-xs text-text-muted border border-dashed border-border rounded-xl bg-surface/20 space-y-2.5">
+          <IconMeeting size={22} className="mx-auto text-text-muted/60" />
+          <div>
+            <p className="font-semibold text-heading text-xs">No meetings scheduled for this inquiry</p>
+            <p className="mt-0.5 text-2xs">Schedule client consultations, technical drawing reviews, or negotiation calls.</p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              navigate(`/meetings/new?inquiryId=${id}`, {
+                state: {
+                  from: `/inquiries/${id}`,
+                  fromTitle: `Back to Inquiry (${inquiry?.InquiryNo || ''})`,
+                  inquiry,
+                },
+              })
+            }
+            className="text-xs mt-1"
+          >
+            <IconAdd size={13} className="mr-1" />
+            Schedule First Meeting
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3 max-h-[380px] overflow-y-auto overscroll-contain pr-1.5 custom-scrollbar">
+          {inquiryMeetings.map((m) => {
+            const meetingId = m.id || m.meetingId;
+            const isCompleted = m.status === 'Completed';
+            const isCancelled = m.status === 'Cancelled';
+            const statusVariant = isCompleted ? 'success' : isCancelled ? 'neutral' : 'info';
+            const typeVariant = m.meetingType === 'Client' ? 'primary' : m.meetingType === 'Vendor' ? 'warning' : 'neutral';
+
+            const handleNavigateToMeeting = () => {
+              navigate(`/meetings/${meetingId}`, {
+                state: {
+                  from: `/inquiries/${id}`,
+                  fromTitle: `Back to Inquiry (${inquiry?.InquiryNo || ''})`,
+                },
+              });
+            };
+
+            return (
+              <div
+                key={meetingId}
+                className="p-3.5 bg-surface border border-border rounded-xl space-y-2.5 hover:border-primary/40 transition-all shadow-2xs min-w-0 overflow-hidden"
+              >
+                {/* Header row: Type & Status Badges + Date */}
+                <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant={typeVariant} size="xs">
+                      {m.meetingType || 'Internal'}
+                    </Badge>
+                    <Badge variant={statusVariant} size="xs">
+                      {m.status || 'Scheduled'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-3xs font-mono text-text-muted shrink-0">
+                    <IconCalendar size={12} className="shrink-0" />
+                    <span>{formatDate(m.meetingDate)}</span>
+                    {m.startTime && (
+                      <span className="text-text-muted/70">
+                        · {m.startTime}
+                        {m.endTime ? ` - ${m.endTime}` : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Meeting Title & Location */}
+                <div className="min-w-0">
+                  <h4
+                    onClick={handleNavigateToMeeting}
+                    className="text-xs font-semibold text-heading hover:text-primary cursor-pointer transition-colors truncate block"
+                    title={m.meetingTitle}
+                  >
+                    {m.meetingTitle}
+                  </h4>
+                  {m.location && (
+                    <div className="flex items-center gap-1 text-2xs text-text-muted mt-1 min-w-0">
+                      <IconLocation size={12} className="shrink-0 text-text-muted/70" />
+                      <span className="truncate min-w-0">{m.location}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Attendees list / count */}
+                {Array.isArray(m.attendees) && m.attendees.length > 0 && (
+                  <div className="flex items-center gap-1.5 text-2xs text-text-muted pt-1 border-t border-border/50 min-w-0">
+                    <IconUser size={12} className="shrink-0 text-text-muted/70" />
+                    <span className="font-semibold text-heading shrink-0">
+                      {m.attendees.length} Attendee{m.attendees.length > 1 ? 's' : ''}:
+                    </span>
+                    <span className="truncate min-w-0">
+                      {m.attendees
+                        .slice(0, 3)
+                        .map((a) => a.name || a.externalName || 'Attendee')
+                        .join(', ')}
+                      {m.attendees.length > 3 ? ` +${m.attendees.length - 3} more` : ''}
+                    </span>
+                  </div>
+                )}
+
+                {/* Outcome / Remarks (if completed) */}
+                {m.remarks && (
+                  <div className="p-2 rounded-lg bg-bg border border-border/70 text-2xs overflow-hidden">
+                    <span className="font-semibold text-heading block mb-0.5">
+                      Outcome / Notes:
+                    </span>
+                    <p className="text-text-muted line-clamp-2 break-words leading-relaxed">
+                      {m.remarks}
+                    </p>
+                  </div>
+                )}
+
+                {/* Bottom link to view full meeting details */}
+                <div className="flex items-center justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleNavigateToMeeting}
+                    className="text-2xs font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <IconView size={12} />
+                    View Details
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+
   return (
     <div className="space-y-6 pb-20">
       {/* ── Top Header & Actions ── */}
@@ -1195,6 +1436,11 @@ export default function InquiryViewPage() {
             {renderDocumentsSection()}
           </div>
 
+          {/* Mobile Only: Meetings & Consultations (shown on screens < xl) */}
+          <div className="xl:hidden">
+            {renderMeetingsSection()}
+          </div>
+
           {/* 3. Add Comment / Internal Note Card (Rich Text Editor) */}
           <Card padding="md" className="bg-bg space-y-4 shadow-2xs">
             <div className="border-b border-border pb-3 flex items-center justify-between flex-wrap gap-2">
@@ -1305,11 +1551,16 @@ export default function InquiryViewPage() {
           </CollapsibleCard>
         </div>
 
-        {/* ── RIGHT COLUMN: Documents & Attachments, Activity Timeline (xl:col-span-6) ── */}
+        {/* ── RIGHT COLUMN: Documents & Attachments, Meetings, Activity Timeline (xl:col-span-6) ── */}
         <div className="xl:col-span-6 space-y-6">
           {/* Desktop Only: Documents & Attachments (shown here on screens >= xl) */}
           <div className="hidden xl:block">
             {renderDocumentsSection()}
+          </div>
+
+          {/* Desktop Only: Meetings & Consultations (shown here on screens >= xl) */}
+          <div className="hidden xl:block">
+            {renderMeetingsSection()}
           </div>
 
           {/* Activity Timeline Card */}

@@ -23,6 +23,12 @@ function KanbanColumn({
   const columnId = column.id;
   const count = items.length;
 
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (!isOver) setIsOver(true);
+  };
+
   const handleDragOver = (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -39,8 +45,16 @@ function KanbanColumn({
   const handleDrop = (e) => {
     e.preventDefault();
     setIsOver(false);
-    const rawId = e.dataTransfer.getData('text/plain');
-    const itemId = rawId || draggedItemId;
+
+    let itemId = null;
+    try {
+      itemId = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
+    } catch {
+      // ignore
+    }
+    if (!itemId) {
+      itemId = draggedItemId;
+    }
 
     if (itemId && onItemMove) {
       // Dropping anywhere on the column background/empty area places at the top of this stage
@@ -62,6 +76,7 @@ function KanbanColumn({
           ? 'border-primary ring-2 ring-primary/30 bg-primary/5 dark:bg-primary/10'
           : 'border-border/80'
       }`}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
