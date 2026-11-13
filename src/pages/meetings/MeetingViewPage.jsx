@@ -1,11 +1,11 @@
 /**
- * MeetingViewPage.jsx — Full-page 360-degree view for a Meeting record.
+ * MeetingViewPage.jsx — Full-page 360-degree cockpit view for a Meeting record.
  *
  * Route: /meetings/:id
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   PageHeader,
   Button,
@@ -27,6 +27,9 @@ import {
   IconSuccess,
   IconError,
   IconBack,
+  IconExternalLink,
+  IconBuilding2,
+  IconUser,
 } from '../../constants/icons';
 import {
   getMeetingById,
@@ -49,6 +52,20 @@ function formatTime12(timeStr) {
   return `${String(h).padStart(2, '0')}:${m} ${period}`;
 }
 
+function getDurationBadge(startTime, endTime) {
+  if (!startTime || !endTime) return null;
+  const [sh, sm] = String(startTime).split(':').map(Number);
+  const [eh, em] = String(endTime).split(':').map(Number);
+  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return null;
+  const diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff <= 0) return null;
+  const hours = Math.floor(diff / 60);
+  const mins = diff % 60;
+  if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+  if (hours > 0) return `${hours} hr${hours > 1 ? 's' : ''}`;
+  return `${mins} min`;
+}
+
 export default function MeetingViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -58,7 +75,7 @@ export default function MeetingViewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Dynamic return destination & label (e.g. Back to Inquiry if navigated from an inquiry view)
+  // Dynamic return destination & label
   const returnUrl =
     location.state?.from ||
     (meeting?.inquiryId ? `/inquiries/${meeting.inquiryId}` : '/meetings');
@@ -109,6 +126,16 @@ export default function MeetingViewPage() {
     }
   }
 
+  const isVideoUrl = useMemo(() => {
+    if (!meeting?.location) return false;
+    const loc = meeting.location.trim().toLowerCase();
+    return loc.startsWith('http://') || loc.startsWith('https://');
+  }, [meeting?.location]);
+
+  const durationText = useMemo(() => {
+    return getDurationBadge(meeting?.startTime, meeting?.endTime);
+  }, [meeting?.startTime, meeting?.endTime]);
+
   if (loading) {
     return (
       <div className="p-12 text-center text-text-muted text-sm animate-pulse">
@@ -135,7 +162,7 @@ export default function MeetingViewPage() {
   const isCancelled = meeting.status === 'Cancelled';
 
   return (
-    <div className="space-y-6 pb-20 w-full">
+    <div className="space-y-5 pb-12 w-full">
       {/* Page Header */}
       <PageHeader
         title={meeting.meetingTitle}
@@ -169,8 +196,8 @@ export default function MeetingViewPage() {
                   onClick={() => navigate(`/meetings/${meeting.id}/edit`)}
                   className="gap-1.5"
                 >
-                  <IconEdit className="w-4 h-4" />
-                  Edit / Reschedule
+                  <IconEdit className="w-3.5 h-3.5" />
+                  Edit
                 </Button>
 
                 <Button
@@ -179,7 +206,7 @@ export default function MeetingViewPage() {
                   onClick={() => setIsCompleteModalOpen(true)}
                   className="gap-1.5 bg-success hover:bg-success/90 text-white"
                 >
-                  <IconCheck className="w-4 h-4" />
+                  <IconCheck className="w-3.5 h-3.5" />
                   Complete
                 </Button>
 
@@ -189,7 +216,7 @@ export default function MeetingViewPage() {
                   onClick={() => setIsCancelModalOpen(true)}
                   className="gap-1.5"
                 >
-                  <IconClose className="w-4 h-4" />
+                  <IconClose className="w-3.5 h-3.5" />
                   Cancel
                 </Button>
               </>
@@ -198,38 +225,17 @@ export default function MeetingViewPage() {
         }
       />
 
-      {/* Outcome / Cancellation Remarks Banner */}
-      {isCompleted && meeting.remarks && (
-        <div className="p-4 rounded-xl border border-success/30 bg-success/10 space-y-1">
-          <div className="flex items-center gap-2 text-success font-semibold text-sm">
-            <IconSuccess className="w-4 h-4" />
-            <span>Meeting Outcome & Minutes</span>
-          </div>
-          <p className="text-sm text-text whitespace-pre-wrap pl-6">{meeting.remarks}</p>
-        </div>
-      )}
-
-      {isCancelled && meeting.remarks && (
-        <div className="p-4 rounded-xl border border-danger/30 bg-danger/10 space-y-1">
-          <div className="flex items-center gap-2 text-danger font-semibold text-sm">
-            <IconError className="w-4 h-4" />
-            <span>Cancellation Reason</span>
-          </div>
-          <p className="text-sm text-text whitespace-pre-wrap pl-6">{meeting.remarks}</p>
-        </div>
-      )}
-
-      {/* Overview & Timing Card */}
-      <Card>
-        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
-          <IconCalendar className="w-5 h-5 text-primary" />
-          <h2 className="text-base font-semibold text-heading">Meeting Details & Schedule</h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6">
-          <DetailField
-            label="Meeting Type"
-            value={
+      {/* 2-Column Responsive Workspace Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* LEFT COLUMN: Agenda, Outcomes & Attendees (lg:col-span-7 xl:col-span-8) */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-5">
+          {/* Section 1: Agenda & Outcomes Card */}
+          <Card padding="md">
+            <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-border">
+              <div className="flex items-center gap-2">
+                <IconFileText className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-semibold text-heading">Agenda & Discussion Topics</h2>
+              </div>
               <Badge
                 variant={
                   meeting.meetingType === 'Client'
@@ -238,91 +244,196 @@ export default function MeetingViewPage() {
                     ? 'warning'
                     : 'neutral'
                 }
+                size="sm"
+                className="text-2xs"
               >
                 {meeting.meetingType}
               </Badge>
-            }
-          />
+            </div>
 
-          <DetailField
-            label="Date"
-            value={formatDate(meeting.meetingDate)}
-          />
-
-          <DetailField
-            label="Time Window"
-            value={
-              <div className="flex items-center gap-1.5 font-mono text-xs">
-                <IconClock className="w-4 h-4 text-text-muted shrink-0" />
-                <span>
-                  {formatTime12(meeting.startTime)}
-                  {meeting.endTime ? ` – ${formatTime12(meeting.endTime)}` : ''}
-                </span>
-              </div>
-            }
-          />
-
-          <DetailField
-            label="Organizer"
-            value={
-              <div>
-                <p className="font-medium text-text">{meeting.organizerName}</p>
-                <p className="text-xs text-text-muted font-mono">{meeting.organizerEmail}</p>
-              </div>
-            }
-          />
-
-          <DetailField
-            label="Linked Inquiry"
-            value={
-              meeting.inquiryNumber ? (
-                <span className="font-mono text-primary bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20 text-xs">
-                  {meeting.inquiryNumber}
-                </span>
-              ) : (
-                <span className="text-text-muted">None (General)</span>
-              )
-            }
-          />
-
-          <DetailField
-            label="Location / Link"
-            value={
-              meeting.location ? (
-                <div className="flex items-center gap-1.5 text-text">
-                  <IconMapPin className="w-4 h-4 text-primary shrink-0" />
-                  <span className="break-all">{meeting.location}</span>
+            <div className="space-y-4">
+              {/* Meeting Minutes & Outcome Banner (if Completed) */}
+              {isCompleted && meeting.remarks && (
+                <div className="p-3.5 rounded-lg border border-success/30 bg-success/10 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-success font-semibold text-xs">
+                    <IconSuccess className="w-4 h-4" />
+                    <span>Meeting Outcome & Minutes of Meeting (MoM)</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-text whitespace-pre-wrap pl-5 leading-relaxed">
+                    {meeting.remarks}
+                  </p>
                 </div>
-              ) : (
-                <span className="text-text-muted">—</span>
-              )
-            }
-          />
-        </div>
-      </Card>
+              )}
 
-      {/* Agenda Card */}
-      <Card>
-        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-border">
-          <IconFileText className="w-5 h-5 text-primary" />
-          <h2 className="text-base font-semibold text-heading">Agenda & Discussion Topics</h2>
-        </div>
-        {meeting.agenda ? (
-          <p className="text-sm text-text whitespace-pre-wrap leading-relaxed">
-            {meeting.agenda}
-          </p>
-        ) : (
-          <p className="text-sm text-text-muted italic">No specific agenda provided.</p>
-        )}
-      </Card>
+              {/* Cancellation Reason Banner (if Cancelled) */}
+              {isCancelled && meeting.remarks && (
+                <div className="p-3.5 rounded-lg border border-danger/30 bg-danger/10 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-danger font-semibold text-xs">
+                    <IconError className="w-4 h-4" />
+                    <span>Cancellation Reason</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-text whitespace-pre-wrap pl-5 leading-relaxed">
+                    {meeting.remarks}
+                  </p>
+                </div>
+              )}
 
-      {/* Attendees Card */}
-      <Card>
-        <AttendeeManager
-          attendees={meeting.attendees || []}
-          readOnly={true}
-        />
-      </Card>
+              {/* Main Agenda Text */}
+              <div>
+                <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
+                  Discussion Points & Purpose
+                </span>
+                {meeting.agenda ? (
+                  <p className="text-xs sm:text-sm text-text whitespace-pre-wrap leading-relaxed">
+                    {meeting.agenda}
+                  </p>
+                ) : (
+                  <p className="text-xs text-text-muted italic">No specific agenda outlined.</p>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* Section 2: Attendees Card */}
+          <Card padding="md">
+            <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-border">
+              <div className="flex items-center gap-2">
+                <IconUsers className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-semibold text-heading">Participants & Invitees</h2>
+              </div>
+              <Badge variant="neutral" size="sm" className="text-2xs px-2 py-0.5">
+                {meeting.attendees?.length || 0} Attending
+              </Badge>
+            </div>
+
+            <AttendeeManager
+              attendees={meeting.attendees || []}
+              readOnly={true}
+            />
+          </Card>
+        </div>
+
+        {/* RIGHT COLUMN / SIDEBAR: Schedule, Logistics & Context (lg:col-span-5 xl:col-span-4) */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-5">
+          {/* Card 1: Schedule & Logistics */}
+          <Card padding="md">
+            <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-border">
+              <div className="flex items-center gap-2">
+                <IconClock className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-semibold text-heading">Schedule & Logistics</h2>
+              </div>
+              {durationText && (
+                <span className="text-2xs font-mono font-semibold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                  {durationText}
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <DetailField
+                label="Date"
+                value={
+                  <div className="flex items-center gap-1.5 font-medium text-text">
+                    <IconCalendar className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                    <span>{formatDate(meeting.meetingDate)}</span>
+                  </div>
+                }
+              />
+
+              <DetailField
+                label="Time Window"
+                value={
+                  <div className="flex items-center gap-1.5 font-mono text-xs">
+                    <IconClock className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                    <span>
+                      {formatTime12(meeting.startTime)}
+                      {meeting.endTime ? ` – ${formatTime12(meeting.endTime)}` : ''}
+                    </span>
+                  </div>
+                }
+              />
+
+              <DetailField
+                label="Location / Link"
+                value={
+                  meeting.location ? (
+                    isVideoUrl ? (
+                      <div className="space-y-1.5 pt-0.5">
+                        <a
+                          href={meeting.location}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover shadow-2xs transition-colors w-full"
+                        >
+                          <IconExternalLink className="w-3.5 h-3.5" />
+                          <span>Join Video Meeting</span>
+                        </a>
+                        <p className="text-2xs text-text-muted font-mono truncate" title={meeting.location}>
+                          {meeting.location}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-text">
+                        <IconMapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span className="break-all">{meeting.location}</span>
+                      </div>
+                    )
+                  ) : (
+                    <span className="text-text-muted">—</span>
+                  )
+                }
+              />
+            </div>
+          </Card>
+
+          {/* Card 2: Organizer & Linked Context */}
+          <Card padding="md">
+            <div className="flex items-center gap-2 mb-3 pb-2.5 border-b border-border">
+              <IconBuilding2 className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-semibold text-heading">Organizer & Context</h2>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <DetailField
+                label="Organized By"
+                value={
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-text">{meeting.organizerName || 'Staff Member'}</p>
+                    {meeting.organizerEmail && (
+                      <p className="text-2xs text-text-muted font-mono">{meeting.organizerEmail}</p>
+                    )}
+                  </div>
+                }
+              />
+
+              <DetailField
+                label="Linked Inquiry"
+                value={
+                  meeting.inquiryId ? (
+                    <div className="flex items-center justify-between p-2.5 rounded-lg border border-primary/20 bg-primary/5 mt-1">
+                      <div className="space-y-0.5 min-w-0">
+                        <span className="text-2xs text-text-muted block">Related Inquiry</span>
+                        <span className="font-mono font-bold text-xs text-primary truncate block">
+                          {meeting.inquiryNumber || `#${meeting.inquiryId}`}
+                        </span>
+                      </div>
+                      <Link
+                        to={`/inquiries/${meeting.inquiryId}`}
+                        className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 shrink-0 ml-2"
+                      >
+                        <span>View</span>
+                        <IconExternalLink className="w-3 h-3" />
+                      </Link>
+                    </div>
+                  ) : (
+                    <span className="text-text-muted">General (No inquiry linked)</span>
+                  )
+                }
+              />
+            </div>
+          </Card>
+        </div>
+      </div>
 
       {/* Complete Meeting Modal */}
       <CompleteMeetingModal

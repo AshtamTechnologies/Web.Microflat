@@ -63,9 +63,9 @@ function to24HourString(hour12, minuteStr, period) {
 }
 
 /**
- * Formats "HH:mm" 24h string into human-friendly 12h display string, e.g. "09:36 PM (21:36)"
+ * Formats "HH:mm" 24h string into human-friendly 12h display string, e.g. "09:36 PM"
  */
-function formatDisplayTime(val, include24h = true) {
+function formatDisplayTime(val, include24h = false) {
   const parsed = parseTimeString(val);
   if (!parsed) return '';
   const { hour12, minuteStr, period, hour24 } = parsed;
@@ -193,7 +193,7 @@ export default function TimePicker({
   disabled = false,
   size = 'md',
   className = '',
-  show24hInDisplay = true,
+  show24hInDisplay = false,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState(null);

@@ -49,7 +49,9 @@ import SalesOrderViewPage from './pages/salesOrders/SalesOrderViewPage';
 import { SalesOrdersProvider } from './context/SalesOrdersContext';
 
 import SeriesSetupPage from './pages/configuration/SeriesSetupPage';
+import FinancialYearsPage from './pages/configuration/FinancialYearsPage';
 import { SeriesProvider } from './context/SeriesContext';
+import { FinancialYearsProvider } from './context/FinancialYearsContext';
 
 import EmailTemplatesPage from './pages/configuration/EmailTemplatesPage';
 import EmailTemplateFormPage from './pages/configuration/EmailTemplateFormPage';
@@ -174,17 +176,19 @@ export default function App() {
                                           <PaymentTermsProvider>
                                             <TaxConfigsProvider>
                                               <SeriesProvider>
-                                                <CompanyProvider>
-                                                  <CompanyBankDetailsProvider>
-                                                    <ProcessFlowProvider>
-                                                      <QuotationsProvider>
-                                                        <SalesOrdersProvider>
-                                                          <AppLayout />
-                                                        </SalesOrdersProvider>
-                                                      </QuotationsProvider>
-                                                    </ProcessFlowProvider>
-                                                  </CompanyBankDetailsProvider>
-                                                </CompanyProvider>
+                                                <FinancialYearsProvider>
+                                                  <CompanyProvider>
+                                                    <CompanyBankDetailsProvider>
+                                                      <ProcessFlowProvider>
+                                                        <QuotationsProvider>
+                                                          <SalesOrdersProvider>
+                                                            <AppLayout />
+                                                          </SalesOrdersProvider>
+                                                        </QuotationsProvider>
+                                                      </ProcessFlowProvider>
+                                                    </CompanyBankDetailsProvider>
+                                                  </CompanyProvider>
+                                                </FinancialYearsProvider>
                                               </SeriesProvider>
                                             </TaxConfigsProvider>
                                           </PaymentTermsProvider>
@@ -294,6 +298,7 @@ export default function App() {
               {/* Configuration Routes */}
               <Route path="/configuration/series" element={<Navigate to="/configuration/series/po" replace />} />
               <Route path="/configuration/series/:docType" element={<SeriesSetupPage />} />
+              <Route path="/configuration/financial-years" element={<FinancialYearsPage />} />
               <Route path="/configuration/email-templates" element={<EmailTemplatesPage />} />
               <Route path="/configuration/email-templates/new" element={<EmailTemplateFormPage />} />
               <Route path="/configuration/email-templates/:id/edit" element={<EmailTemplateFormPage />} />

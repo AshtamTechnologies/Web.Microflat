@@ -258,6 +258,12 @@ export const navigation = [
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
           },
           {
+            label: 'Financial Year Setup',
+            icon: IconMeeting,
+            path: '/configuration/financial-years',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
             label: 'Email Templates',
             icon: IconEmailTemplates,
             path: '/configuration/email-templates',

@@ -72,6 +72,9 @@ import * as geographyService from './geography/geographyService';
 
 import * as meetingsService from './meetings/meetingsService';
 
+import * as realFinancialYears from './financialYears/financialYearService';
+import * as mockFinancialYears from './financialYears/financialYearService.mock';
+
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 export const authService = useMock ? mockAuth : realAuth;
@@ -94,6 +97,7 @@ export const currencyService = useMock ? mockCurrencies : realCurrencies;
 export const productCategoriesService = useMock ? mockProductCategories : realProductCategories;
 export const taxConfigService = useMock ? mockTaxConfigs : realTaxConfigs;
 export const productService = realProducts;
+export const financialYearService = useMock ? mockFinancialYears : realFinancialYears;
 export { delegationService };
 export { geographyService };
 export { meetingsService };

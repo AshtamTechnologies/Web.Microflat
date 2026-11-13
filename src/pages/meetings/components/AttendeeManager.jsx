@@ -146,12 +146,12 @@ export default function AttendeeManager({
             ? att.name || `User #${att.userId}`
             : att.externalName || 'Guest';
           return (
-            <span className="font-semibold text-heading text-sm block truncate" title={displayName}>
+            <span className="font-semibold text-heading text-xs block truncate" title={displayName}>
               {displayName}
             </span>
           );
         },
-        size: 260,
+        size: 200,
       },
       {
         id: 'type',
@@ -164,7 +164,7 @@ export default function AttendeeManager({
             </Badge>
           );
         },
-        size: 110,
+        size: 90,
       },
       {
         id: 'email',
@@ -178,7 +178,7 @@ export default function AttendeeManager({
             </span>
           );
         },
-        size: 220,
+        size: 190,
       },
       {
         id: 'role',
@@ -193,7 +193,7 @@ export default function AttendeeManager({
             </span>
           );
         },
-        size: 180,
+        size: 140,
       },
     ];
 
@@ -207,15 +207,15 @@ export default function AttendeeManager({
               <button
                 type="button"
                 onClick={() => setAttendeeToDelete({ index: row.index, attendee: row.original })}
-                className="p-1.5 text-text-muted hover:text-danger rounded-md hover:bg-danger/10 transition-colors"
+                className="p-1 text-text-muted hover:text-danger rounded hover:bg-danger/10 transition-colors"
                 title="Remove attendee"
               >
-                <IconDelete className="w-4 h-4" />
+                <IconDelete className="w-3.5 h-3.5" />
               </button>
             </div>
           );
         },
-        size: 80,
+        size: 60,
       });
     }
 
@@ -236,10 +236,10 @@ export default function AttendeeManager({
     <div className="space-y-4">
       {/* Add Attendee Bar (Hidden in readOnly mode) */}
       {!readOnly && (
-        <div className="p-4 rounded-xl border border-border bg-surface-hover/30 space-y-3">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold uppercase text-text-muted">Add Attendee:</span>
-            <div className="flex items-center gap-1.5 p-0.5 rounded-lg bg-surface border border-border text-xs">
+        <div className="p-3 rounded-lg border border-border bg-surface-hover/20 space-y-2.5">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted">Add Participant:</span>
+            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-surface border border-border text-xs">
               <button
                 type="button"
                 onClick={() => {
@@ -247,7 +247,7 @@ export default function AttendeeManager({
                   setAddError('');
                   setEmailError('');
                 }}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
                   attendeeType === 'internal'
                     ? 'bg-primary text-white shadow-2xs'
                     : 'text-text-muted hover:text-text'
@@ -262,7 +262,7 @@ export default function AttendeeManager({
                   setAddError('');
                   setEmailError('');
                 }}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
                   attendeeType === 'external'
                     ? 'bg-primary text-white shadow-2xs'
                     : 'text-text-muted hover:text-text'
@@ -275,7 +275,7 @@ export default function AttendeeManager({
 
           {attendeeType === 'internal' ? (
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              <div className="flex-1 min-w-[240px]">
+              <div className="flex-1 min-w-[200px]">
                 <SearchableSelect
                   value={selectedUserId}
                   onChange={(e) => {
@@ -290,10 +290,11 @@ export default function AttendeeManager({
               <Button
                 type="button"
                 variant="secondary"
+                size="sm"
                 onClick={handleAddInternal}
-                className="gap-1.5 shrink-0"
+                className="gap-1 shrink-0"
               >
-                <IconAdd className="w-4 h-4" />
+                <IconAdd className="w-3.5 h-3.5" />
                 Add Internal
               </Button>
             </div>
@@ -318,17 +319,18 @@ export default function AttendeeManager({
                     if (emailError) setEmailError('');
                     if (addError) setAddError('');
                   }}
-                  placeholder="Email Address (e.g. name@company.com)"
+                  placeholder="Email Address (optional)"
                   error={emailError}
                 />
               </div>
               <Button
                 type="button"
                 variant="secondary"
+                size="sm"
                 onClick={handleAddExternal}
-                className="gap-1.5 shrink-0"
+                className="gap-1 shrink-0"
               >
-                <IconAdd className="w-4 h-4" />
+                <IconAdd className="w-3.5 h-3.5" />
                 Add Guest
               </Button>
             </div>
@@ -340,31 +342,31 @@ export default function AttendeeManager({
 
       {/* Attendees List Header */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-heading">
-            <IconUsers className="w-4 h-4 text-primary" />
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-heading">
+            <IconUsers className="w-3.5 h-3.5 text-primary" />
             <span>Invited Attendees</span>
-            <Badge variant="neutral" size="sm">
+            <Badge variant="neutral" size="sm" className="text-2xs px-1.5 py-0">
               {attendees.length}
             </Badge>
           </div>
         </div>
 
         {attendees.length === 0 ? (
-          <div className="p-6 text-center border border-dashed border-border rounded-xl bg-surface/50 text-text-muted text-sm">
-            No attendees added yet. Add team members or external participants above.
+          <div className="p-4 text-center border border-dashed border-border rounded-lg bg-surface/40 text-text-muted text-xs">
+            No attendees added yet. Add internal colleagues or external guests above.
           </div>
         ) : (
-          <div className="overflow-hidden border border-border rounded-xl">
+          <div className="overflow-hidden border border-border rounded-lg">
             <TableContainer
               className="border-0 rounded-none overflow-x-auto"
               tableStyle={{
                 width: totalTableWidth > 0 ? `${totalTableWidth}px` : '100%',
                 minWidth: '100%',
               }}
-              tableClassName="text-left text-sm table-fixed"
+              tableClassName="text-left text-xs table-fixed"
             >
-              <thead className="bg-surface border-b border-border text-xs text-text-muted font-semibold tracking-wider uppercase select-none">
+              <thead className="bg-surface border-b border-border text-2xs text-text-muted font-semibold tracking-wider uppercase select-none">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
@@ -373,7 +375,7 @@ export default function AttendeeManager({
                         style={{ width: `${header.getSize()}px` }}
                         isResizing={header.column.getIsResizing()}
                         resizeHandler={header.column.getCanResize() ? header.getResizeHandler() : undefined}
-                        className="py-2.5 px-3"
+                        className="py-2 px-2.5"
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
                       </Th>
@@ -388,7 +390,7 @@ export default function AttendeeManager({
                       <Td
                         key={cell.id}
                         style={{ width: `${cell.column.getSize()}px` }}
-                        className="py-2.5 px-3"
+                        className="py-1.5 px-2.5"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </Td>
