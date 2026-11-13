@@ -7,6 +7,10 @@
  * - /api/meetings/{id}/status
  * - /api/meetings/{id}/attendees
  * - /api/meetings/{id}/attendees/{attendeeId}
+ * - /api/meetings/{id}/attachments
+ * - /api/meeting-attachments/{id}
+ * - /api/meeting-attachments/{id}/download
+ * - /api/document-types
  */
 
 export const MEETINGS_ENDPOINTS = {
@@ -15,5 +19,10 @@ export const MEETINGS_ENDPOINTS = {
   MEETING_STATUS: (id) => `/api/meetings/${id}/status`,
   ATTENDEES: (id) => `/api/meetings/${id}/attendees`,
   ATTENDEE_BY_ID: (meetingId, attendeeId) => `/api/meetings/${meetingId}/attendees/${attendeeId}`,
+  ATTACHMENTS: (id) => `/api/meetings/${id}/attachments`,
+  ATTACHMENT_BY_ID: (attachmentId) => `/api/meeting-attachments/${attachmentId}`,
+  ATTACHMENT_DOWNLOAD: (attachmentId) => `/api/meeting-attachments/${attachmentId}/download`,
+  DOCUMENT_TYPES: '/api/document-types',
 };
+
 

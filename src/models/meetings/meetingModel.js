@@ -59,6 +59,37 @@ export function attendeeToApi(attendee = {}) {
 }
 
 /**
+ * Normalizes a meeting attachment item from the API.
+ * @param {object} raw
+ * @returns {object|null}
+ */
+export function meetingAttachmentFromApi(raw = {}) {
+  if (!raw) return null;
+  return {
+    id: raw.id ?? raw.attachmentId ?? raw.meetingAttachmentId,
+    documentTypeId: raw.documentTypeId ?? raw.documentType?.id ?? null,
+    documentTypeName:
+      raw.documentTypeName ||
+      raw.documentType?.documentTypeName ||
+      raw.documentType?.name ||
+      'Document',
+    documentName: raw.documentName || raw.documentTitle || raw.fileName || '',
+    documentTitle: raw.documentTitle || raw.documentName || '',
+    remarks: raw.remarks || '',
+    fileName: raw.fileName || raw.name || 'document',
+    fileSizeMB: raw.fileSizeMB ?? raw.fileSize ?? 0,
+    downloadUrl:
+      raw.downloadUrl ||
+      (raw.id || raw.attachmentId
+        ? `/api/meeting-attachments/${raw.id || raw.attachmentId}/download`
+        : ''),
+    uploadedByName: raw.uploadedByName || raw.createdByName || 'Staff Member',
+    uploadedByUserId: raw.uploadedByUserId || raw.createdBy || null,
+    createdOn: raw.createdOn || raw.createdAt || null,
+  };
+}
+
+/**
  * Normalizes a single meeting record from the API response.
  * @param {object} raw
  * @returns {object|null}
@@ -68,6 +99,9 @@ export function meetingFromApi(raw = {}) {
 
   const rawAttendees = Array.isArray(raw.attendees) ? raw.attendees : [];
   const attendees = rawAttendees.map((att, idx) => attendeeFromApi(att, idx)).filter(Boolean);
+
+  const rawAttachments = Array.isArray(raw.attachments) ? raw.attachments : [];
+  const attachments = rawAttachments.map(meetingAttachmentFromApi).filter(Boolean);
 
   const status = raw.status || 'Scheduled';
   const attendeeCount =
@@ -96,6 +130,7 @@ export function meetingFromApi(raw = {}) {
       'Organizer',
     organizerEmail: raw.organizerEmail || (raw.organizer && raw.organizer.email) || '',
     attendees,
+    attachments,
     canEdit: status === 'Scheduled',
     canCancel: status === 'Scheduled',
     canComplete: status === 'Scheduled',
@@ -122,6 +157,19 @@ export function meetingListFromApi(data) {
   return items.map(meetingFromApi).filter(Boolean);
 }
 
+function safeString(val) {
+  if (typeof val === 'string') return val.trim();
+  if (val && typeof val === 'object') {
+    if (val.target && typeof val.target.value === 'string') {
+      return val.target.value.trim();
+    }
+    if (typeof val.value === 'string') {
+      return val.value.trim();
+    }
+  }
+  return '';
+}
+
 /**
  * Serializes meeting form data into POST /api/meetings payload.
  * Per Section 5.4i: includes attendees.
@@ -130,14 +178,14 @@ export function meetingListFromApi(data) {
  */
 export function meetingToCreatePayload(form = {}) {
   const payload = {
-    meetingTitle: (form.meetingTitle || form.title || '').trim(),
+    meetingTitle: safeString(form.meetingTitle || form.title),
     meetingType: form.meetingType || 'Internal',
     inquiryId: form.inquiryId ? Number(form.inquiryId) : null,
     meetingDate: form.meetingDate ? String(form.meetingDate).slice(0, 10) : '',
     startTime: form.startTime || '',
     endTime: form.endTime || null,
-    location: (form.location || '').trim() || null,
-    agenda: (form.agenda || '').trim() || null,
+    location: safeString(form.location) || null,
+    agenda: safeString(form.agenda) || null,
     attendees: Array.isArray(form.attendees) ? form.attendees.map(attendeeToApi) : [],
   };
 
@@ -152,14 +200,14 @@ export function meetingToCreatePayload(form = {}) {
  */
 export function meetingToUpdatePayload(form = {}) {
   const payload = {
-    meetingTitle: (form.meetingTitle || form.title || '').trim(),
+    meetingTitle: safeString(form.meetingTitle || form.title),
     meetingType: form.meetingType || 'Internal',
     inquiryId: form.inquiryId ? Number(form.inquiryId) : null,
     meetingDate: form.meetingDate ? String(form.meetingDate).slice(0, 10) : '',
     startTime: form.startTime || '',
     endTime: form.endTime || null,
-    location: (form.location || '').trim() || null,
-    agenda: (form.agenda || '').trim() || null,
+    location: safeString(form.location) || null,
+    agenda: safeString(form.agenda) || null,
   };
 
   return payload;

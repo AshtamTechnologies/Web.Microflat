@@ -3,8 +3,15 @@
  */
 
 import { useState } from 'react';
-import { Modal, Button, Textarea } from '../../../components/ui';
+import { Modal, Button, RichTextEditor } from '../../../components/ui';
 import { IconError, IconClose } from '../../../constants/icons';
+
+function isHtmlEmpty(html) {
+  if (!html) return true;
+  const str = typeof html === 'object' ? html.target?.value || '' : String(html);
+  const stripped = str.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+  return stripped.length === 0;
+}
 
 export default function CancelMeetingModal({ isOpen, onClose, onConfirm, meetingTitle, loading }) {
   const [remarks, setRemarks] = useState('');
@@ -14,12 +21,13 @@ export default function CancelMeetingModal({ isOpen, onClose, onConfirm, meeting
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!remarks.trim()) {
+    if (isHtmlEmpty(remarks)) {
       setError('Please provide a reason for cancelling this meeting.');
       return;
     }
     setError('');
-    onConfirm(remarks.trim());
+    const finalRemarks = typeof remarks === 'object' ? remarks.target?.value || '' : String(remarks);
+    onConfirm(finalRemarks.trim());
   }
 
   function handleClose() {
@@ -33,7 +41,7 @@ export default function CancelMeetingModal({ isOpen, onClose, onConfirm, meeting
       isOpen={isOpen}
       onClose={handleClose}
       title="Cancel Meeting"
-      maxWidth="max-w-lg"
+      maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex items-start gap-3 p-3.5 rounded-xl bg-danger/10 border border-danger/20">
@@ -48,15 +56,17 @@ export default function CancelMeetingModal({ isOpen, onClose, onConfirm, meeting
           <label className="block text-xs font-semibold text-text-muted mb-1.5 uppercase tracking-wide">
             Cancellation Reason <span className="text-danger">*</span>
           </label>
-          <Textarea
+          <RichTextEditor
+            id="cancel-remarks"
+            name="remarks"
             value={remarks}
             onChange={(e) => {
-              setRemarks(e.target.value);
+              const val = e?.target?.value !== undefined ? e.target.value : e;
+              setRemarks(val);
               if (error) setError('');
             }}
             placeholder="e.g., Client requested postponement, key attendees unavailable..."
-            rows={3}
-            autoFocus
+            minHeight="120px"
           />
           {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
         </div>

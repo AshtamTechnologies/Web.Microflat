@@ -34,9 +34,14 @@ import {
 import {
   getMeetingById,
   changeMeetingStatus,
+  getMeetingDocumentTypes,
+  uploadMeetingAttachment,
+  downloadMeetingAttachment,
+  deleteMeetingAttachment,
 } from '../../services/meetings/meetingsService';
 import { formatDate } from '../../utils/dateUtils';
 import AttendeeManager from './components/AttendeeManager';
+import MeetingAttachmentManager from './components/MeetingAttachmentManager';
 import CompleteMeetingModal from './components/CompleteMeetingModal';
 import CancelMeetingModal from './components/CancelMeetingModal';
 
@@ -83,9 +88,29 @@ export default function MeetingViewPage() {
     location.state?.fromTitle ||
     (meeting?.inquiryId ? 'Back to Inquiry' : 'Back to Meetings');
 
+  const [documentTypes, setDocumentTypes] = useState([]);
+
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    async function fetchDocTypes() {
+      try {
+        const types = await getMeetingDocumentTypes();
+        if (mounted && Array.isArray(types)) {
+          setDocumentTypes(types);
+        }
+      } catch (err) {
+        console.warn('Failed to load meeting document types:', err);
+      }
+    }
+    fetchDocTypes();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const loadMeeting = useCallback(async () => {
     setLoading(true);
@@ -124,6 +149,23 @@ export default function MeetingViewPage() {
     } finally {
       setActionLoading(false);
     }
+  }
+
+  async function handleUploadAttachment(attachmentData) {
+    await uploadMeetingAttachment(id, attachmentData);
+    await loadMeeting();
+  }
+
+  async function handleDeleteAttachment(attachmentId) {
+    await deleteMeetingAttachment(attachmentId);
+    await loadMeeting();
+  }
+
+  async function handleDownloadAttachment(attachment) {
+    await downloadMeetingAttachment(
+      attachment.downloadUrl || attachment.id,
+      attachment.fileName || attachment.documentTitle || 'attachment'
+    );
   }
 
   const isVideoUrl = useMemo(() => {
@@ -166,7 +208,7 @@ export default function MeetingViewPage() {
       {/* Page Header */}
       <PageHeader
         title={meeting.meetingTitle}
-        subtitle={`Meeting #${meeting.id} • ${meeting.meetingType} Discussion`}
+        subtitle={`${meeting.meetingType ? `${meeting.meetingType} Discussion` : 'Meeting Details'}`}
         icon={<IconCalendar className="h-6 w-6 text-primary" aria-hidden="true" />}
         breadcrumbs={[
           { label: 'Dashboard', path: '/dashboard' },
@@ -227,9 +269,70 @@ export default function MeetingViewPage() {
 
       {/* 2-Column Responsive Workspace Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* LEFT COLUMN: Agenda, Outcomes & Attendees (lg:col-span-7 xl:col-span-8) */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-5">
-          {/* Section 1: Agenda & Outcomes Card */}
+        {/* LEFT COLUMN: Agenda, Outcomes & Attendees (lg:col-span-7 xl:col-span-7) */}
+        <div className="lg:col-span-7 xl:col-span-7 space-y-5">
+          {/* Section: Minutes of Meeting (MoM) & Outcomes Card (if Completed) */}
+          {isCompleted && meeting.remarks && (
+            <Card padding="md" className="border-l-4 border-l-success shadow-sm">
+              <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-border">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-success/10 text-success flex items-center justify-center shrink-0">
+                    <IconSuccess className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-heading leading-tight">
+                      Minutes of Meeting (MoM) & Outcome
+                    </h2>
+                    <p className="text-2xs text-text-muted">Recorded discussion conclusions & action items</p>
+                  </div>
+                </div>
+                <Badge variant="success" size="sm" className="text-2xs font-medium">
+                  Official Record
+                </Badge>
+              </div>
+
+              <div className="rounded-lg bg-slate-50/70 dark:bg-card-hover/40 border border-border/60 p-4">
+                <div
+                  className="text-xs sm:text-sm text-text leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                  dangerouslySetInnerHTML={{ __html: meeting.remarks }}
+                />
+              </div>
+            </Card>
+          )}
+
+          {/* Section: Cancellation Notice Card (if Cancelled) */}
+          {isCancelled && meeting.remarks && (
+            <Card padding="md" className="border-l-4 border-l-danger shadow-sm">
+              <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-border">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-danger/10 text-danger flex items-center justify-center shrink-0">
+                    <IconError className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-heading leading-tight">
+                      Meeting Cancellation Notice
+                    </h2>
+                    <p className="text-2xs text-text-muted">Official reason for cancelling this meeting</p>
+                  </div>
+                </div>
+                <Badge variant="danger" size="sm" className="text-2xs font-medium">
+                  Cancelled
+                </Badge>
+              </div>
+
+              <div className="rounded-lg bg-danger/5 border border-danger/20 p-4">
+                <span className="text-2xs font-semibold text-danger uppercase tracking-wider block mb-1.5">
+                  Reason for Cancellation
+                </span>
+                <div
+                  className="text-xs sm:text-sm text-text leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                  dangerouslySetInnerHTML={{ __html: meeting.remarks }}
+                />
+              </div>
+            </Card>
+          )}
+
+          {/* Section 1: Agenda & Discussion Topics Card */}
           <Card padding="md">
             <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-border">
               <div className="flex items-center gap-2">
@@ -251,46 +354,18 @@ export default function MeetingViewPage() {
               </Badge>
             </div>
 
-            <div className="space-y-4">
-              {/* Meeting Minutes & Outcome Banner (if Completed) */}
-              {isCompleted && meeting.remarks && (
-                <div className="p-3.5 rounded-lg border border-success/30 bg-success/10 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-success font-semibold text-xs">
-                    <IconSuccess className="w-4 h-4" />
-                    <span>Meeting Outcome & Minutes of Meeting (MoM)</span>
-                  </div>
-                  <p className="text-xs sm:text-sm text-text whitespace-pre-wrap pl-5 leading-relaxed">
-                    {meeting.remarks}
-                  </p>
-                </div>
+            <div>
+              <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
+                Discussion Points & Purpose
+              </span>
+              {meeting.agenda ? (
+                <div
+                  className="text-xs sm:text-sm text-text leading-relaxed prose prose-sm dark:prose-invert max-w-none"
+                  dangerouslySetInnerHTML={{ __html: meeting.agenda }}
+                />
+              ) : (
+                <p className="text-xs text-text-muted italic">No specific agenda outlined.</p>
               )}
-
-              {/* Cancellation Reason Banner (if Cancelled) */}
-              {isCancelled && meeting.remarks && (
-                <div className="p-3.5 rounded-lg border border-danger/30 bg-danger/10 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-danger font-semibold text-xs">
-                    <IconError className="w-4 h-4" />
-                    <span>Cancellation Reason</span>
-                  </div>
-                  <p className="text-xs sm:text-sm text-text whitespace-pre-wrap pl-5 leading-relaxed">
-                    {meeting.remarks}
-                  </p>
-                </div>
-              )}
-
-              {/* Main Agenda Text */}
-              <div>
-                <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block mb-1.5">
-                  Discussion Points & Purpose
-                </span>
-                {meeting.agenda ? (
-                  <p className="text-xs sm:text-sm text-text whitespace-pre-wrap leading-relaxed">
-                    {meeting.agenda}
-                  </p>
-                ) : (
-                  <p className="text-xs text-text-muted italic">No specific agenda outlined.</p>
-                )}
-              </div>
             </div>
           </Card>
 
@@ -313,8 +388,8 @@ export default function MeetingViewPage() {
           </Card>
         </div>
 
-        {/* RIGHT COLUMN / SIDEBAR: Schedule, Logistics & Context (lg:col-span-5 xl:col-span-4) */}
-        <div className="lg:col-span-5 xl:col-span-4 space-y-5">
+        {/* RIGHT COLUMN / SIDEBAR: Schedule, Logistics, Context & Attachments (lg:col-span-5 xl:col-span-5) */}
+        <div className="lg:col-span-5 xl:col-span-5 space-y-5">
           {/* Card 1: Schedule & Logistics */}
           <Card padding="md">
             <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-border">
@@ -431,6 +506,19 @@ export default function MeetingViewPage() {
                 }
               />
             </div>
+          </Card>
+
+          {/* Card 3: Attachments Card */}
+          <Card padding="md">
+            <MeetingAttachmentManager
+              attachments={meeting.attachments || []}
+              onUploadDirect={handleUploadAttachment}
+              onDelete={handleDeleteAttachment}
+              onDownload={handleDownloadAttachment}
+              documentTypes={documentTypes}
+              canUpload={!isCancelled}
+              readOnly={isCancelled}
+            />
           </Card>
         </div>
       </div>

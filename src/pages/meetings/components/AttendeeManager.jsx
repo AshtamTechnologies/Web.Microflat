@@ -89,7 +89,29 @@ export default function AttendeeManager({
     setAddError('');
   }
 
-  function handleAddExternal() {
+  function handleEmailChange(e) {
+    const val = e.target.value;
+    setExternalEmail(val);
+    if (addError) setAddError('');
+    if (emailError) {
+      if (!val.trim() || EMAIL_REGEX.test(val.trim())) {
+        setEmailError('');
+      }
+    }
+  }
+
+  function handleEmailBlur() {
+    const trimmed = externalEmail.trim();
+    if (trimmed && !EMAIL_REGEX.test(trimmed)) {
+      setEmailError('Please enter a valid email address (e.g. name@company.com).');
+    }
+  }
+
+  function handleAddExternal(e) {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const trimmedName = externalName.trim();
     const trimmedEmail = externalEmail.trim();
 
@@ -307,17 +329,27 @@ export default function AttendeeManager({
                     setExternalName(e.target.value);
                     if (addError) setAddError('');
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddExternal(e);
+                    }
+                  }}
                   placeholder="Guest / Client Name *"
                 />
               </div>
               <div className="flex-1">
                 <Input
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   value={externalEmail}
-                  onChange={(e) => {
-                    setExternalEmail(e.target.value);
-                    if (emailError) setEmailError('');
-                    if (addError) setAddError('');
+                  onChange={handleEmailChange}
+                  onBlur={handleEmailBlur}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddExternal(e);
+                    }
                   }}
                   placeholder="Email Address (optional)"
                   error={emailError}

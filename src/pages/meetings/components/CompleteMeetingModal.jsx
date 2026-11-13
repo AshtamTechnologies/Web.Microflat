@@ -3,8 +3,15 @@
  */
 
 import { useState } from 'react';
-import { Modal, Button, Textarea } from '../../../components/ui';
+import { Modal, Button, RichTextEditor } from '../../../components/ui';
 import { IconCheck, IconSuccess } from '../../../constants/icons';
+
+function isHtmlEmpty(html) {
+  if (!html) return true;
+  const str = typeof html === 'object' ? html.target?.value || '' : String(html);
+  const stripped = str.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+  return stripped.length === 0;
+}
 
 export default function CompleteMeetingModal({ isOpen, onClose, onConfirm, meetingTitle, loading }) {
   const [remarks, setRemarks] = useState('');
@@ -14,12 +21,13 @@ export default function CompleteMeetingModal({ isOpen, onClose, onConfirm, meeti
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!remarks.trim()) {
+    if (isHtmlEmpty(remarks)) {
       setError('Please provide outcome notes or summary remarks for this meeting.');
       return;
     }
     setError('');
-    onConfirm(remarks.trim());
+    const finalRemarks = typeof remarks === 'object' ? remarks.target?.value || '' : String(remarks);
+    onConfirm(finalRemarks.trim());
   }
 
   function handleClose() {
@@ -33,7 +41,7 @@ export default function CompleteMeetingModal({ isOpen, onClose, onConfirm, meeti
       isOpen={isOpen}
       onClose={handleClose}
       title="Complete Meeting"
-      maxWidth="max-w-lg"
+      maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex items-start gap-3 p-3.5 rounded-xl bg-success/10 border border-success/20">
@@ -48,15 +56,17 @@ export default function CompleteMeetingModal({ isOpen, onClose, onConfirm, meeti
           <label className="block text-xs font-semibold text-text-muted mb-1.5 uppercase tracking-wide">
             Outcome & Next Steps <span className="text-danger">*</span>
           </label>
-          <Textarea
+          <RichTextEditor
+            id="outcome-remarks"
+            name="remarks"
             value={remarks}
             onChange={(e) => {
-              setRemarks(e.target.value);
+              const val = e?.target?.value !== undefined ? e.target.value : e;
+              setRemarks(val);
               if (error) setError('');
             }}
             placeholder="Record key decisions, action items, or discussion highlights..."
-            rows={4}
-            autoFocus
+            minHeight="150px"
           />
           {error && <p className="text-xs text-danger mt-1.5">{error}</p>}
         </div>

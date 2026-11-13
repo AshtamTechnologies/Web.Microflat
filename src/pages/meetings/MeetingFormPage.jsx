@@ -20,6 +20,7 @@ import {
   SaveButton,
   CancelButton,
   Badge,
+  RichTextEditor,
 } from '../../components/ui';
 import {
   IconCalendar,
@@ -31,11 +32,13 @@ import {
   IconBack,
   IconBuilding2,
   IconExternalLink,
+  IconAttachment,
 } from '../../constants/icons';
 import { useMeetingForm } from './hooks/useMeetingForm';
 import { useUserOptions } from '../../context/UsersContext';
 import { mockInquiries } from '../../mocks/inquiries';
 import AttendeeManager from './components/AttendeeManager';
+import MeetingAttachmentManager from './components/MeetingAttachmentManager';
 
 const MEETING_TYPE_OPTIONS = [
   { value: 'Internal', label: 'Internal Discussion' },
@@ -73,6 +76,10 @@ export default function MeetingFormPage() {
     submitting,
     loading,
     error,
+    documentTypes,
+    addQueuedAttachment,
+    removeQueuedAttachment,
+    deleteExistingAttachment,
     setField,
     submit,
   } = useMeetingForm(id);
@@ -137,7 +144,7 @@ export default function MeetingFormPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 pb-12 w-full">
+    <form noValidate onSubmit={handleSubmit} className="space-y-5 pb-12 w-full">
       {/* Top Header & Header Actions */}
       <PageHeader
         title={isEdit ? 'Edit Meeting' : 'Schedule Meeting'}
@@ -247,14 +254,19 @@ export default function MeetingFormPage() {
 
               {/* Agenda & Notes */}
               <div>
-                <label className="block text-2xs font-semibold text-text-muted mb-1 uppercase tracking-wide">
+                <label className="block text-2xs font-semibold text-text-muted mb-1.5 uppercase tracking-wide">
                   Meeting Agenda & Discussion Topics
                 </label>
-                <Textarea
+                <RichTextEditor
+                  id="agenda"
+                  name="agenda"
                   value={formData.agenda}
-                  onChange={(e) => setField('agenda', e.target.value)}
+                  onChange={(e) => {
+                    const val = e?.target?.value !== undefined ? e.target.value : e;
+                    setField('agenda', val);
+                  }}
                   placeholder="Outline the meeting purpose, key topics to discuss, and expected outcomes..."
-                  rows={3}
+                  minHeight="160px"
                 />
               </div>
             </div>
@@ -267,23 +279,21 @@ export default function MeetingFormPage() {
                 <IconUsers className="w-4 h-4 text-primary" />
                 <h2 className="text-sm font-semibold text-heading">Participants & Invitees</h2>
               </div>
-              {isEdit && (
-                <span className="text-2xs text-text-muted bg-surface px-2 py-0.5 rounded border border-border">
-                  Read-only while editing
-                </span>
-              )}
+              <Badge variant="neutral" size="sm" className="text-2xs px-2 py-0.5">
+                {formData.attendees?.length || 0} Attending
+              </Badge>
             </div>
 
             <AttendeeManager
               attendees={formData.attendees}
               onChange={(newAttendees) => setField('attendees', newAttendees)}
               userOptions={userOptions}
-              readOnly={isEdit}
+              readOnly={false}
             />
           </Card>
         </div>
 
-        {/* RIGHT COLUMN: Schedule, Linked Inquiry & Context (lg:col-span-5 xl:col-span-4) */}
+        {/* RIGHT COLUMN: Schedule, Linked Inquiry & Attachments (lg:col-span-5 xl:col-span-4) */}
         <div className="lg:col-span-5 xl:col-span-4 space-y-5">
           {/* Schedule & Timing Card */}
           <Card padding="md">
@@ -419,6 +429,19 @@ export default function MeetingFormPage() {
                 </p>
               )}
             </div>
+          </Card>
+
+          {/* Meeting Attachments & Documents Card */}
+          <Card padding="md">
+            <MeetingAttachmentManager
+              attachments={formData.existingAttachments || []}
+              queuedAttachments={formData.queuedAttachments || []}
+              onAddQueued={addQueuedAttachment}
+              onRemoveQueued={removeQueuedAttachment}
+              onDelete={deleteExistingAttachment}
+              documentTypes={documentTypes}
+              canUpload={true}
+            />
           </Card>
         </div>
       </div>

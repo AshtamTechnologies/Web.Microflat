@@ -548,3 +548,66 @@ export async function removeAttendee(meetingId, attendeeId) {
   return { success: true };
 }
 
+let nextAttachmentId = 500;
+
+export async function getMeetingDocumentTypes() {
+  await delay(100);
+  return [
+    { id: 1, documentTypeCode: 'MOM', documentTypeName: 'Minutes of Meeting', maxFileSizeMB: 10, allowedExtensions: '.pdf,.doc,.docx' },
+    { id: 2, documentTypeCode: 'AGENDA', documentTypeName: 'Agenda', maxFileSizeMB: 10, allowedExtensions: '.pdf,.doc,.docx' },
+    { id: 3, documentTypeCode: 'PRESENTATION', documentTypeName: 'Presentation', maxFileSizeMB: 25, allowedExtensions: '.pdf,.ppt,.pptx' },
+    { id: 4, documentTypeCode: 'OTHER', documentTypeName: 'Other Document', maxFileSizeMB: 10, allowedExtensions: '.pdf,.doc,.docx,.png,.jpg,.jpeg' },
+  ];
+}
+
+export async function getMeetingAttachments(meetingId) {
+  await delay(100);
+  const m = mockMeetings.find((x) => String(x.id) === String(meetingId));
+  return (m && m.attachments) ? JSON.parse(JSON.stringify(m.attachments)) : [];
+}
+
+export async function uploadMeetingAttachment(meetingId, { documentTypeId, file, documentName, documentTitle, remarks }) {
+  await delay(200);
+  const m = mockMeetings.find((x) => String(x.id) === String(meetingId));
+  if (!m) throw new Error(`Meeting #${meetingId} not found.`);
+
+  if (!m.attachments) m.attachments = [];
+
+  const types = await getMeetingDocumentTypes();
+  const matchedType = types.find((t) => String(t.id) === String(documentTypeId));
+
+  const newAttachment = {
+    id: nextAttachmentId++,
+    documentTypeId: Number(documentTypeId),
+    documentTypeName: matchedType?.documentTypeName || 'Other Document',
+    documentName: documentName || documentTitle || file?.name || 'Document',
+    documentTitle: documentTitle || documentName || file?.name || '',
+    remarks: remarks || '',
+    fileName: file?.name || 'document.pdf',
+    fileSizeMB: file?.size ? (file.size / (1024 * 1024)).toFixed(2) : 0.5,
+    downloadUrl: '',
+    uploadedByName: 'Current User',
+    uploadedByUserId: 1,
+    createdOn: new Date().toISOString(),
+  };
+
+  m.attachments.push(newAttachment);
+  m.updatedAt = new Date().toISOString();
+  return newAttachment;
+}
+
+export async function deleteMeetingAttachment(attachmentId) {
+  await delay(100);
+  for (const m of mockMeetings) {
+    if (m.attachments) {
+      const idx = m.attachments.findIndex((a) => String(a.id) === String(attachmentId));
+      if (idx !== -1) {
+        m.attachments.splice(idx, 1);
+        m.updatedAt = new Date().toISOString();
+        return true;
+      }
+    }
+  }
+  return true;
+}
+
