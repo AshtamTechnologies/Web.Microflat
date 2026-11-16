@@ -33,18 +33,48 @@ export async function getApprovalStatuses() {
 }
 
 /**
+ * Returns pending requests assigned to the current user's role (not raised by them), oldest first.
+ * GET /api/approval-requests/awaiting-me
+ * @param {{ moduleCode?: string, pageNumber?: number, pageSize?: number }} [params]
+ */
+export async function getAwaitingMeApprovals(params = {}) {
+  try {
+    const query = {};
+    const mod = params.moduleCode || params.ModuleCode;
+    if (mod && mod !== 'ALL') {
+      query.moduleCode = mod;
+    }
+    if (params.approvalTypeId) query.approvalTypeId = params.approvalTypeId;
+    if (params.referenceId) query.referenceId = params.referenceId;
+    if (params.pageNumber) query.pageNumber = params.pageNumber;
+    if (params.pageSize) query.pageSize = params.pageSize;
+
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.AWAITING_ME, {
+      params: query,
+    });
+    return approvalRequestsFromApi(response.data);
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
  * Returns pending approvals waiting for decision (Approver's to-do list).
  * GET /api/approval-requests/pending
  * @param {object} [params]
  */
 export async function getPendingApprovals(params = {}) {
   try {
-    const query = {
-      ModuleCode: params.moduleCode || params.ModuleCode || 'VENDOR',
-    };
+    const query = {};
+    const mod = params.moduleCode || params.ModuleCode;
+    if (mod && mod !== 'ALL') {
+      query.ModuleCode = mod;
+    }
     if (params.approvalTypeId) query.ApprovalTypeId = params.approvalTypeId;
     if (params.referenceId) query.ReferenceId = params.referenceId;
-    query.Mine = params.mine !== undefined ? Boolean(params.mine) : (params.Mine !== undefined ? Boolean(params.Mine) : true);
+    if (params.mine !== undefined || params.Mine !== undefined) {
+      query.Mine = params.mine !== undefined ? Boolean(params.mine) : Boolean(params.Mine);
+    }
     if (params.pageNumber) query.PageNumber = params.pageNumber;
     if (params.pageSize) query.PageSize = params.pageSize;
 
@@ -64,15 +94,19 @@ export async function getPendingApprovals(params = {}) {
  */
 export async function getApprovalHistory(params = {}) {
   try {
-    const query = {
-      ModuleCode: params.moduleCode || params.ModuleCode || 'VENDOR',
-    };
+    const query = {};
+    const mod = params.moduleCode || params.ModuleCode;
+    if (mod && mod !== 'ALL') {
+      query.ModuleCode = mod;
+    }
     if (params.status !== undefined && params.status !== null && params.status !== 'ALL') {
       query.Status = typeof params.status === 'number' ? params.status : normalizeApprovalStatus(params.status);
     }
     if (params.approvalTypeId) query.ApprovalTypeId = params.approvalTypeId;
     if (params.referenceId) query.ReferenceId = params.referenceId;
-    query.Mine = params.mine !== undefined ? Boolean(params.mine) : (params.Mine !== undefined ? Boolean(params.Mine) : true);
+    if (params.mine !== undefined || params.Mine !== undefined) {
+      query.Mine = params.mine !== undefined ? Boolean(params.mine) : Boolean(params.Mine);
+    }
     if (params.pageNumber) query.PageNumber = params.pageNumber;
     if (params.pageSize) query.PageSize = params.pageSize;
 
@@ -244,10 +278,128 @@ export async function cancelRequest(id, data = {}) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   APPROVAL SETTINGS (Admin Setup)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Returns all system modules with their current approval requirement configuration.
+ * GET /api/approval-settings/modules?isModuleActive=true
+ * @param {{ isModuleActive?: boolean }} [params]
+ */
+export async function getApprovalSettingsModules(params = { isModuleActive: true }) {
+  try {
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.SETTINGS_MODULES, {
+      params,
+    });
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Lists approval settings filtered by moduleCode and/or isApprovalRequired.
+ * GET /api/approval-settings
+ * @param {{ moduleCode?: string, isApprovalRequired?: boolean }} [params]
+ */
+export async function getApprovalSettings(params = {}) {
+  try {
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.SETTINGS, {
+      params,
+    });
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Fetches approval setting for a specific module (e.g. VENDOR, QUOTATION).
+ * GET /api/approval-settings/by-module/{moduleCode}
+ * @param {string} moduleCode
+ */
+export async function getApprovalSettingByModule(moduleCode) {
+  try {
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.SETTINGS_BY_MODULE(moduleCode));
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Fetches single approval setting by ID.
+ * GET /api/approval-settings/{id}
+ * @param {number|string} id
+ */
+export async function getApprovalSetting(id) {
+  try {
+    const validId = cleanId(id);
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.SETTINGS_BY_ID(validId));
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Creates approval setting for a module (Admin only).
+ * POST /api/approval-settings
+ * @param {{ moduleId: number, isApprovalRequired: boolean, approverRoleId?: number }} data
+ */
+export async function createApprovalSetting(data) {
+  try {
+    const response = await axiosInstance.post(APPROVAL_ENDPOINTS.SETTINGS, {
+      moduleId: Number(data.moduleId),
+      isApprovalRequired: Boolean(data.isApprovalRequired),
+      approverRoleId: data.approverRoleId ? Number(data.approverRoleId) : undefined,
+    });
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Updates approval setting for a module (Admin only).
+ * PUT /api/approval-settings/{id}
+ * @param {number|string} id
+ * @param {{ isApprovalRequired: boolean, approverRoleId?: number }} data
+ */
+export async function updateApprovalSetting(id, data) {
+  try {
+    const validId = cleanId(id);
+    const response = await axiosInstance.put(APPROVAL_ENDPOINTS.SETTINGS_BY_ID(validId), {
+      isApprovalRequired: Boolean(data.isApprovalRequired),
+      approverRoleId: data.approverRoleId ? Number(data.approverRoleId) : undefined,
+    });
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Deletes approval setting for a module (Admin only).
+ * DELETE /api/approval-settings/{id}
+ * @param {number|string} id
+ */
+export async function deleteApprovalSetting(id) {
+  try {
+    const validId = cleanId(id);
+    const response = await axiosInstance.delete(APPROVAL_ENDPOINTS.SETTINGS_BY_ID(validId));
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
 export const capabilities = {
   summary: true,
   verifyDocuments: true,
   approve: true,
   reject: true,
   cancel: true,
+  settings: true,
 };

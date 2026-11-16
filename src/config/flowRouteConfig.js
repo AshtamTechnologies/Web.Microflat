@@ -33,6 +33,12 @@ export const ROUTE_FLOW_CONFIG = [
     defaultStep: 'Commercial Review',
   },
   {
+    pattern: /^\/approvals\/vendors\/[^/]+$/,
+    moduleCode: 'VENDOR',
+    pageType: 'approval',
+    defaultStep: 'Evaluation',
+  },
+  {
     pattern: /^\/vendor-bank-details\/new$/,
     moduleCode: 'VENDOR',
     pageType: 'create',
@@ -135,6 +141,38 @@ export const ROUTE_FLOW_CONFIG = [
     moduleCode: 'PURCHASE',
     pageType: 'approval',
     defaultStep: 'Pending Approval',
+  },
+  {
+    pattern: /^\/purchase-requisitions\/[^/]+$/,
+    moduleCode: 'PURCHASE',
+    pageType: 'view',
+    defaultStep: 'Approved',
+  },
+  {
+    pattern: /^\/approvals\/purchase-requisitions\/[^/]+$/,
+    moduleCode: 'PURCHASE',
+    pageType: 'approval',
+    defaultStep: 'Pending Approval',
+  },
+
+  // ── 3b. PRODUCTS ──────────────────────────────────────────────────
+  {
+    pattern: /^\/products\/new$/,
+    moduleCode: 'PRODUCT',
+    pageType: 'create',
+    defaultStep: 'Draft',
+  },
+  {
+    pattern: /^\/products\/[^/]+\/edit$/,
+    moduleCode: 'PRODUCT',
+    pageType: 'edit',
+    defaultStep: 'Review',
+  },
+  {
+    pattern: /^\/products\/[^/]+$/,
+    moduleCode: 'PRODUCT',
+    pageType: 'view',
+    defaultStep: 'Approved',
   },
 
   // ── 4. CLIENTS & COMPANY REGISTRATION (Fallback / Blank space) ────

@@ -17,6 +17,8 @@ import VendorFormPage from './pages/vendors/VendorFormPage';
 import VendorApprovalPage from './pages/approvals/VendorApprovalPage';
 import VendorApprovalViewPage from './pages/approvals/VendorApprovalViewPage';
 import PurchaseRequisitionApprovalPage from './pages/approvals/PurchaseRequisitionApprovalPage';
+import ApprovalsPage from './pages/approvals/ApprovalsPage';
+import ApprovalSettingsPage from './pages/approvals/ApprovalSettingsPage';
 import VendorEffectiveDatesPage from './pages/vendors/VendorEffectiveDatesPage';
 import { VendorsProvider } from './context/VendorsContext';
 import VendorBankDetailsPage from './pages/vendorBankDetails/VendorBankDetailsPage';
@@ -241,6 +243,8 @@ export default function App() {
               <Route path="/vendors/:id" element={<VendorEffectiveDatesPage />} />
               <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
               <Route path="/vendors/:id/effective-dates" element={<VendorEffectiveDatesPage />} />
+              <Route path="/approvals" element={<ApprovalsPage />} />
+              <Route path="/approvals/settings" element={<ApprovalSettingsPage />} />
               <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
               <Route path="/approvals/vendors/:id" element={<VendorApprovalViewPage />} />
               <Route path="/approvals/purchase-requisitions" element={<PurchaseRequisitionApprovalPage />} />
