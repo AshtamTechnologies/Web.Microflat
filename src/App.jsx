@@ -55,6 +55,9 @@ import { FinancialYearsProvider } from './context/FinancialYearsContext';
 
 import EmailTemplatesPage from './pages/configuration/EmailTemplatesPage';
 import EmailTemplateFormPage from './pages/configuration/EmailTemplateFormPage';
+import { EmailTemplatesProvider } from './context/EmailTemplatesContext';
+import MyQueuePage from './pages/queue/MyQueuePage';
+import { NotificationsProvider } from './context/NotificationsContext';
 import DocumentTypesPage from './pages/configuration/DocumentTypesPage';
 import { DocumentTypesProvider } from './context/DocumentTypesContext';
 
@@ -182,7 +185,11 @@ export default function App() {
                                                       <ProcessFlowProvider>
                                                         <QuotationsProvider>
                                                           <SalesOrdersProvider>
-                                                            <AppLayout />
+                                                            <EmailTemplatesProvider>
+                                                              <NotificationsProvider>
+                                                                <AppLayout />
+                                                              </NotificationsProvider>
+                                                            </EmailTemplatesProvider>
                                                           </SalesOrdersProvider>
                                                         </QuotationsProvider>
                                                       </ProcessFlowProvider>
@@ -214,6 +221,7 @@ export default function App() {
               }
             >
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/my-queue" element={<MyQueuePage />} />
               <Route path="/delegation" element={<DelegationPage />} />
               <Route path="/delegation/all" element={<AllDelegationsPage />} />
               <Route path="/delegation/new" element={<DelegationFormPage />} />

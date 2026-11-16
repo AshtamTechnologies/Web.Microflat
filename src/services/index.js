@@ -75,6 +75,15 @@ import * as meetingsService from './meetings/meetingsService';
 import * as realFinancialYears from './financialYears/financialYearService';
 import * as mockFinancialYears from './financialYears/financialYearService.mock';
 
+import * as realEmailTemplates from './emailTemplates/emailTemplatesService';
+import * as mockEmailTemplates from './emailTemplates/emailTemplatesService.mock';
+
+import * as realMyQueue from './myQueue/myQueueService';
+import * as mockMyQueue from './myQueue/myQueueService.mock';
+
+import * as realNotifications from './notifications/notificationsService';
+import * as mockNotifications from './notifications/notificationsService.mock';
+
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 export const authService = useMock ? mockAuth : realAuth;
@@ -98,6 +107,9 @@ export const productCategoriesService = useMock ? mockProductCategories : realPr
 export const taxConfigService = useMock ? mockTaxConfigs : realTaxConfigs;
 export const productService = realProducts;
 export const financialYearService = useMock ? mockFinancialYears : realFinancialYears;
+export const emailTemplatesService = useMock ? mockEmailTemplates : realEmailTemplates;
+export const myQueueService = useMock ? mockMyQueue : realMyQueue;
+export const notificationsService = useMock ? mockNotifications : realNotifications;
 export { delegationService };
 export { geographyService };
 export { meetingsService };

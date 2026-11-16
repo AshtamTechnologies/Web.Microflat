@@ -22,10 +22,10 @@ import {
   FormActionsBar,
 } from '../../components/ui';
 
-import {
-  INITIAL_EMAIL_TEMPLATES,
-  EMAIL_MODULE_OPTIONS,
-} from '../../mocks/emailTemplates';
+import { EMAIL_MODULE_OPTIONS } from '../../mocks/emailTemplates';
+import { useEmailTemplates } from '../../context/EmailTemplatesContext';
+import { useAuthContext } from '../../context/AuthContext';
+import { formatDate } from '../../utils/dateUtils';
 
 const INITIAL_FORM = {
   templateCode: '',
@@ -51,46 +51,52 @@ export default function EmailTemplateFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const { user } = useAuthContext();
 
-  // Load existing templates from localStorage (mock database)
-  const [templates, setTemplates] = useState(() => {
-    const saved = localStorage.getItem('microflat_email_templates');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return INITIAL_EMAIL_TEMPLATES;
-      }
-    }
-    return INITIAL_EMAIL_TEMPLATES;
-  });
+  const { getTemplateById, createTemplate, updateTemplate, toggleStatus, modules } = useEmailTemplates();
 
   const [formData, setFormData] = useState(INITIAL_FORM);
+  const [initialStatus, setInitialStatus] = useState('Active');
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(isEdit);
   const [newTagInput, setNewTagInput] = useState('');
   const [activeTab, setActiveTab] = useState('editor'); // 'editor' | 'preview'
 
-  // Pre-fill when editing
+  // Pre-fill when editing via API
   useEffect(() => {
+    let isMounted = true;
     if (isEdit) {
-      const existing = templates.find((t) => String(t.id) === String(id));
-      if (existing) {
-        setFormData({
-          templateCode: existing.templateCode,
-          templateName: existing.templateName,
-          moduleName: existing.moduleName,
-          subject: existing.subject,
-          body: existing.body,
-          availablePlaceholders: [...(existing.availablePlaceholders || [])],
-          status: existing.status || 'Active',
+      setIsLoadingDetails(true);
+      getTemplateById(id)
+        .then((existing) => {
+          if (!isMounted) return;
+          if (existing) {
+            const currentStatus = existing.status || 'Active';
+            setInitialStatus(currentStatus);
+            setFormData({
+              templateCode: existing.templateCode || '',
+              templateName: existing.templateName || '',
+              moduleName: existing.moduleName || 'VENDOR',
+              subject: existing.subject || '',
+              body: existing.body || '',
+              availablePlaceholders: [...(existing.availablePlaceholders || [])],
+              status: currentStatus,
+            });
+          }
+        })
+        .catch(() => {
+          if (!isMounted) return;
+          navigate('/configuration/email-templates');
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingDetails(false);
         });
-      } else {
-        toast.error('Email template not found.');
-        navigate('/configuration/email-templates');
-      }
     }
-  }, [id, isEdit, templates, navigate]);
+    return () => {
+      isMounted = false;
+    };
+  }, [id, isEdit, getTemplateById, navigate]);
 
   // Handle adding a placeholder tag
   const handleAddPlaceholder = (nameToAdd) => {
@@ -124,27 +130,12 @@ export default function EmailTemplateFormPage() {
     toast.success(`${label} copied to clipboard!`);
   };
 
-  // Generate sample test values for live preview
+  // Generate blank test values for live preview
   const previewValues = useMemo(() => {
     const values = {};
     (formData.availablePlaceholders || []).forEach((placeholder) => {
-      values[placeholder] = `[${placeholder}]`;
+      values[placeholder] = '';
     });
-
-    if (values.VendorName) values.VendorName = 'Acme Precision Tools Pvt Ltd';
-    if (values.VendorCode) values.VendorCode = 'VEN-0042';
-    if (values.ContactPerson) values.ContactPerson = 'Ravi Sharma';
-    if (values.ClientContact) values.ClientContact = 'Amit Patel';
-    if (values.CompanyName) values.CompanyName = 'Apex Manufacturing Ltd';
-    if (values.InquiryNumber) values.InquiryNumber = 'INQ-2026-000128';
-    if (values.QuotationNumber) values.QuotationNumber = 'QT-2026-0045';
-    if (values.PRNumber) values.PRNumber = 'PR-2026-0089';
-    if (values.OrderNumber) values.OrderNumber = 'SO-2026-0012';
-    if (values.CurrencySymbol) values.CurrencySymbol = '₹';
-    if (values.TotalAmount) values.TotalAmount = '1,85,000';
-    if (values.ApprovedDate) values.ApprovedDate = '13 Nov 2026';
-    if (values.Date) values.Date = '13 Nov 2026';
-
     return values;
   }, [formData.availablePlaceholders]);
 
@@ -152,7 +143,9 @@ export default function EmailTemplateFormPage() {
   const renderedSubject = useMemo(() => {
     let result = formData.subject || '';
     Object.entries(previewValues).forEach(([key, val]) => {
-      result = result.replaceAll(`{{${key}}}`, val || `[${key}]`);
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        result = result.replaceAll(`{{${key}}}`, val);
+      }
     });
     return result;
   }, [formData.subject, previewValues]);
@@ -161,13 +154,28 @@ export default function EmailTemplateFormPage() {
   const renderedBody = useMemo(() => {
     let result = formData.body || '';
     Object.entries(previewValues).forEach(([key, val]) => {
-      result = result.replaceAll(`{{${key}}}`, val || `[${key}]`);
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        result = result.replaceAll(`{{${key}}}`, val);
+      }
     });
     return result;
   }, [formData.body, previewValues]);
 
+  // Module selection options
+  const formModuleOptions = useMemo(() => {
+    if (modules && modules.length > 0) {
+      return modules
+        .filter((m) => m.isActive)
+        .map((m) => ({
+          value: m.moduleCode,
+          label: `${m.moduleName} (${m.moduleCode})`,
+        }));
+    }
+    return EMAIL_MODULE_OPTIONS.filter((o) => o.value !== 'ALL');
+  }, [modules]);
+
   // Form submit
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     const errors = {};
 
@@ -175,11 +183,6 @@ export default function EmailTemplateFormPage() {
       errors.templateCode = 'Template code is required.';
     } else if (!isEdit && !/^[A-Z0-9_]{3,50}$/.test(formData.templateCode.trim())) {
       errors.templateCode = 'Code must be uppercase letters, numbers or underscore (3-50 chars).';
-    } else if (
-      !isEdit &&
-      templates.some((t) => t.templateCode.toUpperCase() === formData.templateCode.trim().toUpperCase())
-    ) {
-      errors.templateCode = 'A template with this code already exists.';
     }
 
     if (!formData.templateName.trim()) {
@@ -215,48 +218,37 @@ export default function EmailTemplateFormPage() {
       return;
     }
 
-    setIsSubmitting(true);
-
-    setTimeout(() => {
-      let updatedList;
+    try {
+      setIsSubmitting(true);
       if (isEdit) {
-        updatedList = templates.map((t) =>
-          String(t.id) === String(id)
-            ? {
-                ...t,
-                templateName: formData.templateName.trim(),
-                moduleName: formData.moduleName,
-                subject: formData.subject.trim(),
-                body: formData.body,
-                availablePlaceholders: formData.availablePlaceholders,
-                status: formData.status,
-                updatedOn: new Date().toISOString(),
-              }
-            : t
-        );
-        toast.success(`Template '${formData.templateCode}' updated successfully.`);
+        await updateTemplate(id, formData);
+        // If status changed in the form, trigger PATCH /api/email-templates/{id}/status
+        if (formData.status !== initialStatus) {
+          await toggleStatus(id, formData.status);
+        }
       } else {
-        const newTemplate = {
-          id: Date.now(),
-          templateCode: formData.templateCode.trim().toUpperCase(),
-          templateName: formData.templateName.trim(),
-          moduleName: formData.moduleName,
-          subject: formData.subject.trim(),
-          body: formData.body,
-          availablePlaceholders: formData.availablePlaceholders,
-          status: formData.status,
-          createdOn: new Date().toISOString(),
-          updatedOn: new Date().toISOString(),
-        };
-        updatedList = [newTemplate, ...templates];
-        toast.success(`Email template '${newTemplate.templateCode}' created successfully.`);
+        const created = await createTemplate(formData);
+        // If created as Inactive, trigger PATCH /api/email-templates/{id}/status for the newly created ID
+        if (created?.id && formData.status === 'Inactive') {
+          await toggleStatus(created.id, 'Inactive');
+        }
       }
-
-      localStorage.setItem('microflat_email_templates', JSON.stringify(updatedList));
-      setIsSubmitting(false);
       navigate('/configuration/email-templates');
-    }, 350);
+    } catch {
+      // Toast notification is handled inside context
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  if (isLoadingDetails) {
+    return (
+      <div className="w-full min-h-[400px] flex flex-col items-center justify-center gap-3">
+        <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs text-text-muted font-medium">Loading email template details…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-w-0 space-y-6 pb-24 max-w-full overflow-x-hidden">
@@ -333,7 +325,7 @@ export default function EmailTemplateFormPage() {
                 id="moduleName"
                 name="moduleName"
                 placeholder="Select Module"
-                options={EMAIL_MODULE_OPTIONS.filter((o) => o.value !== 'ALL')}
+                options={formModuleOptions}
                 value={formData.moduleName}
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, moduleName: e.target.value }))
