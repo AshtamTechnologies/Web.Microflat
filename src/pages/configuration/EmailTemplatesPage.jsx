@@ -32,10 +32,8 @@ import {
   ConfirmModal,
 } from '../../components/ui';
 
-import {
-  INITIAL_EMAIL_TEMPLATES,
-  EMAIL_MODULE_OPTIONS,
-} from '../../mocks/emailTemplates';
+import { useEmailTemplates } from '../../context/EmailTemplatesContext';
+import { useAuthContext } from '../../context/AuthContext';
 import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
@@ -54,26 +52,23 @@ const MODULE_COLORS = {
 
 export default function EmailTemplatesPage() {
   const navigate = useNavigate();
+  const { user } = useAuthContext();
 
-  // Master templates state (mock database)
-  const [templates, setTemplates] = useState(() => {
-    const saved = localStorage.getItem('microflat_email_templates');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return INITIAL_EMAIL_TEMPLATES;
-      }
-    }
-    return INITIAL_EMAIL_TEMPLATES;
-  });
+  // Connected to real Email Templates Context & API
+  const {
+    templates,
+    modules,
+    totalCount,
+    isLoading,
+    fetchTemplates,
+    getTemplateById,
+    deleteTemplate,
+    toggleStatus,
+    previewTemplate,
+  } = useEmailTemplates();
 
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Sync to localStorage
-  useEffect(() => {
-    localStorage.setItem('microflat_email_templates', JSON.stringify(templates));
-  }, [templates]);
+  // Loading state when fetching single template details by ID
+  const [isFetchingDetail, setIsFetchingDetail] = useState(false);
 
   // Table filtering & pagination state
   const [sorting, setSorting] = useState([]);
@@ -85,6 +80,28 @@ export default function EmailTemplatesPage() {
   const [globalFilter, setGlobalFilter] = useState('');
   const [selectedModuleFilter, setSelectedModuleFilter] = useState('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
+
+  // Query API with filters matching Swagger (Search, ModuleName, Status, PageNumber, PageSize)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchTemplates({
+        Search: globalFilter.trim() || undefined,
+        ModuleName: selectedModuleFilter !== 'ALL' ? selectedModuleFilter : undefined,
+        Status: selectedStatusFilter !== 'ALL' ? selectedStatusFilter : undefined,
+        PageNumber: pagination.pageIndex + 1,
+        PageSize: pagination.pageSize,
+      });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [
+    globalFilter,
+    selectedModuleFilter,
+    selectedStatusFilter,
+    pagination.pageIndex,
+    pagination.pageSize,
+    fetchTemplates,
+  ]);
 
   // Modals state
   const [viewingItem, setViewingItem] = useState(null); // Centered popup View modal
@@ -106,32 +123,6 @@ export default function EmailTemplatesPage() {
     globalFilter || selectedModuleFilter !== 'ALL' || selectedStatusFilter !== 'ALL'
   );
 
-  // Filtered dataset
-  const filteredData = useMemo(() => {
-    return templates.filter((item) => {
-      // Global search: matches code, name, subject
-      if (globalFilter.trim()) {
-        const query = globalFilter.toLowerCase();
-        const codeMatch = item.templateCode?.toLowerCase().includes(query);
-        const nameMatch = item.templateName?.toLowerCase().includes(query);
-        const subjectMatch = item.subject?.toLowerCase().includes(query);
-        if (!codeMatch && !nameMatch && !subjectMatch) return false;
-      }
-
-      // Module filter
-      if (selectedModuleFilter !== 'ALL' && item.moduleName !== selectedModuleFilter) {
-        return false;
-      }
-
-      // Status filter
-      if (selectedStatusFilter !== 'ALL' && item.status !== selectedStatusFilter) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [templates, globalFilter, selectedModuleFilter, selectedStatusFilter]);
-
   // Open Add Page
   const handleOpenAdd = () => {
     navigate('/configuration/email-templates/new');
@@ -142,41 +133,67 @@ export default function EmailTemplatesPage() {
     navigate(`/configuration/email-templates/${item.id}/edit`);
   };
 
-  // Open Live Preview modal
-  const handleOpenPreview = (item) => {
-    setPreviewItem(item);
-    const sampleValues = {};
-    (item.availablePlaceholders || []).forEach((placeholder) => {
-      sampleValues[placeholder] = `[${placeholder}]`;
-    });
-
-    // Provide realistic sample defaults
-    if (sampleValues.VendorName) sampleValues.VendorName = 'Acme Precision Tools Pvt Ltd';
-    if (sampleValues.VendorCode) sampleValues.VendorCode = 'VEN-0042';
-    if (sampleValues.ContactPerson) sampleValues.ContactPerson = 'Ravi Sharma';
-    if (sampleValues.ClientContact) sampleValues.ClientContact = 'Amit Patel';
-    if (sampleValues.CompanyName) sampleValues.CompanyName = 'Apex Manufacturing Ltd';
-    if (sampleValues.InquiryNumber) sampleValues.InquiryNumber = 'INQ-2026-000128';
-    if (sampleValues.QuotationNumber) sampleValues.QuotationNumber = 'QT-2026-0045';
-    if (sampleValues.PRNumber) sampleValues.PRNumber = 'PR-2026-0089';
-    if (sampleValues.OrderNumber) sampleValues.OrderNumber = 'SO-2026-0012';
-    if (sampleValues.CurrencySymbol) sampleValues.CurrencySymbol = '₹';
-    if (sampleValues.TotalAmount) sampleValues.TotalAmount = '1,85,000';
-    if (sampleValues.ApprovedDate) sampleValues.ApprovedDate = '13 Nov 2026';
-    if (sampleValues.Date) sampleValues.Date = '13 Nov 2026';
-
-    setPreviewValues(sampleValues);
+  // Open View Modal by fetching complete template details via GET /api/email-templates/{id}
+  const handleOpenView = async (item) => {
+    if (!item?.id) return;
+    try {
+      setIsFetchingDetail(true);
+      const fullDetail = await getTemplateById(item.id);
+      setViewingItem(fullDetail || item);
+    } catch {
+      setViewingItem(item);
+    } finally {
+      setIsFetchingDetail(false);
+    }
   };
 
-  // Delete Template
-  const handleDelete = () => {
+  // Open Live Preview modal by fetching complete template details via GET /api/email-templates/{id}
+  const handleOpenPreview = async (item) => {
+    if (!item?.id) return;
+    try {
+      setIsFetchingDetail(true);
+      const fullDetail = await getTemplateById(item.id);
+      const target = fullDetail || item;
+      setPreviewItem(target);
+
+      // Initialize all test marker input values as completely BLANK
+      const sampleValues = {};
+      (target.availablePlaceholders || []).forEach((placeholder) => {
+        sampleValues[placeholder] = '';
+      });
+
+      setPreviewValues(sampleValues);
+    } catch {
+      setPreviewItem(item);
+    } finally {
+      setIsFetchingDetail(false);
+    }
+  };
+
+  // Delete Template via API
+  const handleDelete = async () => {
     if (!deleteConfirmItem) return;
-    const updated = templates.filter((t) => t.id !== deleteConfirmItem.id);
-    setTemplates(updated);
-    localStorage.setItem('microflat_email_templates', JSON.stringify(updated));
-    toast.success(`Email template '${deleteConfirmItem.templateCode}' deleted.`);
-    setDeleteConfirmItem(null);
+    try {
+      await deleteTemplate(deleteConfirmItem.id, deleteConfirmItem.templateName);
+      setDeleteConfirmItem(null);
+    } catch {
+      // Error toast is handled inside deleteTemplate
+    }
   };
+
+  // Dynamic module filter options derived from active API modules
+  const moduleOptions = useMemo(() => {
+    if (modules && modules.length > 0) {
+      return [
+        { value: 'ALL', label: 'All Modules' },
+        ...modules.map((m) => ({
+          value: m.moduleCode,
+          label: `${m.moduleName} (${m.moduleCode})`,
+        })),
+      ];
+    }
+    return [{ value: 'ALL', label: 'All Modules' }];
+  }, [modules]);
 
   // Copy helper
   const handleCopy = (text, label = 'Copied') => {
@@ -218,7 +235,7 @@ export default function EmailTemplatesPage() {
           return (
             <span
               className="font-medium text-sm text-heading hover:text-primary cursor-pointer transition-colors"
-              onClick={() => setViewingItem(row)}
+              onClick={() => handleOpenView(row)}
             >
               {row.templateName}
             </span>
@@ -263,7 +280,7 @@ export default function EmailTemplatesPage() {
           const row = info.row.original;
           return (
             <TableActions
-              onView={() => setViewingItem(row)}
+              onView={() => handleOpenView(row)}
               onEdit={() => handleOpenEdit(row)}
               viewTitle="View Template Details"
               editTitle="Edit Template"
@@ -288,7 +305,7 @@ export default function EmailTemplatesPage() {
 
   // TanStack table instance
   const table = useReactTable({
-    data: filteredData,
+    data: templates,
     columns,
     state: {
       sorting,
@@ -308,7 +325,9 @@ export default function EmailTemplatesPage() {
     if (!previewItem) return '';
     let result = previewItem.subject || '';
     Object.entries(previewValues).forEach(([key, val]) => {
-      result = result.replaceAll(`{{${key}}}`, val || `[${key}]`);
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        result = result.replaceAll(`{{${key}}}`, val);
+      }
     });
     return result;
   }, [previewItem, previewValues]);
@@ -317,7 +336,9 @@ export default function EmailTemplatesPage() {
     if (!previewItem) return '';
     let result = previewItem.body || '';
     Object.entries(previewValues).forEach(([key, val]) => {
-      result = result.replaceAll(`{{${key}}}`, val || `[${key}]`);
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        result = result.replaceAll(`{{${key}}}`, val);
+      }
     });
     return result;
   }, [previewItem, previewValues]);
@@ -362,7 +383,7 @@ export default function EmailTemplatesPage() {
             id="filter-module"
             placeholder="All Modules"
             searchPlaceholder="Search modules..."
-            options={EMAIL_MODULE_OPTIONS}
+            options={moduleOptions}
             value={selectedModuleFilter}
             onChange={(e) => {
               setSelectedModuleFilter(e.target.value);
@@ -396,7 +417,7 @@ export default function EmailTemplatesPage() {
         table={table}
         columns={columns}
         isLoading={isLoading}
-        totalCount={filteredData.length}
+        totalCount={totalCount ?? templates.length}
         entityName="email templates"
         emptyTitle="No email templates found"
         emptyDescription={
@@ -442,7 +463,7 @@ export default function EmailTemplatesPage() {
               <div>
                 <h4
                   className="font-semibold text-sm text-heading hover:text-primary cursor-pointer transition-colors"
-                  onClick={() => setViewingItem(item)}
+                  onClick={() => handleOpenView(item)}
                 >
                   {item.templateName}
                 </h4>
@@ -458,7 +479,7 @@ export default function EmailTemplatesPage() {
 
                 <div className="w-auto shrink-0">
                   <TableActions
-                    onView={() => setViewingItem(item)}
+                    onView={() => handleOpenView(item)}
                     onEdit={() => handleOpenEdit(item)}
                     viewTitle="View Template Details"
                     editTitle="Edit Template"
@@ -516,7 +537,9 @@ export default function EmailTemplatesPage() {
               </div>
 
               <div>
-                <span className="text-3xs text-text-muted uppercase font-semibold block">Last Updated</span>
+                <span className="text-3xs text-text-muted uppercase font-semibold block">
+                  {viewingItem.updatedOn ? 'Last Updated' : 'Created On'}
+                </span>
                 <p className="text-xs font-medium text-heading mt-1">
                   {formatDate(viewingItem.updatedOn || viewingItem.createdOn)}
                 </p>
@@ -677,6 +700,16 @@ export default function EmailTemplatesPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* ── DETAIL FETCHING OVERLAY ── */}
+      {isFetchingDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
+          <div className="flex items-center gap-3 bg-surface px-4 py-3 rounded-xl border border-border shadow-lg">
+            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <span className="text-xs font-medium text-heading">Loading template details…</span>
+          </div>
+        </div>
       )}
 
       {/* ── DELETE CONFIRM MODAL ── */}
