@@ -39,10 +39,14 @@ export default function Button({
   type = 'button',
   className = '',
   icon,
+  leftIcon,
   iconRight,
+  rightIcon,
   children,
   ...rest
 }) {
+  const effectiveIcon = icon || leftIcon;
+  const effectiveIconRight = iconRight || rightIcon;
   const renderIcon = (iconItem) => {
     if (!iconItem) return null;
     if (React.isValidElement(iconItem)) return iconItem;
@@ -75,10 +79,10 @@ export default function Button({
           aria-hidden="true"
         />
       ) : (
-        renderIcon(icon)
+        renderIcon(effectiveIcon)
       )}
       {children}
-      {renderIcon(iconRight)}
+      {renderIcon(effectiveIconRight)}
     </button>
   );
 }

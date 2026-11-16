@@ -124,7 +124,7 @@ import {
   Activity,
   Smartphone,
   Laptop,
-  Tablet,
+  Tablet, Bell, ListTodo,
 } from 'lucide-react';
 
 // Custom image assets from assets folder
@@ -235,6 +235,10 @@ export const IconUploadCloud = UploadCloud;
 export const IconDownload = Download;
 export const IconCalendar = Calendar;
 export const IconMeeting = Calendar;
+export const IconBell = Bell;
+export const IconNotification = Bell;
+export const IconQueue = ListTodo;
+export const IconMyQueue = ListTodo;
 export const IconRefresh = RefreshCw; // Change status / refresh
 
 /* ── 3. PAGINATION, CAROUSEL & SORTING ICONS ── */

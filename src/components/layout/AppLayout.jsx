@@ -15,11 +15,15 @@ import {
   IconClose,
   IconMenu,
   IconPanelLeftOpen,
+  IconBell,
+  IconMyQueue,
 } from '../../constants/icons';
-import { Outlet, useLocation, Link } from 'react-router-dom';
+import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Footer from './Footer';
 import navigation from '../../config/navigation';
+import { useNotifications } from '../../context/NotificationsContext';
+import NotificationDropdown from '../notifications/NotificationDropdown';
 
 /** Set to false to instantly hide the footer across all pages in one place */
 export const SHOW_FOOTER = true;
@@ -82,7 +86,10 @@ export default function AppLayout() {
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const title = usePageTitle();
   const location = useLocation();
+  const navigate = useNavigate();
   const mainRef = useRef(null);
+
+  const { unreadCount, isDropdownOpen, toggleDropdown, closeDropdown, queueSummary } = useNotifications();
 
   // Ensure <main> scroll container resets to top on every navigation/redirect
   useEffect(() => {
@@ -226,6 +233,54 @@ export default function AppLayout() {
 
             {/* Page title */}
             <h1 className="text-base font-semibold text-heading truncate">{title}</h1>
+
+            {/* Header Right Actions: My Queue shortcut + Notifications Bell */}
+            <div className="ml-auto flex items-center gap-2 sm:gap-3">
+              {/* My Queue Quick Pill */}
+              <Link
+                to="/my-queue"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  location.pathname === '/my-queue'
+                    ? 'bg-primary/10 text-primary border border-primary/20'
+                    : 'bg-surface hover:bg-surface/80 text-text border border-border'
+                }`}
+                title="Go to My Queue"
+              >
+                <IconMyQueue size={15} className="shrink-0 text-text-muted" />
+                <span className="hidden sm:inline">My Queue</span>
+                {queueSummary?.pending > 0 && (
+                  <span className="flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full text-3xs font-bold bg-amber-500 text-white">
+                    {queueSummary.pending}
+                  </span>
+                )}
+              </Link>
+
+              {/* Notifications Bell with Floating Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  id="header-notification-bell"
+                  onClick={toggleDropdown}
+                  aria-label="Toggle notifications dropdown"
+                  title="Notifications"
+                  className={`relative p-2 rounded-lg transition-colors cursor-pointer flex items-center justify-center ${
+                    isDropdownOpen
+                      ? 'bg-surface text-primary border border-border shadow-2xs'
+                      : 'text-text-muted hover:text-heading hover:bg-surface border border-transparent hover:border-border'
+                  }`}
+                >
+                  <IconBell size={19} className="shrink-0" aria-hidden="true" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full text-3xs font-bold bg-primary text-on-primary shadow-xs ring-2 ring-bg">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Floating Notification Popover Menu */}
+                <NotificationDropdown isOpen={isDropdownOpen} onClose={closeDropdown} />
+              </div>
+            </div>
           </header>
 
           {/* ── Page content ── */}

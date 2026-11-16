@@ -45,7 +45,7 @@ import {
   IconList,
   IconAdd,
   IconMeeting,
-  IconEmailTemplates,
+  IconEmailTemplates, IconMyQueue,
 } from '../constants/icons';
 
 /**
@@ -111,6 +111,12 @@ const navigation = [
         icon: IconDashboard,
         path: '/dashboard',
         roles: ['ADMIN', 'MANAGER', 'USER'],
+      },
+      {
+        label: 'My Queue',
+        icon: IconMyQueue,
+        path: '/my-queue',
+        roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
       },
       {
         label: 'Delegation',
