@@ -19,6 +19,7 @@ export function ProcessFlowProvider({ children }) {
 
   const isRelevantRoute = Boolean(
     location?.pathname?.startsWith('/configuration/process-flows') ||
+    location?.pathname?.startsWith('/approvals') ||
     currentRouteConfig?.moduleCode
   );
 

@@ -16,6 +16,7 @@ export const ApprovalStatus = {
   Approved: 3,
   Rejected: 4,
   Cancelled: 5,
+  NotRequired: 6,
 };
 
 export const ApprovalStatusLabel = {
@@ -24,6 +25,7 @@ export const ApprovalStatusLabel = {
   3: 'Approved',
   4: 'Rejected',
   5: 'Cancelled',
+  6: 'Not Required',
 };
 
 export const ApprovalBadgeVariant = {
@@ -32,16 +34,17 @@ export const ApprovalBadgeVariant = {
   3: 'approved',
   4: 'rejected',
   5: 'neutral',
+  6: 'neutral',
 };
 
 /**
- * Normalizes any approval status (numeric code or legacy string) to the standard numeric code 1..5.
+ * Normalizes any approval status (numeric code or legacy string) to the standard numeric code 1..6.
  * @param {number|string} status
- * @returns {number} 1 | 2 | 3 | 4 | 5
+ * @returns {number} 1 | 2 | 3 | 4 | 5 | 6
  */
 export function normalizeApprovalStatus(status) {
   if (typeof status === 'number') {
-    if (status >= 1 && status <= 5) return status;
+    if (status >= 1 && status <= 6) return status;
   }
   const str = String(status || '').trim().toLowerCase();
   switch (str) {
@@ -61,6 +64,11 @@ export function normalizeApprovalStatus(status) {
     case 'canceled':
     case '5':
       return ApprovalStatus.Cancelled;
+    case 'notrequired':
+    case 'not_required':
+    case 'not required':
+    case '6':
+      return ApprovalStatus.NotRequired;
     default:
       return ApprovalStatus.Pending;
   }

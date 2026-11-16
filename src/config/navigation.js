@@ -48,7 +48,61 @@ import {
   IconEmailTemplates,
 } from '../constants/icons';
 
-export const navigation = [
+/**
+ * Approvals Navigation Mode:
+ *   - 'dropdown': Shows the 'Approval' accordion in the sidebar with per-module links (Vendor, PR) & Settings.
+ *   - 'unified':  Shows a single clean 'Global Approvals' link, letting the in-page Module filter handle selection.
+ * Default: 'dropdown'. Change this constant to 'unified' to switch modes anytime.
+ */
+export const APPROVALS_NAV_MODE = 'dropdown'; // 'dropdown' | 'unified'
+
+const approvalNavItem =
+  APPROVALS_NAV_MODE === 'dropdown'
+    ? {
+        label: 'Approval',
+        icon: IconApproval,
+        roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+        children: [
+          {
+            label: 'Global Approvals',
+            icon: IconApproval,
+            path: '/approvals',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Vendor Approval',
+            icon: IconVendorApproval,
+            path: '/approvals?module=VENDOR',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          },
+          {
+            label: 'PR Approval',
+            icon: IconPRApproval,
+            path: '/approvals?module=PURCHASE_REQUISITION',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Quotation Approval',
+            icon: IconQuotation,
+            path: '/approvals?module=QUOTATION',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Product Approval',
+            icon: IconProduct,
+            path: '/approvals?module=PRODUCT',
+            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+          },
+        ],
+      }
+    : {
+        label: 'Global Approvals',
+        icon: IconApproval,
+        path: '/approvals',
+        roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
+      };
+
+const navigation = [
   {
     section: 'MAIN',
     items: [
@@ -192,25 +246,7 @@ export const navigation = [
         path: '/clients',
         roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
       },
-      {
-        label: 'Approval',
-        icon: IconApproval,
-        roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
-        children: [
-          {
-            label: 'Vendor Approval',
-            icon: IconVendorApproval,
-            path: '/approvals/vendors',
-            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
-          },
-          {
-            label: 'PR Approval',
-            icon: IconPRApproval,
-            path: '/approvals/purchase-requisitions',
-            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
-          },
-        ],
-      },
+      approvalNavItem,
     ],
   },
   {
@@ -340,6 +376,12 @@ export const navigation = [
             icon: IconProcessFlow,
             path: '/configuration/process-flows',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Approval Settings',
+            icon: IconApproval,
+            path: '/approvals/settings',
+            roles: ['ADMIN'],
           },
         ],
       },

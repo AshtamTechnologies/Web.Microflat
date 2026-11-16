@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   IconBack,
@@ -48,6 +48,7 @@ import {
   PageHeader,
   Textarea,
   StatusBadge,
+  Checkbox,
 } from '../../components/ui';
 import { approvalsService, vendorService } from '../../services';
 import { useAuthContext } from '../../context/AuthContext';
@@ -74,6 +75,17 @@ function getFileIcon(fileName = '', contentType = '') {
 export default function VendorApprovalViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleBack = useCallback(() => {
+    if (location.state?.from) {
+      navigate(location.state.from);
+    } else if (window.history.state?.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/approvals');
+    }
+  }, [location.state?.from, navigate]);
   const { user } = useAuthContext();
   const { refreshVendors } = useVendorsContext();
   const { getCountryName, getStateName, fetchStatesForCountry } = useCountryState();
@@ -129,6 +141,23 @@ export default function VendorApprovalViewPage() {
   const currentStatus = normalizeApprovalStatus(request.status ?? vendorDetail.approvalStatus);
   const isPending = currentStatus === ApprovalStatus.Pending;
 
+  // Active Process Flow step based on approval state
+  const currentWorkflowStep = useMemo(() => {
+    switch (currentStatus) {
+      case ApprovalStatus.Approved:
+        return 'Approved';
+      case ApprovalStatus.Rejected:
+        return 'Evaluation';
+      case ApprovalStatus.Cancelled:
+        return 'Evaluation';
+      case ApprovalStatus.Draft:
+        return 'Registration';
+      case ApprovalStatus.Pending:
+      default:
+        return (request.isDocumentVerified || isDocVerified) ? 'Evaluation' : 'Document Verification';
+    }
+  }, [currentStatus, request.isDocumentVerified, isDocVerified]);
+
   // RBAC Checks
   const userRole = (user?.role || user?.roleName || user?.roles?.[0]?.name || '').toLowerCase();
   const isAdmin = userRole.includes('admin') || userRole.includes('super');
@@ -139,12 +168,18 @@ export default function VendorApprovalViewPage() {
   /* ── Confirm Approve ── */
   async function handleConfirmApprove(e) {
     if (e && e.preventDefault) e.preventDefault();
+
+    if (hasDocuments && !isDocVerified) {
+      toast.error('Please verify the attached compliance documents before approving.');
+      return;
+    }
+
     try {
       setIsSubmittingApprove(true);
       await approvalsService.approveRequest(id, {
         comments: approveComments.trim(),
-        // Send true only if documents were present and verified; otherwise send false
-        isDocumentVerified: hasDocuments ? Boolean(isDocVerified) : false,
+        // Send true if verified, or true if no documents were attached
+        isDocumentVerified: hasDocuments ? Boolean(isDocVerified) : true,
       });
 
       toast.success('Vendor approved successfully.');
@@ -159,7 +194,11 @@ export default function VendorApprovalViewPage() {
         setIsApproveOpen(false);
         loadRequestDetail();
       } else {
-        toast.error(err?.detail || err?.message || 'Failed to approve vendor.');
+        let msg = err?.message || err?.detail || 'Failed to approve vendor.';
+        if (msg.includes('isDocumentVerified')) {
+          msg = 'Please confirm that the supporting documents have been verified before approving.';
+        }
+        toast.error(msg);
       }
     } finally {
       setIsSubmittingApprove(false);
@@ -248,7 +287,7 @@ export default function VendorApprovalViewPage() {
           <p className="text-xs text-text-muted">
             The requested approval record with ID &ldquo;{id}&rdquo; does not exist or has been removed.
           </p>
-          <Button variant="primary" size="sm" onClick={() => navigate('/approvals/vendors')}>
+          <Button variant="primary" size="sm" onClick={handleBack}>
             <IconBack size={15} className="mr-1.5" />
             Back to Approvals Queue
           </Button>
@@ -264,6 +303,10 @@ export default function VendorApprovalViewPage() {
         title={vendorDetail.vendorName || request.referenceTitle || 'Vendor Application'}
         subtitle={`Request #${id} • ${request.typeName || 'Vendor Registration'} • Submitted by ${request.initiatedByName || 'User'} on ${formatDate(request.initiatedOn)}`}
         icon={<IconVendorApproval className="h-6 w-6 text-primary" aria-hidden="true" />}
+        moduleCode="VENDOR"
+        processFlowMode="tracker"
+        currentStep={currentWorkflowStep}
+        showProcessFlow={true}
         badge={
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs font-bold px-2.5 py-0.5 bg-primary/10 text-primary rounded-md border border-primary/20">
@@ -275,7 +318,7 @@ export default function VendorApprovalViewPage() {
           </div>
         }
         backButton={{
-          onClick: () => navigate('/approvals/vendors'),
+          onClick: handleBack,
           label: 'Approvals Queue',
         }}
         actions={
@@ -580,17 +623,28 @@ export default function VendorApprovalViewPage() {
           </p>
 
           {/* Conditional Checkbox: ONLY if vendor has documents */}
-          {hasDocuments && (
-            <div className="p-3 bg-surface border border-border rounded-xl">
-              <label className="flex items-center gap-2.5 text-xs text-heading font-medium cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isDocVerified}
-                  onChange={(e) => setIsDocVerified(e.target.checked)}
-                  className="rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer"
-                />
-                <span>Confirm GST, PAN and KYC compliance documents are verified</span>
-              </label>
+          {hasDocuments ? (
+            <div className="p-3 bg-surface border border-primary/20 rounded-xl">
+              <Checkbox
+                id="verify-kyc-docs"
+                checked={isDocVerified}
+                onChange={(e) => setIsDocVerified(e.target.checked)}
+                label={
+                  <div className="text-xs">
+                    <span className="font-semibold text-heading block">
+                      Verify Supporting Documents <span className="text-danger">*</span>
+                    </span>
+                    <span className="text-text-muted">
+                      Confirm that all uploaded registration and compliance documents have been checked.
+                    </span>
+                  </div>
+                }
+              />
+            </div>
+          ) : (
+            <div className="p-3 bg-surface border border-border rounded-xl text-xs text-text-muted flex items-center gap-2">
+              <IconFileText size={15} className="text-text-muted shrink-0" />
+              <span>No compliance documents were attached with this registration.</span>
             </div>
           )}
 
@@ -737,6 +791,11 @@ export default function VendorApprovalViewPage() {
                     </div>
                     <p className="text-xs text-text-muted mt-1">
                       Actioned by: <strong className="text-heading">{step.userName || 'System'}</strong>
+                      {(step.actionedOnBehalfOfName || step.onBehalfOfUserName) && (
+                        <span className="text-2xs italic ml-1">
+                          (on behalf of {step.actionedOnBehalfOfName || step.onBehalfOfUserName})
+                        </span>
+                      )}
                     </p>
                     {step.comments && (
                       <p className="text-xs bg-bg p-2 rounded-lg mt-2 text-text border border-border">

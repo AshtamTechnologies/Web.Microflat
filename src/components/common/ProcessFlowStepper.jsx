@@ -65,6 +65,13 @@ export default function ProcessFlowStepper({
 
   const targetModule = (overrideModule || currentRouteConfig?.moduleCode || '').toUpperCase();
 
+  // Ensure flow details are loaded if targetModule is provided
+  useEffect(() => {
+    if (targetModule && context?.loadFlowDetails && !context?.flowDetailsMap?.[targetModule]) {
+      context.loadFlowDetails(targetModule);
+    }
+  }, [targetModule, context]);
+
   const flow = useMemo(() => {
     if (!targetModule || !context?.flowDetailsMap) return null;
     return context.flowDetailsMap[targetModule] || null;
