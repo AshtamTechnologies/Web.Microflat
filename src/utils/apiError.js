@@ -35,6 +35,22 @@ function lowerFirstLetter(str) {
 }
 
 /**
+ * Cleans backend technical jargon (like `(isDocumentVerified: true)`) into clear, human-friendly messages.
+ * @param {string} rawMessage
+ * @returns {string}
+ */
+function cleanUserFacingMessage(rawMessage) {
+  if (!rawMessage || typeof rawMessage !== 'string') return '';
+  let msg = rawMessage.trim();
+  if (msg.includes('isDocumentVerified')) {
+    return 'Please confirm that the supporting documents have been verified before approving.';
+  }
+  // Strip code syntax like "(paramName: value)"
+  msg = msg.replace(/\s*\([a-zA-Z0-9_]+\s*:\s*[^)]+\)/g, '').trim();
+  return msg;
+}
+
+/**
  * Normalizes any error (Axios error, Error, or object) into an ApiError.
  * @param {unknown} err
  * @returns {ApiError}
@@ -65,13 +81,13 @@ export function normalizeApiError(err) {
     // 2. Determine best user-facing message
     let message = '';
     if (typeof data === 'string' && data.trim()) {
-      message = data;
+      message = cleanUserFacingMessage(data);
     } else if (data.detail && typeof data.detail === 'string') {
-      message = data.detail;
+      message = cleanUserFacingMessage(data.detail);
     } else if (data.message && typeof data.message === 'string') {
-      message = data.message;
+      message = cleanUserFacingMessage(data.message);
     } else if (data.title && typeof data.title === 'string') {
-      message = data.title;
+      message = cleanUserFacingMessage(data.title);
     }
 
     if (!message) {

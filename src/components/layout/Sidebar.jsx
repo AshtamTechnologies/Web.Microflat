@@ -179,8 +179,28 @@ function NavItem({ item, collapsed, onClick }) {
 /* ── Submenu Item Active Resolver ────────────────────────────── */
 function isSubNavActive(itemPath, currentPath, allSiblingPaths = [], fromPath = null) {
   if (!itemPath || !currentPath) return false;
-  // Exact match
+
+  // Exact match (including query parameters if present)
   if (currentPath === itemPath) return true;
+
+  const [itemBase, itemQuery] = itemPath.split('?');
+  const [currentBase, currentQuery] = currentPath.split('?');
+
+  // If itemPath has a query parameter (e.g. /approvals?module=VENDOR):
+  // It should ONLY be active on exact match, OR when on that module's dedicated sub-route
+  if (itemQuery) {
+    if (currentPath === itemPath) return true;
+    if (itemQuery.includes('module=VENDOR') && (currentBase === '/approvals/vendors' || currentBase.startsWith('/approvals/vendors/'))) {
+      return true;
+    }
+    return false;
+  }
+
+  // If itemPath is the generic /approvals:
+  // It is ONLY active when the URL is strictly /approvals without any module query
+  if (itemBase === '/approvals') {
+    return currentBase === '/approvals' && !currentQuery;
+  }
 
   // If navigated from a specific sibling (e.g. /delegation/all -> /delegation/new),
   // keep that originating sibling active when on a shared sub-route.
@@ -192,27 +212,24 @@ function isSubNavActive(itemPath, currentPath, allSiblingPaths = [], fromPath = 
     return itemPath === fromPath;
   }
 
-  // If another sibling in the same group has an exact match or a longer/more-specific prefix match,
-  // this item should not be marked active.
+  // If another sibling in the same group has an exact match, don't match general prefix
   if (Array.isArray(allSiblingPaths) && allSiblingPaths.length > 0) {
-    const hasMoreSpecificSiblingMatch = allSiblingPaths.some(
-      (siblingPath) =>
-        siblingPath !== itemPath &&
-        (currentPath === siblingPath ||
-          (currentPath.startsWith(siblingPath + '/') && siblingPath.length > itemPath.length))
+    const hasSiblingExactMatch = allSiblingPaths.some(
+      (siblingPath) => siblingPath !== itemPath && siblingPath === currentPath
     );
-    if (hasMoreSpecificSiblingMatch) {
+    if (hasSiblingExactMatch) {
       return false;
     }
   }
 
   // Dashboard routes require exact match
-  if (itemPath.endsWith('/dashboard')) {
-    return currentPath === itemPath;
+  if (itemBase.endsWith('/dashboard')) {
+    return currentBase === itemBase;
   }
+
   // Sub-routes under this section (e.g. /purchase-requisition/create, /purchase-requisition/PR-123)
   // should activate the main list link, but NOT if navigating to the dashboard sibling
-  return currentPath.startsWith(itemPath + '/') && !currentPath.startsWith(itemPath + '/dashboard');
+  return currentBase.startsWith(itemBase + '/') && !currentBase.startsWith(itemBase + '/dashboard');
 }
 
 /* ── Submenu Item (Tree-branch hierarchy) ──────────────────────── */
@@ -220,9 +237,10 @@ function SubNavItem({ item, allSiblingPaths, onClick }) {
   const navigate = useNavigate();
   const location = useLocation();
   const Icon = item.icon;
+  const currentFullPath = location.pathname + (location.search || '');
   const isActive = isSubNavActive(
     item.path,
-    location.pathname,
+    currentFullPath,
     allSiblingPaths,
     location.state?.from
   );
@@ -280,7 +298,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
 
   const childPaths = useMemo(() => item.children?.map((c) => c.path) || [], [item.children]);
   const isChildActive = item.children?.some((c) =>
-    isSubNavActive(c.path, location.pathname, childPaths, location.state?.from)
+    isSubNavActive(c.path, location.pathname + (location.search || ''), childPaths, location.state?.from)
   );
   const [open, setOpen] = useState(isChildActive);
   const [isFlyoutOpen, setIsFlyoutOpen] = useState(false);
@@ -409,7 +427,7 @@ function NavGroup({ item, collapsed, onChildClick, isSearching = false }) {
                   const ChildIcon = child.icon;
                   const isLinkActive = isSubNavActive(
                     child.path,
-                    location.pathname,
+                    location.pathname + (location.search || ''),
                     childPaths,
                     location.state?.from
                   );
