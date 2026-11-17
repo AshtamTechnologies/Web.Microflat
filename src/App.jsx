@@ -252,6 +252,7 @@ export default function App() {
               <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
               <Route path="/vendors/:id/effective-dates" element={<VendorEffectiveDatesPage />} />
               <Route path="/approvals" element={<ApprovalsPage />} />
+              <Route path="/approvals/:id" element={<VendorApprovalViewPage />} />
               <Route path="/approvals/settings" element={<ApprovalSettingsPage />} />
               <Route path="/approvals/vendors" element={<VendorApprovalPage />} />
               <Route path="/approvals/vendors/:id" element={<VendorApprovalViewPage />} />

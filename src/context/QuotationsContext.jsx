@@ -216,7 +216,7 @@ export function QuotationsProvider({ children }) {
               fileName: poData.fileName,
               documentType: 'Client PO',
               revisionNo: q.currentRevision,
-              linkedStage: '—',
+              linkedStage: 'Customer PO',
               uploadedAt: poData.receivedOn || new Date().toISOString().split('T')[0],
               fileSize: poData.fileSize || '350 KB',
             }
@@ -224,18 +224,23 @@ export function QuotationsProvider({ children }) {
 
         return {
           ...q,
+          status: 'Confirmed',
+          confirmedOn: poData.receivedOn || new Date().toISOString().split('T')[0],
           poReceived: true,
           poDetails: {
             poNumber: poData.poNumber || 'Client PO',
             receivedOn: poData.receivedOn || new Date().toISOString().split('T')[0],
+            expectedDeliveryDate: poData.expectedDeliveryDate || null,
             fileName: poData.fileName || 'Client-PO.pdf',
+            fileSize: poData.fileSize || '350 KB',
+            remarks: poData.remarks || '',
           },
           documents: newDoc ? [...q.documents, newDoc] : q.documents,
           lastUpdatedAt: new Date().toISOString(),
         };
       })
     );
-    toast.success('Client Purchase Order recorded');
+    toast.success('Customer Purchase Order recorded successfully!');
   }, []);
 
   // Add Negotiation Stage
