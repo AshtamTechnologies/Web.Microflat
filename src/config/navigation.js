@@ -35,6 +35,8 @@ import {
   IconUOM,
   IconRegions,
   IconPaymentTerms,
+  IconDeliveryTerms,
+  IconNotificationSetup,
   IconTax,
   IconProcessFlow,
   IconGrades,
@@ -370,6 +372,18 @@ const navigation = [
             icon: IconPaymentTerms,
             path: '/configuration/payment-terms',
             roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Delivery Terms',
+            icon: IconDeliveryTerms,
+            path: '/configuration/delivery-terms',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+          {
+            label: 'Notification Setup',
+            icon: IconNotificationSetup,
+            path: '/configuration/notification-setup',
+            roles: ['ADMIN'],
           },
           {
             label: 'Tax Configurations',
