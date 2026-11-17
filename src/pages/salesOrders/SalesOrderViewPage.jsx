@@ -5,7 +5,7 @@
  * Aligned with Frontend-API-Guide.md §5.4g.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   IconBack,
@@ -47,14 +47,57 @@ import SendOrderMailModal from './components/SendOrderMailModal';
 export default function SalesOrderViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getSalesOrderById, deleteSalesOrderDocument } = useSalesOrdersContext();
+  const {
+    getSalesOrderById,
+    fetchSalesOrderById,
+    downloadSalesOrderDocument,
+    deleteSalesOrderDocument,
+  } = useSalesOrdersContext();
 
-  const order = getSalesOrderById(id);
+  const [orderDetail, setOrderDetail] = useState(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (id && fetchSalesOrderById) {
+      setIsLoadingDetail(true);
+      fetchSalesOrderById(id)
+        .then((res) => {
+          if (isMounted && res) {
+            setOrderDetail(res);
+          }
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingDetail(false);
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [id, fetchSalesOrderById]);
+
+  const cachedOrder = getSalesOrderById(id);
+  const order = orderDetail || cachedOrder;
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [isMailModalOpen, setIsMailModalOpen] = useState(false);
+
+  function handleDownloadDocument(doc) {
+    if (doc?.downloadUrl) {
+      const link = document.createElement('a');
+      link.href = doc.downloadUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.setAttribute('download', doc.fileName || 'document.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+    downloadSalesOrderDocument?.(doc?.id, doc?.fileName);
+  }
 
   const MIN_PRODUCT_COL_WIDTHS = useMemo(
     () => ({
@@ -89,6 +132,13 @@ export default function SalesOrderViewPage() {
   } = useColumnResize(INITIAL_PRODUCT_COL_WIDTHS, MIN_PRODUCT_COL_WIDTHS);
 
   if (!order) {
+    if (isLoadingDetail) {
+      return (
+        <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
+          <p className="text-xs text-text-muted">Loading sales order details...</p>
+        </div>
+      );
+    }
     return (
       <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
         <h2 className="text-xl font-bold text-heading">Sales Order Not Found</h2>
@@ -109,7 +159,9 @@ export default function SalesOrderViewPage() {
   ];
 
   const canUploadDocs = order.status !== 'Cancelled';
-  const canChangeStatus = (order.nextStatuses?.length || 0) > 0;
+  const canChangeStatus = Array.isArray(order.nextStatuses)
+    ? order.nextStatuses.length > 0
+    : Boolean(order.nextStatuses?.length);
 
   return (
     <div className="w-full space-y-6 pb-20">
@@ -131,15 +183,21 @@ export default function SalesOrderViewPage() {
           <div className="text-xs text-text-muted mt-0.5 flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-heading">{order.clientName}</span>
             <span>·</span>
-            <span>
-              Quotation:{' '}
-              <Link
-                to={`/quotations/${order.quotationId}`}
-                className="font-mono text-primary hover:underline"
-              >
-                {order.quotationNo}
-              </Link>
-            </span>
+            {order.quotationId ? (
+              <span>
+                Quotation:{' '}
+                <Link
+                  to={`/quotations/${order.quotationId}`}
+                  className="font-mono text-primary hover:underline"
+                >
+                  {order.quotationNo}
+                </Link>
+              </span>
+            ) : (
+              <Badge variant="neutral" size="xs">
+                Direct Order (Without Quotation)
+              </Badge>
+            )}
             {order.inquiryNo && (
               <>
                 <span>·</span>
@@ -277,8 +335,8 @@ export default function SalesOrderViewPage() {
                       {order.quotationNo} (Rev {order.quotationRevisionNo ?? 0})
                     </Link>
                   ) : (
-                    <span className="view-field-value mf-detail-value font-mono">
-                      {order.quotationNo} (Rev {order.quotationRevisionNo ?? 0})
+                    <span className="view-field-value mf-detail-value font-mono text-text-muted">
+                      Direct Order (None)
                     </span>
                   )}
                 </DetailField>
@@ -494,8 +552,50 @@ export default function SalesOrderViewPage() {
 
           <Card title="Commercial & Delivery Terms">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <DetailField label="Payment Terms" value={order.paymentTerms || '—'} />
-              <DetailField label="Delivery Terms" value={order.deliveryTerms || '—'} />
+              <DetailField label="Payment Terms">
+                {Array.isArray(order.paymentTerms) && order.paymentTerms.length > 0 ? (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {order.paymentTerms.map((t, idx) => (
+                      <Badge key={idx} variant="neutral" size="xs">
+                        {t}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : typeof order.paymentTerms === 'string' && order.paymentTerms.includes(',') ? (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {order.paymentTerms.split(',').map((t, idx) => (
+                      <Badge key={idx} variant="neutral" size="xs">
+                        {t.trim()}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <span>{order.paymentTerms || '—'}</span>
+                )}
+              </DetailField>
+
+              <DetailField label="Delivery Terms">
+                {Array.isArray(order.deliveryTerms) && order.deliveryTerms.length > 0 ? (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {order.deliveryTerms.map((t, idx) => (
+                      <Badge key={idx} variant="neutral" size="xs">
+                        {t}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : typeof order.deliveryTerms === 'string' && order.deliveryTerms.includes(',') ? (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {order.deliveryTerms.split(',').map((t, idx) => (
+                      <Badge key={idx} variant="neutral" size="xs">
+                        {t.trim()}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <span>{order.deliveryTerms || '—'}</span>
+                )}
+              </DetailField>
+
               <DetailField label="Currency" value={order.currency || 'INR'} />
               <DetailField
                 label="Tax Treatment"
@@ -605,7 +705,7 @@ export default function SalesOrderViewPage() {
                       <div className="inline-flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => {}}
+                          onClick={() => handleDownloadDocument(doc)}
                           className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
                           title="Download document"
                         >

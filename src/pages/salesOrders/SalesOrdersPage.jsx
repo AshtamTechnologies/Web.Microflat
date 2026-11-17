@@ -132,12 +132,18 @@ export default function SalesOrdersPage() {
                 {info.getValue()}
               </div>
               <div className="font-mono text-2xs text-text-muted flex items-center gap-1.5">
-                <Link
-                  to={`/quotations/${row.quotationId}`}
-                  className="text-primary hover:underline"
-                >
-                  {row.quotationNo}
-                </Link>
+                {row.quotationId ? (
+                  <Link
+                    to={`/quotations/${row.quotationId}`}
+                    className="text-primary hover:underline"
+                  >
+                    {row.quotationNo}
+                  </Link>
+                ) : (
+                  <Badge variant="neutral" size="xs">
+                    Direct Order
+                  </Badge>
+                )}
                 {row.inquiryNo && <span>· {row.inquiryNo}</span>}
               </div>
             </div>
