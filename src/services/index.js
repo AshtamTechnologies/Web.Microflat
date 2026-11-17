@@ -84,6 +84,12 @@ import * as mockMyQueue from './myQueue/myQueueService.mock';
 import * as realNotifications from './notifications/notificationsService';
 import * as mockNotifications from './notifications/notificationsService.mock';
 
+import * as realDeliveryTerms from './deliveryTerms/deliveryTermService';
+import * as mockDeliveryTerms from './deliveryTerms/deliveryTermService.mock';
+
+import * as realNotificationSetup from './notificationSetup/notificationSetupService';
+import * as mockNotificationSetup from './notificationSetup/notificationSetupService.mock';
+
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 export const authService = useMock ? mockAuth : realAuth;
@@ -110,6 +116,8 @@ export const financialYearService = useMock ? mockFinancialYears : realFinancial
 export const emailTemplatesService = useMock ? mockEmailTemplates : realEmailTemplates;
 export const myQueueService = useMock ? mockMyQueue : realMyQueue;
 export const notificationsService = useMock ? mockNotifications : realNotifications;
+export const deliveryTermService = useMock ? mockDeliveryTerms : realDeliveryTerms;
+export const notificationSetupService = useMock ? mockNotificationSetup : realNotificationSetup;
 export { delegationService };
 export { geographyService };
 export { meetingsService };

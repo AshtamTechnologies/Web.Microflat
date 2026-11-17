@@ -27,6 +27,7 @@ import {
   Check,
   CheckCheck,
   Eye,
+  Loader2,
   RotateCcw,
   Bell,
   ListTodo,
@@ -116,6 +117,7 @@ export default function MyQueuePage() {
   const [completeRemarks, setCompleteRemarks] = useState('');
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [detailModalItem, setDetailModalItem] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // ── Tab 2: Notifications State ──
   const [notifications, setNotifications] = useState([]);
@@ -265,6 +267,22 @@ export default function MyQueuePage() {
     }
   };
 
+  const handleOpenDetail = useCallback(async (item) => {
+    if (!item?.id) return;
+    setDetailModalItem(item);
+    setDetailLoading(true);
+    try {
+      const detail = await myQueueService.getQueueItem(item.id);
+      if (detail) {
+        setDetailModalItem((prev) => ({ ...prev, ...detail }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch queue item detail:', err);
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
   // ── Tab 1: TanStack Table Columns (Matching Image 2 Style) ──
   const queueColumns = useMemo(
     () => [
@@ -299,7 +317,7 @@ export default function MyQueuePage() {
               <div className="flex items-center gap-2">
                 <span
                   className="font-semibold text-heading text-xs hover:text-primary transition-colors cursor-pointer"
-                  onClick={() => setDetailModalItem(item)}
+                  onClick={() => handleOpenDetail(item)}
                 >
                   {item.title}
                 </span>
@@ -324,11 +342,17 @@ export default function MyQueuePage() {
                   {item.metadata.amount && ` • Amount: ${item.metadata.amount}`}
                 </p>
               )}
+              {item.assignedToName && (
+                <p className="text-3xs text-text-muted">
+                  Assigned to: <span className="font-medium text-text">{item.assignedToName}</span>
+                </p>
+              )}
             </div>
           );
         },
       }),
-      queueColumnHelper.accessor('dueDate', {
+      queueColumnHelper.accessor((row) => row.dueDate || row.showFromDate, {
+        id: 'dueDate',
         header: 'DUE / SCHEDULED',
         size: 160,
         cell: (info) => {
@@ -412,7 +436,7 @@ export default function MyQueuePage() {
                 variant="ghost"
                 icon={<Eye size={15} />}
                 aria-label="View task details"
-                onClick={() => setDetailModalItem(item)}
+                onClick={() => handleOpenDetail(item)}
                 title="View full task details"
               />
             </div>
@@ -569,14 +593,20 @@ export default function MyQueuePage() {
             <Badge variant={item.itemType === 'Meeting' ? 'primary' : 'warning'} size="xs">
               {item.itemType}
             </Badge>
-            <Badge variant="outline" size="xs">
-              {item.priority}
-            </Badge>
-            {item.metadata?.documentCode && (
+            {item.priority && (
+              <Badge variant="outline" size="xs">
+                {item.priority}
+              </Badge>
+            )}
+            {item.referenceType && item.referenceId ? (
+              <span className="font-mono text-3xs px-1.5 py-0.5 rounded bg-surface border border-border text-text-muted">
+                {item.referenceType} #{item.referenceId}
+              </span>
+            ) : item.metadata?.documentCode ? (
               <span className="font-mono text-3xs px-1.5 py-0.5 rounded bg-surface border border-border text-text-muted">
                 {item.metadata.documentCode}
               </span>
-            )}
+            ) : null}
           </div>
           <StatusBadge status={item.status} size="xs" />
         </div>
@@ -585,13 +615,15 @@ export default function MyQueuePage() {
         <div className="space-y-1">
           <h4
             className="text-xs font-semibold text-heading hover:text-primary cursor-pointer transition-colors"
-            onClick={() => setDetailModalItem(item)}
+            onClick={() => handleOpenDetail(item)}
           >
             {item.title}
           </h4>
-          <p className="text-2xs text-text-muted line-clamp-2 leading-relaxed">
-            {item.description}
-          </p>
+          {item.description && (
+            <p className="text-2xs text-text-muted line-clamp-2 leading-relaxed">
+              {item.description}
+            </p>
+          )}
         </div>
 
         {/* Detail Grid */}
@@ -600,14 +632,14 @@ export default function MyQueuePage() {
             <span className="text-3xs uppercase tracking-wider text-text-muted font-semibold block">Scheduled</span>
             <span className="text-text font-medium flex items-center gap-1 mt-0.5">
               <Clock size={11} className="text-text-muted shrink-0" />
-              {formatDateTime(item.dueDate)}
+              {formatDateTime(item.dueDate || item.showFromDate)}
             </span>
           </div>
 
           <div>
             <span className="text-3xs uppercase tracking-wider text-text-muted font-semibold block">Contact</span>
             <span className="text-text font-medium truncate block mt-0.5">
-              {item.metadata?.organizerName || item.metadata?.requesterName || item.assignedToUserName || '—'}
+              {item.assignedToName || item.assignedToUserName || item.metadata?.organizerName || item.metadata?.requesterName || '—'}
             </span>
           </div>
         </div>
@@ -617,7 +649,7 @@ export default function MyQueuePage() {
           <Button
             size="xs"
             variant="ghost"
-            onClick={() => setDetailModalItem(item)}
+            onClick={() => handleOpenDetail(item)}
             icon={<Eye size={13} />}
           >
             Details
@@ -949,6 +981,9 @@ export default function MyQueuePage() {
               {detailModalItem?.itemType}
             </Badge>
             <span>Task Details</span>
+            {detailLoading && (
+              <Loader2 size={13} className="animate-spin text-primary ml-1" />
+            )}
           </div>
         }
         size="md"
@@ -986,7 +1021,9 @@ export default function MyQueuePage() {
             <div className="grid grid-cols-2 gap-3 p-3.5 rounded-lg bg-surface border border-border text-xs">
               <div>
                 <span className="text-3xs font-semibold uppercase text-text-muted">Due / Scheduled</span>
-                <p className="font-medium text-text mt-0.5">{formatDateTime(detailModalItem.dueDate)}</p>
+                <p className="font-medium text-text mt-0.5">
+                  {formatDateTime(detailModalItem.dueDate || detailModalItem.showFromDate)}
+                </p>
               </div>
 
               <div>
@@ -1008,18 +1045,48 @@ export default function MyQueuePage() {
               <div>
                 <span className="text-3xs font-semibold uppercase text-text-muted">Assigned To</span>
                 <p className="font-medium text-text mt-0.5">
-                  {detailModalItem.assignedToUserName || '—'}
+                  {detailModalItem.assignedToName || detailModalItem.assignedToUserName || '—'}
                 </p>
               </div>
             </div>
 
-            {/* Additional Metadata */}
-            {detailModalItem.metadata && Object.keys(detailModalItem.metadata).length > 0 && (
-              <div className="p-3.5 rounded-lg bg-surface/50 border border-border text-xs space-y-1.5">
+            {/* Reference Context */}
+            {(detailModalItem.referenceType || detailModalItem.referenceId || detailModalItem.createdOn || (detailModalItem.metadata && Object.keys(detailModalItem.metadata).length > 0)) && (
+              <div className="p-3.5 rounded-lg bg-surface/50 border border-border text-xs space-y-2">
                 <span className="text-3xs font-semibold uppercase text-text-muted tracking-wider block">
                   Reference Context
                 </span>
-                {Object.entries(detailModalItem.metadata).map(([key, val]) => (
+                {detailModalItem.referenceType && (
+                  <div className="flex justify-between items-center text-2xs">
+                    <span className="text-text-muted">Reference Type:</span>
+                    <span className="font-medium text-heading">{detailModalItem.referenceType}</span>
+                  </div>
+                )}
+                {detailModalItem.referenceId && (
+                  <div className="flex justify-between items-center text-2xs">
+                    <span className="text-text-muted">Reference ID:</span>
+                    <span className="font-mono font-semibold text-primary">{detailModalItem.referenceId}</span>
+                  </div>
+                )}
+                {detailModalItem.showFromDate && (
+                  <div className="flex justify-between items-center text-2xs">
+                    <span className="text-text-muted">Show From Date:</span>
+                    <span className="font-medium text-heading">{detailModalItem.showFromDate}</span>
+                  </div>
+                )}
+                {detailModalItem.createdOn && (
+                  <div className="flex justify-between items-center text-2xs">
+                    <span className="text-text-muted">Created On:</span>
+                    <span className="font-mono text-heading">{formatDateTime(detailModalItem.createdOn)}</span>
+                  </div>
+                )}
+                {detailModalItem.completedOn && (
+                  <div className="flex justify-between items-center text-2xs">
+                    <span className="text-text-muted">Completed On:</span>
+                    <span className="font-mono text-heading">{formatDateTime(detailModalItem.completedOn)}</span>
+                  </div>
+                )}
+                {detailModalItem.metadata && Object.entries(detailModalItem.metadata).map(([key, val]) => (
                   <div key={key} className="flex justify-between items-center text-2xs">
                     <span className="capitalize text-text-muted">{key.replace(/([A-Z])/g, ' $1')}:</span>
                     <span className="font-medium text-heading">{String(val)}</span>

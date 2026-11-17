@@ -88,6 +88,10 @@ import { RegionsProvider } from './context/RegionsContext';
 
 import PaymentTermsPage from './pages/configuration/PaymentTermsPage';
 import { PaymentTermsProvider } from './context/PaymentTermsContext';
+import DeliveryTermsPage from './pages/configuration/DeliveryTermsPage';
+import { DeliveryTermsProvider } from './context/DeliveryTermsContext';
+import NotificationSetupPage from './pages/configuration/NotificationSetupPage';
+import { NotificationSetupProvider } from './context/NotificationSetupContext';
 
 import TaxConfigsPage from './pages/configuration/TaxConfigsPage';
 import { TaxConfigsProvider } from './context/TaxConfigsContext';
@@ -179,7 +183,8 @@ export default function App() {
                                       <UomProvider>
                                         <RegionsProvider>
                                           <PaymentTermsProvider>
-                                            <TaxConfigsProvider>
+                                            <DeliveryTermsProvider>
+                                              <TaxConfigsProvider>
                                               <SeriesProvider>
                                                 <FinancialYearsProvider>
                                                   <CompanyProvider>
@@ -189,7 +194,9 @@ export default function App() {
                                                           <SalesOrdersProvider>
                                                             <EmailTemplatesProvider>
                                                               <NotificationsProvider>
-                                                                <AppLayout />
+                                                                <NotificationSetupProvider>
+                                                                  <AppLayout />
+                                                                </NotificationSetupProvider>
                                                               </NotificationsProvider>
                                                             </EmailTemplatesProvider>
                                                           </SalesOrdersProvider>
@@ -200,6 +207,7 @@ export default function App() {
                                                 </FinancialYearsProvider>
                                               </SeriesProvider>
                                             </TaxConfigsProvider>
+                                          </DeliveryTermsProvider>
                                           </PaymentTermsProvider>
                                         </RegionsProvider>
                                       </UomProvider>
@@ -324,6 +332,8 @@ export default function App() {
               <Route path="/configuration/uom" element={<UomPage />} />
               <Route path="/configuration/regions" element={<RegionsPage />} />
               <Route path="/configuration/payment-terms" element={<PaymentTermsPage />} />
+              <Route path="/configuration/delivery-terms" element={<DeliveryTermsPage />} />
+              <Route path="/configuration/notification-setup" element={<NotificationSetupPage />} />
               <Route path="/configuration/tax-configs" element={<TaxConfigsPage />} />
               <Route path="/configuration/process-flows" element={<ProcessFlowsPage />} />
               <Route path="/configuration/process-flows/:flowId" element={<ProcessFlowEditorPage />} />
