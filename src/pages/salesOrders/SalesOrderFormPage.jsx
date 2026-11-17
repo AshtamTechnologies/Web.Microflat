@@ -15,6 +15,7 @@ import {
   IconAttachment,
   IconBack,
   IconCheck,
+  IconDownload,
   IconFileText,
   IconInfo,
   IconPackage,
@@ -34,6 +35,7 @@ import {
   Input,
   Textarea,
   SearchableSelect,
+  SearchableMultiSelect,
   DatePicker,
   Badge,
   ErrorBanner,
@@ -64,6 +66,14 @@ function formatReadableFileSize(bytes = 0) {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
+function toTermsArray(val, fallback = []) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string' && val.trim()) {
+    return val.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return fallback;
+}
+
 function buildPrefillFromQuotation(quotation) {
   if (!quotation) return null;
   const revIdx =
@@ -72,6 +82,21 @@ function buildPrefillFromQuotation(quotation) {
       : Math.max(0, (quotation.revisions?.length || 1) - 1);
   const latestRev =
     quotation.revisions?.[revIdx] || quotation.revisions?.[quotation.revisions.length - 1];
+
+  const inheritedDoc = quotation.poDetails?.fileName
+    ? [
+        {
+          id: `oc-doc-inherited-${Date.now()}`,
+          fileName: quotation.poDetails.fileName,
+          documentType: 'Client PO',
+          uploadedAt:
+            quotation.poDetails.receivedOn ||
+            new Date().toISOString().split('T')[0],
+          fileSize: quotation.poDetails.fileSize || '350 KB',
+          remarks: 'Inherited from Customer PO recording on Quotation',
+        },
+      ]
+    : [];
 
   return {
     quotationId: quotation.id,
@@ -87,8 +112,9 @@ function buildPrefillFromQuotation(quotation) {
     contactPhone: quotation.contactPhone || '',
     clientPoNo: quotation.poDetails?.poNumber || '',
     clientPoDate: quotation.poDetails?.receivedOn || '',
-    paymentTerms: quotation.paymentTerms || 'Net 30 Days',
-    deliveryTerms: quotation.deliveryTerms || '',
+    expectedDeliveryDate: quotation.poDetails?.expectedDeliveryDate || '',
+    paymentTerms: toTermsArray(quotation.paymentTerms, ['Net 30 Days']),
+    deliveryTerms: toTermsArray(quotation.deliveryTerms, []),
     currency: latestRev?.currency || quotation.currency || 'INR',
     taxTreatment: latestRev?.taxTreatment || quotation.taxTreatment || 'INTRA_STATE',
     termsAndConditions: quotation.termsAndConditions || '',
@@ -99,6 +125,7 @@ function buildPrefillFromQuotation(quotation) {
       otherCharges: Number(item.otherCharges) || 0,
       taxPercent: item.taxPercent !== undefined ? item.taxPercent : 18,
     })),
+    documents: inheritedDoc,
   };
 }
 
@@ -112,6 +139,7 @@ export default function SalesOrderFormPage() {
   const {
     getSalesOrderById,
     getNextOrderConfirmationNo,
+    fetchNextOrderConfirmationNo,
     createSalesOrder,
     updateSalesOrder,
   } = useSalesOrdersContext();
@@ -144,6 +172,14 @@ export default function SalesOrderFormPage() {
     [confirmedQuotations]
   );
 
+  const [orderMode, setOrderMode] = useState(() => {
+    if (isEditMode) {
+      return existingOrder?.quotationId ? 'QUOTATION' : 'DIRECT';
+    }
+    return initialQuotationId ? 'QUOTATION' : 'QUOTATION';
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [formData, setFormData] = useState(() => {
     if (isEditMode && existingOrder) {
       return {
@@ -163,8 +199,8 @@ export default function SalesOrderFormPage() {
         clientPoNo: existingOrder.clientPoNo || '',
         clientPoDate: existingOrder.clientPoDate || '',
         expectedDeliveryDate: existingOrder.expectedDeliveryDate || '',
-        paymentTerms: existingOrder.paymentTerms || 'Net 30 Days',
-        deliveryTerms: existingOrder.deliveryTerms || '',
+        paymentTerms: toTermsArray(existingOrder.paymentTerms, ['Net 30 Days']),
+        deliveryTerms: toTermsArray(existingOrder.deliveryTerms, []),
         currency: existingOrder.currency || 'INR',
         taxTreatment: existingOrder.taxTreatment || 'INTRA_STATE',
         otherCharges: existingOrder.otherCharges || 0,
@@ -203,9 +239,9 @@ export default function SalesOrderFormPage() {
       contactPhone: prefill?.contactPhone || '',
       clientPoNo: prefill?.clientPoNo || '',
       clientPoDate: prefill?.clientPoDate || '',
-      expectedDeliveryDate: '',
-      paymentTerms: prefill?.paymentTerms || 'Net 30 Days',
-      deliveryTerms: prefill?.deliveryTerms || '',
+      expectedDeliveryDate: prefill?.expectedDeliveryDate || '',
+      paymentTerms: prefill?.paymentTerms ? toTermsArray(prefill.paymentTerms) : ['Net 30 Days'],
+      deliveryTerms: prefill?.deliveryTerms ? toTermsArray(prefill.deliveryTerms) : [],
       currency: prefill?.currency || 'INR',
       taxTreatment: prefill?.taxTreatment || 'INTRA_STATE',
       otherCharges: 0,
@@ -213,9 +249,41 @@ export default function SalesOrderFormPage() {
       termsAndConditions: prefill?.termsAndConditions || '',
       remarks: '',
       lineItems: prefill?.lineItems || [],
-      documents: [],
+      documents: prefill?.documents || [],
     };
   });
+
+  // Sync prefill if confirmedQuotations loaded after initial render
+  useEffect(() => {
+    if (!isEditMode && initialQuotationId && !formData.quotationId && confirmedQuotations.length > 0) {
+      const quote = confirmedQuotations.find(
+        (q) =>
+          String(q.id).toLowerCase() === initialQuotationId.toLowerCase() ||
+          String(q.quotationNo).toLowerCase() === initialQuotationId.toLowerCase()
+      );
+      if (quote) {
+        const prefill = buildPrefillFromQuotation(quote);
+        if (prefill) {
+          setFormData((prev) => ({
+            ...prev,
+            ...prefill,
+            documents: prefill.documents?.length ? prefill.documents : prev.documents,
+          }));
+        }
+      }
+    }
+  }, [isEditMode, initialQuotationId, formData.quotationId, confirmedQuotations]);
+
+  // Sync next order confirmation series number from API preview
+  useEffect(() => {
+    if (!isEditMode && fetchNextOrderConfirmationNo) {
+      fetchNextOrderConfirmationNo(formData.orderConfirmationDate).then((no) => {
+        if (no) {
+          setFormData((prev) => ({ ...prev, orderConfirmationNo: no }));
+        }
+      });
+    }
+  }, [formData.orderConfirmationDate, isEditMode, fetchNextOrderConfirmationNo]);
 
   const [errors, setErrors] = useState({});
   const [docType, setDocType] = useState('Client PO');
@@ -223,15 +291,53 @@ export default function SalesOrderFormPage() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
+  const clientOptions = useMemo(
+    () =>
+      clients.map((c) => {
+        const id = c.id || c.clientId;
+        const name = c.companyName || c.name || c.clientName || 'Unknown Client';
+        return {
+          value: String(id),
+          label: `${name}${c.clientCode ? ` (${c.clientCode})` : ''}`,
+        };
+      }),
+    [clients]
+  );
+
   const selectedClient = useMemo(
     () =>
       clients.find(
         (c) =>
-          String(c.id) === String(formData.clientId) ||
-          String(c.name || '').toLowerCase() === String(formData.clientName || '').toLowerCase()
+          String(c.id || c.clientId) === String(formData.clientId) ||
+          String(c.companyName || c.name || '').toLowerCase() === String(formData.clientName || '').toLowerCase()
       ) || null,
     [clients, formData.clientId, formData.clientName]
   );
+
+  function handleSelectClient(selectedId) {
+    const c = clients.find(
+      (client) => String(client.id || client.clientId) === String(selectedId)
+    );
+    if (!c) return;
+    const name = c.companyName || c.name || c.clientName || '';
+    const firstAddr = c.addresses?.[0];
+    const defaultAddress = firstAddr
+      ? [firstAddr.label, firstAddr.line1, firstAddr.city, firstAddr.state].filter(Boolean).join(' · ')
+      : '';
+    const firstContact = c.contacts?.[0];
+
+    setFormData((prev) => ({
+      ...prev,
+      clientId: String(selectedId),
+      clientName: name,
+      clientAddress: defaultAddress,
+      contactPerson: firstContact?.name || '',
+      contactEmail: firstContact?.email || '',
+      contactPhone: firstContact?.phone || '',
+    }));
+    setErrors((prev) => ({ ...prev, clientId: undefined }));
+    toast.success(`Selected client "${name}"`);
+  }
 
   const clientAddressOptions = useMemo(() => {
     const opts = (selectedClient?.addresses || []).map((a) => {
@@ -281,6 +387,7 @@ export default function SalesOrderFormPage() {
       otherCharges: 120,
       tax: 120,
       amount: 120,
+      action: 50,
     }),
     []
   );
@@ -294,6 +401,7 @@ export default function SalesOrderFormPage() {
       otherCharges: 135,
       tax: 145,
       amount: 135,
+      action: 60,
     }),
     []
   );
@@ -334,15 +442,55 @@ export default function SalesOrderFormPage() {
   }
 
   function handleSelectQuotation(quotationId) {
-    const quote = confirmedQuotations.find((q) => q.id === quotationId);
+    const quote = confirmedQuotations.find((q) => String(q.id) === String(quotationId));
     if (!quote) return;
     const prefill = buildPrefillFromQuotation(quote);
     setFormData((prev) => ({
       ...prev,
       ...prefill,
+      documents: prefill.documents?.length
+        ? [
+            ...prefill.documents,
+            ...(prev.documents || []).filter(
+              (d) => !d.id.startsWith('oc-doc-inherited-')
+            ),
+          ]
+        : prev.documents,
     }));
     setErrors((prev) => ({ ...prev, quotationId: undefined, lineItems: undefined }));
     toast.success(`Loaded details from Confirmed Quotation ${quote.quotationNo}`);
+  }
+
+  function handleAddLineItem() {
+    const newItem = {
+      id: `oc-it-${Date.now()}-${formData.lineItems.length}`,
+      productName: 'Granite Surface Plate',
+      itemCode: 'GSP-DIR',
+      variantName: 'Grade 0 · 630 x 400 x 100 mm',
+      technicalDetails: 'Standard precision metrology granite surface plate',
+      quantity: 1,
+      rate: 15000,
+      otherCharges: 0,
+      taxPercent: 18,
+    };
+    setFormData((prev) => ({
+      ...prev,
+      lineItems: [...prev.lineItems, newItem],
+    }));
+    setErrors((prev) => ({ ...prev, lineItems: undefined }));
+    toast.success('Added product line item');
+  }
+
+  function handleRemoveLineItem(idx) {
+    if (formData.lineItems.length <= 1) {
+      toast.error('Sales order must have at least one line item.');
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      lineItems: prev.lineItems.filter((_, i) => i !== idx),
+    }));
+    toast.success('Removed line item');
   }
 
   function handleLineItemChange(idx, field, value) {
@@ -382,6 +530,42 @@ export default function SalesOrderFormPage() {
     );
   }
 
+  function handleDownloadDocument(doc) {
+    if (doc?.downloadUrl) {
+      const link = document.createElement('a');
+      link.href = doc.downloadUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.setAttribute('download', doc.fileName || 'document.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return;
+    }
+    if (doc?.file instanceof Blob) {
+      const blobUrl = URL.createObjectURL(doc.file);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = doc.fileName || 'document.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+      return;
+    }
+    toast(`Downloading document "${doc?.fileName || 'Customer PO'}"`, { icon: '📄' });
+    const content = `MicroFlat ERP Document: ${doc?.fileName || 'Customer PO'}\nType: ${doc?.documentType || 'Client PO'}\nUploaded: ${doc?.uploadedAt || ''}\nRemarks: ${doc?.remarks || ''}`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = (doc?.fileName || 'Customer_PO.pdf').replace(/\.pdf$/i, '.txt');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function handleRemoveDocument(docId) {
     setFormData((prev) => ({
       ...prev,
@@ -392,8 +576,11 @@ export default function SalesOrderFormPage() {
 
   function validate(targetStatus) {
     const nextErrors = {};
-    if (!formData.quotationId) {
+    if (orderMode === 'QUOTATION' && !formData.quotationId) {
       nextErrors.quotationId = 'Please select a Confirmed quotation.';
+    }
+    if (orderMode === 'DIRECT' && !formData.clientId) {
+      nextErrors.clientId = 'Please select a Client for this direct sales order.';
     }
     if (!formData.orderConfirmationDate) {
       nextErrors.orderConfirmationDate = 'Order confirmation date is required.';
@@ -411,23 +598,50 @@ export default function SalesOrderFormPage() {
     return Object.keys(nextErrors).length === 0;
   }
 
-  function handleSave(targetStatus) {
+  async function handleSave(targetStatus) {
     if (!validate(targetStatus)) {
       toast.error('Please fix the highlighted validation errors.');
       return;
     }
 
+    const rawQuoteId = formData.quotationId;
+    const parsedQuoteId = rawQuoteId ? Number(rawQuoteId) : null;
+    const finalQuotationId = Number.isFinite(parsedQuoteId)
+      ? parsedQuoteId
+      : rawQuoteId && typeof rawQuoteId === 'string' && rawQuoteId.includes('-')
+      ? Number(rawQuoteId.split('-').pop())
+      : rawQuoteId
+      ? Number(rawQuoteId)
+      : null;
+
     const payload = {
       ...formData,
+      paymentTerms: Array.isArray(formData.paymentTerms)
+        ? formData.paymentTerms.join(', ')
+        : (formData.paymentTerms || 'Net 30 Days'),
+      deliveryTerms: Array.isArray(formData.deliveryTerms)
+        ? formData.deliveryTerms.join(', ')
+        : (formData.deliveryTerms || ''),
+      quotationId: finalQuotationId,
       status: targetStatus,
+      isDirectOrder: orderMode === 'DIRECT' || !formData.quotationId,
     };
 
-    if (isEditMode) {
-      updateSalesOrder(existingOrder.id, payload);
-      navigate(`/sales-orders/${existingOrder.id}`);
-    } else {
-      const created = createSalesOrder(payload);
-      navigate(`/sales-orders/${created.id}`);
+    try {
+      setIsSubmitting(true);
+      if (isEditMode) {
+        const updated = await updateSalesOrder(existingOrder.id, payload);
+        navigate(`/sales-orders/${updated?.id || existingOrder.id}`);
+      } else {
+        const created = await createSalesOrder(payload);
+        if (created?.id) {
+          navigate(`/sales-orders/${created.id}`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to save sales order:', err);
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -462,6 +676,7 @@ export default function SalesOrderFormPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <CancelButton
               size="sm"
+              disabled={isSubmitting}
               onClick={() =>
                 navigate(isEditMode ? `/sales-orders/${existingOrder.id}` : '/sales-orders')
               }
@@ -472,6 +687,7 @@ export default function SalesOrderFormPage() {
               type="button"
               variant="secondary"
               size="sm"
+              disabled={isSubmitting}
               onClick={() => handleSave('Draft')}
             >
               Save as Draft
@@ -480,6 +696,8 @@ export default function SalesOrderFormPage() {
               type="button"
               size="sm"
               icon={IconCheck}
+              loading={isSubmitting}
+              disabled={isSubmitting}
               onClick={() => handleSave('Confirmed')}
             >
               Save &amp; Confirm
@@ -492,31 +710,107 @@ export default function SalesOrderFormPage() {
         <ErrorBanner message={Object.values(errors)[0]} />
       )}
 
-      {/* ── SECTION 1: QUOTATION, ORDER & CLIENT PO DETAILS ── */}
+      {/* ── SECTION 1: ORDER SOURCE & CLIENT PO DETAILS ── */}
       <CollapsibleCard
-        title="1. Confirmed Quotation & Client PO Details"
-        subtitle="Link a Confirmed quotation, preview order confirmation number, and record client PO details"
+        title={
+          orderMode === 'DIRECT'
+            ? '1. Direct Order & Client PO Details'
+            : '1. Confirmed Quotation & Client PO Details'
+        }
+        subtitle={
+          orderMode === 'DIRECT'
+            ? 'Create an order directly for a registered client without an existing quotation'
+            : 'Link a Confirmed quotation, preview order confirmation number, and record client PO details'
+        }
         icon={<IconInfo size={18} className="text-primary" />}
         defaultOpen={true}
       >
         <div className="space-y-4">
+          {/* Mode Switcher */}
+          {!isEditMode && (
+            <div className="flex items-center gap-2 p-1.5 bg-surface/70 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderMode('QUOTATION');
+                  setErrors({});
+                }}
+                className={`flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all ${
+                  orderMode === 'QUOTATION'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-text-muted hover:text-heading hover:bg-surface'
+                }`}
+              >
+                Against Confirmed Quotation (Standard)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderMode('DIRECT');
+                  setErrors({});
+                  if (formData.lineItems.length === 0) {
+                    handleAddLineItem();
+                  }
+                }}
+                className={`flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all ${
+                  orderMode === 'DIRECT'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-text-muted hover:text-heading hover:bg-surface'
+                }`}
+              >
+                Direct Order (Without Quotation)
+              </button>
+            </div>
+          )}
+
+          {/* Linked Customer PO Banner when quotation has PO details */}
+          {orderMode === 'QUOTATION' && formData.clientPoNo && (
+            <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-between text-xs text-primary">
+              <div className="flex items-center gap-2">
+                <IconCheck size={16} className="shrink-0" />
+                <span>
+                  Linked Customer PO: <strong>{formData.clientPoNo}</strong>
+                  {formData.clientPoDate ? ` (${formatDate(formData.clientPoDate)})` : ''}
+                </span>
+              </div>
+              {formData.documents.some((d) => d.documentType === 'Client PO') && (
+                <Badge variant="role" size="xs">
+                  PO Document Attached
+                </Badge>
+              )}
+            </div>
+          )}
+
           <FormGrid columns={3}>
-            {isEditMode ? (
-              <Input
-                label="Confirmed Quotation"
-                disabled
-                value={`${formData.quotationNo} (Rev ${formData.quotationRevisionNo})`}
-              />
+            {orderMode === 'QUOTATION' ? (
+              isEditMode ? (
+                <Input
+                  label="Confirmed Quotation"
+                  disabled
+                  value={`${formData.quotationNo || '—'} (Rev ${formData.quotationRevisionNo ?? 0})`}
+                />
+              ) : (
+                <SearchableSelect
+                  label="Confirmed Quotation"
+                  required
+                  placeholder="-- Select Confirmed Quotation --"
+                  searchPlaceholder="Search confirmed quotations..."
+                  options={quotationOptions}
+                  value={formData.quotationId}
+                  error={errors.quotationId}
+                  onChange={(e) => handleSelectQuotation(e.target.value)}
+                />
+              )
             ) : (
               <SearchableSelect
-                label="Confirmed Quotation"
+                label="Direct Client"
                 required
-                placeholder="-- Select Confirmed Quotation --"
-                searchPlaceholder="Search confirmed quotations..."
-                options={quotationOptions}
-                value={formData.quotationId}
-                error={errors.quotationId}
-                onChange={(e) => handleSelectQuotation(e.target.value)}
+                placeholder="-- Select Client --"
+                searchPlaceholder="Search clients..."
+                options={clientOptions}
+                value={formData.clientId}
+                error={errors.clientId}
+                onChange={(e) => handleSelectClient(e.target.value)}
               />
             )}
 
@@ -586,7 +880,12 @@ export default function SalesOrderFormPage() {
             <Input
               label="Client Name"
               disabled
-              value={formData.clientName || 'Select a confirmed quotation first'}
+              value={
+                formData.clientName ||
+                (orderMode === 'DIRECT'
+                  ? 'Select direct client above'
+                  : 'Select a confirmed quotation first')
+              }
             />
 
             <SearchableSelect
@@ -617,22 +916,32 @@ export default function SalesOrderFormPage() {
           </FormGrid>
 
           <FormGrid columns={3}>
-            <SearchableSelect
+            <SearchableMultiSelect
               label="Payment Terms"
+              placeholder="Select payment terms..."
+              searchPlaceholder="Search payment terms..."
               options={PAYMENT_TERMS_OPTIONS}
               value={formData.paymentTerms}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, paymentTerms: e.target.value }))
-              }
+              name="paymentTerms"
+              maxDisplayTags={2}
+              onChange={(e) => {
+                const val = Array.isArray(e) ? e : e?.target?.value || [];
+                setFormData((prev) => ({ ...prev, paymentTerms: val }));
+              }}
             />
 
-            <SearchableSelect
+            <SearchableMultiSelect
               label="Delivery Terms"
+              placeholder="Select delivery terms..."
+              searchPlaceholder="Search delivery terms..."
               options={DELIVERY_TERMS_OPTIONS}
               value={formData.deliveryTerms}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, deliveryTerms: e.target.value }))
-              }
+              name="deliveryTerms"
+              maxDisplayTags={2}
+              onChange={(e) => {
+                const val = Array.isArray(e) ? e : e?.target?.value || [];
+                setFormData((prev) => ({ ...prev, deliveryTerms: val }));
+              }}
             />
 
             <SearchableSelect
@@ -672,12 +981,30 @@ export default function SalesOrderFormPage() {
       {/* ── SECTION 3: ORDER LINE ITEMS & TOTALS ── */}
       <CollapsibleCard
         title="3. Order Line Items & Tax Summary"
-        subtitle="Copied from the quotation's latest revision; quantities, rates, and taxes can be adjusted while Draft"
+        subtitle={
+          orderMode === 'DIRECT'
+            ? 'Add and configure product line items, quantities, rates, and tax slabs'
+            : 'Copied from the quotation\'s latest revision; quantities, rates, and taxes can be adjusted while Draft'
+        }
         icon={<IconPackage size={18} className="text-primary" />}
         defaultOpen={true}
         padding="none"
         bodyClassName="p-0 space-y-0"
       >
+        <div className="flex items-center justify-between p-3.5 border-b border-border bg-surface/30">
+          <span className="text-xs text-text-muted">
+            {formData.lineItems.length} line item(s) configured
+          </span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleAddLineItem}
+          >
+            + Add Product Line
+          </Button>
+        </div>
+
         <div className="overflow-x-auto">
           <TableContainer>
             <colgroup>
@@ -688,6 +1015,7 @@ export default function SalesOrderFormPage() {
               <col style={{ width: `${colWidths.otherCharges}px` }} />
               <col style={{ width: `${colWidths.tax}px` }} />
               <col style={{ width: `${colWidths.amount}px` }} />
+              <col style={{ width: `${colWidths.action}px` }} />
             </colgroup>
             <thead>
               <tr>
@@ -733,13 +1061,14 @@ export default function SalesOrderFormPage() {
                 >
                   LINE AMOUNT
                 </Th>
+                <Th className="text-center">ACT</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {formData.lineItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-xs text-text-muted">
-                    Select a Confirmed quotation above to populate order line items.
+                  <td colSpan={8} className="p-8 text-center text-xs text-text-muted">
+                    No line items added yet. Click &quot;+ Add Product Line&quot; above to add products.
                   </td>
                 </tr>
               ) : (
@@ -753,16 +1082,49 @@ export default function SalesOrderFormPage() {
                         {idx + 1}
                       </Td>
                       <Td className="text-xs">
-                        <div className="font-bold text-heading truncate">
-                          {item.productName}
-                        </div>
-                        <div className="font-mono text-2xs text-primary truncate">
-                          {item.itemCode || 'ITM'} · {item.variantName}
-                        </div>
-                        {item.technicalDetails && (
-                          <div className="text-3xs text-text-muted truncate max-w-xs">
-                            {item.technicalDetails}
+                        {orderMode === 'DIRECT' ? (
+                          <div className="space-y-1.5 py-1">
+                            <Input
+                              size="sm"
+                              placeholder="Product Name"
+                              value={item.productName}
+                              onChange={(e) =>
+                                handleLineItemChange(idx, 'productName', e.target.value)
+                              }
+                            />
+                            <div className="flex gap-2">
+                              <Input
+                                size="sm"
+                                placeholder="Variant / Specs"
+                                value={item.variantName}
+                                onChange={(e) =>
+                                  handleLineItemChange(idx, 'variantName', e.target.value)
+                                }
+                              />
+                              <Input
+                                size="sm"
+                                placeholder="Code"
+                                value={item.itemCode}
+                                onChange={(e) =>
+                                  handleLineItemChange(idx, 'itemCode', e.target.value)
+                                }
+                              />
+                            </div>
                           </div>
+                        ) : (
+                          <>
+                            <div className="font-bold text-heading truncate">
+                              {item.productName}
+                            </div>
+                            <div className="font-mono text-2xs text-primary truncate">
+                              {item.itemCode || 'ITM'} · {item.variantName}
+                            </div>
+                            {item.technicalDetails && (
+                              <div className="text-3xs text-text-muted truncate max-w-xs">
+                                {item.technicalDetails}
+                              </div>
+                            )}
+                          </>
                         )}
                       </Td>
                       <Td>
@@ -816,6 +1178,17 @@ export default function SalesOrderFormPage() {
                       </Td>
                       <Td className="text-right font-mono font-semibold text-xs text-heading">
                         {formatCurrency(lineAmount, formData.currency)}
+                      </Td>
+                      <Td className="text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLineItem(idx)}
+                          disabled={formData.lineItems.length <= 1}
+                          className="p-1.5 text-text-muted hover:text-red-500 disabled:opacity-30 disabled:hover:text-text-muted rounded hover:bg-surface transition-colors"
+                          title="Remove line item"
+                        >
+                          <IconTrash size={14} />
+                        </button>
                       </Td>
                     </tr>
                   );
@@ -1017,14 +1390,24 @@ export default function SalesOrderFormPage() {
                       <Td className="font-mono text-text-muted">{doc.fileSize || '—'}</Td>
                       <Td className="text-text-muted">{doc.remarks || '—'}</Td>
                       <Td className="text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveDocument(doc.id)}
-                          className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
-                          title="Remove document"
-                        >
-                          <IconTrash size={14} />
-                        </button>
+                        <div className="inline-flex items-center gap-1 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadDocument(doc)}
+                            className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
+                            title="Download document"
+                          >
+                            <IconDownload size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDocument(doc.id)}
+                            className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+                            title="Remove document"
+                          >
+                            <IconTrash size={14} />
+                          </button>
+                        </div>
                       </Td>
                     </tr>
                   ))}
@@ -1037,6 +1420,7 @@ export default function SalesOrderFormPage() {
 
       <FormActionsBar>
         <CancelButton
+          disabled={isSubmitting}
           onClick={() =>
             navigate(isEditMode ? `/sales-orders/${existingOrder.id}` : '/sales-orders')
           }
@@ -1046,6 +1430,7 @@ export default function SalesOrderFormPage() {
         <Button
           type="button"
           variant="secondary"
+          disabled={isSubmitting}
           onClick={() => handleSave('Draft')}
         >
           Save as Draft
@@ -1053,6 +1438,8 @@ export default function SalesOrderFormPage() {
         <SaveButton
           type="button"
           icon={IconCheck}
+          loading={isSubmitting}
+          disabled={isSubmitting}
           onClick={() => handleSave('Confirmed')}
         >
           Save &amp; Confirm

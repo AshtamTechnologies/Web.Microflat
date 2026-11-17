@@ -14,10 +14,12 @@ import { IconRefresh } from '../../../constants/icons';
 export default function ChangeOrderStatusModal({ isOpen, onClose, order }) {
   const { changeSalesOrderStatus } = useSalesOrdersContext();
 
-  const allowedNextStatuses = useMemo(
-    () => (order?.nextStatuses?.length ? order.nextStatuses : getNextOrderStatuses(order?.status)),
-    [order]
-  );
+  const allowedNextStatuses = useMemo(() => {
+    if (Array.isArray(order?.nextStatuses)) {
+      return order.nextStatuses;
+    }
+    return getNextOrderStatuses(order?.status);
+  }, [order]);
 
   const statusOptions = useMemo(
     () => allowedNextStatuses.map((st) => ({ value: st, label: st })),

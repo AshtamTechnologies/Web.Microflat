@@ -275,34 +275,87 @@ export default function QuotationViewPage() {
             </Button>
 
             <Button
-              variant="primary"
+              variant="secondary"
               size="sm"
               onClick={() => setIsMailModalOpen(true)}
               icon={<IconSend size={14} />}
             >
               Send Mail
             </Button>
+
+            {quotation.status !== 'Cancelled' && quotation.status !== 'Rejected' && (
+              <Button
+                variant={quotation.poReceived ? 'secondary' : 'primary'}
+                size="sm"
+                onClick={() => setIsPoModalOpen(true)}
+                icon={<IconFileText size={14} />}
+                className={!quotation.poReceived ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600' : ''}
+              >
+                {quotation.poReceived ? 'Update Customer PO' : 'Record Customer PO'}
+              </Button>
+            )}
           </div>
         }
       />
 
-      {/* Confirmation Sales Order Alert */}
-      {quotation.status === 'Confirmed' && (
-        <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between gap-3 text-xs text-emerald-800 dark:text-emerald-300">
+      {/* Confirmation & Customer PO Alert Banner */}
+      {(quotation.poReceived || quotation.status === 'Confirmed') && (
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-800 dark:text-emerald-300 shadow-2xs">
+          <div className="flex items-start gap-2.5">
+            <IconCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <div className="font-semibold text-emerald-900 dark:text-emerald-200">
+                Customer PO Received: <span className="font-mono font-bold">{quotation.poDetails?.poNumber || 'Client PO on File'}</span>
+              </div>
+              <p className="text-2xs text-emerald-700/80 dark:text-emerald-300/80">
+                Received on <strong>{formatDate(quotation.poDetails?.receivedOn || quotation.confirmedOn || '2026-10-30')}</strong>
+                {quotation.poDetails?.fileName && (
+                  <span> · Attached Document: <strong>{quotation.poDetails.fileName}</strong></span>
+                )}
+                . A Sales Order can now be generated from this quotation.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsPoModalOpen(true)}
+              className="text-xs bg-white/70 dark:bg-surface border-emerald-500/30 text-emerald-900 dark:text-emerald-200"
+            >
+              Edit PO Details
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => navigate(`/sales-orders/new?quotationId=${quotation.id}`)}
+              className="bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white"
+            >
+              Generate Sales Order
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Awaiting Customer PO Callout (When Approved but PO not yet received) */}
+      {quotation.status === 'Approved' && !quotation.poReceived && (
+        <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-800 dark:text-blue-300">
           <div className="flex items-center gap-2">
-            <IconCheck size={16} className="text-emerald-600 shrink-0" />
+            <IconInfo size={16} className="text-blue-600 shrink-0" />
             <span>
-              Confirmed on <strong>{formatDate(quotation.confirmedOn || '2026-10-30')}</strong>. A Sales Order can now be generated from this quotation.
+              Quotation approved! Awaiting customer Purchase Order (PO) to confirm and create the Sales Order.
             </span>
           </div>
           <Button
             type="button"
             variant="primary"
             size="sm"
-            onClick={() => navigate(`/sales-orders/new?quotationId=${quotation.id}`)}
-            className="shrink-0 bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white"
+            onClick={() => setIsPoModalOpen(true)}
+            className="shrink-0 bg-blue-600 hover:bg-blue-700 border-blue-600 text-white"
           >
-            Create Sales Order
+            Record Customer PO
           </Button>
         </div>
       )}

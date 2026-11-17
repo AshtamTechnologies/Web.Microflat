@@ -130,8 +130,8 @@ export default function ApprovalsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthContext();
 
-  // Tab State: 'AWAITING' | 'PENDING_ALL' | 'HISTORY'
-  const [activeTab, setActiveTab] = useState('AWAITING');
+  // Tab State: 'PENDING' | 'HISTORY'
+  const [activeTab, setActiveTab] = useState('PENDING');
 
   // Filters & Search (initialized from URL param ?module= if present)
   const [search, setSearch] = useState('');
@@ -228,16 +228,52 @@ export default function ApprovalsPage() {
   );
 
   /* ── 1. Load Summary Counters ── */
-  const fetchSummary = useCallback(async () => {
-    try {
-      const summary = await approvalsService.getApprovalSummary({ mine: false });
-      if (summary) {
-        setSummaryCounts(summary);
+  const fetchSummary = useCallback(
+    async (targetModule = moduleFilter) => {
+      try {
+        if (!targetModule || targetModule === 'ALL') {
+          const summary = await approvalsService.getApprovalSummary({ mine: false });
+          if (summary) {
+            setSummaryCounts({
+              pending: summary.pending || 0,
+              approved: summary.approved || 0,
+              rejected: summary.rejected || 0,
+              cancelled: summary.cancelled || 0,
+            });
+          }
+        } else {
+          // Module-specific counts for targetModule
+          const [pendingRes, historyRes] = await Promise.allSettled([
+            approvalsService.getAwaitingMeApprovals({ moduleCode: targetModule }),
+            approvalsService.getApprovalHistory({ moduleCode: targetModule, mine: false, pageSize: 500 }),
+          ]);
+
+          const pendingItems =
+            pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.items)
+              ? pendingRes.value.items
+              : [];
+          const historyItems =
+            historyRes.status === 'fulfilled' && Array.isArray(historyRes.value?.items)
+              ? historyRes.value.items
+              : [];
+
+          const approved = historyItems.filter((i) => i.status === ApprovalStatus.Approved).length;
+          const rejected = historyItems.filter((i) => i.status === ApprovalStatus.Rejected).length;
+          const cancelled = historyItems.filter((i) => i.status === ApprovalStatus.Cancelled).length;
+
+          setSummaryCounts({
+            pending: pendingItems.length,
+            approved,
+            rejected,
+            cancelled,
+          });
+        }
+      } catch (err) {
+        console.warn('Could not load approval summary:', err);
       }
-    } catch (err) {
-      console.warn('Could not load approval summary:', err);
-    }
-  }, []);
+    },
+    [moduleFilter]
+  );
 
   /* ── 2. Load Approvals Queue ── */
   const loadApprovalsData = useCallback(async () => {
@@ -249,10 +285,8 @@ export default function ApprovalsPage() {
       }
 
       let res;
-      if (activeTab === 'AWAITING') {
+      if (activeTab === 'PENDING') {
         res = await approvalsService.getAwaitingMeApprovals(params);
-      } else if (activeTab === 'PENDING_ALL') {
-        res = await approvalsService.getPendingApprovals({ ...params, mine: false });
       } else {
         if (historyStatusFilter !== 'ALL') {
           params.status = historyStatusFilter;
@@ -265,7 +299,7 @@ export default function ApprovalsPage() {
       } else {
         setItems([]);
       }
-      fetchSummary();
+      fetchSummary(moduleFilter);
     } catch (err) {
       console.error('Failed to fetch approval requests:', err);
       toast.error(err?.detail || err?.message || 'Failed to load approvals queue.');
@@ -770,7 +804,7 @@ export default function ApprovalsPage() {
         <div className="bg-surface rounded-xl border border-border p-4 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-2xs font-semibold uppercase tracking-wider text-text-muted">
-              Awaiting Me
+              {moduleFilter && moduleFilter !== 'ALL' ? `${moduleFilter} Pending` : 'Awaiting Action'}
             </p>
             <p className="text-2xl font-bold font-mono text-heading mt-1">
               {summaryCounts.pending || 0}
@@ -832,37 +866,24 @@ export default function ApprovalsPage() {
         <div className="inline-flex rounded-xl bg-surface border border-border p-1 shadow-2xs">
           <button
             type="button"
-            onClick={() => setActiveTab('AWAITING')}
+            onClick={() => setActiveTab('PENDING')}
             className={`flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              activeTab === 'AWAITING'
+              activeTab === 'PENDING'
                 ? 'bg-primary text-white shadow-xs'
                 : 'text-text-muted hover:text-heading'
             }`}
           >
             <IconClock size={14} />
-            <span>Awaiting My Action</span>
+            <span>Pending Approvals</span>
             <span
               className={`font-mono text-2xs px-1.5 py-0.2 rounded-full font-bold ${
-                activeTab === 'AWAITING'
+                activeTab === 'PENDING'
                   ? 'bg-white/20 text-white'
                   : 'bg-border text-heading'
               }`}
             >
-              {activeTab === 'AWAITING' ? items.length : summaryCounts.pending || 0}
+              {activeTab === 'PENDING' ? items.length : summaryCounts.pending || 0}
             </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('PENDING_ALL')}
-            className={`flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              activeTab === 'PENDING_ALL'
-                ? 'bg-primary text-white shadow-xs'
-                : 'text-text-muted hover:text-heading'
-            }`}
-          >
-            <IconFileText size={14} />
-            <span>All Pending</span>
           </button>
 
           <button
@@ -875,7 +896,7 @@ export default function ApprovalsPage() {
             }`}
           >
             <IconHistory size={14} />
-            <span>History</span>
+            <span>Approval History</span>
             <span
               className={`font-mono text-2xs px-1.5 py-0.2 rounded-full font-bold ${
                 activeTab === 'HISTORY'
@@ -883,7 +904,7 @@ export default function ApprovalsPage() {
                   : 'bg-border text-heading'
               }`}
             >
-              {(summaryCounts.approved || 0) + (summaryCounts.rejected || 0)}
+              {(summaryCounts.approved || 0) + (summaryCounts.rejected || 0) + (summaryCounts.cancelled || 0)}
             </span>
           </button>
         </div>
@@ -892,8 +913,7 @@ export default function ApprovalsPage() {
         <div className="text-xs text-text-muted flex items-center gap-1.5 self-end sm:self-center">
           <IconShieldCheck size={14} className="text-primary shrink-0" />
           <span>
-            {activeTab === 'AWAITING' && 'Pending requests waiting for your role’s decision'}
-            {activeTab === 'PENDING_ALL' && 'All pending approval requests across the system'}
+            {activeTab === 'PENDING' && 'Pending requests waiting for an approval decision'}
             {activeTab === 'HISTORY' && 'Completed decisions history (Approved, Rejected, Cancelled)'}
           </span>
         </div>
@@ -963,14 +983,12 @@ export default function ApprovalsPage() {
         isLoading={isLoading}
         entityName="approvals"
         emptyTitle={
-          activeTab === 'AWAITING'
+          activeTab === 'PENDING'
             ? 'Your approval queue is completely clear!'
-            : activeTab === 'PENDING_ALL'
-            ? 'No pending approval requests found'
             : 'No approval history records found'
         }
         emptyDescription={
-          activeTab === 'AWAITING'
+          activeTab === 'PENDING'
             ? 'No actions are currently waiting for your role’s decision.'
             : 'Try adjusting your search criteria or clearing filters.'
         }
