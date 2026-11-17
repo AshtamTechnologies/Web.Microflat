@@ -7,16 +7,28 @@
 import { Check, Ban } from 'lucide-react';
 
 export default function StatusSwitch({
-  checked = true,
+  checked,
+  isActive,
   onChange,
+  onToggle,
   id = 'status-switch',
   disabled = false,
   className = '',
   size = 'sm', // 'sm' (sleek/compact, default) | 'md'
 }) {
+  const isChecked =
+    checked !== undefined
+      ? Boolean(checked)
+      : isActive !== undefined
+      ? Boolean(isActive)
+      : true;
+
   function handleToggle() {
-    if (!disabled && onChange) {
-      onChange(!checked);
+    if (disabled) return;
+    if (onChange) {
+      onChange(!isChecked);
+    } else if (onToggle) {
+      onToggle(!isChecked);
     }
   }
 
@@ -34,8 +46,8 @@ export default function StatusSwitch({
       role="switch"
       id={id}
       tabIndex={disabled ? -1 : 0}
-      aria-checked={checked}
-      aria-label="Account status toggle"
+      aria-checked={isChecked}
+      aria-label="Status toggle"
       onClick={handleToggle}
       onKeyDown={handleKeyDown}
       className={[
@@ -47,7 +59,7 @@ export default function StatusSwitch({
         'transition-colors duration-200 ease-in-out',
         'shadow-2xs border border-border',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-        checked ? 'bg-primary border-primary' : 'bg-surface border-border',
+        isChecked ? 'bg-primary border-primary' : 'bg-surface border-border',
         disabled ? 'opacity-50 cursor-not-allowed' : '',
         className,
       ]
@@ -61,7 +73,7 @@ export default function StatusSwitch({
           isSmall
             ? 'left-2.5 text-[10px] font-bold tracking-tight text-on-primary'
             : 'left-3 text-2xs font-bold tracking-tight text-on-primary',
-          checked ? 'opacity-100' : 'opacity-0',
+          isChecked ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
       >
         Active
@@ -74,7 +86,7 @@ export default function StatusSwitch({
           isSmall
             ? 'right-2.5 text-[10px] font-bold tracking-tight text-text-muted'
             : 'right-3 text-2xs font-bold tracking-tight text-text-muted',
-          !checked ? 'opacity-100' : 'opacity-0',
+          !isChecked ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
       >
         Inactive
@@ -89,22 +101,21 @@ export default function StatusSwitch({
             ? 'top-0.5 bottom-0.5 w-5.5'
             : 'top-1 bottom-1 w-6.5',
           isSmall
-            ? checked ? 'left-[calc(100%-24px)]' : 'left-0.5'
-            : checked ? 'left-[calc(100%-28px)]' : 'left-1',
+            ? isChecked ? 'left-[calc(100%-24px)]' : 'left-0.5'
+            : isChecked ? 'left-[calc(100%-28px)]' : 'left-1',
         ].join(' ')}
       >
-        {checked ? (
+        {isChecked ? (
           <Check
             size={isSmall ? 11 : 12}
             strokeWidth={3}
             className="text-primary animate-in zoom-in-75 duration-150"
-            aria-hidden="true"
           />
         ) : (
           <Ban
-            size={isSmall ? 10 : 12}
+            size={isSmall ? 11 : 12}
+            strokeWidth={2.5}
             className="text-text-muted animate-in zoom-in-75 duration-150"
-            aria-hidden="true"
           />
         )}
       </div>

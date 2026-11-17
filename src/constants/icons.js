@@ -124,7 +124,7 @@ import {
   Activity,
   Smartphone,
   Laptop,
-  Tablet, Bell, ListTodo,
+  Tablet, Bell, BellRing, ListTodo,
 } from 'lucide-react';
 
 // Custom image assets from assets folder
@@ -197,6 +197,8 @@ export const IconProductCategories = FolderTree;
 export const IconUOM = Scale;
 export const IconRegions = MapPin;
 export const IconPaymentTerms = HandCoins;
+export const IconDeliveryTerms = Truck;
+export const IconNotificationSetup = BellRing;
 export const IconProcessFlow = Workflow;
 export const IconWorkflow = Workflow;
 export const IconGrades = Target;
