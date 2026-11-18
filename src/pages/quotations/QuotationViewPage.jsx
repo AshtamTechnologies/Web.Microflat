@@ -4,8 +4,9 @@
  * Route: /quotations/:id
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { triggerPdfDownload } from '../../utils/fileHelpers';
 import {
   IconBack,
   IconEdit,
@@ -48,9 +49,15 @@ import useColumnResize from '../../hooks/useColumnResize';
 export default function QuotationViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getQuotationById } = useQuotationsContext();
+  const { getQuotationById, fetchQuotationDetail } = useQuotationsContext();
 
   const quotation = getQuotationById(id);
+
+  useEffect(() => {
+    if (id && fetchQuotationDetail) {
+      fetchQuotationDetail(id);
+    }
+  }, [id, fetchQuotationDetail]);
 
   // Modals state
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -245,16 +252,27 @@ export default function QuotationViewPage() {
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <Button
+            {/* Quotation PDF download hidden until backend provides PDF generation endpoint */}
+            {/* <Button
               variant="secondary"
               size="sm"
               onClick={() => {
-                // static: does nothing right now
+                triggerPdfDownload(`Quotation-${quotation.quotationNo}-Rev${activeRevision?.revisionNo ?? 0}.pdf`, {
+                  title: `Commercial Quotation ${quotation.quotationNo}`,
+                  documentType: 'Official Quotation',
+                  fileName: `Quotation-${quotation.quotationNo}.pdf`,
+                  clientName: quotation.clientName,
+                  quotationNo: quotation.quotationNo,
+                  revisionNo: `Rev ${activeRevision?.revisionNo ?? 0}`,
+                  totalAmount: activeRevision?.grandTotal ? formatCurrency(activeRevision.grandTotal, quotation.currency) : undefined,
+                  uploadedAt: activeRevision?.revisionDate || quotation.revisionDate || new Date().toISOString().split('T')[0],
+                  remarks: `Client: ${quotation.clientName} | Inquiry: ${quotation.inquiryNo || 'Direct'}`,
+                });
               }}
               icon={<IconDownload size={14} />}
             >
               Download PDF
-            </Button>
+            </Button> */}
 
             <Button
               variant="secondary"
@@ -317,6 +335,32 @@ export default function QuotationViewPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            {quotation.poDetails?.fileName && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  triggerPdfDownload(quotation.poDetails.fileName || `Client-PO-${quotation.quotationNo}.pdf`, {
+                    title: `Customer Purchase Order (${quotation.poDetails.poNumber})`,
+                    documentType: quotation.poDetails.documentTypeName || 'Customer Purchase Order',
+                    fileName: quotation.poDetails.fileName || `Client-PO-${quotation.quotationNo}.pdf`,
+                    clientName: quotation.clientName,
+                    quotationNo: quotation.quotationNo,
+                    poNumber: quotation.poDetails.poNumber,
+                    receivedOn: quotation.poDetails.receivedOn,
+                    expectedDeliveryDate: quotation.poDetails.expectedDeliveryDate,
+                    totalAmount: activeRevision?.grandTotal ? formatCurrency(activeRevision.grandTotal, quotation.currency) : undefined,
+                    uploadedAt: quotation.poDetails.receivedOn,
+                    remarks: quotation.poDetails.remarks || 'Customer PO Verified & Linked to Quotation',
+                  });
+                }}
+                icon={<IconDownload size={13} />}
+                className="text-xs bg-white/70 dark:bg-surface border-emerald-500/30 text-emerald-900 dark:text-emerald-200"
+              >
+                Download PO
+              </Button>
+            )}
             <Button
               type="button"
               variant="secondary"

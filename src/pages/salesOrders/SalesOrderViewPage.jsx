@@ -96,6 +96,17 @@ export default function SalesOrderViewPage() {
       link.remove();
       return;
     }
+    if (doc?.file instanceof Blob) {
+      const blobUrl = URL.createObjectURL(doc.file);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = doc.fileName || 'document.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      return;
+    }
     downloadSalesOrderDocument?.(doc?.id, doc?.fileName);
   }
 

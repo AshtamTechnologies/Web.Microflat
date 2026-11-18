@@ -29,6 +29,8 @@ import {
   DatePicker,
   SearchableSelect,
   SearchableMultiSelect,
+  PaymentTermsSelect,
+  DeliveryTermsSelect,
   Textarea,
   TableContainer,
   Th,
@@ -48,8 +50,6 @@ import { useUsersContext } from '../../context/UsersContext';
 import {
   TAX_SLABS,
   TAX_TREATMENTS,
-  PAYMENT_TERMS_OPTIONS,
-  DELIVERY_TERMS_OPTIONS,
   calculateQuotationTotals,
   formatCurrency,
 } from '../../mocks/quotations';
@@ -120,8 +120,8 @@ export default function QuotationFormPage() {
     contactPhone: '',
     currency: 'INR',
     validUntil: '',
-    paymentTerms: ['Net 30 Days'],
-    deliveryTerms: ['Ex-works Ahmedabad'],
+    paymentTerms: [],
+    deliveryTerms: [],
     termsAndConditions: '',
     taxTreatment: 'INTRA_STATE',
     items: [],
@@ -130,6 +130,7 @@ export default function QuotationFormPage() {
   // Staged Document Attachments & Expandable Product Descriptions
   const [stagedDocuments, setStagedDocuments] = useState([]);
   const [expandedDescIds, setExpandedDescIds] = useState(() => new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Revision-Mode Negotiation State
   const [logNegotiationStage, setLogNegotiationStage] = useState(false);
@@ -328,10 +329,10 @@ export default function QuotationFormPage() {
         validUntil: targetQuotation.validUntil || '',
         paymentTerms: Array.isArray(targetQuotation.paymentTerms)
           ? targetQuotation.paymentTerms
-          : [targetQuotation.paymentTerms || 'Net 30 Days'],
+          : (targetQuotation.paymentTerms ? [targetQuotation.paymentTerms] : []),
         deliveryTerms: Array.isArray(targetQuotation.deliveryTerms)
           ? targetQuotation.deliveryTerms
-          : [targetQuotation.deliveryTerms || 'Ex-works Ahmedabad'],
+          : (targetQuotation.deliveryTerms ? [targetQuotation.deliveryTerms] : []),
         termsAndConditions: targetQuotation.termsAndConditions || '',
         taxTreatment: targetQuotation.taxTreatment || 'INTRA_STATE',
         items: latestRev?.items?.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })) || [],
@@ -343,13 +344,22 @@ export default function QuotationFormPage() {
         clientContact: targetQuotation.contactPerson || prev.clientContact || '',
       }));
     } else if (!isRevisionMode) {
-      const nextNo = getNextQuotationNo();
-      setFormData((prev) => ({
-        ...prev,
-        quotationNo: nextNo,
-        revisionNo: 0,
-        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      }));
+      Promise.resolve(getNextQuotationNo()).then((nextNo) => {
+        let cleanNo = '';
+        if (typeof nextNo === 'string') {
+          cleanNo = nextNo.trim();
+        } else if (nextNo && typeof nextNo === 'object') {
+          cleanNo = nextNo.documentNumber || nextNo.nextNumber || '';
+        }
+        if (cleanNo) {
+          setFormData((prev) => ({
+            ...prev,
+            quotationNo: cleanNo,
+            revisionNo: 0,
+            validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          }));
+        }
+      });
 
       // If inquiryId was passed in query parameter, preselect it
       if (inquiryIdParam) {
@@ -687,7 +697,7 @@ export default function QuotationFormPage() {
   };
 
   // Save handler with validation & auto-scroll
-  const handleSave = (statusToSet = 'Draft') => {
+  const handleSave = async (statusToSet = 'Draft') => {
     // 1. Revision Mode Validations
     if (isRevisionMode) {
       if (!formData.revisionDate) {
@@ -740,23 +750,32 @@ export default function QuotationFormPage() {
       return;
     }
 
-    if (isRevisionMode) {
-      const payload = {
-        ...formData,
-        status: statusToSet,
-        newNegotiation: logNegotiationStage ? negotiationStageData : null,
-        newDocuments: stagedDocuments,
-      };
-      createRevision(targetQuotation.id, payload);
-      navigate(`/quotations/${targetQuotation.id}`);
-    } else {
-      const payload = {
-        ...formData,
-        status: statusToSet,
-        documents: stagedDocuments,
-      };
-      const newQuote = createQuotation(payload);
-      navigate(`/quotations/${newQuote.id}`);
+    try {
+      setIsSubmitting(true);
+      if (isRevisionMode) {
+        const payload = {
+          ...formData,
+          status: statusToSet,
+          newNegotiation: logNegotiationStage ? negotiationStageData : null,
+          newDocuments: stagedDocuments,
+        };
+        await createRevision(targetQuotation.id, payload);
+        navigate(`/quotations/${targetQuotation.id}`);
+      } else {
+        const payload = {
+          ...formData,
+          status: statusToSet,
+          documents: stagedDocuments,
+        };
+        const newQuote = await createQuotation(payload);
+        const targetId = newQuote?.id || targetQuotation?.id || formData.quotationNo;
+        navigate(`/quotations/${targetId}`);
+      }
+    } catch (err) {
+      console.error('Failed to save quotation:', err);
+      toast.error(err?.message || 'Failed to save quotation. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -788,19 +807,25 @@ export default function QuotationFormPage() {
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <CancelButton onClick={handleCancel} size="sm">
+            <CancelButton onClick={handleCancel} size="sm" disabled={isSubmitting}>
               Cancel
             </CancelButton>
-            <Button variant="secondary" size="sm" onClick={() => handleSave('Draft')}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleSave('Draft')}
+              disabled={isSubmitting}
+            >
               Save as Draft
             </Button>
             <Button
               variant="primary"
               size="sm"
               onClick={() => handleSave('Sent')}
+              disabled={isSubmitting}
               icon={<IconCheck size={16} />}
             >
-              Save & Mark as Sent
+              {isSubmitting ? 'Saving...' : 'Save & Mark as Sent'}
             </Button>
           </div>
         }
@@ -1341,12 +1366,8 @@ export default function QuotationFormPage() {
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Multi-Select Payment Terms */}
-            <SearchableMultiSelect
-              label="Payment Terms"
-              placeholder="Select applicable payment terms..."
-              searchPlaceholder="Search payment terms..."
-              options={PAYMENT_TERMS_OPTIONS}
+            {/* Dynamic Multi-Select Payment Terms */}
+            <PaymentTermsSelect
               value={formData.paymentTerms}
               name="paymentTerms"
               maxDisplayTags={10}
@@ -1356,12 +1377,8 @@ export default function QuotationFormPage() {
               }}
             />
 
-            {/* Multi-Select Delivery Terms */}
-            <SearchableMultiSelect
-              label="Delivery Terms"
-              placeholder="Select applicable delivery terms..."
-              searchPlaceholder="Search delivery terms..."
-              options={DELIVERY_TERMS_OPTIONS}
+            {/* Dynamic Multi-Select Delivery Terms */}
+            <DeliveryTermsSelect
               value={formData.deliveryTerms}
               name="deliveryTerms"
               maxDisplayTags={10}
@@ -1605,13 +1622,18 @@ export default function QuotationFormPage() {
         }
       >
         <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
-          <CancelButton onClick={handleCancel} className="w-full sm:w-auto justify-center">
+          <CancelButton
+            onClick={handleCancel}
+            disabled={isSubmitting}
+            className="w-full sm:w-auto justify-center"
+          >
             Cancel
           </CancelButton>
 
           <Button
             variant="secondary"
             onClick={() => handleSave('Draft')}
+            disabled={isSubmitting}
             className="w-full sm:w-auto justify-center"
           >
             Save as Draft
@@ -1620,10 +1642,11 @@ export default function QuotationFormPage() {
           <Button
             variant="primary"
             onClick={() => handleSave('Sent')}
+            disabled={isSubmitting}
             icon={<IconCheck size={16} />}
             className="w-full sm:w-auto justify-center"
           >
-            Save & Mark as Sent
+            {isSubmitting ? 'Saving...' : 'Save & Mark as Sent'}
           </Button>
         </div>
       </FormActionsBar>

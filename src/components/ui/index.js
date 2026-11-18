@@ -38,3 +38,9 @@ export { default as CollapsibleCard } from './CollapsibleCard';
 export { default as IconPicker } from './IconPicker';
 export { default as GlobalTooltip, Tooltip } from './GlobalTooltip';
 export { default as KanbanBoard, KanbanColumn, KanbanCard } from './KanbanBoard';
+export { default as DocumentUploader } from './DocumentUploader';
+export {
+  default as CommercialTermsSelect,
+  PaymentTermsSelect,
+  DeliveryTermsSelect,
+} from './CommercialTermsSelect';
