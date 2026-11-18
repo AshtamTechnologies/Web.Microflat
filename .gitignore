@@ -26,5 +26,6 @@ dist-ssr
 *.docx
 InquiryAddProductMockup.html
 microflat-quotation-ui-reference.html
-*md
+*.md
 !MICROFLAT_PROJECT_RULES_AND_WORK_LOG.md
+!DOCUMENT_PREVIEW_ANALYSIS_AND_SOLUTIONS.md

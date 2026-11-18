@@ -14,6 +14,8 @@ export function PaymentTermsProvider({ children }) {
   const [hasRequested, setHasRequested] = useState(false);
   const isRelevantRoute = Boolean(
     location?.pathname?.startsWith('/configuration/payment-terms') ||
+    location?.pathname?.startsWith('/quotations') ||
+    location?.pathname?.startsWith('/sales-orders') ||
     location?.pathname?.startsWith('/clients') ||
     location?.pathname?.startsWith('/vendors')
   );

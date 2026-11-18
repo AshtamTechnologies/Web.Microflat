@@ -86,6 +86,8 @@ import * as mockNotifications from './notifications/notificationsService.mock';
 
 import * as realOrderConfirmations from './salesOrders/orderConfirmationService';
 import * as mockOrderConfirmations from './salesOrders/orderConfirmationService.mock';
+import * as realQuotations from './quotations/quotationService';
+import * as mockQuotations from './quotations/quotationService.mock';
 import * as realDeliveryTerms from './deliveryTerms/deliveryTermService';
 import * as mockDeliveryTerms from './deliveryTerms/deliveryTermService.mock';
 
@@ -119,6 +121,7 @@ export const emailTemplatesService = useMock ? mockEmailTemplates : realEmailTem
 export const myQueueService = useMock ? mockMyQueue : realMyQueue;
 export const notificationsService = useMock ? mockNotifications : realNotifications;
 export const orderConfirmationService = useMock ? mockOrderConfirmations : realOrderConfirmations;
+export const quotationService = useMock ? mockQuotations : realQuotations;
 export const deliveryTermService = useMock ? mockDeliveryTerms : realDeliveryTerms;
 export const notificationSetupService = useMock ? mockNotificationSetup : realNotificationSetup;
 export { delegationService };

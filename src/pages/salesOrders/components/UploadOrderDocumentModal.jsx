@@ -1,70 +1,75 @@
 import { useState } from 'react';
-import { Modal, Button, CancelButton, Input, SearchableSelect } from '../../../components/ui';
+import toast from 'react-hot-toast';
+import { Modal, Button, CancelButton, Input, DocumentUploader } from '../../../components/ui';
 import { useSalesOrdersContext } from '../../../context/SalesOrdersContext';
-import { ORDER_DOCUMENT_TYPES } from '../../../mocks/salesOrders';
 import { IconUploadCloud } from '../../../constants/icons';
 
 export default function UploadOrderDocumentModal({ isOpen, onClose, order }) {
   const { uploadSalesOrderDocument } = useSalesOrdersContext();
-  const [docType, setDocType] = useState('Client PO');
-  const [fileName, setFileName] = useState('');
+  const [selectedDocTypeId, setSelectedDocTypeId] = useState('');
+  const [docTypeObj, setDocTypeObj] = useState(null);
+  const [fileData, setFileData] = useState(null);
   const [remarks, setRemarks] = useState('');
-
-  function handleFileChange(e) {
-    if (e.target.files && e.target.files[0]) {
-      setFileName(e.target.files[0].name);
-    }
-  }
+  const [error, setError] = useState('');
 
   function handleUpload() {
     if (!order) return;
+    if (!fileData) {
+      setError('Please select or attach a file to upload.');
+      toast.error('Please select a file to upload.');
+      return;
+    }
+
+    const docTypeName = docTypeObj?.label || fileData.documentTypeName || 'Client PO';
     uploadSalesOrderDocument(order.id, {
-      fileName:
-        fileName || `${docType.replace(/\s+/g, '_')}_${order.orderConfirmationNo}.pdf`,
-      documentType: docType,
-      fileSize: '340 KB',
+      fileName: fileData.fileName || `${docTypeName.replace(/\s+/g, '_')}_${order.orderConfirmationNo}.pdf`,
+      documentType: docTypeName,
+      documentTypeId: docTypeObj?.id || selectedDocTypeId || null,
+      fileSize: fileData.fileSize || '340 KB',
+      file: fileData.file || null,
       remarks,
     });
-    setFileName('');
+
+    setFileData(null);
     setRemarks('');
+    setError('');
+    onClose();
+  }
+
+  function handleClose() {
+    setFileData(null);
+    setRemarks('');
+    setError('');
     onClose();
   }
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       title="Upload Order Confirmation Document"
-      maxWidth="max-w-md"
+      maxWidth="max-w-lg"
     >
       <div className="space-y-4">
-        <SearchableSelect
-          label="Document Type"
+        {/* Reusable Document Uploader linked to Document Types Master */}
+        <DocumentUploader
+          label="Select File"
           required
-          options={ORDER_DOCUMENT_TYPES}
-          value={docType}
-          onChange={(e) => setDocType(e.target.value)}
+          showDocTypeSelect={true}
+          docTypeLabel="Document Type"
+          defaultDocTypeKeyword="Order"
+          selectedDocTypeId={selectedDocTypeId}
+          onDocTypeChange={(typeId, obj) => {
+            setSelectedDocTypeId(typeId);
+            setDocTypeObj(obj);
+          }}
+          value={fileData}
+          onChange={(data) => {
+            setFileData(data);
+            if (error) setError('');
+          }}
+          error={error}
         />
-
-        <div>
-          <label className="block text-xs font-semibold text-text-muted mb-1.5">
-            Select File <span className="text-danger">*</span>
-          </label>
-          <div className="border border-dashed border-border rounded-xl p-4 text-center bg-surface/50 hover:bg-surface transition-colors cursor-pointer relative">
-            <input
-              type="file"
-              onChange={handleFileChange}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-            />
-            <IconUploadCloud className="mx-auto text-primary mb-1" size={24} />
-            <div className="text-xs font-medium text-heading">
-              {fileName || 'Click to select or drag file here'}
-            </div>
-            <div className="text-3xs text-text-muted mt-0.5">
-              PDF, DOC, XLS, PNG, JPG up to 15MB
-            </div>
-          </div>
-        </div>
 
         <Input
           label="Remarks / Description (Optional)"
@@ -74,7 +79,7 @@ export default function UploadOrderDocumentModal({ isOpen, onClose, order }) {
         />
 
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-          <CancelButton onClick={onClose}>Cancel</CancelButton>
+          <CancelButton onClick={handleClose}>Cancel</CancelButton>
           <Button variant="primary" onClick={handleUpload} icon={<IconUploadCloud size={15} />}>
             Upload Document
           </Button>
@@ -83,4 +88,3 @@ export default function UploadOrderDocumentModal({ isOpen, onClose, order }) {
     </Modal>
   );
 }
-

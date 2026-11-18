@@ -18,6 +18,7 @@ import {
   getNextOrderStatuses,
 } from '../mocks/salesOrders';
 import { orderConfirmationService, isMockApi } from '../services';
+import { triggerPdfDownload } from '../utils/fileHelpers';
 
 const SalesOrdersContext = createContext(null);
 const STORAGE_KEY = 'microflat_sales_orders_data';
@@ -650,7 +651,7 @@ export function SalesOrdersProvider({ children }) {
    * Download a document by ID.
    */
   const downloadSalesOrderDocument = useCallback(
-    async (docId, fileName) => {
+    async (docId, fileName = 'Customer_PO.pdf') => {
       const isNumericDocId = typeof docId === 'number' || /^\d+$/.test(String(docId));
       if (!isMockApi && isNumericDocId) {
         try {
@@ -660,7 +661,12 @@ export function SalesOrdersProvider({ children }) {
           toast.error('Failed to download document from server.');
         }
       }
-      toast('Document download simulated in offline mode.', { icon: '📄' });
+      toast(`Downloading document "${fileName}"`, { icon: '📄' });
+      triggerPdfDownload(fileName, {
+        title: 'Customer Purchase Order',
+        documentType: 'Client PO',
+        fileName,
+      });
     },
     []
   );

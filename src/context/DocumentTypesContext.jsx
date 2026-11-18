@@ -14,7 +14,9 @@ export function DocumentTypesProvider({ children }) {
   const [hasRequested, setHasRequested] = useState(false);
   const isRelevantRoute = Boolean(
     location?.pathname?.startsWith('/configuration/document-types') ||
-    location?.pathname?.startsWith('/inquiries')
+    location?.pathname?.startsWith('/inquiries') ||
+    location?.pathname?.startsWith('/quotations') ||
+    location?.pathname?.startsWith('/sales-orders')
   );
   const shouldFetch = isRelevantRoute || hasRequested;
 

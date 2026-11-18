@@ -42,6 +42,9 @@ import {
   TableContainer,
   Th,
   Td,
+  DocumentUploader,
+  PaymentTermsSelect,
+  DeliveryTermsSelect,
 } from '../../components/ui';
 import { useSalesOrdersContext } from '../../context/SalesOrdersContext';
 import { useQuotationsContext } from '../../context/QuotationsContext';
@@ -52,10 +55,9 @@ import {
   ORDER_DOCUMENT_TYPES,
   TAX_SLABS,
   TAX_TREATMENTS,
-  PAYMENT_TERMS_OPTIONS,
-  DELIVERY_TERMS_OPTIONS,
 } from '../../mocks/salesOrders';
 import { formatDate } from '../../utils/dateUtils';
+import { triggerPdfDownload } from '../../utils/fileHelpers';
 import useColumnResize from '../../hooks/useColumnResize';
 
 function formatReadableFileSize(bytes = 0) {
@@ -87,12 +89,14 @@ function buildPrefillFromQuotation(quotation) {
     ? [
         {
           id: `oc-doc-inherited-${Date.now()}`,
+          documentTypeId: quotation.poDetails.documentTypeId || null,
           fileName: quotation.poDetails.fileName,
-          documentType: 'Client PO',
+          documentType: quotation.poDetails.documentTypeName || 'Client PO',
           uploadedAt:
             quotation.poDetails.receivedOn ||
             new Date().toISOString().split('T')[0],
           fileSize: quotation.poDetails.fileSize || '350 KB',
+          file: quotation.poDetails.file || null,
           remarks: 'Inherited from Customer PO recording on Quotation',
         },
       ]
@@ -113,7 +117,7 @@ function buildPrefillFromQuotation(quotation) {
     clientPoNo: quotation.poDetails?.poNumber || '',
     clientPoDate: quotation.poDetails?.receivedOn || '',
     expectedDeliveryDate: quotation.poDetails?.expectedDeliveryDate || '',
-    paymentTerms: toTermsArray(quotation.paymentTerms, ['Net 30 Days']),
+    paymentTerms: toTermsArray(quotation.paymentTerms, []),
     deliveryTerms: toTermsArray(quotation.deliveryTerms, []),
     currency: latestRev?.currency || quotation.currency || 'INR',
     taxTreatment: latestRev?.taxTreatment || quotation.taxTreatment || 'INTRA_STATE',
@@ -199,7 +203,7 @@ export default function SalesOrderFormPage() {
         clientPoNo: existingOrder.clientPoNo || '',
         clientPoDate: existingOrder.clientPoDate || '',
         expectedDeliveryDate: existingOrder.expectedDeliveryDate || '',
-        paymentTerms: toTermsArray(existingOrder.paymentTerms, ['Net 30 Days']),
+        paymentTerms: toTermsArray(existingOrder.paymentTerms, []),
         deliveryTerms: toTermsArray(existingOrder.deliveryTerms, []),
         currency: existingOrder.currency || 'INR',
         taxTreatment: existingOrder.taxTreatment || 'INTRA_STATE',
@@ -240,7 +244,7 @@ export default function SalesOrderFormPage() {
       clientPoNo: prefill?.clientPoNo || '',
       clientPoDate: prefill?.clientPoDate || '',
       expectedDeliveryDate: prefill?.expectedDeliveryDate || '',
-      paymentTerms: prefill?.paymentTerms ? toTermsArray(prefill.paymentTerms) : ['Net 30 Days'],
+      paymentTerms: prefill?.paymentTerms ? toTermsArray(prefill.paymentTerms) : [],
       deliveryTerms: prefill?.deliveryTerms ? toTermsArray(prefill.deliveryTerms) : [],
       currency: prefill?.currency || 'INR',
       taxTreatment: prefill?.taxTreatment || 'INTRA_STATE',
@@ -286,10 +290,7 @@ export default function SalesOrderFormPage() {
   }, [formData.orderConfirmationDate, isEditMode, fetchNextOrderConfirmationNo]);
 
   const [errors, setErrors] = useState({});
-  const [docType, setDocType] = useState('Client PO');
   const [docRemarks, setDocRemarks] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef(null);
 
   const clientOptions = useMemo(
     () =>
@@ -502,34 +503,6 @@ export default function SalesOrderFormPage() {
     }));
   }
 
-  function handleAttachFiles(fileList) {
-    const files = Array.from(fileList || []);
-    if (files.length === 0) return;
-    const todayIso = new Date().toISOString().split('T')[0];
-    const newDocs = files.map((file, idx) => ({
-      id: `oc-doc-${Date.now()}-${idx}`,
-      fileName: file.name,
-      documentType: docType || 'Client PO',
-      uploadedAt: todayIso,
-      fileSize: formatReadableFileSize(file.size),
-      remarks: docRemarks.trim(),
-    }));
-
-    setFormData((prev) => ({
-      ...prev,
-      documents: [...newDocs, ...(prev.documents || [])],
-    }));
-    setDocRemarks('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    toast.success(
-      files.length === 1
-        ? `Attached "${files[0].name}"`
-        : `Attached ${files.length} documents`
-    );
-  }
-
   function handleDownloadDocument(doc) {
     if (doc?.downloadUrl) {
       const link = document.createElement('a');
@@ -550,20 +523,17 @@ export default function SalesOrderFormPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(blobUrl);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
       return;
     }
     toast(`Downloading document "${doc?.fileName || 'Customer PO'}"`, { icon: '📄' });
-    const content = `MicroFlat ERP Document: ${doc?.fileName || 'Customer PO'}\nType: ${doc?.documentType || 'Client PO'}\nUploaded: ${doc?.uploadedAt || ''}\nRemarks: ${doc?.remarks || ''}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = (doc?.fileName || 'Customer_PO.pdf').replace(/\.pdf$/i, '.txt');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    triggerPdfDownload(doc?.fileName || 'Customer_PO.pdf', {
+      title: 'Customer Purchase Order',
+      documentType: doc?.documentType || 'Client PO',
+      fileName: doc?.fileName || 'Customer_PO.pdf',
+      uploadedAt: doc?.uploadedAt || new Date().toISOString().split('T')[0],
+      remarks: doc?.remarks || '',
+    });
   }
 
   function handleRemoveDocument(docId) {
@@ -618,7 +588,7 @@ export default function SalesOrderFormPage() {
       ...formData,
       paymentTerms: Array.isArray(formData.paymentTerms)
         ? formData.paymentTerms.join(', ')
-        : (formData.paymentTerms || 'Net 30 Days'),
+        : (formData.paymentTerms || ''),
       deliveryTerms: Array.isArray(formData.deliveryTerms)
         ? formData.deliveryTerms.join(', ')
         : (formData.deliveryTerms || ''),
@@ -916,11 +886,7 @@ export default function SalesOrderFormPage() {
           </FormGrid>
 
           <FormGrid columns={3}>
-            <SearchableMultiSelect
-              label="Payment Terms"
-              placeholder="Select payment terms..."
-              searchPlaceholder="Search payment terms..."
-              options={PAYMENT_TERMS_OPTIONS}
+            <PaymentTermsSelect
               value={formData.paymentTerms}
               name="paymentTerms"
               maxDisplayTags={2}
@@ -930,11 +896,7 @@ export default function SalesOrderFormPage() {
               }}
             />
 
-            <SearchableMultiSelect
-              label="Delivery Terms"
-              placeholder="Select delivery terms..."
-              searchPlaceholder="Search delivery terms..."
-              options={DELIVERY_TERMS_OPTIONS}
+            <DeliveryTermsSelect
               value={formData.deliveryTerms}
               name="deliveryTerms"
               maxDisplayTags={2}
@@ -1296,65 +1258,36 @@ export default function SalesOrderFormPage() {
       >
         <div className="space-y-4">
           <div className="p-4 bg-surface/40 border border-border rounded-xl space-y-4">
-            <FormGrid columns={2}>
-              <SearchableSelect
-                label="Document Type"
-                options={ORDER_DOCUMENT_TYPES}
-                value={docType}
-                onChange={(e) => setDocType(e.target.value)}
-              />
-              <Input
-                label="Remarks / Description (Optional)"
-                placeholder="e.g. Client signed PO PDF"
-                value={docRemarks}
-                onChange={(e) => setDocRemarks(e.target.value)}
-              />
-            </FormGrid>
+            <DocumentUploader
+              label="Select or Drop Document Files"
+              showDocTypeSelect={true}
+              docTypeLabel="Document Type"
+              defaultDocTypeKeyword="Order"
+              multiple={true}
+              onFilesAdded={(newFiles) => {
+                const enriched = newFiles.map((f) => ({
+                  ...f,
+                  remarks: docRemarks.trim(),
+                }));
+                setFormData((prev) => ({
+                  ...prev,
+                  documents: [...enriched, ...(prev.documents || [])],
+                }));
+                setDocRemarks('');
+                toast.success(
+                  enriched.length === 1
+                    ? `Attached "${enriched[0].fileName}"`
+                    : `Attached ${enriched.length} documents`
+                );
+              }}
+            />
 
-            <div>
-              <label className="mf-label block mb-1.5">Upload Document</label>
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(true);
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(false);
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(false);
-                  if (e.dataTransfer.files?.length) {
-                    handleAttachFiles(e.dataTransfer.files);
-                  }
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border border-dashed rounded-xl p-5 text-center transition-colors cursor-pointer ${
-                  isDragging
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border bg-bg hover:bg-surface/60'
-                }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={(e) => handleAttachFiles(e.target.files)}
-                  className="hidden"
-                />
-                <IconUploadCloud className="mx-auto text-primary mb-1.5" size={24} />
-                <div className="text-xs font-medium text-heading">
-                  Click to browse or drag &amp; drop files here
-                </div>
-                <div className="text-3xs text-text-muted mt-0.5">
-                  PDF, DOC, XLS, PNG, JPG up to 15MB — attached files appear below
-                </div>
-              </div>
-            </div>
+            <Input
+              label="Remarks / Description for Attached Files (Optional)"
+              placeholder="e.g. Client signed PO PDF or delivery schedule notes"
+              value={docRemarks}
+              onChange={(e) => setDocRemarks(e.target.value)}
+            />
           </div>
 
           {(formData.documents || []).length > 0 && (

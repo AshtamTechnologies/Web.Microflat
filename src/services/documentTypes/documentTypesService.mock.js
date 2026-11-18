@@ -39,6 +39,26 @@ export const MOCK_MODULES = [
     createdOn: '2026-01-01T00:00:00Z',
     lastUpdatedOn: null,
   },
+  {
+    id: 5,
+    moduleCode: 'ORDER_CONFIRMATION',
+    moduleName: 'Order Confirmation',
+    isActive: true,
+    documentTypeCount: 1,
+    approvalTypeCount: 1,
+    createdOn: '2026-01-01T00:00:00Z',
+    lastUpdatedOn: null,
+  },
+  {
+    id: 8,
+    moduleCode: 'PO',
+    moduleName: 'Purchase Order',
+    isActive: true,
+    documentTypeCount: 1,
+    approvalTypeCount: 1,
+    createdOn: '2026-01-01T00:00:00Z',
+    lastUpdatedOn: null,
+  },
 ];
 
 let mockDocumentTypes = [
@@ -92,6 +112,19 @@ let mockDocumentTypes = [
     allowedExtensionList: ['.pdf', '.dwg', '.dxf', '.zip'],
     isActive: true,
     createdOn: '2026-01-10T00:00:00Z',
+    lastUpdatedOn: null,
+  },
+  {
+    id: 10,
+    moduleId: 8,
+    moduleCode: 'PO',
+    documentTypeName: 'PO Document',
+    description: 'Customer Purchase Order document (PO).',
+    maxFileSizeMB: 5,
+    allowedExtensions: '.pdf,.jpg,.jpeg,.png',
+    allowedExtensionList: ['.pdf', '.jpg', '.jpeg', '.png'],
+    isActive: true,
+    createdOn: '2026-11-18T00:00:00Z',
     lastUpdatedOn: null,
   },
 ];
