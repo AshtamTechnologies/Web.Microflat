@@ -175,6 +175,7 @@ export const IconBankDetails = Landmark;
 export const IconPurchaseRequisition = ClipboardList;
 export const IconPR = ClipboardList; // Shorthand alias
 export const IconInquiry = Inbox;
+export const IconDeal = HandCoins;
 export const IconQuotation = FileSpreadsheet;
 export const IconSalesOrder = ClipboardCheck;
 export const IconProduct = PackageCheck;

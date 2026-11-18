@@ -18,6 +18,7 @@ import {
   IconBankDetails,
   IconPR,
   IconInquiry,
+  IconDeal,
   IconQuotation,
   IconSalesOrder,
   IconProduct,
@@ -159,6 +160,12 @@ const navigation = [
         label: 'Inquiry',
         icon: IconInquiry,
         path: '/inquiries',
+        roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+      },
+      {
+        label: 'Deals',
+        icon: IconDeal,
+        path: '/deals',
         roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
       },
       {

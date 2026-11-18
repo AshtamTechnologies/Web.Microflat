@@ -475,7 +475,13 @@ export default function VendorEffectiveDatesPage() {
     phoneNo: '',
     alternatePhoneNo: '',
     email: '',
+    ccEmail: '',
     gstNo: '',
+    panNo: '',
+    cin: '',
+    udhyamNo: '',
+    msmeType: '',
+    msmeActivity: '',
     website: '',
     countryId: '',
     stateId: '',
@@ -504,19 +510,29 @@ export default function VendorEffectiveDatesPage() {
   const [copyAttachments, setCopyAttachments] = useState(true);
   const [submitForApproval, setSubmitForApproval] = useState(true);
   const [apiDocTypes, setApiDocTypes] = useState([]);
+  const [msmeTypes, setMsmeTypes] = useState(['Micro', 'Small', 'Medium']);
+  const [msmeActivities, setMsmeActivities] = useState(['Manufacturing', 'Traders', 'Services']);
 
-  // Fetch active Document Types from GET /api/vendors/lookups
+  // Fetch active Document Types and lookups from GET /api/vendors/lookups
   useEffect(() => {
     let isMounted = true;
     vendorService
       .getVendorLookups()
       .then((data) => {
-        if (isMounted && data?.documentTypes && Array.isArray(data.documentTypes)) {
-          // Show only active document types
-          const activeOnly = data.documentTypes.filter(
-            (dt) => dt.isActive === true || dt.isActive === 'true'
-          );
-          setApiDocTypes(activeOnly);
+        if (isMounted) {
+          if (data?.documentTypes && Array.isArray(data.documentTypes)) {
+            // Show only active document types
+            const activeOnly = data.documentTypes.filter(
+              (dt) => dt.isActive === true || dt.isActive === 'true'
+            );
+            setApiDocTypes(activeOnly);
+          }
+          if (data?.msmeTypes && Array.isArray(data.msmeTypes)) {
+            setMsmeTypes(data.msmeTypes);
+          }
+          if (data?.msmeActivities && Array.isArray(data.msmeActivities)) {
+            setMsmeActivities(data.msmeActivities);
+          }
         }
       })
       .catch((err) => {
@@ -526,6 +542,16 @@ export default function VendorEffectiveDatesPage() {
       isMounted = false;
     };
   }, []);
+
+  const msmeTypeOptions = useMemo(() => [
+    { value: '', label: 'Select MSME Type (Optional)...' },
+    ...msmeTypes.map((t) => ({ value: t, label: t })),
+  ], [msmeTypes]);
+
+  const msmeActivityOptions = useMemo(() => [
+    { value: '', label: 'Select MSME Activity (Optional)...' },
+    ...msmeActivities.map((a) => ({ value: a, label: a })),
+  ], [msmeActivities]);
 
   const documentTypeOptions = useMemo(() => {
     if (apiDocTypes && apiDocTypes.length > 0) {
@@ -771,7 +797,13 @@ export default function VendorEffectiveDatesPage() {
       phoneNo: full.phoneNo || ver.phoneNo || '',
       alternatePhoneNo: full.alternatePhoneNo || ver.alternatePhoneNo || '',
       email: full.email || ver.email || '',
+      ccEmail: full.ccEmail || ver.ccEmail || '',
       gstNo: full.gstNo || ver.gstNo || '',
+      panNo: full.panNo || ver.panNo || '',
+      cin: full.cin || ver.cin || '',
+      udhyamNo: full.udhyamNo || ver.udhyamNo || '',
+      msmeType: full.msmeType || ver.msmeType || '',
+      msmeActivity: full.msmeActivity || ver.msmeActivity || '',
       website: full.website || ver.website || '',
       countryId: full.countryId || ver.countryId || 2,
       stateId: full.stateId || ver.stateId || '',
@@ -795,7 +827,13 @@ export default function VendorEffectiveDatesPage() {
           phoneNo: fetched.phoneNo || '',
           alternatePhoneNo: fetched.alternatePhoneNo || '',
           email: fetched.email || '',
+          ccEmail: fetched.ccEmail || '',
           gstNo: fetched.gstNo || '',
+          panNo: fetched.panNo || '',
+          cin: fetched.cin || '',
+          udhyamNo: fetched.udhyamNo || '',
+          msmeType: fetched.msmeType || '',
+          msmeActivity: fetched.msmeActivity || '',
           website: fetched.website || '',
           countryId: fetched.countryId || 2,
           stateId: fetched.stateId || '',
@@ -856,7 +894,13 @@ export default function VendorEffectiveDatesPage() {
           phoneNo: detail.phoneNo || '',
           alternatePhoneNo: detail.alternatePhoneNo || '',
           email: detail.email || '',
+          ccEmail: detail.ccEmail || '',
           gstNo: detail.gstNo || '',
+          panNo: detail.panNo || '',
+          cin: detail.cin || '',
+          udhyamNo: detail.udhyamNo || '',
+          msmeType: detail.msmeType || '',
+          msmeActivity: detail.msmeActivity || '',
           website: detail.website || '',
           countryId: detail.countryId || 'IN',
           stateId: detail.stateId || '',
@@ -896,7 +940,13 @@ export default function VendorEffectiveDatesPage() {
         phoneNo: src.phoneNo || '',
         alternatePhoneNo: src.alternatePhoneNo || '',
         email: src.email || '',
+        ccEmail: src.ccEmail || '',
         gstNo: src.gstNo || '',
+        panNo: src.panNo || '',
+        cin: src.cin || '',
+        udhyamNo: src.udhyamNo || '',
+        msmeType: src.msmeType || '',
+        msmeActivity: src.msmeActivity || '',
         website: src.website || '',
         countryId: src.countryId || 2,
         stateId: src.stateId || '',
@@ -922,7 +972,13 @@ export default function VendorEffectiveDatesPage() {
         phoneNo: latestVersionRecord?.phoneNo || '',
         alternatePhoneNo: latestVersionRecord?.alternatePhoneNo || '',
         email: latestVersionRecord?.email || '',
+        ccEmail: latestVersionRecord?.ccEmail || '',
         gstNo: latestVersionRecord?.gstNo || '',
+        panNo: latestVersionRecord?.panNo || '',
+        cin: latestVersionRecord?.cin || '',
+        udhyamNo: latestVersionRecord?.udhyamNo || '',
+        msmeType: latestVersionRecord?.msmeType || '',
+        msmeActivity: latestVersionRecord?.msmeActivity || '',
         website: latestVersionRecord?.website || '',
         countryId: latestVersionRecord?.countryId || '',
         stateId: latestVersionRecord?.stateId || '',
@@ -967,6 +1023,34 @@ export default function VendorEffectiveDatesPage() {
 
   function handleInputChange(e) {
     const { name, value } = e.target;
+
+    if (name === 'gstNo') {
+      const upper = typeof value === 'string' ? value.toUpperCase() : value;
+      setFormData((prev) => {
+        const next = { ...prev, gstNo: upper };
+        if (upper.length >= 12 && !prev.panNo) {
+          const panCandidate = upper.slice(2, 12);
+          if (/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panCandidate)) {
+            next.panNo = panCandidate;
+          }
+        }
+        return next;
+      });
+      if (formErrors.gstNo) {
+        setFormErrors((prev) => ({ ...prev, gstNo: '' }));
+      }
+      return;
+    }
+
+    if (name === 'panNo' || name === 'cin' || name === 'udhyamNo') {
+      const upper = typeof value === 'string' ? value.toUpperCase() : value;
+      setFormData((prev) => ({ ...prev, [name]: upper }));
+      if (formErrors[name]) {
+        setFormErrors((prev) => ({ ...prev, [name]: '' }));
+      }
+      return;
+    }
+
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (formErrors[name]) {
       setFormErrors((prev) => ({ ...prev, [name]: '' }));
@@ -1181,6 +1265,26 @@ export default function VendorEffectiveDatesPage() {
       errors.email = 'Please enter a valid email address.';
     }
 
+    // CC Email
+    if (formData.ccEmail?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.ccEmail.trim())) {
+      errors.ccEmail = 'Please enter a valid CC email address.';
+    }
+
+    // GSTIN
+    if (formData.gstNo?.trim() && formData.gstNo.trim().length !== 15) {
+      errors.gstNo = 'GST number must be 15 alphanumeric characters.';
+    }
+
+    // PAN
+    if (formData.panNo?.trim() && formData.panNo.trim().length !== 10) {
+      errors.panNo = 'PAN must be 10 alphanumeric characters.';
+    }
+
+    // CIN
+    if (formData.cin?.trim() && formData.cin.trim().length !== 21) {
+      errors.cin = 'CIN must be 21 characters.';
+    }
+
     // 5. City
     if (!formData.city?.trim()) {
       errors.city = 'City is required.';
@@ -1291,6 +1395,12 @@ export default function VendorEffectiveDatesPage() {
               phoneNo: formData.phoneNo.trim(),
               alternatePhoneNo: formData.alternatePhoneNo?.trim() || '',
               gstNo: formData.gstNo?.trim().toUpperCase() || '',
+              panNo: formData.panNo?.trim().toUpperCase() || '',
+              cin: formData.cin?.trim().toUpperCase() || '',
+              udhyamNo: formData.udhyamNo?.trim().toUpperCase() || '',
+              msmeType: formData.msmeType?.trim() || '',
+              msmeActivity: formData.msmeActivity?.trim() || '',
+              ccEmail: formData.ccEmail?.trim() || '',
               website: formData.website?.trim() || '',
               email: formData.email.trim(),
               countryId: formData.countryId,
@@ -2229,6 +2339,10 @@ export default function VendorEffectiveDatesPage() {
                   mono
                 />
                 <DetailField
+                  label="Vendor Category"
+                  value={vendor?.vendorCategory || selectedVersion?.vendorCategory || 'Not Categorized'}
+                />
+                <DetailField
                   label="Contact Person Name"
                   value={selectedVersion.contactPersonName}
                 />
@@ -2247,9 +2361,8 @@ export default function VendorEffectiveDatesPage() {
                   value={selectedVersion.email}
                 />
                 <DetailField
-                  label="GST / Tax Identification"
-                  value={selectedVersion.gstNo}
-                  mono
+                  label="CC Email Address"
+                  value={selectedVersion.ccEmail}
                 />
                 <DetailField
                   label="Website URL"
@@ -2260,7 +2373,62 @@ export default function VendorEffectiveDatesPage() {
               </div>
             </div>
 
-            {/* 2. Address Details */}
+            {/* 2. Statutory & MSME Registrations */}
+            <div className="space-y-3 pt-6">
+              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                <IconShieldCheck size={15} className="text-primary" />
+                Statutory & MSME Registrations
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 pt-1">
+                <DetailField
+                  label="GST / Tax Identification"
+                  value={selectedVersion.gstNo}
+                  mono
+                />
+                <DetailField
+                  label="Permanent Account Number (PAN)"
+                  value={selectedVersion.panNo}
+                  mono
+                />
+                <DetailField
+                  label="Corporate ID Number (CIN)"
+                  value={selectedVersion.cin}
+                  mono
+                />
+                <DetailField
+                  label="Udyam Registration Number"
+                  value={selectedVersion.udhyamNo}
+                  mono
+                />
+                <DetailField
+                  label="MSME Enterprise Type"
+                  value={selectedVersion.msmeType}
+                />
+                <DetailField
+                  label="MSME Primary Activity"
+                  value={selectedVersion.msmeActivity}
+                />
+              </div>
+
+              {/* Tally / Migration Audit Notice if present */}
+              {(vendor.tallyLedgerName || vendor.tallyGroup || selectedVersion.defaultedFields || selectedVersion.correctedFields) && (
+                <div className="mt-2 rounded-xl border border-primary/20 bg-primary/[0.03] p-3 text-xs space-y-1">
+                  <div className="font-semibold text-heading flex items-center gap-1.5">
+                    <IconBuilding2 size={14} className="text-primary" />
+                    Accounting & Migration Details
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-text-muted">
+                    {vendor.tallyLedgerName && <span>Ledger: <strong className="text-heading font-medium">{vendor.tallyLedgerName}</strong></span>}
+                    {vendor.tallyGroup && <span>Group: <strong className="text-heading font-medium">{vendor.tallyGroup}</strong></span>}
+                    {vendor.tallySubGroup && <span>Sub-Group: <strong className="text-heading font-medium">{vendor.tallySubGroup}</strong></span>}
+                    {selectedVersion.correctedFields && <span>Corrected: <span className="text-success font-medium">{selectedVersion.correctedFields}</span></span>}
+                    {selectedVersion.defaultedFields && <span>Defaulted: <span className="text-warning font-medium">{selectedVersion.defaultedFields}</span></span>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. Address Details */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconLocation size={15} className="text-primary" />
@@ -2295,7 +2463,7 @@ export default function VendorEffectiveDatesPage() {
               </div>
             </div>
 
-            {/* 3. Procurement Notes & Version Audit */}
+            {/* 4. Procurement Notes & Version Audit */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconFileText size={15} className="text-primary" />
@@ -2303,7 +2471,6 @@ export default function VendorEffectiveDatesPage() {
               </div>
               <div className="space-y-3 pt-1">
                 <div className="space-y-1">
-                  {/* <span className="text-2xs font-semibold  tracking-wider text-text-muted block"> */}
                   <span className="view-field-label mf-detail-label">
                     Notes & Terms
                   </span>
@@ -2327,7 +2494,7 @@ export default function VendorEffectiveDatesPage() {
               </div>
             </div>
 
-            {/* 4. Attachments & Supporting Documents (VIEW MODE — Click opens Screen Popup) */}
+            {/* 5. Attachments & Supporting Documents (VIEW MODE — Click opens Screen Popup) */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
@@ -2489,20 +2656,18 @@ export default function VendorEffectiveDatesPage() {
                   />
                 </div>
 
-                {/* GST Number */}
+                {/* CC Email */}
                 <div>
                   <Input
-                    id="gstNo"
-                    name="gstNo"
-                    label="GST / Tax ID"
-                    placeholder="e.g. 24AABCA1234F1Z5"
-                    value={formData.gstNo}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        gstNo: e.target.value.toUpperCase(),
-                      }))
-                    }
+                    id="ccEmail"
+                    name="ccEmail"
+                    label="CC Email Address"
+                    type="email"
+                    placeholder="e.g. accounts@apexcastings.com"
+                    value={formData.ccEmail}
+                    onChange={handleInputChange}
+                    error={formErrors.ccEmail}
+                    hint="Optional carbon-copy email"
                   />
                 </div>
 
@@ -2521,7 +2686,103 @@ export default function VendorEffectiveDatesPage() {
               </div>
             </div>
 
-            {/* Section 2: Address Details */}
+            {/* Section 2: Statutory & MSME Registrations */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
+                <IconShieldCheck size={15} className="text-primary" />
+                Statutory & MSME Registrations
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* GST Number */}
+                <div>
+                  <Input
+                    id="gstNo"
+                    name="gstNo"
+                    label="GST / Tax ID"
+                    placeholder="e.g. 24AABCA1234F1Z5"
+                    maxLength={15}
+                    value={formData.gstNo}
+                    onChange={handleInputChange}
+                    error={formErrors.gstNo}
+                    className="font-mono uppercase"
+                  />
+                </div>
+
+                {/* PAN Number */}
+                <div>
+                  <Input
+                    id="panNo"
+                    name="panNo"
+                    label="Permanent Account Number (PAN)"
+                    placeholder="e.g. AABCA1234F"
+                    maxLength={10}
+                    value={formData.panNo}
+                    onChange={handleInputChange}
+                    error={formErrors.panNo}
+                    className="font-mono uppercase"
+                  />
+                </div>
+
+                {/* CIN */}
+                <div>
+                  <Input
+                    id="cin"
+                    name="cin"
+                    label="Corporate ID Number (CIN)"
+                    placeholder="e.g. U74999GJ2020PTC118123"
+                    maxLength={21}
+                    value={formData.cin}
+                    onChange={handleInputChange}
+                    error={formErrors.cin}
+                    className="font-mono uppercase"
+                  />
+                </div>
+
+                {/* Udyam Registration Number */}
+                <div>
+                  <Input
+                    id="udhyamNo"
+                    name="udhyamNo"
+                    label="Udyam Registration Number"
+                    placeholder="e.g. UDYAM-GJ-01-0012345"
+                    value={formData.udhyamNo}
+                    onChange={handleInputChange}
+                    className="font-mono uppercase"
+                  />
+                </div>
+
+                {/* MSME Enterprise Type */}
+                <div>
+                  <SearchableSelect
+                    id="msmeType"
+                    name="msmeType"
+                    label="MSME Enterprise Type"
+                    placeholder="Select MSME Type..."
+                    searchPlaceholder="Search types..."
+                    options={msmeTypeOptions}
+                    value={formData.msmeType}
+                    onChange={handleInputChange}
+                  />
+                </div>
+
+                {/* MSME Primary Activity */}
+                <div>
+                  <SearchableSelect
+                    id="msmeActivity"
+                    name="msmeActivity"
+                    label="MSME Primary Activity"
+                    placeholder="Select MSME Activity..."
+                    searchPlaceholder="Search activities..."
+                    options={msmeActivityOptions}
+                    value={formData.msmeActivity}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Address Details */}
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
                 <IconLocation size={15} className="text-primary" />
@@ -2623,7 +2884,7 @@ export default function VendorEffectiveDatesPage() {
               </div>
             </div>
 
-            {/* Section 3: Notes & Instructions */}
+            {/* Section 4: Notes & Instructions */}
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
                 <IconFileText size={15} className="text-primary" />
@@ -2643,7 +2904,7 @@ export default function VendorEffectiveDatesPage() {
               </div>
             </div>
 
-            {/* Section 4: Attachments & Supporting Documents (EDIT/ADD MODE — Version-Scoped) */}
+            {/* Section 5: Attachments & Supporting Documents (EDIT/ADD MODE — Version-Scoped) */}
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
                 <IconAttachment size={15} className="text-primary" />

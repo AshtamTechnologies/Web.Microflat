@@ -38,6 +38,9 @@ import InquiriesPage from './pages/inquiries/InquiriesPage';
 import InquiryFormPage from './pages/inquiries/InquiryFormPage';
 import InquiryViewPage from './pages/inquiries/InquiryViewPage';
 import { InquiriesProvider } from './context/InquiriesContext';
+import DealsPage from './pages/deals/DealsPage';
+import DealViewPage from './pages/deals/DealViewPage';
+import { DealsProvider } from './context/DealsContext';
 import { InquiryDocumentsProvider } from './context/InquiryDocumentsContext';
 
 import QuotationsPage from './pages/quotations/QuotationsPage';
@@ -170,6 +173,7 @@ export default function App() {
                         <VendorBankDetailsProvider>
                           <ClientsProvider>
                             <PurchaseRequisitionProvider>
+                              <DealsProvider>
                               <InquiriesProvider>
                                 <ProductsProvider>
                                 <InquiryDocumentsProvider>
@@ -221,6 +225,7 @@ export default function App() {
                                 </InquiryDocumentsProvider>
                                 </ProductsProvider>
                               </InquiriesProvider>
+                              </DealsProvider>
                             </PurchaseRequisitionProvider>
                           </ClientsProvider>
                         </VendorBankDetailsProvider>
@@ -297,6 +302,10 @@ export default function App() {
               <Route path="/inquiries/new" element={<InquiryFormPage />} />
               <Route path="/inquiries/:id" element={<InquiryViewPage />} />
               <Route path="/inquiries/:id/edit" element={<InquiryFormPage />} />
+
+              {/* Deal Routes */}
+              <Route path="/deals" element={<DealsPage />} />
+              <Route path="/deals/:id" element={<DealViewPage />} />
 
               {/* Quotation Routes */}
               <Route path="/quotations" element={<QuotationsPage />} />

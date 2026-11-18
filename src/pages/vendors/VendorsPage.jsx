@@ -71,33 +71,81 @@ const APPROVAL_FILTER_OPTIONS = [
   { value: String(ApprovalStatus.Draft), label: 'Draft' },
 ];
 
+const CATEGORY_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Categories' },
+  { value: 'Goods', label: 'Goods' },
+  { value: 'Services', label: 'Services' },
+  { value: 'Others', label: 'Others' },
+];
+
+const PENDING_CHANGE_OPTIONS = [
+  { value: 'ALL', label: 'All Changes' },
+  { value: 'TRUE', label: 'Pending Revision' },
+  { value: 'FALSE', label: 'No Pending Revision' },
+];
+
+const DEFAULTED_FIELDS_OPTIONS = [
+  { value: 'ALL', label: 'All Records' },
+  { value: 'TRUE', label: 'Needs Data Review' },
+  { value: 'FALSE', label: 'Complete Records' },
+];
+
 export default function VendorsPage() {
   const navigate = useNavigate();
 
   const {
     vendors,
+    allVendors,
     search,
     setSearch,
     statusFilter,
     setStatusFilter,
     approvalFilter,
     setApprovalFilter,
+    categoryFilter,
+    setCategoryFilter,
+    hasPendingChangeFilter,
+    setHasPendingChangeFilter,
+    hasDefaultedFieldsFilter,
+    setHasDefaultedFieldsFilter,
     resetFilters,
+    pageNumber,
+    setPageNumber,
+    pageSize,
+    setPageSize,
+    totalCount,
+    totalPages,
     deleteVendor,
     isLoading: loading,
     refreshVendors,
   } = useVendorsContext();
 
   const hasActiveFilters = Boolean(
-    search.trim() || statusFilter !== 'ALL' || approvalFilter !== 'ALL'
+    search.trim() ||
+    statusFilter !== 'ALL' ||
+    approvalFilter !== 'ALL' ||
+    categoryFilter !== 'ALL' ||
+    hasPendingChangeFilter !== 'ALL' ||
+    hasDefaultedFieldsFilter !== 'ALL'
   );
+
+  const pendingChangeCount = useMemo(() => {
+    return (allVendors || vendors).filter((v) => Boolean(v.hasPendingChange)).length;
+  }, [allVendors, vendors]);
+
+  const defaultedFieldsCount = useMemo(() => {
+    return (allVendors || vendors).filter((v) => Boolean(v.hasDefaultedFields)).length;
+  }, [allVendors, vendors]);
 
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
-  const [pagination, setPagination] = useState({
-    pageIndex: 0,
-    pageSize: 10,
-  });
+  const pagination = useMemo(
+    () => ({
+      pageIndex: Math.max(0, (pageNumber || 1) - 1),
+      pageSize: pageSize || 10,
+    }),
+    [pageNumber, pageSize]
+  );
   const [vendorToDelete, setVendorToDelete] = useState(null);
 
   const [searchParams] = useSearchParams();
@@ -106,6 +154,9 @@ export default function VendorsPage() {
   useEffect(() => {
     const hasStatus = searchParams.has('status');
     const hasApproval = searchParams.has('approval') || searchParams.has('approvalStatus');
+    const hasCategory = searchParams.has('category') || searchParams.has('vendorCategory');
+    const hasPending = searchParams.has('pendingChange') || searchParams.has('hasPendingChange');
+    const hasDefaulted = searchParams.has('defaultedFields') || searchParams.has('hasDefaultedFields');
     const hasSearch = searchParams.has('search');
     const resetParam = searchParams.get('reset') || searchParams.get('filter');
 
@@ -136,10 +187,38 @@ export default function VendorsPage() {
       }
     }
 
+    if (hasCategory) {
+      const rawCat = searchParams.get('category') || searchParams.get('vendorCategory') || '';
+      if (rawCat.toUpperCase() === 'ALL') {
+        setCategoryFilter('ALL');
+      } else {
+        setCategoryFilter(rawCat);
+      }
+    }
+
+    if (hasPending) {
+      const rawP = (searchParams.get('pendingChange') || searchParams.get('hasPendingChange') || '').toUpperCase();
+      setHasPendingChangeFilter(rawP === 'TRUE' ? 'TRUE' : rawP === 'FALSE' ? 'FALSE' : 'ALL');
+    }
+
+    if (hasDefaulted) {
+      const rawD = (searchParams.get('defaultedFields') || searchParams.get('hasDefaultedFields') || '').toUpperCase();
+      setHasDefaultedFieldsFilter(rawD === 'TRUE' ? 'TRUE' : rawD === 'FALSE' ? 'FALSE' : 'ALL');
+    }
+
     if (hasSearch) {
       setSearch(searchParams.get('search') || '');
     }
-  }, [searchParams, setStatusFilter, setApprovalFilter, setSearch, resetFilters]);
+  }, [
+    searchParams,
+    setStatusFilter,
+    setApprovalFilter,
+    setCategoryFilter,
+    setHasPendingChangeFilter,
+    setHasDefaultedFieldsFilter,
+    setSearch,
+    resetFilters,
+  ]);
 
   // Re-fetch vendors whenever VendorsPage mounts to ensure fresh ERP data
   useEffect(() => {
@@ -148,8 +227,16 @@ export default function VendorsPage() {
 
   // Reset pagination to page 1 when search or filters change
   useEffect(() => {
-    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-  }, [search, statusFilter, approvalFilter]);
+    setPageNumber(1);
+  }, [
+    search,
+    statusFilter,
+    approvalFilter,
+    categoryFilter,
+    hasPendingChangeFilter,
+    hasDefaultedFieldsFilter,
+    setPageNumber,
+  ]);
 
   /* ── Column definitions for desktop table ── */
   const columns = useMemo(
@@ -173,7 +260,7 @@ export default function VendorsPage() {
       }),
 
       /* 2. VENDOR NAME & CONTACT PERSON */
-      columnHelper.accessor((row) => `${row.vendorName} ${row.contactPersonName}`, {
+      columnHelper.accessor((row) => `${row.vendorName} ${row.contactPersonName} ${row.vendorCategory || ''} ${row.panNo || ''} ${row.hasPendingChange ? 'pending' : ''}`, {
         id: 'vendorName',
         header: 'VENDOR & CONTACT',
         minSize: 240,
@@ -182,14 +269,33 @@ export default function VendorsPage() {
           const row = info.row.original;
           return (
             <div className="flex flex-col py-0.5">
-              <Link
-                to={`/vendors/${row.vendorId ?? row.id}/effective-dates`}
-                className="font-semibold text-heading text-sm leading-snug hover:text-primary transition-colors truncate text-left cursor-pointer"
-              >
-                {row.vendorName}
-              </Link>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Link
+                  to={`/vendors/${row.vendorId ?? row.id}/effective-dates`}
+                  className="font-semibold text-heading text-sm leading-snug hover:text-primary transition-colors truncate text-left cursor-pointer"
+                >
+                  {row.vendorName}
+                </Link>
+                {row.vendorCategory && (
+                  <span className="inline-flex items-center text-3xs font-medium px-1.5 py-0.5 rounded bg-surface border border-border text-text-muted">
+                    {row.vendorCategory}
+                  </span>
+                )}
+                {row.hasPendingChange && (
+                  <span className="inline-flex items-center text-3xs font-semibold px-1.5 py-0.5 rounded bg-warning/15 text-warning-heading border border-warning/30">
+                    Revision Pending
+                  </span>
+                )}
+                {row.hasDefaultedFields && (
+                  <span className="inline-flex items-center text-3xs font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                    Needs Data Review
+                  </span>
+                )}
+              </div>
               <span className="text-text-muted text-xs leading-normal truncate">
                 {row.contactPersonName} {row.email ? `• ${row.email}` : ''}
+                {row.panNo ? ` • PAN: ${row.panNo}` : ''}
+                {row.tallyGroup ? ` • ${row.tallyGroup}` : ''}
               </span>
             </div>
           );
@@ -272,24 +378,30 @@ export default function VendorsPage() {
   const table = useReactTable({
     data: vendors,
     columns,
+    pageCount: totalPages || 1,
     state: {
       sorting,
       columnSizing,
       pagination,
     },
+    manualPagination: true,
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
-    onPaginationChange: setPagination,
+    onPaginationChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(pagination) : updater;
+      setPageNumber(next.pageIndex + 1);
+      if (next.pageSize && next.pageSize !== pageSize) {
+        setPageSize(next.pageSize);
+      }
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
   });
 
-  const totalRows = vendors.length;
-  const currentPage = pagination.pageIndex;
-  const pageSize = pagination.pageSize;
+  const totalRows = totalCount ?? vendors.length;
 
   /* ── Delete Handler ── */
   function handleDeleteConfirm() {
@@ -339,6 +451,28 @@ export default function VendorsPage() {
 
         <div className="w-full sm:w-44">
           <SearchableSelect
+            id="filter-category"
+            placeholder="All Categories"
+            searchPlaceholder="Search categories..."
+            options={CATEGORY_FILTER_OPTIONS}
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          />
+        </div>
+
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="filter-pending-change"
+            placeholder="All Changes"
+            searchPlaceholder="Search changes..."
+            options={PENDING_CHANGE_OPTIONS}
+            value={hasPendingChangeFilter}
+            onChange={(e) => setHasPendingChangeFilter(e.target.value)}
+          />
+        </div>
+
+        <div className="w-full sm:w-44">
+          <SearchableSelect
             id="filter-status"
             placeholder="All Statuses"
             searchPlaceholder="Search statuses..."
@@ -348,6 +482,63 @@ export default function VendorsPage() {
           />
         </div>
       </TableToolbar>
+
+      {/* ── Quick Filter Pills for Instant 1-Click Toggling ── */}
+      {(pendingChangeCount > 0 || defaultedFieldsCount > 0 || hasPendingChangeFilter !== 'ALL' || hasDefaultedFieldsFilter !== 'ALL') && (
+        <div className="flex items-center gap-2 flex-wrap px-1">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted mr-1">
+            Quick Filters:
+          </span>
+          <button
+            type="button"
+            onClick={() => setHasPendingChangeFilter((prev) => (prev === 'TRUE' ? 'ALL' : 'TRUE'))}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer border ${
+              hasPendingChangeFilter === 'TRUE'
+                ? 'bg-warning/15 text-warning-heading border-warning/40 shadow-2xs font-semibold'
+                : 'bg-surface hover:bg-surface/80 text-text border-border font-medium'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-warning" aria-hidden="true" />
+            <span>Pending Revision</span>
+            {pendingChangeCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-2xs bg-bg/80 border border-border/60 font-mono">
+                {pendingChangeCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setHasDefaultedFieldsFilter((prev) => (prev === 'TRUE' ? 'ALL' : 'TRUE'))}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer border ${
+              hasDefaultedFieldsFilter === 'TRUE'
+                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-2xs font-semibold'
+                : 'bg-surface hover:bg-surface/80 text-text border-border font-medium'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+            <span>Needs Data Review</span>
+            {defaultedFieldsCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-2xs bg-bg/80 border border-border/60 font-mono">
+                {defaultedFieldsCount}
+              </span>
+            )}
+          </button>
+
+          {(hasPendingChangeFilter !== 'ALL' || hasDefaultedFieldsFilter !== 'ALL') && (
+            <button
+              type="button"
+              onClick={() => {
+                setHasPendingChangeFilter('ALL');
+                setHasDefaultedFieldsFilter('ALL');
+              }}
+              className="text-2xs text-text-muted hover:text-primary underline ml-1 cursor-pointer"
+            >
+              Clear quick filters
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Standard TanStack DataTable & Mobile Responsive Cards ── */}
       <DataTable
@@ -392,6 +583,21 @@ export default function VendorsPage() {
                     <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
                       {getApprovalStatusLabel(vendor.approvalStatus)}
                     </Badge>
+                    {vendor.vendorCategory && (
+                      <span className="inline-flex items-center text-3xs font-medium px-1.5 py-0.5 rounded bg-surface border border-border text-text-muted">
+                        {vendor.vendorCategory}
+                      </span>
+                    )}
+                    {vendor.hasPendingChange && (
+                      <span className="inline-flex items-center text-3xs font-semibold px-1.5 py-0.5 rounded bg-warning/15 text-warning-heading border border-warning/30">
+                        Revision Pending
+                      </span>
+                    )}
+                    {vendor.hasDefaultedFields && (
+                      <span className="inline-flex items-center text-3xs font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                        Needs Data Review
+                      </span>
+                    )}
                   </div>
                   <Link
                     to={`/vendors/${vendor.vendorId ?? vendor.id}/effective-dates`}
@@ -401,6 +607,12 @@ export default function VendorsPage() {
                   </Link>
                   <p className="text-xs text-text-muted mt-0.5 flex items-center gap-1.5 flex-wrap">
                     <span>Contact: {vendor.contactPersonName}</span>
+                    {vendor.panNo ? (
+                      <>
+                        <span>•</span>
+                        <span className="font-mono text-2xs">PAN: {vendor.panNo}</span>
+                      </>
+                    ) : null}
                     <span>•</span>
                     <span className="font-mono text-2xs font-medium text-heading">
                       Eff: {formatDateDisplay(vendor.effectiveDate)}
