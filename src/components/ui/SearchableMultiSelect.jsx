@@ -14,7 +14,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Search, Check, X } from 'lucide-react';
+import { ChevronDown, Search, Check, X, Info } from 'lucide-react';
 
 export default function SearchableMultiSelect({
   label,
@@ -34,6 +34,8 @@ export default function SearchableMultiSelect({
   maxDisplayTags = 2,
   size = 'md',
   className = '',
+  onTagInfo = null,
+  onOptionInfo = null,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -255,6 +257,8 @@ export default function SearchableMultiSelect({
                 const opt = options.find(
                   (o) =>
                     o.value === val ||
+                    o.termCode === val ||
+                    o.termName === val ||
                     (typeof val === 'object' &&
                       val !== null &&
                       (o.value === val.id ||
@@ -282,8 +286,24 @@ export default function SearchableMultiSelect({
                   <span
                     key={itemKey}
                     className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 text-xs font-semibold px-2 py-0.5 rounded-badge leading-tight max-w-[280px] shrink-0"
+                    title={opt?.subtitle || opt?.description || labelText}
                   >
                     <span className="truncate">{labelText}</span>
+                    {onTagInfo && (opt?.description || opt?.subtitle) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          onTagInfo(opt || val);
+                        }}
+                        className="hover:text-primary-hover text-primary/70 rounded p-0.5 cursor-pointer inline-flex items-center justify-center shrink-0"
+                        title="View details & clause"
+                        aria-label={`View details for ${labelText}`}
+                      >
+                        <Info size={11} aria-hidden="true" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => handleRemoveTag(val, e)}
@@ -384,7 +404,13 @@ export default function SearchableMultiSelect({
               ) : (
                 filteredOptions.map((option) => {
                   const isSelected = selectedValues.some((v) => {
-                    if (v === option.value) return true;
+                    if (
+                      v === option.value ||
+                      (option.termCode && v === option.termCode) ||
+                      (option.termName && v === option.termName)
+                    ) {
+                      return true;
+                    }
                     if (typeof v === 'object' && v !== null) {
                       return (
                         v.id === option.value ||
@@ -433,6 +459,22 @@ export default function SearchableMultiSelect({
                             </span>
                           )}
                         </div>
+                        {onOptionInfo && (option.description || option.subtitle) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setIsOpen(false);
+                              onOptionInfo(option);
+                            }}
+                            className="p-1.5 text-text-muted hover:text-primary transition-colors shrink-0 rounded-full hover:bg-surface border border-transparent hover:border-border ml-2"
+                            title="View full clause"
+                            aria-label={`View details for ${option.label}`}
+                          >
+                            <Info size={13} aria-hidden="true" />
+                          </button>
+                        )}
                       </div>
                     </li>
                   );

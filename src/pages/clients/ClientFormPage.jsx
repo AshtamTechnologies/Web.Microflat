@@ -47,11 +47,11 @@ import {
   RichTextEditor,
   PageHeader,
   SearchableMultiSelect,
+  PaymentTermsSelect,
   Badge,
   ScrollableTabs,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
-import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
 import {
   getTodayIsoDate,
 } from '../../utils/effectiveDateUtils';
@@ -82,7 +82,6 @@ export default function ClientFormPage() {
   const isEdit = Boolean(id);
 
   const { getClientById, fetchClientDetail, addClient, updateClient, lookups } = useClientsContext();
-  const { paymentTerms = [] } = usePaymentTermsContext();
 
   const [activeTab, setActiveTab] = useState('company_terms');
   const [form, setForm] = useState(INITIAL_FORM);
@@ -156,7 +155,7 @@ export default function ClientFormPage() {
 
     loadClientData();
     return () => { isMounted = false; };
-  }, [id, isEdit, getClientById, fetchClientDetail, navigate, paymentTerms]);
+  }, [id, isEdit, getClientById, fetchClientDetail, navigate]);
 
   // Dirty detection
   const isDirty = useMemo(() => {
@@ -192,58 +191,6 @@ export default function ClientFormPage() {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
   };
-
-  // Payment Terms options from Configuration or lookups
-  const paymentTermOptions = useMemo(() => {
-    const stripHtml = (html) => {
-      if (!html) return '';
-      return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-    };
-
-    const source = (lookups?.paymentTerms && lookups.paymentTerms.length > 0)
-      ? lookups.paymentTerms
-      : paymentTerms;
-
-    return (source || [])
-      .filter((pt) => pt.isActive !== false)
-      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-      .map((pt) => ({
-        value: pt.id || pt.paymentTermId || pt.termCode,
-        label: pt.termCode || pt.termName,
-        chipLabel: pt.termCode || pt.termName,
-        subtitle: stripHtml(pt.description || pt.termName || ''),
-        termCode: pt.termCode,
-        description: pt.description || pt.termName || '',
-      }));
-  }, [paymentTerms, lookups]);
-
-  // Resolve selected payment terms objects for preview cards
-  const selectedPaymentTermsList = useMemo(() => {
-    const selected = Array.isArray(form.paymentTerms)
-      ? form.paymentTerms
-      : form.paymentTerms
-        ? [form.paymentTerms]
-        : [];
-
-    const source = (lookups?.paymentTerms && lookups.paymentTerms.length > 0)
-      ? lookups.paymentTerms
-      : paymentTerms;
-
-    return selected.map((val) => {
-      const match = source.find(
-        (pt) =>
-          pt.id === val ||
-          pt.paymentTermId === val ||
-          pt.termCode?.toUpperCase() === String(val).toUpperCase()
-      );
-      if (match) return match;
-      return {
-        paymentTermId: val,
-        termCode: val,
-        description: '',
-      };
-    });
-  }, [form.paymentTerms, paymentTerms, lookups]);
 
   // Master validation
   const validateMasterForm = () => {
@@ -603,67 +550,13 @@ export default function ClientFormPage() {
             <div className="space-y-5">
               {/* Payment Terms Multi-Select */}
               <div className="space-y-2.5">
-                <SearchableMultiSelect
-                  label="Payment Terms"
+                <PaymentTermsSelect
                   id="paymentTerms"
                   name="paymentTerms"
-                  options={paymentTermOptions}
-                  value={Array.isArray(form.paymentTerms) ? form.paymentTerms : form.paymentTerms ? [form.paymentTerms] : []}
-                  onChange={(e) => handleFieldChange('paymentTerms', e.target.value)}
-                  placeholder="Select payment terms..."
-                  searchPlaceholder="Search payment terms..."
-                  emptyText="No payment terms found in Configuration"
+                  value={form.paymentTerms}
+                  onChange={(e) => handleFieldChange('paymentTerms', e?.target ? e.target.value : e)}
                   hint="Multiple terms can be selected from Configuration"
                 />
-
-                {/* Selected Terms Cards */}
-                {selectedPaymentTermsList.length > 0 && (
-                  <div className="space-y-2 pt-1">
-                    <div className="flex items-center justify-between text-2xs font-semibold text-text-muted tracking-wider">
-                      <span>Selected Terms ({selectedPaymentTermsList.length})</span>
-                      <button
-                        type="button"
-                        onClick={() => handleFieldChange('paymentTerms', [])}
-                        className="text-text-muted hover:text-danger cursor-pointer transition-colors"
-                      >
-                        Clear All
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {selectedPaymentTermsList.map((term, idx) => {
-                        const code = term.termCode || term.termName || term.paymentTermId || `Term ${idx + 1}`;
-                        const desc = term.description || term.termName || '';
-                        const termVal = term.id || term.paymentTermId || term.termCode;
-
-                        return (
-                          <div
-                            key={termVal || idx}
-                            className="flex flex-col p-2.5 rounded-lg border border-border bg-surface/50 text-xs space-y-1 relative group"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold text-heading font-mono">{code}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const current = Array.isArray(form.paymentTerms) ? form.paymentTerms : [];
-                                  handleFieldChange('paymentTerms', current.filter((t) => t !== termVal && t !== code));
-                                }}
-                                className="text-text-muted hover:text-danger p-0.5 rounded cursor-pointer transition-colors"
-                                title="Remove term"
-                              >
-                                &times;
-                              </button>
-                            </div>
-                            {desc && (
-                              <p className="text-2xs text-text-muted line-clamp-2">{desc}</p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Rich Text Editors for Delivery Terms & Internal Comments */}

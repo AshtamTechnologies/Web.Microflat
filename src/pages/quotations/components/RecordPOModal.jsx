@@ -2,28 +2,71 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
   Modal,
-  Button,
   SaveButton,
   CancelButton,
   Input,
   DatePicker,
   Textarea,
+  DocumentUploader,
 } from '../../../components/ui';
 import { useQuotationsContext } from '../../../context/QuotationsContext';
-import { IconCheck, IconUpload, IconInfo, IconFileText, IconTrash } from '../../../constants/icons';
+import { quotationService } from '../../../services';
+import { IconInfo } from '../../../constants/icons';
 
 export default function RecordPOModal({ isOpen, onClose, quotation }) {
-  const { recordClientPO } = useQuotationsContext();
+  const { recordClientPO, lookups } = useQuotationsContext();
+
   const [poNumber, setPoNumber] = useState('');
   const [receivedOn, setReceivedOn] = useState(new Date().toISOString().split('T')[0]);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
-  const [fileName, setFileName] = useState('');
-  const [fileSize, setFileSize] = useState('');
+  const [selectedDocTypeId, setSelectedDocTypeId] = useState('');
+  const [docTypeObj, setDocTypeObj] = useState(null);
+  const [clientPoDocTypeId, setClientPoDocTypeId] = useState(null);
+  const [fileData, setFileData] = useState(null);
   const [remarks, setRemarks] = useState('');
   const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
+  // Dynamically resolve documentTypeId for CLIENT_PO from lookups
   useEffect(() => {
-    if (quotation) {
+    let isMounted = true;
+
+    async function resolveClientPoDocType() {
+      let docTypes = lookups?.documentTypes;
+      if (!docTypes || docTypes.length === 0) {
+        try {
+          const freshLookups = await quotationService.getQuotationLookups();
+          docTypes = freshLookups?.documentTypes;
+        } catch (e) {
+          // ignore lookup fetch errors
+        }
+      }
+
+      if (Array.isArray(docTypes)) {
+        const clientPoType = docTypes.find(
+          (dt) => (dt.documentTypeCode || dt.code) === 'CLIENT_PO'
+        );
+        if (clientPoType && isMounted) {
+          setClientPoDocTypeId(clientPoType.id);
+          if (!selectedDocTypeId) {
+            setSelectedDocTypeId(String(clientPoType.id));
+          }
+        }
+      }
+    }
+
+    if (isOpen) {
+      resolveClientPoDocType();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, lookups, selectedDocTypeId]);
+
+  // Initialize or reset form state when modal opens or quotation changes
+  useEffect(() => {
+    if (quotation && isOpen) {
       setPoNumber(quotation.poDetails?.poNumber || '');
       setReceivedOn(
         quotation.poDetails?.receivedOn ||
@@ -31,28 +74,28 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
         new Date().toISOString().split('T')[0]
       );
       setExpectedDeliveryDate(quotation.poDetails?.expectedDeliveryDate || '');
-      setFileName(quotation.poDetails?.fileName || '');
-      setFileSize(quotation.poDetails?.fileSize || '');
       setRemarks(quotation.poDetails?.remarks || '');
       setError('');
+
+      if (quotation.poDetails?.fileName) {
+        setFileData({
+          fileName: quotation.poDetails.fileName,
+          fileSize: quotation.poDetails.fileSize || '350 KB',
+          documentTypeName: quotation.poDetails.documentTypeName || 'PO Document',
+          file: quotation.poDetails.file || null,
+        });
+      } else {
+        setFileData(null);
+      }
+
+      const existingDocTypeId = quotation.poDetails?.documentTypeId;
+      if (existingDocTypeId) {
+        setSelectedDocTypeId(String(existingDocTypeId));
+      }
     }
   }, [quotation, isOpen]);
 
-  function handleFileChange(e) {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFileName(file.name);
-      const kb = Math.round(file.size / 1024);
-      setFileSize(kb > 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`);
-    }
-  }
-
-  function handleRemoveFile() {
-    setFileName('');
-    setFileSize('');
-  }
-
-  function handleSave() {
+  async function handleSave() {
     if (!quotation) return;
     if (!poNumber.trim()) {
       setError('Client PO number is required.');
@@ -60,15 +103,33 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
       return;
     }
 
-    recordClientPO(quotation.id, {
-      poNumber: poNumber.trim(),
-      receivedOn,
-      expectedDeliveryDate: expectedDeliveryDate || null,
-      fileName: fileName || `Client-PO-${quotation.quotationNo}.pdf`,
-      fileSize: fileSize || '350 KB',
-      remarks: remarks.trim(),
-    });
-    onClose();
+    const resolvedDocTypeId =
+      docTypeObj?.id ||
+      (selectedDocTypeId ? Number(selectedDocTypeId) : null) ||
+      clientPoDocTypeId ||
+      null;
+
+    try {
+      setIsSaving(true);
+      await recordClientPO(quotation.id, {
+        poNumber: poNumber.trim(),
+        receivedOn,
+        poReceivedDate: receivedOn,
+        expectedDeliveryDate: expectedDeliveryDate || null,
+        documentTypeId: resolvedDocTypeId,
+        documentTypeName: docTypeObj?.label || 'Client PO',
+        fileName: fileData?.fileName || `Client-PO-${quotation.quotationNo}.pdf`,
+        fileSize: fileData?.fileSize || '350 KB',
+        file: fileData?.file || null,
+        remarks: remarks.trim(),
+        poRemarks: remarks.trim(),
+      });
+      onClose();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to record customer PO.');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -76,7 +137,7 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
       isOpen={isOpen}
       onClose={onClose}
       title="Record Customer Purchase Order (PO)"
-      maxWidth="max-w-md"
+      maxWidth="max-w-lg"
     >
       <div className="space-y-4">
         {/* Quotation Details Chip */}
@@ -124,49 +185,21 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
           />
         </div>
 
-        {/* PO Attachment */}
-        <div>
-          <label className="block text-xs font-semibold text-text-muted mb-1.5">
-            Customer PO Document (PDF / Scan)
-          </label>
-          {fileName ? (
-            <div className="flex items-center justify-between p-3 bg-surface-subtle border border-border rounded-xl text-xs">
-              <div className="flex items-center gap-2 overflow-hidden">
-                <IconFileText className="text-primary shrink-0" size={18} />
-                <div className="truncate">
-                  <div className="font-medium text-heading truncate">{fileName}</div>
-                  <div className="text-3xs text-text-muted font-mono">{fileSize || 'Attached'}</div>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRemoveFile}
-                className="!p-1 text-danger hover:bg-danger/10 shrink-0"
-                title="Remove file"
-              >
-                <IconTrash size={14} />
-              </Button>
-            </div>
-          ) : (
-            <div className="border border-dashed border-border rounded-xl p-4 text-center bg-surface/50 hover:bg-surface transition-colors cursor-pointer relative group">
-              <input
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg"
-                onChange={handleFileChange}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-              />
-              <IconUpload
-                className="mx-auto text-primary/70 group-hover:text-primary transition-colors mb-1"
-                size={22}
-              />
-              <div className="text-xs font-medium text-heading">
-                Click or drag customer PO file to attach
-              </div>
-              <div className="text-3xs text-text-muted mt-0.5">PDF or image file up to 10MB</div>
-            </div>
-          )}
-        </div>
+        {/* Reusable Document Uploader linked to Document Types Master (Strict PO Module Filter) */}
+        <DocumentUploader
+          label="Customer PO Attachment"
+          showDocTypeSelect={true}
+          docTypeLabel="Document Type"
+          moduleFilter="PO"
+          defaultDocTypeKeyword="PO"
+          selectedDocTypeId={selectedDocTypeId}
+          onDocTypeChange={(typeId, obj) => {
+            setSelectedDocTypeId(typeId);
+            setDocTypeObj(obj);
+          }}
+          value={fileData}
+          onChange={(data) => setFileData(data)}
+        />
 
         {/* Remarks */}
         <Textarea
@@ -186,8 +219,8 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
 
         {/* Modal Actions */}
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-          <CancelButton onClick={onClose}>Cancel</CancelButton>
-          <SaveButton onClick={handleSave}>
+          <CancelButton onClick={onClose} disabled={isSaving}>Cancel</CancelButton>
+          <SaveButton onClick={handleSave} loading={isSaving}>
             Save Customer PO
           </SaveButton>
         </div>

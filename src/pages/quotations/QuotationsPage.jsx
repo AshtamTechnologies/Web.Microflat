@@ -4,7 +4,7 @@
  * Route: /quotations
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   useReactTable,
@@ -30,6 +30,7 @@ import {
   SearchableSelect,
 } from '../../components/ui';
 import { useQuotationsContext } from '../../context/QuotationsContext';
+import { triggerPdfDownload } from '../../utils/fileHelpers';
 import { formatCurrency } from '../../mocks/quotations';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -47,7 +48,11 @@ const STATUS_FILTER_OPTIONS = [
 
 export default function QuotationsPage() {
   const navigate = useNavigate();
-  const { quotations = [] } = useQuotationsContext();
+  const { quotations = [], refreshQuotations, isLoading } = useQuotationsContext();
+
+  useEffect(() => {
+    refreshQuotations?.();
+  }, [refreshQuotations]);
 
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -80,12 +85,22 @@ export default function QuotationsPage() {
         header: 'Quotation No',
         cell: (info) => {
           const row = info.row.original;
+          const val = info.getValue();
+          const displayNo =
+            typeof val === 'object' && val !== null
+              ? (val.documentNumber || val.nextNumber || val.seriesNumber || String(row.id || ''))
+              : String(val || row.id || '');
+          const rowId =
+            typeof row.id === 'object' && row.id !== null
+              ? (row.id.documentNumber || row.id.id || displayNo)
+              : String(row.id || displayNo);
+
           return (
             <Link
-              to={`/quotations/${row.id}`}
+              to={`/quotations/${rowId}`}
               className="font-mono font-bold text-primary hover:underline text-xs tracking-wide"
             >
-              {info.getValue()}
+              {displayNo}
             </Link>
           );
         },
@@ -190,17 +205,30 @@ export default function QuotationsPage() {
           const row = info.row.original;
           return (
             <div className="flex items-center justify-end gap-1">
-              <button
+              {/* Quotation PDF download hidden until backend provides PDF generation endpoint */}
+              {/* <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // static: does nothing right now
+                  triggerPdfDownload(
+                    `Quotation-${row.quotationNo || row.id}.pdf`,
+                    {
+                      title: `Commercial Quotation ${row.quotationNo || row.id}`,
+                      documentType: 'Official Quotation',
+                      fileName: `Quotation-${row.quotationNo || row.id}.pdf`,
+                      clientName: row.clientName,
+                      quotationNo: row.quotationNo || row.id,
+                      totalAmount: `₹${(Number(row.totalAmount || row.grandTotal) || 0).toLocaleString('en-IN')}`,
+                      uploadedAt: row.lastUpdatedAt || new Date().toISOString().split('T')[0],
+                      remarks: `Client: ${row.clientName || 'Client'} | Status: ${row.status || 'Active'}`,
+                    }
+                  );
                 }}
                 className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
                 title="Download PDF"
               >
                 <IconDownload size={15} />
-              </button>
+              </button> */}
               <button
                 type="button"
                 onClick={() => navigate(`/quotations/${row.id}`)}

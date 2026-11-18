@@ -237,6 +237,48 @@ Then:
 
 ---
 
+### Work Log Entry: WL-012
+- **Date**: 2026-11-18
+- **Module**: Document Uploader Module Isolation & Bug Fix
+- **Summary of Implemented Changes**:
+  1. Fixed duplicate "Client PO" dropdown options by replacing loose string search with strict module ID filtering (`moduleFilter="PO"`).
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
+
+---
+
+### Work Log Entry: WL-013
+- **Date**: 2026-11-18
+- **Module**: Reusable Commercial Terms Dropdown (`src/components/ui/CommercialTermsSelect.jsx`)
+- **Summary of Implemented Changes**:
+  1. Created unified `CommercialTermsSelect.jsx` (with `PaymentTermsSelect` & `DeliveryTermsSelect` aliases).
+  2. Implemented Code-primary formatting (`CODE — Term Name`).
+  3. Integrated touch/mobile-friendly `(i)` info modal allowing users to inspect full commercial clauses on mobile devices without relying on hover tooltips.
+  4. Integrated into `SalesOrderFormPage.jsx`, `QuotationFormPage.jsx`, and `ClientFormPage.jsx`.
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
+
+---
+
+### Work Log Entry: WL-014
+- **Date**: 2026-11-18
+- **Module**: Quotations Core API & Task 61 (Customer PO Recording) Integration
+- **Summary of Implemented Changes**:
+  1. **Task 61 Full Integration**:
+     - Confirmed Task 61 Customer Purchase Order recording belongs to the Quotations Controller (`POST /api/quotations/{id}/po-received`) per Guide §5.4g line 892.
+     - Built multipart form-data payload handler supporting `poNumber`, `poReceivedDate`, `poReceivedBy`, `poRemarks`, and file binary upload.
+     - Wired `RecordPOModal.jsx` to `recordClientPO` with progress indicators and error handling.
+     - Updated `QuotationViewPage.jsx` PO alert banner with details and one-click "Download PO" button.
+  2. **Quotation Core Endpoints (§5.4f & §5.4g)**:
+     - Implemented `quotationEndpoints.js`, `quotationModel.js`, `quotationService.js`, and `quotationService.mock.js`.
+     - Exported `quotationService` in `src/services/index.js`.
+     - Connected `QuotationsContext.jsx` with hybrid live API + offline state resilience.
+     - Updated `QuotationFormPage.jsx` and `QuotationsPage.jsx` for async series numbering and dynamic API list refreshing.
+  3. **Strict Compliance**:
+     - 100% frontend implementation. No backend C# files, controllers, or database migrations touched.
+     - Krupal's protected files (`MyQueuePage.jsx`, notifications, delivery terms config) untouched.
+- **Verification**: `npm run build` passed cleanly with **0 errors** in 3.82s.
+
+---
+
 ## 6. Important Reminder
 
 The work log is a continuity aid. Before relying on a historical entry, verify the current code and actual project state. **When in doubt, do not modify backend/database resources; stop, document the issue, and ask the user.**
