@@ -18,7 +18,7 @@ import { normalizeApprovalStatus, ApprovalStatus } from '../../constants/approva
 
 /**
  * Lists vendors with server-side pagination, search, and status filters.
- * @param {{ search?: string, approvalStatus?: string, isActive?: boolean|string, hasPendingChange?: boolean, pageNumber?: number, pageSize?: number }} [params]
+ * @param {{ search?: string, approvalStatus?: string|number, isActive?: boolean|string, hasPendingChange?: boolean, vendorCategory?: string, tallyGroup?: string, hasDefaultedFields?: boolean|string, pageNumber?: number, pageSize?: number }} [params]
  */
 export async function listVendors(params = {}) {
   try {
@@ -37,22 +37,47 @@ export async function listVendors(params = {}) {
         ? params.isActive
         : params.isActive === 'true' || params.isActive === 'ACTIVE';
     }
-    if (params.hasPendingChange !== undefined && params.hasPendingChange !== null) {
+    if (params.hasPendingChange !== undefined && params.hasPendingChange !== null && params.hasPendingChange !== 'ALL') {
       query.HasPendingChange = Boolean(params.hasPendingChange);
     }
-    if (params.pageNumber) query.PageNumber = Number(params.pageNumber);
-    if (params.pageSize) query.PageSize = Number(params.pageSize);
+    if (params.vendorCategory && params.vendorCategory !== 'ALL') {
+      query.VendorCategory = params.vendorCategory.trim();
+    }
+    if (params.tallyGroup && params.tallyGroup !== 'ALL') {
+      query.TallyGroup = params.tallyGroup.trim();
+    }
+    if (params.hasDefaultedFields !== undefined && params.hasDefaultedFields !== null && params.hasDefaultedFields !== 'ALL') {
+      query.HasDefaultedFields = Boolean(params.hasDefaultedFields);
+    }
+    if (params.pageNumber !== undefined && params.pageNumber !== null) {
+      query.PageNumber = Number(params.pageNumber);
+    }
+    if (params.pageSize !== undefined && params.pageSize !== null) {
+      query.PageSize = Number(params.pageSize);
+    }
 
     const response = await axiosInstance.get(VENDOR_ENDPOINTS.VENDORS, { params: query });
     const data = response.data || {};
-    const items = Array.isArray(data.items) ? data.items.map(vendorItemFromApi) : [];
+    const items = Array.isArray(data.items)
+      ? data.items.map(vendorItemFromApi)
+      : Array.isArray(data)
+        ? data.map(vendorItemFromApi)
+        : [];
+
+    const totalCount =
+      data.totalCount ??
+      data.total ??
+      (response.headers?.['x-total-count'] ? Number(response.headers['x-total-count']) : undefined) ??
+      items.length;
+    const pageSize = Number(data.pageSize || params.pageSize || (items.length > 0 ? items.length : 10));
+    const totalPages = Number(data.totalPages || (pageSize > 0 ? Math.ceil(totalCount / pageSize) : 1));
 
     return {
       items,
-      pageNumber: data.pageNumber || 1,
-      pageSize: data.pageSize || items.length,
-      totalCount: data.totalCount ?? items.length,
-      totalPages: data.totalPages || 1,
+      pageNumber: Number(data.pageNumber || params.pageNumber || 1),
+      pageSize,
+      totalCount,
+      totalPages,
     };
   } catch (err) {
     throw normalizeApiError(err);
@@ -165,13 +190,27 @@ export async function createVendor(formData, submitForApproval = true) {
 }
 
 /**
- * Renames a vendor header (Admin only).
+ * Updates vendor header (vendorName and optional vendorCategory).
+ * Matches PUT /api/vendors/{id} schema: { vendorName, vendorCategory }
  * @param {string|number} id
- * @param {string} vendorName
+ * @param {string|{ vendorName: string, vendorCategory?: string }} vendorNameOrData
+ * @param {string} [vendorCategory]
  */
-export async function updateVendorName(id, vendorName) {
+export async function updateVendorName(id, vendorNameOrData, vendorCategory) {
   try {
-    const payload = { vendorName: String(vendorName).trim() };
+    let name = '';
+    let category = undefined;
+    if (typeof vendorNameOrData === 'object' && vendorNameOrData !== null) {
+      name = vendorNameOrData.vendorName;
+      category = vendorNameOrData.vendorCategory ?? vendorNameOrData.category;
+    } else {
+      name = vendorNameOrData;
+      category = vendorCategory;
+    }
+    const payload = { vendorName: String(name || '').trim() };
+    if (category !== undefined) {
+      payload.vendorCategory = category ? String(category).trim() : null;
+    }
     const response = await axiosInstance.put(VENDOR_ENDPOINTS.VENDOR_BY_ID(id), payload);
     return response.data;
   } catch (err) {
@@ -226,15 +265,23 @@ export async function getVendorSummary() {
 }
 
 /**
- * Retrieves dropdown lookups (approvalStatuses, bankAccountTypes, documentTypes).
+ * Retrieves dropdown lookups (approvalStatuses, bankAccountTypes, documentTypes, vendorCategories, msmeTypes, msmeActivities).
  */
 export async function getVendorLookups() {
   try {
     const response = await axiosInstance.get(VENDOR_ENDPOINTS.LOOKUPS);
     return response.data || {
-      approvalStatuses: ['Draft', 'Pending', 'Approved', 'Rejected'],
+      approvalStatuses: [
+        { id: 1, name: 'Draft' },
+        { id: 2, name: 'Pending' },
+        { id: 3, name: 'Approved' },
+        { id: 4, name: 'Rejected' },
+      ],
       bankAccountTypes: ['Current', 'Savings', 'Cash Credit', 'Overdraft'],
       documentTypes: [],
+      vendorCategories: ['Goods', 'Services', 'Others'],
+      msmeTypes: ['Micro', 'Small', 'Medium'],
+      msmeActivities: ['Manufacturing', 'Traders', 'Services'],
     };
   } catch (err) {
     throw normalizeApiError(err);
@@ -301,6 +348,12 @@ export async function editVendorVersion(versionId, formData) {
       email: payload.email,
       website: payload.website,
       gstNo: payload.gstNo,
+      cin: payload.cin ?? null,
+      udhyamNo: payload.udhyamNo ?? null,
+      panNo: payload.panNo ?? null,
+      msmeType: payload.msmeType ?? null,
+      msmeActivity: payload.msmeActivity ?? null,
+      ccEmail: payload.ccEmail ?? null,
       address1: payload.address1,
       address2: payload.address2,
       countryId: payload.countryId,

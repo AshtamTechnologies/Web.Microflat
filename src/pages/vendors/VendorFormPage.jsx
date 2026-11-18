@@ -94,11 +94,18 @@ const INITIAL_FORM = {
   vendorCode: '',
   effectiveDate: getTodayISO(),
   vendorName: '',
+  vendorCategory: '',
   contactPersonName: '',
   phoneNo: '',
   alternatePhoneNo: '',
   email: '',
+  ccEmail: '',
   gstNo: '',
+  panNo: '',
+  cin: '',
+  udhyamNo: '',
+  msmeType: '',
+  msmeActivity: '',
   website: '',
   countryId: '',
   stateId: '',
@@ -122,6 +129,8 @@ function validateField(name, value, currentForm = {}) {
     case 'vendorName':
       if (!str) return 'Vendor name is required.';
       return '';
+    case 'vendorCategory':
+      return '';
     case 'effectiveDate':
       if (!str) return 'Effective date is required.';
       return '';
@@ -144,9 +153,23 @@ function validateField(name, value, currentForm = {}) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str))
         return 'Enter a valid email address.';
       return '';
+    case 'ccEmail':
+      if (str && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str))
+        return 'Enter a valid CC email address.';
+      return '';
     case 'gstNo':
       if (str && str.length > 0 && str.length !== 15) {
         return 'GST number must be 15 alphanumeric characters.';
+      }
+      return '';
+    case 'panNo':
+      if (str && str.length > 0 && str.length !== 10) {
+        return 'PAN must be 10 alphanumeric characters.';
+      }
+      return '';
+    case 'cin':
+      if (str && str.length > 0 && str.length !== 21) {
+        return 'CIN must be 21 characters.';
       }
       return '';
     case 'website':
@@ -204,9 +227,21 @@ function validateAll(form) {
     const err = validateField('alternatePhoneNo', form.alternatePhoneNo);
     if (err) errors.alternatePhoneNo = err;
   }
+  if (form.ccEmail) {
+    const err = validateField('ccEmail', form.ccEmail);
+    if (err) errors.ccEmail = err;
+  }
   if (form.gstNo) {
     const err = validateField('gstNo', form.gstNo);
     if (err) errors.gstNo = err;
+  }
+  if (form.panNo) {
+    const err = validateField('panNo', form.panNo);
+    if (err) errors.panNo = err;
+  }
+  if (form.cin) {
+    const err = validateField('cin', form.cin);
+    if (err) errors.cin = err;
   }
   if (form.website) {
     const err = validateField('website', form.website, form);
@@ -283,19 +318,32 @@ export default function VendorFormPage() {
   const [previewItem, setPreviewItem] = useState(null);
   const fileInputRef = useRef(null);
   const [apiDocTypes, setApiDocTypes] = useState([]);
+  const [vendorCategories, setVendorCategories] = useState(['Goods', 'Services', 'Others']);
+  const [msmeTypes, setMsmeTypes] = useState(['Micro', 'Small', 'Medium']);
+  const [msmeActivities, setMsmeActivities] = useState(['Manufacturing', 'Traders', 'Services']);
 
-  // Fetch active Document Types from GET /api/vendors/lookups
+  // Fetch active Document Types and lookups from GET /api/vendors/lookups
   useEffect(() => {
     let isMounted = true;
     vendorService
       .getVendorLookups()
       .then((data) => {
-        if (isMounted && data?.documentTypes && Array.isArray(data.documentTypes)) {
-          // Show only active document types
-          const activeOnly = data.documentTypes.filter(
-            (dt) => dt.isActive === true || dt.isActive === 'true'
-          );
-          setApiDocTypes(activeOnly);
+        if (isMounted) {
+          if (data?.documentTypes && Array.isArray(data.documentTypes)) {
+            const activeOnly = data.documentTypes.filter(
+              (dt) => dt.isActive === true || dt.isActive === 'true'
+            );
+            setApiDocTypes(activeOnly);
+          }
+          if (data?.vendorCategories && Array.isArray(data.vendorCategories)) {
+            setVendorCategories(data.vendorCategories);
+          }
+          if (data?.msmeTypes && Array.isArray(data.msmeTypes)) {
+            setMsmeTypes(data.msmeTypes);
+          }
+          if (data?.msmeActivities && Array.isArray(data.msmeActivities)) {
+            setMsmeActivities(data.msmeActivities);
+          }
         }
       })
       .catch((err) => {
@@ -305,6 +353,21 @@ export default function VendorFormPage() {
       isMounted = false;
     };
   }, []);
+
+  const vendorCategoryOptions = useMemo(() => [
+    { value: '', label: 'Select Category...' },
+    ...vendorCategories.map((c) => ({ value: c, label: c })),
+  ], [vendorCategories]);
+
+  const msmeTypeOptions = useMemo(() => [
+    { value: '', label: 'Select MSME Type (Optional)...' },
+    ...msmeTypes.map((t) => ({ value: t, label: t })),
+  ], [msmeTypes]);
+
+  const msmeActivityOptions = useMemo(() => [
+    { value: '', label: 'Select MSME Activity (Optional)...' },
+    ...msmeActivities.map((a) => ({ value: a, label: a })),
+  ], [msmeActivities]);
 
   const documentTypeOptions = useMemo(() => {
     if (apiDocTypes && apiDocTypes.length > 0) {
@@ -355,11 +418,18 @@ export default function VendorFormPage() {
           vendorCode: existingVendor.vendorCode || '',
           effectiveDate: existingVendor.effectiveDate || getTodayIsoDate(),
           vendorName: existingVendor.vendorName || '',
+          vendorCategory: existingVendor.vendorCategory || '',
           contactPersonName: existingVendor.contactPersonName || '',
           phoneNo: existingVendor.phoneNo || '',
           alternatePhoneNo: existingVendor.alternatePhoneNo || '',
           email: existingVendor.email || '',
+          ccEmail: existingVendor.ccEmail || '',
           gstNo: existingVendor.gstNo || '',
+          panNo: existingVendor.panNo || '',
+          cin: existingVendor.cin || '',
+          udhyamNo: existingVendor.udhyamNo || '',
+          msmeType: existingVendor.msmeType || '',
+          msmeActivity: existingVendor.msmeActivity || '',
           website: existingVendor.website || '',
           countryId: existingVendor.countryId || '',
           stateId: existingVendor.stateId || '',
@@ -420,6 +490,35 @@ export default function VendorFormPage() {
 
   function handleChange(e) {
     const { name, value } = e.target;
+
+    if (name === 'gstNo') {
+      const upper = typeof value === 'string' ? value.toUpperCase() : value;
+      setForm((prev) => {
+        const next = { ...prev, gstNo: upper };
+        // Auto-extract PAN from GSTIN if PAN is empty
+        if (upper.length >= 12 && !prev.panNo) {
+          const panCandidate = upper.slice(2, 12);
+          if (/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panCandidate)) {
+            next.panNo = panCandidate;
+          }
+        }
+        return next;
+      });
+      if (errors.gstNo) {
+        setErrors((prev) => ({ ...prev, gstNo: '' }));
+      }
+      return;
+    }
+
+    if (name === 'panNo' || name === 'cin' || name === 'udhyamNo') {
+      const upper = typeof value === 'string' ? value.toUpperCase() : value;
+      setForm((prev) => ({ ...prev, [name]: upper }));
+      if (errors[name]) {
+        setErrors((prev) => ({ ...prev, [name]: '' }));
+      }
+      return;
+    }
+
     setForm((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
@@ -768,39 +867,59 @@ export default function VendorFormPage() {
       >
 
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             {/* Vendor Name */}
-            <Input
-              id="vendorName"
-              name="vendorName"
-              type="text"
-              label="Vendor Name"
-              placeholder="e.g. Apex Precision Castings Pvt Ltd"
-              required
-              value={form.vendorName}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              error={errors.vendorName}
-              autoComplete="organization"
-            />
+            <div className="md:col-span-2">
+              <Input
+                id="vendorName"
+                name="vendorName"
+                type="text"
+                label="Vendor Name"
+                placeholder="e.g. Apex Precision Castings Pvt Ltd"
+                required
+                value={form.vendorName}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                error={errors.vendorName}
+                autoComplete="organization"
+              />
+            </div>
+
+            {/* Vendor Category */}
+            <div>
+              <SearchableSelect
+                id="vendorCategory"
+                name="vendorCategory"
+                label="Vendor Category"
+                placeholder="Select category..."
+                searchPlaceholder="Search categories..."
+                options={vendorCategoryOptions}
+                value={form.vendorCategory}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                error={errors.vendorCategory}
+              />
+            </div>
 
             {/* Effective Date */}
-            <DatePicker
-              id="effectiveDate"
-              name="effectiveDate"
-              label="Effective Date"
-              required
-              value={form.effectiveDate}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              error={errors.effectiveDate}
-              disabled={isEdit}
-              hint={
-                isEdit
-                  ? 'Effective date cannot be changed for an existing vendor. Use Effective Dates page to add a new version.'
-                  : 'Initial effective start date'
-              }
-            />
+            <div className="md:col-span-3">
+              <DatePicker
+                id="effectiveDate"
+                name="effectiveDate"
+                label="Effective Date"
+                required
+                value={form.effectiveDate}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                error={errors.effectiveDate}
+                disabled={isEdit}
+                hint={
+                  isEdit
+                    ? 'Effective date cannot be changed for an existing vendor. Use Effective Dates page to add a new version.'
+                    : 'Initial effective start date'
+                }
+              />
+            </div>
           </div>
 
           {/* Status Switch */}
@@ -862,11 +981,11 @@ export default function VendorFormPage() {
       {/* ── SECTION 2: CONTACT INFORMATION ── */}
       <CollapsibleCard
         title="2. Contact Information"
-        subtitle="Primary communication channel & tax identifier"
+        subtitle="Primary communication channel & key contacts"
         icon={<IconContact size={18} />}
         className="bg-bg"
         defaultOpen={true}
-        hasError={Boolean(errors.contactPersonName || errors.email || errors.phoneNo || errors.alternatePhoneNo || errors.gstNo || errors.website)}
+        hasError={Boolean(errors.contactPersonName || errors.email || errors.ccEmail || errors.phoneNo || errors.alternatePhoneNo || errors.website)}
       >
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
@@ -898,6 +1017,20 @@ export default function VendorFormPage() {
             onBlur={handleBlur}
             error={errors.email}
             autoComplete="email"
+          />
+
+          {/* CC Email */}
+          <Input
+            id="ccEmail"
+            name="ccEmail"
+            type="email"
+            label="CC Email Address"
+            placeholder="accounts@company.com (optional)"
+            value={form.ccEmail}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.ccEmail}
+            hint="Optional CC address for notifications"
           />
 
           {/* Phone Number */}
@@ -934,22 +1067,6 @@ export default function VendorFormPage() {
             className="font-mono tabular-nums"
           />
 
-          {/* GST Number */}
-          <Input
-            id="gstNo"
-            name="gstNo"
-            type="text"
-            label="GST Identification Number (GSTIN)"
-            placeholder="e.g. 24AABCA1234F1Z5"
-            maxLength={15}
-            value={form.gstNo}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={errors.gstNo}
-            hint="15-character alphanumeric tax identifier (auto-capitalized)"
-            className="font-mono uppercase"
-          />
-
           {/* Website Link (Optional) */}
           <Input
             id="website"
@@ -966,9 +1083,112 @@ export default function VendorFormPage() {
         </div>
       </CollapsibleCard>
 
-      {/* ── SECTION 3: ADDRESS & LOCATION ── */}
+      {/* ── SECTION 3: STATUTORY & MSME REGISTRATIONS ── */}
       <CollapsibleCard
-        title="3. Address & Location"
+        title="3. Statutory & MSME Registrations"
+        subtitle="GSTIN, PAN, CIN, and MSME/Udyam statutory compliance classification"
+        icon={<IconShieldCheck size={18} />}
+        className="bg-bg"
+        defaultOpen={true}
+        hasError={Boolean(errors.gstNo || errors.panNo || errors.cin || errors.udhyamNo || errors.msmeType || errors.msmeActivity)}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+          {/* GST Number */}
+          <Input
+            id="gstNo"
+            name="gstNo"
+            type="text"
+            label="GST Identification Number (GSTIN)"
+            placeholder="e.g. 24AABCA1234F1Z5"
+            maxLength={15}
+            value={form.gstNo}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.gstNo}
+            hint="15-character alphanumeric tax identifier"
+            className="font-mono uppercase"
+          />
+
+          {/* PAN Number */}
+          <Input
+            id="panNo"
+            name="panNo"
+            type="text"
+            label="Permanent Account Number (PAN)"
+            placeholder="e.g. AABCA1234F"
+            maxLength={10}
+            value={form.panNo}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.panNo}
+            hint="10-character alphanumeric PAN"
+            className="font-mono uppercase"
+          />
+
+          {/* CIN */}
+          <Input
+            id="cin"
+            name="cin"
+            type="text"
+            label="Corporate Identification Number (CIN)"
+            placeholder="e.g. U74999GJ2020PTC118123"
+            maxLength={21}
+            value={form.cin}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.cin}
+            hint="21-character corporate identifier"
+            className="font-mono uppercase"
+          />
+
+          {/* Udyam Registration Number */}
+          <Input
+            id="udhyamNo"
+            name="udhyamNo"
+            type="text"
+            label="Udyam Registration Number"
+            placeholder="e.g. UDYAM-GJ-01-0012345"
+            value={form.udhyamNo}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.udhyamNo}
+            hint="MSME Udyam certificate registration"
+            className="font-mono uppercase"
+          />
+
+          {/* MSME Type */}
+          <SearchableSelect
+            id="msmeType"
+            name="msmeType"
+            label="MSME Enterprise Type"
+            placeholder="Select MSME Type..."
+            searchPlaceholder="Search types..."
+            options={msmeTypeOptions}
+            value={form.msmeType}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.msmeType}
+          />
+
+          {/* MSME Activity */}
+          <SearchableSelect
+            id="msmeActivity"
+            name="msmeActivity"
+            label="MSME Primary Activity"
+            placeholder="Select MSME Activity..."
+            searchPlaceholder="Search activities..."
+            options={msmeActivityOptions}
+            value={form.msmeActivity}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            error={errors.msmeActivity}
+          />
+        </div>
+      </CollapsibleCard>
+
+      {/* ── SECTION 4: ADDRESS & LOCATION ── */}
+      <CollapsibleCard
+        title="4. Address & Location"
         subtitle="Billing & dispatch registered location"
         icon={<IconLocation size={18} />}
         className="bg-bg"
@@ -1085,9 +1305,9 @@ export default function VendorFormPage() {
         </div>
       </CollapsibleCard>
 
-      {/* ── SECTION 4: PROCUREMENT & QUALITY NOTES ── */}
+      {/* ── SECTION 5: PROCUREMENT & QUALITY NOTES ── */}
       <CollapsibleCard
-        title="4. Procurement & Quality Notes"
+        title="5. Procurement & Quality Notes"
         subtitle="Optional supplier remarks"
         icon={<IconFileText size={18} />}
         className="bg-bg"
@@ -1105,9 +1325,9 @@ export default function VendorFormPage() {
         />
       </CollapsibleCard>
 
-      {/* ── SECTION 5: ATTACHMENTS & SUPPORTING DOCUMENTS ── */}
+      {/* ── SECTION 6: ATTACHMENTS & SUPPORTING DOCUMENTS ── */}
       <CollapsibleCard
-        title="5. Attachments & Supporting Documents"
+        title="6. Attachments & Supporting Documents"
         subtitle="Upload commercial, tax, and quality compliance files"
         icon={<IconAttachment size={18} />}
         className="bg-bg"
@@ -1265,10 +1485,10 @@ export default function VendorFormPage() {
         </div>
       </CollapsibleCard>
 
-      {/* ── SECTION 6 (EDIT MODE ONLY): READ-ONLY APPROVAL & AUDIT PANEL ── */}
+      {/* ── SECTION 7 (EDIT MODE ONLY): READ-ONLY APPROVAL & AUDIT PANEL ── */}
       {isEdit && existingVendor && (
         <CollapsibleCard
-          title="6. System-Managed Approval & Audit Info"
+          title="7. System-Managed Approval & Audit Info"
           subtitle="Read-only system metadata and approval records"
           icon={<IconShieldCheck size={18} />}
           className="bg-surface/50 border-border/80"

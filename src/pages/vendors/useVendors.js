@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { mockVendors } from '../../mocks/vendors';
@@ -38,30 +38,61 @@ export function useVendors() {
 
   const [vendors, setVendors] = useState(isMockApi ? mockVendors : []);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [approvalFilter, setApprovalFilter] = useState('ALL');
-  const [isLoading, setIsLoading] = useState(!isMockApi);
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [hasPendingChangeFilter, setHasPendingChangeFilter] = useState('ALL');
+  const [hasDefaultedFieldsFilter, setHasDefaultedFieldsFilter] = useState('ALL');
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(isMockApi ? mockVendors.length : 0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(!isMockApi);
+
+  /* ── Debounce search input (300ms) ── */
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  /* ── Reset page to 1 when filters or search change ── */
+  const isInitialFilterMount = useRef(true);
+  useEffect(() => {
+    if (isInitialFilterMount.current) {
+      isInitialFilterMount.current = false;
+      return;
+    }
+    setPageNumber(1);
+  }, [debouncedSearch, approvalFilter, statusFilter, categoryFilter, hasPendingChangeFilter, hasDefaultedFieldsFilter]);
 
   /* ── Load Vendors from real API with fallback ── */
   const loadVendors = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await vendorService.listVendors({
-        search,
+        search: debouncedSearch,
         approvalStatus: approvalFilter,
         isActive: statusFilter,
+        vendorCategory: categoryFilter,
+        hasPendingChange: hasPendingChangeFilter !== 'ALL' ? hasPendingChangeFilter === 'TRUE' : undefined,
+        hasDefaultedFields: hasDefaultedFieldsFilter !== 'ALL' ? hasDefaultedFieldsFilter === 'TRUE' : undefined,
+        pageNumber,
+        pageSize,
       });
       if (res && Array.isArray(res.items)) {
         setVendors(res.items);
         setTotalCount(res.totalCount ?? res.items.length);
+        setTotalPages(res.totalPages || (pageSize > 0 ? Math.ceil((res.totalCount ?? res.items.length) / pageSize) : 1));
       }
     } catch (err) {
       console.warn('Could not fetch vendors from API, keeping existing state:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [search, approvalFilter, statusFilter]);
+  }, [debouncedSearch, approvalFilter, statusFilter, categoryFilter, hasPendingChangeFilter, hasDefaultedFieldsFilter, pageNumber, pageSize]);
 
   useEffect(() => {
     if (!shouldFetch) return;
@@ -74,6 +105,11 @@ export function useVendors() {
       const activeVersion = getActiveVendorVersion(v);
       return {
         ...v,
+        vendorCategory: v.vendorCategory || activeVersion?.vendorCategory || '',
+        tallyGroup: v.tallyGroup || '',
+        tallyLedgerName: v.tallyLedgerName || '',
+        tallySubGroup: v.tallySubGroup || '',
+        hasDefaultedFields: Boolean(v.hasDefaultedFields),
         ...(activeVersion
           ? {
               effectiveDate: activeVersion.effectiveDate || v.effectiveDate,
@@ -81,6 +117,12 @@ export function useVendors() {
               phoneNo: activeVersion.phoneNo || v.phoneNo,
               alternatePhoneNo: activeVersion.alternatePhoneNo || v.alternatePhoneNo,
               gstNo: activeVersion.gstNo || v.gstNo,
+              panNo: activeVersion.panNo || v.panNo || '',
+              cin: activeVersion.cin || v.cin || '',
+              udhyamNo: activeVersion.udhyamNo || v.udhyamNo || '',
+              msmeType: activeVersion.msmeType || v.msmeType || '',
+              msmeActivity: activeVersion.msmeActivity || v.msmeActivity || '',
+              ccEmail: activeVersion.ccEmail || v.ccEmail || '',
               website: activeVersion.website || v.website,
               email: activeVersion.email || v.email,
               countryId: activeVersion.countryId || v.countryId,
@@ -90,6 +132,8 @@ export function useVendors() {
               address1: activeVersion.address1 || v.address1,
               address2: activeVersion.address2 || v.address2,
               notes: activeVersion.notes || v.notes,
+              defaultedFields: activeVersion.defaultedFields || v.defaultedFields || '',
+              correctedFields: activeVersion.correctedFields || v.correctedFields || '',
               attachments: activeVersion.attachments || v.attachments || [],
             }
           : {}),
@@ -102,7 +146,13 @@ export function useVendors() {
 
   /* ── Filtered vendors list ── */
   const filteredVendors = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    // When connected to the real backend, the API already applies
+    // server-side filtering and server-side pagination.
+    if (!isMockApi) {
+      return augmentedVendors;
+    }
+
+    const q = debouncedSearch.trim().toLowerCase();
 
     return augmentedVendors.filter((v) => {
       if (q) {
@@ -111,7 +161,9 @@ export function useVendors() {
           v.vendorCode?.toLowerCase().includes(q) ||
           v.contactPersonName?.toLowerCase().includes(q) ||
           v.email?.toLowerCase().includes(q) ||
-          v.city?.toLowerCase().includes(q);
+          v.city?.toLowerCase().includes(q) ||
+          v.panNo?.toLowerCase().includes(q) ||
+          v.gstNo?.toLowerCase().includes(q);
         if (!matchesQuery) return false;
       }
 
@@ -134,15 +186,40 @@ export function useVendors() {
         }
       }
 
+      if (categoryFilter !== 'ALL') {
+        if ((v.vendorCategory || '').toLowerCase() !== categoryFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
+      if (hasPendingChangeFilter !== 'ALL') {
+        const expected = hasPendingChangeFilter === 'TRUE';
+        if (Boolean(v.hasPendingChange) !== expected) {
+          return false;
+        }
+      }
+
+      if (hasDefaultedFieldsFilter !== 'ALL') {
+        const expected = hasDefaultedFieldsFilter === 'TRUE';
+        if (Boolean(v.hasDefaultedFields) !== expected) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [augmentedVendors, search, statusFilter, approvalFilter]);
+  }, [augmentedVendors, debouncedSearch, statusFilter, approvalFilter, categoryFilter, hasPendingChangeFilter, hasDefaultedFieldsFilter]);
 
   /* ── Reset all filters ── */
   const resetFilters = useCallback(() => {
     setSearch('');
+    setDebouncedSearch('');
     setStatusFilter('ALL');
     setApprovalFilter('ALL');
+    setCategoryFilter('ALL');
+    setHasPendingChangeFilter('ALL');
+    setHasDefaultedFieldsFilter('ALL');
+    setPageNumber(1);
   }, []);
 
   /* ── Get single vendor by id ── */
@@ -261,9 +338,12 @@ export function useVendors() {
     const now = formatAuditTimestamp();
     const todayIso = new Date().toISOString().slice(0, 10);
     try {
-      // If vendor name was changed, call PUT /api/vendors/{id}
-      if (formData.vendorName) {
-        await vendorService.updateVendorName(id, formData.vendorName);
+      // If vendor name or category was changed, call PUT /api/vendors/{id}
+      if (formData.vendorName || formData.vendorCategory) {
+        await vendorService.updateVendorName(id, {
+          vendorName: formData.vendorName,
+          vendorCategory: formData.vendorCategory,
+        });
       }
 
       // If active status was changed, call PATCH /api/vendors/{id}/status
@@ -410,7 +490,19 @@ export function useVendors() {
     setStatusFilter,
     approvalFilter,
     setApprovalFilter,
+    categoryFilter,
+    setCategoryFilter,
+    hasPendingChangeFilter,
+    setHasPendingChangeFilter,
+    hasDefaultedFieldsFilter,
+    setHasDefaultedFieldsFilter,
     resetFilters,
+    pageNumber,
+    setPageNumber,
+    pageSize,
+    setPageSize,
+    totalCount,
+    totalPages,
     getVendorById,
     fetchVendorDetail,
     getNextVendorCode,

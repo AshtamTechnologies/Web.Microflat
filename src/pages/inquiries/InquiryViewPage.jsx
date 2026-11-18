@@ -26,6 +26,7 @@ import {
   IconFileText,
   IconIndianRupee,
   IconInquiry,
+  IconDeal,
   IconLayers,
   IconLocation,
   IconMail,
@@ -79,6 +80,8 @@ import { formatFileSizeKB } from '../../mocks/inquiryDocuments';
 import AssignInquiryModal from './components/AssignInquiryModal';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import UploadDocumentModal from './components/UploadDocumentModal';
+import DealFormModal from '../deals/DealFormModal';
+import { dealService } from '../../services';
 import { formatDate, formatDateTime } from '../../utils/dateUtils';
 import { getMeetings } from '../../services/meetings/meetingsService';
 
@@ -271,6 +274,43 @@ export default function InquiryViewPage() {
   // Meetings attached to this inquiry
   const [inquiryMeetings, setInquiryMeetings] = useState([]);
   const [loadingMeetings, setLoadingMeetings] = useState(false);
+
+  // Deal Conversion state
+  const [isConvertDealOpen, setIsConvertDealOpen] = useState(false);
+  const [dealPrefillData, setDealPrefillData] = useState(null);
+  const [nextDealDocNumber, setNextDealDocNumber] = useState('');
+  const [dealCurrencies, setDealCurrencies] = useState([]);
+  const [isConvertingDeal, setIsConvertingDeal] = useState(false);
+
+  const handleConvertToDealClick = async () => {
+    try {
+      setIsConvertingDeal(true);
+      const inqId = inquiry?.id || id;
+      const [prefill, nextNum, lookups] = await Promise.all([
+        dealService.getDealPrefill(inqId),
+        dealService.getNextDealNumber(),
+        dealService.getDealLookups(),
+      ]);
+      setDealPrefillData(prefill);
+      setNextDealDocNumber(nextNum?.documentNumber || '');
+      setDealCurrencies(lookups?.currencies || []);
+      setIsConvertDealOpen(true);
+    } catch (err) {
+      toast.error(err?.message || 'This inquiry cannot be converted to a deal.');
+    } finally {
+      setIsConvertingDeal(false);
+    }
+  };
+
+  const handleSaveDealConversion = async (formData) => {
+    try {
+      const created = await dealService.createDeal(formData);
+      setIsConvertDealOpen(false);
+      navigate(`/deals/${created.id}`);
+    } catch (err) {
+      console.error('Error saving deal from inquiry:', err);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -1065,6 +1105,18 @@ export default function InquiryViewPage() {
               type="button"
               variant="secondary"
               size="sm"
+              onClick={handleConvertToDealClick}
+              disabled={isConvertingDeal}
+              className="text-xs"
+            >
+              <IconDeal size={14} className="mr-1.5" />
+              {isConvertingDeal ? 'Loading...' : 'Convert to Deal'}
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
               onClick={() =>
                 navigate(`/quotations/new?inquiryId=${id}`, {
                   state: { from: `/inquiries/${id}` },
@@ -1738,6 +1790,19 @@ export default function InquiryViewPage() {
         mode={uploadModalMode}
         document={selectedDocForVersion}
       />
+
+      {/* ── Convert to Deal Modal ── */}
+      {isConvertDealOpen && (
+        <DealFormModal
+          isOpen={isConvertDealOpen}
+          onClose={() => setIsConvertDealOpen(false)}
+          mode="CREATE"
+          prefill={dealPrefillData}
+          nextDocNumber={nextDealDocNumber}
+          currencies={dealCurrencies}
+          onSave={handleSaveDealConversion}
+        />
+      )}
     </div>
   );
 }
