@@ -372,3 +372,15 @@ export async function uploadBankDetailAttachment(id, { documentTypeId, documentN
     uploadedOn: new Date().toISOString(),
   };
 }
+
+export async function deleteBankAttachment(attachmentId) {
+  await new Promise((r) => setTimeout(r, 150));
+  for (const b of inMemoryBankDetails) {
+    if (Array.isArray(b.attachments)) {
+      b.attachments = b.attachments.filter(
+        (a) => String(a.id || a.attachmentId) !== String(attachmentId)
+      );
+    }
+  }
+  return { success: true };
+}

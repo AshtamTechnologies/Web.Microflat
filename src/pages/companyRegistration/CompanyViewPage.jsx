@@ -5,8 +5,8 @@
  * Designed strictly matching the layout and typography of ClientViewPage.jsx.
  */
 
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   PageHeader,
@@ -29,21 +29,32 @@ import {
   IconCopy,
   IconCheck,
   IconUser,
+  IconBankDetails,
 } from '../../constants/icons';
 
 import { useCompanyContext } from '../../context/CompanyContext';
+import { useCompanyBankDetails } from '../../context/CompanyBankDetailsContext';
 import { useCountryState } from '../../context/CountryStateContext';
 import { formatDateTime } from '../../utils/dateUtils';
+import CompanyBankDetailsViewPage from '../companyBankDetails/CompanyBankDetailsViewPage';
 
 export default function CompanyViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'bank' ? 'bank' : 'profile';
+
   const { getCompanyById, fetchCompanyById } = useCompanyContext();
+  const { getBanksForCompany } = useCompanyBankDetails();
   const { getCountryName, getStateName, fetchStatesForCountry } = useCountryState();
 
   const [copiedField, setCopiedField] = useState(null);
   const [company, setCompany] = useState(() => getCompanyById(id));
   const [loading, setLoading] = useState(!company);
+
+  const bankAccounts = useMemo(() => {
+    return (id && getBanksForCompany ? getBanksForCompany(id) : []) || [];
+  }, [id, getBanksForCompany]);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -148,21 +159,70 @@ export default function CompanyViewPage() {
           </Badge>
         }
         actions={
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            icon={IconEdit}
-            onClick={() => navigate(`/company-registration/${company.companyId || company.id}/edit`)}
-            className="text-xs font-semibold shadow-2xs"
-          >
-            Edit Company
-          </Button>
+          <div className="flex items-center gap-2">
+            {activeTab === 'profile' ? (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                icon={IconEdit}
+                onClick={() => navigate(`/company-registration/${company.companyId || company.id}/edit`)}
+                className="text-xs font-semibold shadow-2xs"
+              >
+                Edit Company
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                icon={IconEdit}
+                onClick={() => navigate(`/company-registration/${company.companyId || company.id}/edit?tab=bank`)}
+                className="text-xs font-semibold shadow-2xs"
+              >
+                Manage Bank Details
+              </Button>
+            )}
+          </div>
         }
       />
 
-      {/* ── Balanced 2-Column Responsive Layout (lg:grid-cols-12) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* ── Tabs Navigation ── */}
+      <div className="flex items-center gap-2 border-b border-border">
+        <button
+          type="button"
+          onClick={() => setSearchParams({ tab: 'profile' })}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'profile'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-muted hover:text-heading'
+          }`}
+        >
+          <IconBuilding2 size={15} />
+          <span>Corporate Profile</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSearchParams({ tab: 'bank' })}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'bank'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-muted hover:text-heading'
+          }`}
+        >
+          <IconBankDetails size={15} />
+          <span>Bank Accounts</span>
+          {bankAccounts.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-3xs font-bold bg-primary/10 text-primary">
+              {bankAccounts.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ── Tab 1: Corporate Profile ── */}
+      {activeTab === 'profile' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ── LEFT COLUMN: Corporate Profile & Key Signatory (lg:col-span-7) ── */}
         <div className="lg:col-span-7 space-y-6">
           {/* Card 1: Corporate Profile & Identifiers */}
@@ -271,7 +331,7 @@ export default function CompanyViewPage() {
                         className="flex items-center justify-between p-2 rounded-lg bg-surface/50 border border-border text-xs"
                       >
                         <div className="min-w-0">
-                          <span className="text-3xs uppercase tracking-wider text-text-muted block font-semibold">
+                          <span className="text-2xs text-text-muted block font-medium">
                             {p.phoneLabel || 'Phone'}
                           </span>
                           <span className="font-mono text-heading font-medium">
@@ -438,6 +498,15 @@ export default function CompanyViewPage() {
           </Card>
         </div>
       </div>
+      )}
+
+      {/* ── Tab 2: Bank Accounts ── */}
+      {activeTab === 'bank' && (
+        <CompanyBankDetailsViewPage
+          companyId={company.companyId || company.id}
+          embedded
+        />
+      )}
     </div>
   );
 }

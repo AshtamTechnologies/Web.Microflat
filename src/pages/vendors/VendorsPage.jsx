@@ -129,14 +129,6 @@ export default function VendorsPage() {
     hasDefaultedFieldsFilter !== 'ALL'
   );
 
-  const pendingChangeCount = useMemo(() => {
-    return (allVendors || vendors).filter((v) => Boolean(v.hasPendingChange)).length;
-  }, [allVendors, vendors]);
-
-  const defaultedFieldsCount = useMemo(() => {
-    return (allVendors || vendors).filter((v) => Boolean(v.hasDefaultedFields)).length;
-  }, [allVendors, vendors]);
-
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
   const pagination = useMemo(
@@ -482,63 +474,6 @@ export default function VendorsPage() {
           />
         </div>
       </TableToolbar>
-
-      {/* ── Quick Filter Pills for Instant 1-Click Toggling ── */}
-      {(pendingChangeCount > 0 || defaultedFieldsCount > 0 || hasPendingChangeFilter !== 'ALL' || hasDefaultedFieldsFilter !== 'ALL') && (
-        <div className="flex items-center gap-2 flex-wrap px-1">
-          <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted mr-1">
-            Quick Filters:
-          </span>
-          <button
-            type="button"
-            onClick={() => setHasPendingChangeFilter((prev) => (prev === 'TRUE' ? 'ALL' : 'TRUE'))}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer border ${
-              hasPendingChangeFilter === 'TRUE'
-                ? 'bg-warning/15 text-warning-heading border-warning/40 shadow-2xs font-semibold'
-                : 'bg-surface hover:bg-surface/80 text-text border-border font-medium'
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-warning" aria-hidden="true" />
-            <span>Pending Revision</span>
-            {pendingChangeCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-2xs bg-bg/80 border border-border/60 font-mono">
-                {pendingChangeCount}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setHasDefaultedFieldsFilter((prev) => (prev === 'TRUE' ? 'ALL' : 'TRUE'))}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer border ${
-              hasDefaultedFieldsFilter === 'TRUE'
-                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-2xs font-semibold'
-                : 'bg-surface hover:bg-surface/80 text-text border-border font-medium'
-            }`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden="true" />
-            <span>Needs Data Review</span>
-            {defaultedFieldsCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-2xs bg-bg/80 border border-border/60 font-mono">
-                {defaultedFieldsCount}
-              </span>
-            )}
-          </button>
-
-          {(hasPendingChangeFilter !== 'ALL' || hasDefaultedFieldsFilter !== 'ALL') && (
-            <button
-              type="button"
-              onClick={() => {
-                setHasPendingChangeFilter('ALL');
-                setHasDefaultedFieldsFilter('ALL');
-              }}
-              className="text-2xs text-text-muted hover:text-primary underline ml-1 cursor-pointer"
-            >
-              Clear quick filters
-            </button>
-          )}
-        </div>
-      )}
 
       {/* ── Standard TanStack DataTable & Mobile Responsive Cards ── */}
       <DataTable

@@ -218,6 +218,10 @@ export async function getQueueItem(id) {
   return { ...found };
 }
 
+export async function doneQueueItem(id) {
+  return completeQueueItem(id, { remarks: 'Marked done' });
+}
+
 export async function completeQueueItem(id, payload = {}) {
   await new Promise((r) => setTimeout(r, 150));
   const numericId = Number(id);
