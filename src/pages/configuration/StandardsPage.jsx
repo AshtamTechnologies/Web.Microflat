@@ -25,6 +25,8 @@ import {
   IconStandards,
   IconSearch,
   IconView,
+  IconArrowUp,
+  IconArrowDown,
 } from '../../constants/icons';
 
 import {
@@ -41,8 +43,12 @@ import {
   TableActions,
   StatusBadge,
   SearchableSelect,
+  Badge,
+  Checkbox,
 } from '../../components/ui';
 import { useStandardsContext } from '../../context/StandardsContext';
+import { useGradesContext } from '../../context/GradesContext';
+import { useAuthContext } from '../../context/AuthContext';
 import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
@@ -69,7 +75,27 @@ export default function StandardsPage() {
     addStandard,
     updateStandard,
     updateStandardStatus,
+    saveStandardGrades,
   } = useStandardsContext();
+
+  const {
+    gradesList = [],
+    ensureGradesLoaded,
+    fetchGrades,
+  } = useGradesContext();
+
+  const { user } = useAuthContext();
+  const isAdmin = useMemo(() => {
+    if (!user) return true;
+    const roleString = `${user.primaryRole || ''} ${(user.roles || []).join(' ')}`.toLowerCase();
+    return roleString.includes('admin') || roleString.includes('super');
+  }, [user]);
+
+  // Ensure grades are loaded for the mapping checklist
+  useEffect(() => {
+    ensureGradesLoaded?.();
+    fetchGrades?.({ pageSize: 100 });
+  }, [ensureGradesLoaded, fetchGrades]);
 
   // Search & Filter State
   const [search, setSearch] = useState('');
@@ -115,8 +141,66 @@ export default function StandardsPage() {
   const [viewingStandard, setViewingStandard] = useState(null);
   const [isFetchingDetail, setIsFetchingDetail] = useState(false);
   const [formData, setFormData] = useState(INITIAL_FORM);
+  const [selectedGrades, setSelectedGrades] = useState([]);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Combined available grades list (master active grades + any existing mapped grades)
+  const allAvailableGrades = useMemo(() => {
+    const list = [...gradesList];
+    const knownIds = new Set(list.map((g) => Number(g.id)));
+    (selectedGrades || []).forEach((sg) => {
+      const gId = Number(sg.gradeId);
+      if (!knownIds.has(gId)) {
+        list.push({
+          id: gId,
+          gradeCode: sg.gradeCode,
+          isActive: sg.isGradeActive !== undefined ? sg.isGradeActive : true,
+        });
+        knownIds.add(gId);
+      }
+    });
+    return list;
+  }, [gradesList, selectedGrades]);
+
+  // Toggle grade selection in mapping checklist
+  const handleToggleGrade = (masterGrade) => {
+    if (!isAdmin) return;
+    if (masterGrade.isActive === false) return;
+
+    setSelectedGrades((prev) => {
+      const exists = prev.some((g) => Number(g.gradeId) === Number(masterGrade.id));
+      if (exists) {
+        return prev
+          .filter((g) => Number(g.gradeId) !== Number(masterGrade.id))
+          .map((g, idx) => ({ ...g, displayOrder: idx + 1 }));
+      } else {
+        return [
+          ...prev,
+          {
+            gradeId: Number(masterGrade.id),
+            gradeCode: masterGrade.gradeCode || `Gr-${masterGrade.id}`,
+            isGradeActive: true,
+            displayOrder: prev.length + 1,
+          },
+        ];
+      }
+    });
+  };
+
+  // Reorder mapped grade sequence up/down
+  const handleMoveGrade = (index, direction) => {
+    if (!isAdmin) return;
+    setSelectedGrades((prev) => {
+      const targetIndex = direction === 'UP' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy.map((g, idx) => ({ ...g, displayOrder: idx + 1 }));
+    });
+  };
 
   /* ── Form Validation ── */
   function validateField(name, value) {
@@ -158,6 +242,7 @@ export default function StandardsPage() {
   function handleOpenAdd() {
     setEditingStandard(null);
     setFormData(INITIAL_FORM);
+    setSelectedGrades([]);
     setFormErrors({});
     setIsModalOpen(true);
   }
@@ -170,6 +255,10 @@ export default function StandardsPage() {
       description: standard.description || '',
       isActive: Boolean(standard.isActive),
     });
+    const initialGrades = (standard.grades || [])
+      .slice()
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    setSelectedGrades(initialGrades);
     setFormErrors({});
     setIsModalOpen(true);
     setIsFetchingDetail(true);
@@ -183,6 +272,9 @@ export default function StandardsPage() {
           description: fresh.description || '',
           isActive: Boolean(fresh.isActive),
         });
+        setSelectedGrades(
+          (fresh.grades || []).slice().sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+        );
       }
     } catch {
       // toast is handled in context
@@ -213,11 +305,12 @@ export default function StandardsPage() {
     setIsModalOpen(false);
     setEditingStandard(null);
     setFormData(INITIAL_FORM);
+    setSelectedGrades([]);
     setFormErrors({});
     setIsFetchingDetail(false);
   }
 
-  /* ── Form Submit with Status Patching ── */
+  /* ── Form Submit with Status Patching & Grade Mapping ── */
   async function handleFormSubmit(e) {
     if (e) e.preventDefault();
     const errors = validateAll(formData);
@@ -249,6 +342,15 @@ export default function StandardsPage() {
         if (Boolean(editingStandard.isActive) !== Boolean(formData.isActive)) {
           await updateStandardStatus(id, formData.isActive);
         }
+
+        // 3. Save allowed grades mapping (Admin only)
+        if (isAdmin) {
+          const gradesPayload = selectedGrades.map((g, idx) => ({
+            gradeId: g.gradeId,
+            displayOrder: idx + 1,
+          }));
+          await saveStandardGrades(id, gradesPayload);
+        }
       } else {
         // 1. Create new standard via POST /api/standards
         const created = await addStandard(payload);
@@ -257,6 +359,15 @@ export default function StandardsPage() {
         // 2. If status set to inactive during creation, update via PATCH /api/standards/{id}/status
         if (newId && formData.isActive === false) {
           await updateStandardStatus(newId, false);
+        }
+
+        // 3. Save allowed grades if selected
+        if (newId && isAdmin && selectedGrades.length > 0) {
+          const gradesPayload = selectedGrades.map((g, idx) => ({
+            gradeId: g.gradeId,
+            displayOrder: idx + 1,
+          }));
+          await saveStandardGrades(newId, gradesPayload);
         }
       }
 
@@ -307,8 +418,8 @@ export default function StandardsPage() {
       columnHelper.accessor('description', {
         id: 'description',
         header: 'DESCRIPTION',
-        size: 260,
-        minSize: 150,
+        size: 240,
+        minSize: 140,
         cell: ({ row }) => (
           <span
             className="text-xs text-text-muted line-clamp-1 break-words"
@@ -317,6 +428,33 @@ export default function StandardsPage() {
             {row.original.description || '—'}
           </span>
         ),
+      }),
+      columnHelper.accessor('grades', {
+        id: 'grades',
+        header: 'ALLOWED GRADES',
+        size: 200,
+        minSize: 130,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const grades = row.original.grades || [];
+          if (!grades || grades.length === 0) {
+            return <span className="text-xs text-text-muted">—</span>;
+          }
+          return (
+            <div className="flex flex-wrap items-center gap-1">
+              {grades.map((g) => (
+                <Badge
+                  key={g.mappingId || g.gradeId}
+                  variant={g.isGradeActive !== false ? 'neutral' : 'warning'}
+                  size="sm"
+                  className="font-mono text-3xs font-medium"
+                >
+                  {g.gradeCode || `Gr-${g.gradeId}`}
+                </Badge>
+              ))}
+            </div>
+          );
+        },
       }),
       columnHelper.accessor('isActive', {
         id: 'isActive',
@@ -507,6 +645,23 @@ export default function StandardsPage() {
                 </p>
               )}
 
+              {/* Allowed Grades Chips */}
+              {standard.grades && standard.grades.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                  <span className="text-3xs text-text-muted font-medium mr-1">Grades:</span>
+                  {standard.grades.map((g) => (
+                    <Badge
+                      key={g.mappingId || g.gradeId}
+                      variant={g.isGradeActive !== false ? 'neutral' : 'warning'}
+                      size="sm"
+                      className="font-mono text-3xs"
+                    >
+                      {g.gradeCode || `Gr-${g.gradeId}`}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
               {/* Date Timestamps */}
               <div className="text-2xs text-text-muted space-y-1 pt-2 border-t border-border/60">
                 <div className="flex items-center justify-between">
@@ -556,7 +711,7 @@ export default function StandardsPage() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         title={editingStandard ? 'Edit Standard' : 'Add New Standard'}
-        maxWidth="max-w-md"
+        maxWidth="max-w-lg"
       >
         <form onSubmit={handleFormSubmit} className="space-y-4">
           {isFetchingDetail && (
@@ -596,7 +751,7 @@ export default function StandardsPage() {
             name="description"
             label="Description"
             placeholder="Enter standard description or specifications..."
-            rows={3}
+            rows={2}
             maxLength={250}
             showCharCount
             value={formData.description}
@@ -614,6 +769,149 @@ export default function StandardsPage() {
             }}
             error={formErrors.description}
           />
+
+          {/* ── Allowed Precision Grades Mapping Section (Task 54) ── */}
+          <div className="pt-3 border-t border-border space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="mf-label block font-semibold text-xs text-heading uppercase tracking-wider">
+                  Allowed Precision Grades
+                </span>
+                <p className="text-2xs text-text-muted mt-0.5">
+                  Select and sequence the grades allowed under this standard
+                </p>
+              </div>
+              <Badge variant="neutral" size="sm" className="font-mono">
+                {selectedGrades.length} Selected
+              </Badge>
+            </div>
+
+            {/* Checklist of available active grades */}
+            {isAdmin ? (
+              <div className="p-3 bg-surface/50 border border-border rounded-xl space-y-2">
+                <span className="text-3xs font-semibold text-text-muted uppercase tracking-wider block">
+                  Available Active Grades
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {allAvailableGrades.map((masterGrade) => {
+                    const isChecked = selectedGrades.some(
+                      (g) => Number(g.gradeId) === Number(masterGrade.id)
+                    );
+                    const isInactive = masterGrade.isActive === false;
+
+                    return (
+                      <label
+                        key={masterGrade.id}
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-colors select-none ${
+                          isInactive
+                            ? 'opacity-50 cursor-not-allowed bg-muted/20 border-border/40'
+                            : isChecked
+                            ? 'border-primary/50 bg-primary/5 text-heading font-medium cursor-pointer'
+                            : 'border-border/60 hover:bg-surface/80 text-text-muted cursor-pointer'
+                        }`}
+                      >
+                        <Checkbox
+                          id={`grade-check-${masterGrade.id}`}
+                          checked={isChecked}
+                          disabled={isInactive || isSubmitting || isFetchingDetail}
+                          onChange={() => handleToggleGrade(masterGrade)}
+                        />
+                        <span className="font-mono truncate">
+                          {masterGrade.gradeCode}
+                          {isInactive && (
+                            <span className="text-3xs text-danger font-normal ml-1">
+                              (Inactive)
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-surface/30 border border-border rounded-xl">
+                <p className="text-xs text-text-muted italic">
+                  Only administrators can modify allowed grade mappings.
+                </p>
+              </div>
+            )}
+
+            {/* Display Order Sequence List */}
+            {selectedGrades.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-3xs font-semibold text-text-muted uppercase tracking-wider">
+                    Display Order Sequence
+                  </span>
+                  <span className="text-3xs text-text-muted">
+                    {isAdmin ? 'Use arrows to adjust order in dropdowns' : 'Fixed sequence'}
+                  </span>
+                </div>
+
+                <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                  {selectedGrades.map((grade, idx) => (
+                    <div
+                      key={grade.gradeId}
+                      className="p-2 rounded-lg bg-surface border border-border flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-5 h-5 rounded-md bg-primary/10 text-primary font-mono text-3xs font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="font-mono font-semibold text-heading truncate">
+                          {grade.gradeCode}
+                        </span>
+                        {grade.isGradeActive === false && (
+                          <Badge variant="warning" size="sm" className="text-3xs">
+                            Inactive
+                          </Badge>
+                        )}
+                      </div>
+
+                      {isAdmin && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            disabled={idx === 0 || isSubmitting}
+                            onClick={() => handleMoveGrade(idx, 'UP')}
+                            className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-heading disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            title="Move Up"
+                          >
+                            <IconArrowUp size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === selectedGrades.length - 1 || isSubmitting}
+                            onClick={() => handleMoveGrade(idx, 'DOWN')}
+                            className="p-1 rounded hover:bg-surface-hover text-text-muted hover:text-heading disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            title="Move Down"
+                          >
+                            <IconArrowDown size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() =>
+                              handleToggleGrade({
+                                id: grade.gradeId,
+                                gradeCode: grade.gradeCode,
+                                isActive: true,
+                              })
+                            }
+                            className="p-1 rounded hover:bg-danger/10 text-text-muted hover:text-danger cursor-pointer ml-1"
+                            title="Remove from Standard"
+                          >
+                            <IconClose size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Status Switch (Active / Inactive inside form only) */}
           <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
@@ -658,7 +956,7 @@ export default function StandardsPage() {
         isOpen={Boolean(viewingStandard)}
         onClose={() => setViewingStandard(null)}
         title="Standard Details"
-        maxWidth="max-w-md"
+        maxWidth="max-w-lg"
       >
         {viewingStandard && (
           <div className="space-y-4">
@@ -715,6 +1013,37 @@ export default function StandardsPage() {
                 <p className="text-xs text-heading break-words whitespace-pre-wrap">
                   {viewingStandard.description || '—'}
                 </p>
+              </div>
+
+              {/* Allowed Precision Grades */}
+              <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-2 col-span-1 sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
+                    Allowed Precision Grades
+                  </span>
+                  <Badge variant="neutral" size="sm" className="font-mono text-3xs">
+                    {(viewingStandard.grades || []).length} Grades Mapped
+                  </Badge>
+                </div>
+                {viewingStandard.grades && viewingStandard.grades.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {viewingStandard.grades.map((g, idx) => (
+                      <Badge
+                        key={g.mappingId || g.gradeId}
+                        variant={g.isGradeActive !== false ? 'neutral' : 'warning'}
+                        size="sm"
+                        className="font-mono text-xs font-semibold"
+                      >
+                        #{idx + 1} {g.gradeCode || `Gr-${g.gradeId}`}
+                        {g.isGradeActive === false && ' (Inactive)'}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-text-muted italic">
+                    No precision grades mapped to this standard.
+                  </p>
+                )}
               </div>
 
               <div className="p-3 bg-surface/40 border border-border rounded-lg space-y-1">

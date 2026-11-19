@@ -15,8 +15,11 @@ export default function NegotiationStageFields({
   userOptions = [],
   currency = 'INR',
   suggestedOffer = null,
+  modeOptions: customModeOptions = null,
 }) {
-  const modeOptions = NEGOTIATION_MODES.map((m) => ({ value: m, label: m }));
+  const modeOptions = customModeOptions && customModeOptions.length > 0
+    ? customModeOptions
+    : NEGOTIATION_MODES.map((m) => ({ value: m, label: m }));
   const currencySym = CURRENCY_SYMBOLS[currency] || '₹';
 
   const handleField = (field, value) => {

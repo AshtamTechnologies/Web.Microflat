@@ -133,9 +133,6 @@ export async function getQuotationPrefill(inquiryId) {
 export async function createQuotation(payload) {
   try {
     const body = buildCreateQuotationPayload(payload);
-    // Explicitly enforce lineItems: null per Guide §5.4f & Swagger
-    // Backend automatically copies line items from the inquiry
-    body.lineItems = null;
     const response = await axiosInstance.post(QUOTATION_ENDPOINTS.QUOTATIONS, body);
     return quotationDetailFromApi(response.data);
   } catch (err) {
@@ -248,6 +245,93 @@ export async function addNegotiationStage(revisionId, stageData = {}) {
     };
     const response = await axiosInstance.post(QUOTATION_ENDPOINTS.REVISION_NEGOTIATIONS(validRevId), body);
     return quotationNegotiationFromApi(response.data);
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * 12a. Update Negotiation Stage
+ * PUT /api/quotation-negotiations/{id}
+ * @param {number|string} stageId
+ * @param {object} stageData
+ */
+export async function updateNegotiationStage(stageId, stageData = {}) {
+  try {
+    const validStageId = cleanId(stageId);
+    const body = {
+      negotiationOn: stageData.negotiationOn || stageData.date || new Date().toISOString().slice(0, 10),
+      handledByUserId: stageData.handledByUserId ? cleanId(stageData.handledByUserId) : null,
+      clientContactId: stageData.clientContactId ? cleanId(stageData.clientContactId) : null,
+      mode: stageData.mode || 'Call',
+      discussion: stageData.discussion || stageData.notes || '',
+      ourOfferAmount: stageData.ourOfferAmount !== undefined && stageData.ourOfferAmount !== null ? Number(stageData.ourOfferAmount) : null,
+      clientCounterAmount: stageData.clientCounterAmount !== undefined && stageData.clientCounterAmount !== null ? Number(stageData.clientCounterAmount) : null,
+    };
+    const response = await axiosInstance.put(QUOTATION_ENDPOINTS.NEGOTIATION_STAGE_BY_ID(validStageId), body);
+    return quotationNegotiationFromApi(response.data);
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * 12b. Delete Negotiation Stage
+ * DELETE /api/quotation-negotiations/{id}
+ * @param {number|string} stageId
+ */
+export async function deleteNegotiationStage(stageId) {
+  try {
+    const validStageId = cleanId(stageId);
+    const response = await axiosInstance.delete(QUOTATION_ENDPOINTS.NEGOTIATION_STAGE_BY_ID(validStageId));
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * 12c. Get Negotiation Stage Detail
+ * GET /api/quotation-negotiations/{id}
+ * @param {number|string} stageId
+ */
+export async function getNegotiationStage(stageId) {
+  try {
+    const validStageId = cleanId(stageId);
+    const response = await axiosInstance.get(QUOTATION_ENDPOINTS.NEGOTIATION_STAGE_BY_ID(validStageId));
+    return quotationNegotiationFromApi(response.data);
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * 12d. List Quotation Negotiations (All Revisions)
+ * GET /api/quotations/{id}/negotiations
+ * @param {number|string} quotationId
+ */
+export async function listQuotationNegotiations(quotationId) {
+  try {
+    const validId = cleanId(quotationId);
+    const response = await axiosInstance.get(QUOTATION_ENDPOINTS.QUOTATION_NEGOTIATIONS(validId));
+    const items = Array.isArray(response.data) ? response.data : (response.data?.items || []);
+    return items.map(quotationNegotiationFromApi).filter(Boolean);
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * 12e. List Revision Negotiations
+ * GET /api/quotation-revisions/{revisionId}/negotiations
+ * @param {number|string} revisionId
+ */
+export async function listRevisionNegotiations(revisionId) {
+  try {
+    const validRevId = cleanId(revisionId);
+    const response = await axiosInstance.get(QUOTATION_ENDPOINTS.REVISION_NEGOTIATIONS(validRevId));
+    const items = Array.isArray(response.data) ? response.data : (response.data?.items || []);
+    return items.map(quotationNegotiationFromApi).filter(Boolean);
   } catch (err) {
     throw normalizeApiError(err);
   }

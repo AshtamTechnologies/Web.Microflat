@@ -23,8 +23,9 @@ export async function getAwaitingMeApprovals(params = {}) {
   let filtered = inMemoryApprovals.filter(
     (a) => a.status === ApprovalStatus.Pending || (String(a.status || '').toLowerCase() === 'pending')
   );
-  if (params.moduleCode && params.moduleCode !== 'ALL') {
-    filtered = filtered.filter((a) => (a.moduleCode || '').toLowerCase() === params.moduleCode.toLowerCase());
+  const mod = params.moduleCode || params.ModuleCode;
+  if (mod && mod !== 'ALL') {
+    filtered = filtered.filter((a) => (a.moduleCode || '').toLowerCase() === mod.toLowerCase());
   }
   return approvalRequestsFromApi(filtered);
 }

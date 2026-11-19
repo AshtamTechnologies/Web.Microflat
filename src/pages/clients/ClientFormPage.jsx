@@ -48,6 +48,7 @@ import {
   PageHeader,
   SearchableMultiSelect,
   PaymentTermsSelect,
+  DeliveryTermsSelect,
   Badge,
   ScrollableTabs,
 } from '../../components/ui';
@@ -548,8 +549,8 @@ export default function ClientFormPage() {
             className="space-y-4"
           >
             <div className="space-y-5">
-              {/* Payment Terms Multi-Select */}
-              <div className="space-y-2.5">
+              {/* Payment & Delivery Terms Master Selects */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <PaymentTermsSelect
                   id="paymentTerms"
                   name="paymentTerms"
@@ -557,32 +558,29 @@ export default function ClientFormPage() {
                   onChange={(e) => handleFieldChange('paymentTerms', e?.target ? e.target.value : e)}
                   hint="Multiple terms can be selected from Configuration"
                 />
-              </div>
 
-              {/* Rich Text Editors for Delivery Terms & Internal Comments */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {/* Delivery Terms */}
-                <RichTextEditor
+                <DeliveryTermsSelect
                   id="deliveryTerms"
                   name="deliveryTerms"
-                  label="Delivery Terms"
-                  value={form.deliveryTerms}
-                  onChange={(e) => handleFieldChange('deliveryTerms', e.target ? e.target.value : e)}
-                  placeholder="Provide delivery terms, dispatch schedules, transport scope, freight clauses, or packaging guidelines..."
-                  hint="Formatted delivery and transport terms for dispatch documentation."
-                />
-
-                {/* Internal Comments */}
-                <RichTextEditor
-                  id="comments"
-                  name="comments"
-                  label="Internal Comments"
-                  value={form.comments}
-                  onChange={(e) => handleFieldChange('comments', e.target ? e.target.value : e)}
-                  placeholder="Record customer preferences, commercial considerations, internal audit notes, or special packaging instructions..."
-                  hint="Internal notes visible to sales, procurement, and production teams."
+                  value={Array.isArray(form.deliveryTerms) ? form.deliveryTerms : (form.deliveryTerms ? [form.deliveryTerms] : [])}
+                  onChange={(e) => {
+                    const val = Array.isArray(e) ? e : e?.target?.value || [];
+                    handleFieldChange('deliveryTerms', val);
+                  }}
+                  hint="Multiple terms can be selected from Configuration"
                 />
               </div>
+
+              {/* Internal Comments */}
+              <RichTextEditor
+                id="comments"
+                name="comments"
+                label="Internal Comments"
+                value={form.comments}
+                onChange={(e) => handleFieldChange('comments', e.target ? e.target.value : e)}
+                placeholder="Record customer preferences, commercial considerations, internal audit notes, or special packaging instructions..."
+                hint="Internal notes visible to sales, procurement, and production teams."
+              />
             </div>
           </CollapsibleCard>
 

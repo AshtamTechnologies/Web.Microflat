@@ -69,11 +69,11 @@ export function quotationNegotiationFromApi(dto = {}) {
   if (!dto) return null;
   return {
     id: dto.id || `neg-${Date.now()}`,
-    stageId: dto.id,
+    stageId: dto.id || dto.stageId,
     revisionId: dto.revisionId,
     revisionNo: dto.revisionNo ?? 0,
-    negotiationOn: dto.negotiationOn ? String(dto.negotiationOn).slice(0, 10) : '',
-    date: dto.negotiationOn ? String(dto.negotiationOn).slice(0, 10) : '',
+    negotiationOn: dto.negotiationOn ? String(dto.negotiationOn).slice(0, 10) : (dto.date ? String(dto.date).slice(0, 10) : ''),
+    date: dto.negotiationOn ? String(dto.negotiationOn).slice(0, 10) : (dto.date ? String(dto.date).slice(0, 10) : ''),
     handledByUserId: dto.handledByUserId,
     handledByName: dto.handledByName || dto.userName || 'Sales Exec',
     clientContactId: dto.clientContactId,
@@ -81,9 +81,12 @@ export function quotationNegotiationFromApi(dto = {}) {
     mode: dto.mode || 'Call',
     discussion: dto.discussion || dto.notes || '',
     notes: dto.discussion || dto.notes || '',
-    ourOfferAmount: dto.ourOfferAmount !== undefined ? Number(dto.ourOfferAmount) : null,
-    clientCounterAmount: dto.clientCounterAmount !== undefined ? Number(dto.clientCounterAmount) : null,
+    ourOfferAmount: dto.ourOfferAmount !== undefined && dto.ourOfferAmount !== null ? Number(dto.ourOfferAmount) : null,
+    ourOffer: dto.ourOfferAmount !== undefined && dto.ourOfferAmount !== null ? Number(dto.ourOfferAmount) : (dto.ourOffer !== undefined && dto.ourOffer !== null ? Number(dto.ourOffer) : null),
+    clientCounterAmount: dto.clientCounterAmount !== undefined && dto.clientCounterAmount !== null ? Number(dto.clientCounterAmount) : null,
+    clientCounter: dto.clientCounterAmount !== undefined && dto.clientCounterAmount !== null ? Number(dto.clientCounterAmount) : (dto.clientCounter !== undefined && dto.clientCounter !== null ? Number(dto.clientCounter) : null),
     createdOn: dto.createdOn || '',
+    stageNo: dto.stageNo ?? null,
   };
 }
 
@@ -177,6 +180,8 @@ export function quotationDetailFromApi(dto = {}) {
   // Normalize historical revisions list
   const revisions = Array.isArray(dto.revisions)
     ? dto.revisions.map((rev) => ({
+        id: rev.id,
+        revisionId: rev.id,
         revisionNo: rev.revisionNo ?? 0,
         revisionDate: rev.revisionDate ? String(rev.revisionDate).slice(0, 10) : '',
         revisionReason: rev.revisionReason || 'Revision',
@@ -226,6 +231,10 @@ export function quotationDetailFromApi(dto = {}) {
     otherChargesDescription: dto.otherChargesDescription || latestRev.otherChargesDescription || '',
     status,
     currentRevision: dto.currentRevision ?? latestRev.revisionNo ?? 0,
+    latestRevisionId: latestRev.id ?? dto.latestRevision?.id ?? dto.revisions?.[0]?.id ?? null,
+    approvalStatus: dto.approvalStatus ?? null,
+    canSubmitForApproval: dto.canSubmitForApproval ?? false,
+    pendingApprovalRequestId: dto.pendingApprovalRequestId ?? null,
     items,
     taxes,
     subtotal,

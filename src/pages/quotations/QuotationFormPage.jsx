@@ -85,6 +85,9 @@ export default function QuotationFormPage() {
     getNextQuotationNo,
     createQuotation,
     createRevision,
+    fetchQuotationPrefill,
+    fetchLookups,
+    lookups,
   } = useQuotationsContext();
 
   const { inquiries = [] } = useInquiriesContext();
@@ -115,15 +118,20 @@ export default function QuotationFormPage() {
     clientName: '',
     clientId: '',
     clientAddress: '',
+    clientAddressId: null,
     contactPerson: '',
+    clientContactId: null,
     contactEmail: '',
     contactPhone: '',
     currency: 'INR',
+    currencyId: 1,
     validUntil: '',
     paymentTerms: [],
+    paymentTermId: null,
     deliveryTerms: [],
     termsAndConditions: '',
     taxTreatment: 'INTRA_STATE',
+    pricingNotes: '',
     items: [],
   });
 
@@ -189,8 +197,8 @@ export default function QuotationFormPage() {
     ];
   }, [availableInquiries]);
 
-  // Handle Inquiry Selection
-  const handleSelectInquiry = (inquiryNoOrId) => {
+  // Handle Inquiry Selection (with dynamic API prefill)
+  const handleSelectInquiry = async (inquiryNoOrId) => {
     if (!inquiryNoOrId) {
       setFormData((prev) => ({
         ...prev,
@@ -199,7 +207,9 @@ export default function QuotationFormPage() {
         clientName: '',
         clientId: '',
         clientAddress: '',
+        clientAddressId: null,
         contactPerson: '',
+        clientContactId: null,
         contactEmail: '',
         contactPhone: '',
       }));
@@ -212,62 +222,129 @@ export default function QuotationFormPage() {
         String(inq.id).toLowerCase() === String(inquiryNoOrId).toLowerCase()
     );
 
-    if (!matchedInq) return;
+    const inqId = matchedInq?.id || matchedInq?.InquiryId || inquiryNoOrId;
+
+    // Fetch dynamic prefill from API
+    let prefill = null;
+    if (inqId && fetchQuotationPrefill) {
+      try {
+        prefill = await fetchQuotationPrefill(inqId);
+      } catch (e) {
+        console.warn('API fetchQuotationPrefill failed, using local inq fallback:', e);
+      }
+    }
 
     // Resolve client
     const inqClient = clients.find(
       (c) =>
-        (c.companyName || '').toLowerCase() === (matchedInq.CustomerName || '').toLowerCase() ||
-        (c.clientId || c.id) === matchedInq.clientId
+        (c.companyName || '').toLowerCase() === (prefill?.client?.clientName || matchedInq?.CustomerName || '').toLowerCase() ||
+        (c.clientId || c.id) === (prefill?.clientId || prefill?.client?.id || matchedInq?.clientId)
     );
 
-    const defaultAddr = inqClient?.addresses?.[0]?.addressLine1
-      ? `${inqClient.addresses[0].addressLine1}, ${inqClient.addresses[0].city}`
-      : matchedInq.AddressLine1
+    // Prefer prefill address, then inqClient address, then matchedInq address
+    const prefillAddrObj =
+      prefill?.client?.addresses?.find((a) => a.id === prefill.clientAddressId) ||
+      prefill?.client?.addresses?.[0];
+    const defaultAddrId =
+      prefill?.clientAddressId ||
+      prefillAddrObj?.id ||
+      inqClient?.addresses?.[0]?.id ||
+      inqClient?.addresses?.[0]?.addressId ||
+      null;
+    const defaultAddr = prefillAddrObj
+      ? `${prefillAddrObj.addressLine1 || prefillAddrObj.address || ''}${prefillAddrObj.city ? `, ${prefillAddrObj.city}` : ''}`
+      : inqClient?.addresses?.[0]?.addressLine1
+      ? `${inqClient.addresses[0].addressLine1}, ${inqClient.addresses[0].city || ''}`
+      : matchedInq?.AddressLine1
       ? `${matchedInq.AddressLine1}, ${matchedInq.City || ''}`
       : 'Plot 12, GIDC, Ahmedabad';
 
-    const defaultContact = inqClient?.contacts?.[0]?.firstName
+    // Prefer prefill contact, then inqClient contact, then matchedInq contact
+    const prefillContactObj =
+      prefill?.client?.contacts?.find((c) => c.id === prefill.clientContactId) ||
+      prefill?.client?.contacts?.[0];
+    const defaultContactId =
+      prefill?.clientContactId ||
+      prefillContactObj?.id ||
+      inqClient?.contacts?.[0]?.id ||
+      inqClient?.contacts?.[0]?.clientContactId ||
+      null;
+    const defaultContact = prefillContactObj
+      ? `${prefillContactObj.firstName || ''} ${prefillContactObj.lastName || ''}`.trim() || prefillContactObj.name || ''
+      : inqClient?.contacts?.[0]?.firstName
       ? `${inqClient.contacts[0].firstName} ${inqClient.contacts[0].lastName || ''}`.trim()
-      : matchedInq.ContactPerson || '';
+      : matchedInq?.ContactPerson || '';
 
-    // Map items from inquiry
-    const mappedItems = (matchedInq.items || []).map((it, idx) => {
-      const catProd = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === it.productId);
-      const catVar = catProd?.variants?.find((v) => v.id === it.variantId);
-      const fallbackDesc = catProd ? buildCatalogProductDescription(catProd, catVar) : '';
-      return {
-        id: `it-${Date.now()}-${idx}`,
-        categoryId: it.categoryId || 'cat-sp',
-        productId: it.productId || 'prod-gsp',
-        productName: it.productName || it.itemName || 'Precision Plate',
-        variantId: it.variantId || '',
-        variantName: it.variantName || 'Standard Size',
-        itemCode: it.itemCode || 'ITM-01',
-        technicalDetails: it.technicalDetails || it.specification || '',
-        description: it.description || it.specification || fallbackDesc || '',
-        quantity: Number(it.quantity) || 1,
-        rate: 35000,
-        otherCharges: 0,
-        taxPercent: 18,
-        options: Array.isArray(it.options) ? it.options : ['Rexine Cover (Standard)'],
-      };
-    });
+    const defaultContactEmail = prefillContactObj?.email || matchedInq?.Email || inqClient?.email || '';
+    const defaultContactPhone = prefillContactObj?.phone || matchedInq?.Phone || inqClient?.phone || '';
+
+    // Currency from prefill or lookups
+    const prefillCurrencyId = prefill?.currencyId || lookups?.defaultCurrencyId || 1;
+    const matchedCurrency = lookups?.currencies?.find((c) => c.id === prefillCurrencyId);
+    const resolvedCurrency = matchedCurrency?.code || matchedCurrency?.currencyCode || 'INR';
+
+    // Commercial Terms from prefill
+    const prefillPaymentTerms = prefill?.paymentTerms
+      ? (Array.isArray(prefill.paymentTerms) ? prefill.paymentTerms : [prefill.paymentTerms])
+      : (prefill?.paymentTermName ? [prefill.paymentTermName] : null);
+
+    // Map items from prefill or fallback to inquiry items
+    let mappedItems = [];
+    const rawItems = prefill?.lineItems || prefill?.items || matchedInq?.items || [];
+
+    if (Array.isArray(rawItems) && rawItems.length > 0) {
+      mappedItems = rawItems.map((it, idx) => {
+        const catProd = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === it.productId);
+        const catVar = catProd?.variants?.find((v) => v.id === it.variantId);
+        const fallbackDesc = catProd ? buildCatalogProductDescription(catProd, catVar) : '';
+        return {
+          id: it.id || `it-${Date.now()}-${idx}`,
+          quotationLineItemId: it.id || null,
+          categoryId: it.categoryId || 'cat-sp',
+          productId: it.productId || 'prod-gsp',
+          productName: it.productName || it.itemName || it.description || 'Precision Plate',
+          variantId: it.variantId || '',
+          variantName: it.variantName || 'Standard Size',
+          itemCode: it.itemCode || it.productCode || 'ITM-01',
+          technicalDetails: it.technicalDetails || it.specification || '',
+          description: it.description || it.specification || fallbackDesc || '',
+          quantity: Number(it.quantity) || 1,
+          rate: Number(it.rate) || (matchedInq?.items ? 35000 : 0),
+          otherCharges: Number(it.otherCharges || it.lineCharges) || 0,
+          taxConfigDetailId: it.taxConfigDetailId || null,
+          taxPercent: Number(it.taxPercent) || 18,
+          options: Array.isArray(it.options) ? it.options : ['Rexine Cover (Standard)'],
+        };
+      });
+    }
 
     setFormData((prev) => ({
       ...prev,
-      inquiryNo: matchedInq.InquiryNo,
-      inquiryId: matchedInq.id || matchedInq.InquiryId,
-      clientName: matchedInq.CustomerName || '',
-      clientId: inqClient?.clientId || inqClient?.id || '',
+      inquiryNo: matchedInq?.InquiryNo || prefill?.inquiryNo || inquiryNoOrId,
+      inquiryId: inqId,
+      clientName: prefill?.client?.clientName || matchedInq?.CustomerName || inqClient?.companyName || '',
+      clientId: prefill?.clientId || prefill?.client?.id || inqClient?.clientId || inqClient?.id || '',
+      clientAddressId: defaultAddrId,
       clientAddress: defaultAddr,
+      clientContactId: defaultContactId,
       contactPerson: defaultContact,
-      contactEmail: matchedInq.Email || inqClient?.email || '',
-      contactPhone: matchedInq.Phone || inqClient?.phone || '',
+      contactEmail: defaultContactEmail,
+      contactPhone: defaultContactPhone,
+      currency: resolvedCurrency,
+      currencyId: prefillCurrencyId,
+      paymentTerms: prefillPaymentTerms || prev.paymentTerms,
+      paymentTermId: prefill?.paymentTermId || prev.paymentTermId,
+      deliveryTerms: prefill?.deliveryTerms
+        ? (Array.isArray(prefill.deliveryTerms) ? prefill.deliveryTerms : [prefill.deliveryTerms])
+        : prev.deliveryTerms,
       items: mappedItems.length > 0 ? mappedItems : prev.items,
     }));
 
-    toast.success(`Inquiry ${matchedInq.InquiryNo} selected · Client & items loaded`);
+    if (prefill?.skippedCustomItems?.length > 0) {
+      toast(`${prefill.skippedCustomItems.length} custom line item(s) skipped from auto-pricing.`);
+    }
+
+    toast.success(`Inquiry ${matchedInq?.InquiryNo || inquiryNoOrId} selected · Client & items loaded`);
   };
 
   // ── Column Resizing State for Product Grid (via shared hook) ──
@@ -307,6 +384,7 @@ export default function QuotationFormPage() {
   // Initialize form on mount
   useEffect(() => {
     ensureClientsLoaded?.();
+    fetchLookups?.();
     if (isRevisionMode && targetQuotation) {
       const latestRev =
         targetQuotation.revisions?.[targetQuotation.currentRevision] ||
@@ -335,6 +413,7 @@ export default function QuotationFormPage() {
           : (targetQuotation.deliveryTerms ? [targetQuotation.deliveryTerms] : []),
         termsAndConditions: targetQuotation.termsAndConditions || '',
         taxTreatment: targetQuotation.taxTreatment || 'INTRA_STATE',
+        pricingNotes: targetQuotation.pricingNotes || targetQuotation.remarks || '',
         items: latestRev?.items?.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })) || [],
       });
 
@@ -406,13 +485,49 @@ export default function QuotationFormPage() {
     return (activeProductObj.variants || []).find((v) => v.id === drawerVariant) || null;
   }, [activeProductObj, drawerVariant]);
 
-  // Tax Slab Options
+  // Dynamic Currencies from lookups
+  const currencyOptions = useMemo(() => {
+    if (Array.isArray(lookups?.currencies) && lookups.currencies.length > 0) {
+      return lookups.currencies.map((c) => {
+        const code = c.code || c.currencyCode || c.name || 'INR';
+        const symbol = c.symbol ? ` (${c.symbol})` : '';
+        const name = c.name || c.currencyName || '';
+        return {
+          value: code,
+          label: `${code}${symbol}${name ? ` — ${name}` : ''}`,
+          id: c.id,
+        };
+      });
+    }
+    return [
+      { value: 'INR', label: 'INR (₹ - Indian Rupee)', id: 1 },
+      { value: 'USD', label: 'USD ($ - US Dollar)', id: 2 },
+      { value: 'EUR', label: 'EUR (€ - Euro)', id: 3 },
+      { value: 'GBP', label: 'GBP (£ - British Pound)', id: 4 },
+    ];
+  }, [lookups?.currencies]);
+
+  // Tax Slab Options (Dynamic from lookups.taxes, with fallback to TAX_SLABS)
   const taxSlabOptions = useMemo(() => {
+    if (Array.isArray(lookups?.taxes) && lookups.taxes.length > 0) {
+      return lookups.taxes.map((t) => {
+        const rate = Number(t.rate ?? t.taxRate ?? 0);
+        const name = t.taxName || t.name || 'GST';
+        return {
+          value: String(rate),
+          label: `${rate}% (${name})`,
+          rate,
+          id: t.id || t.taxConfigDetailId || null,
+        };
+      });
+    }
     return TAX_SLABS.map((s) => ({
       value: String(s.value),
       label: s.label,
+      rate: s.value,
+      id: null,
     }));
-  }, []);
+  }, [lookups?.taxes]);
 
   // Tax Treatment Options
   const taxTreatmentOptions = useMemo(() => {
@@ -488,23 +603,37 @@ export default function QuotationFormPage() {
 
   const clientAddressOptions = useMemo(() => {
     if (!matchedClient || !matchedClient.addresses || matchedClient.addresses.length === 0) {
-      return [{ value: formData.clientAddress || 'Head Office', label: formData.clientAddress || 'Head Office' }];
+      return [{
+        value: formData.clientAddress || 'Head Office',
+        label: formData.clientAddress || 'Head Office',
+        id: formData.clientAddressId || null,
+      }];
     }
     return matchedClient.addresses.map((addr) => ({
       value: `${addr.addressType || 'Office'} – ${addr.addressLine1}, ${addr.city} ${addr.pincode || ''}`,
       label: `${addr.addressType || 'Office'} – ${addr.addressLine1}, ${addr.city}`,
+      id: addr.id || addr.addressId || null,
     }));
-  }, [matchedClient, formData.clientAddress]);
+  }, [matchedClient, formData.clientAddress, formData.clientAddressId]);
 
   const clientContactOptions = useMemo(() => {
     if (!matchedClient || !matchedClient.contacts || matchedClient.contacts.length === 0) {
-      return [{ value: formData.contactPerson || 'Contact Person', label: formData.contactPerson || 'Contact Person' }];
+      return [{
+        value: formData.contactPerson || 'Contact Person',
+        label: formData.contactPerson || 'Contact Person',
+        id: formData.clientContactId || null,
+        email: formData.contactEmail || '',
+        phone: formData.contactPhone || '',
+      }];
     }
     return matchedClient.contacts.map((c) => ({
       value: `${c.firstName || ''} ${c.lastName || ''}`.trim(),
       label: `${c.firstName || ''} ${c.lastName || ''} · ${c.email || c.mobile1 || ''}`.trim(),
+      id: c.id || c.clientContactId || null,
+      email: c.email || '',
+      phone: c.mobile1 || c.phone || '',
     }));
-  }, [matchedClient, formData.contactPerson]);
+  }, [matchedClient, formData.contactPerson, formData.clientContactId, formData.contactEmail, formData.contactPhone]);
 
   // Real-time Totals Calculation
   const totals = useMemo(() => {
@@ -621,6 +750,8 @@ export default function QuotationFormPage() {
     }
 
     const defaultDesc = buildCatalogProductDescription(activeProductObj, activeVariantObj);
+    const matchedTaxObj = taxSlabOptions.find((o) => String(o.rate) === String(drawerTax) || o.value === String(drawerTax));
+    const taxConfigDetailId = matchedTaxObj?.id || null;
 
     const payload = {
       categoryId: drawerCategory || activeProductObj?.categoryId || 'cat-sp',
@@ -635,6 +766,7 @@ export default function QuotationFormPage() {
       rate: Number(drawerRate) || 0,
       otherCharges: Number(drawerOtherCharges) || 0,
       taxPercent: Number(drawerTax) || 18,
+      taxConfigDetailId,
       options: drawerOptions,
     };
 
@@ -752,9 +884,28 @@ export default function QuotationFormPage() {
 
     try {
       setIsSubmitting(true);
+
+      const resolvedAddressId = formData.clientAddressId || clientAddressOptions[0]?.id || null;
+      const resolvedContactId = formData.clientContactId || clientContactOptions[0]?.id || null;
+      const resolvedCurrencyId = formData.currencyId || currencyOptions.find((c) => c.value === formData.currency)?.id || 1;
+
+      // Extract unique taxConfigDetailIds
+      const activeTaxConfigIds = [
+        ...new Set(
+          formData.items
+            .map((it) => it.taxConfigDetailId)
+            .filter(Boolean)
+        ),
+      ];
+      const taxesPayload = activeTaxConfigIds.map((tid) => ({ taxConfigDetailId: tid }));
+
       if (isRevisionMode) {
         const payload = {
           ...formData,
+          clientAddressId: resolvedAddressId,
+          clientContactId: resolvedContactId,
+          currencyId: resolvedCurrencyId,
+          taxes: taxesPayload.length > 0 ? taxesPayload : (formData.taxes || []),
           status: statusToSet,
           newNegotiation: logNegotiationStage ? negotiationStageData : null,
           newDocuments: stagedDocuments,
@@ -764,6 +915,10 @@ export default function QuotationFormPage() {
       } else {
         const payload = {
           ...formData,
+          clientAddressId: resolvedAddressId,
+          clientContactId: resolvedContactId,
+          currencyId: resolvedCurrencyId,
+          taxes: taxesPayload.length > 0 ? taxesPayload : (formData.taxes || []),
           status: statusToSet,
           documents: stagedDocuments,
         };
@@ -898,14 +1053,17 @@ export default function QuotationFormPage() {
               <SearchableSelect
                 label="Currency"
                 required
-                options={[
-                  { value: 'INR', label: 'INR (₹ - Indian Rupee)' },
-                  { value: 'USD', label: 'USD ($ - US Dollar)' },
-                  { value: 'EUR', label: 'EUR (€ - Euro)' },
-                  { value: 'GBP', label: 'GBP (£ - British Pound)' },
-                ]}
+                options={currencyOptions}
                 value={formData.currency}
-                onChange={(e) => setFormData((prev) => ({ ...prev, currency: e.target.value }))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const matched = currencyOptions.find((opt) => opt.value === val);
+                  setFormData((prev) => ({
+                    ...prev,
+                    currency: val,
+                    currencyId: matched?.id || prev.currencyId || 1,
+                  }));
+                }}
               />
             </div>
           </div>
@@ -951,14 +1109,32 @@ export default function QuotationFormPage() {
                 required
                 options={clientAddressOptions}
                 value={formData.clientAddress}
-                onChange={(e) => setFormData((prev) => ({ ...prev, clientAddress: e.target.value }))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const matched = clientAddressOptions.find((opt) => opt.value === val);
+                  setFormData((prev) => ({
+                    ...prev,
+                    clientAddress: val,
+                    clientAddressId: matched?.id || prev.clientAddressId,
+                  }));
+                }}
               />
             </div>
             <SearchableSelect
               label="Contact Person"
               options={clientContactOptions}
               value={formData.contactPerson}
-              onChange={(e) => setFormData((prev) => ({ ...prev, contactPerson: e.target.value }))}
+              onChange={(e) => {
+                const val = e.target.value;
+                const matched = clientContactOptions.find((opt) => opt.value === val);
+                setFormData((prev) => ({
+                  ...prev,
+                  contactPerson: val,
+                  clientContactId: matched?.id || prev.clientContactId,
+                  contactEmail: matched?.email || prev.contactEmail,
+                  contactPhone: matched?.phone || prev.contactPhone,
+                }));
+              }}
             />
           </div>
         </div>
@@ -1183,59 +1359,108 @@ export default function QuotationFormPage() {
             </TableContainer>
           </div>
 
-          {/* ── Totals Summary Widget ── */}
-          <div className="p-4 sm:p-5 bg-surface/30 border-t border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-            <div className="max-w-md space-y-1.5">
-              <span className="text-xs font-bold text-heading uppercase tracking-wider block">
-                Applicable Tax Regime & Commercial Treatment
-              </span>
-              <SearchableSelect
-                options={taxTreatmentOptions}
-                value={formData.taxTreatment}
-                onChange={(e) => setFormData((prev) => ({ ...prev, taxTreatment: e.target.value }))}
-              />
-            </div>
-
-            <div className="w-full md:w-80 bg-card dark:bg-card-dark rounded-xl border border-border p-4 shadow-xs space-y-2 text-xs">
-              <div className="flex justify-between items-center text-text-muted">
-                <span>Taxable Subtotal:</span>
-                <span className="font-mono font-semibold text-heading">
-                  {formatCurrency(totals.subtotal, formData.currency)}
-                </span>
-              </div>
-
-              {formData.taxTreatment === 'INTRA_STATE' && (
-                <>
-                  <div className="flex justify-between items-center text-text-muted text-2xs">
-                    <span>CGST (Output):</span>
-                    <span className="font-mono">{formatCurrency(totals.cgst, formData.currency)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-text-muted text-2xs">
-                    <span>SGST (Output):</span>
-                    <span className="font-mono">{formatCurrency(totals.sgst, formData.currency)}</span>
-                  </div>
-                </>
-              )}
-
-              {formData.taxTreatment === 'INTER_STATE' && (
-                <div className="flex justify-between items-center text-text-muted text-2xs">
-                  <span>IGST (Output):</span>
-                  <span className="font-mono">{formatCurrency(totals.igst, formData.currency)}</span>
+          {/* ── Balanced 2-Column Pricing Footer (Layout 3: Left = Notes/Details, Right = Totals) ── */}
+          <div className="p-4 sm:p-5 bg-surface/30 border-t border-border">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column (lg: 7 cols): Commercial Treatment & Pricing Notes */}
+              <div className="lg:col-span-7 bg-card dark:bg-card-dark rounded-xl border border-border p-4 sm:p-5 shadow-xs space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-heading pb-2 border-b border-border">
+                  <IconFileText size={15} className="text-primary" />
+                  <span>Commercial Treatment & Pricing Notes</span>
                 </div>
-              )}
 
-              <div className="flex justify-between items-center text-text-muted">
-                <span>Total Tax:</span>
-                <span className="font-mono font-semibold text-heading">
-                  {formatCurrency(totals.totalTax, formData.currency)}
-                </span>
+                <div className="space-y-1.5">
+                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
+                    Applicable Tax Regime
+                  </label>
+                  <SearchableSelect
+                    options={taxTreatmentOptions}
+                    value={formData.taxTreatment}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, taxTreatment: e.target.value }))}
+                  />
+                  <p className="text-3xs text-text-muted">
+                    Determines Output Tax split: Intra-State (CGST + SGST), Inter-State (IGST), or Export / Exempt (0%).
+                  </p>
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
+                    Quotation Pricing Notes & Commercial Remarks
+                  </label>
+                  <Textarea
+                    rows={2}
+                    placeholder="e.g. Unit rates include standard export packing; prices valid for 30 days from document date; freight extra at actuals..."
+                    value={formData.pricingNotes || ''}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, pricingNotes: e.target.value }))}
+                  />
+                  <p className="text-3xs text-text-muted">
+                    Commercial notes to be communicated with line items on official client quotations.
+                  </p>
+                </div>
               </div>
 
-              <div className="pt-2 border-t border-border flex justify-between items-center font-bold text-sm text-heading">
-                <span>Grand Total:</span>
-                <span className="font-mono text-primary text-base">
-                  {formatCurrency(totals.grandTotal, formData.currency)}
-                </span>
+              {/* Right Column (lg: 5 cols): Calculation Summary Card */}
+              <div className="lg:col-span-5 bg-card dark:bg-card-dark rounded-xl border border-border p-4 sm:p-5 shadow-xs space-y-3 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-border">
+                  <span className="text-xs font-bold uppercase tracking-wider text-heading">
+                    Calculation Summary
+                  </span>
+                  <Badge variant="neutral" size="sm" className="font-mono font-semibold">
+                    {formData.currency}
+                  </Badge>
+                </div>
+
+                <div className="flex justify-between items-center text-text-muted">
+                  <span>Taxable Subtotal:</span>
+                  <span className="font-mono font-semibold text-heading text-sm">
+                    {formatCurrency(totals.subtotal, formData.currency)}
+                  </span>
+                </div>
+
+                {formData.taxTreatment === 'INTRA_STATE' && (
+                  <div className="space-y-1.5 py-1.5 px-2.5 bg-surface/60 rounded-lg border border-border/60">
+                    <div className="flex justify-between items-center text-text-muted text-2xs">
+                      <span>CGST (Output - 50%):</span>
+                      <span className="font-mono font-medium">{formatCurrency(totals.cgst, formData.currency)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-text-muted text-2xs">
+                      <span>SGST (Output - 50%):</span>
+                      <span className="font-mono font-medium">{formatCurrency(totals.sgst, formData.currency)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {formData.taxTreatment === 'INTER_STATE' && (
+                  <div className="py-1.5 px-2.5 bg-surface/60 rounded-lg border border-border/60">
+                    <div className="flex justify-between items-center text-text-muted text-2xs">
+                      <span>IGST (Output):</span>
+                      <span className="font-mono font-medium">{formatCurrency(totals.igst, formData.currency)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {(formData.taxTreatment === 'EXPORT_LUT' || formData.taxTreatment === 'EXEMPT') && (
+                  <div className="py-1.5 px-2.5 bg-surface/60 rounded-lg border border-border/60">
+                    <div className="flex justify-between items-center text-text-muted text-2xs">
+                      <span>Exempt Tax (0%):</span>
+                      <span className="font-mono font-medium">₹0.00</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center text-text-muted pt-1">
+                  <span>Total Tax:</span>
+                  <span className="font-mono font-semibold text-heading">
+                    {formatCurrency(totals.totalTax, formData.currency)}
+                  </span>
+                </div>
+
+                <div className="pt-2.5 border-t border-border flex justify-between items-center font-bold text-sm text-heading">
+                  <span>Grand Total:</span>
+                  <span className="font-mono text-primary text-base sm:text-lg">
+                    {formatCurrency(totals.grandTotal, formData.currency)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

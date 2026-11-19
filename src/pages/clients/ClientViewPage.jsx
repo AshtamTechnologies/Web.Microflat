@@ -37,6 +37,7 @@ import {
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
+import { useDeliveryTermsContext } from '../../context/DeliveryTermsContext';
 import {
   getContactTypeBadgeVariant,
   getCountryName,
@@ -110,6 +111,7 @@ export default function ClientViewPage() {
   const navigate = useNavigate();
   const { getClientById } = useClientsContext();
   const { paymentTerms = [] } = usePaymentTermsContext();
+  const { deliveryTerms = [] } = useDeliveryTermsContext();
 
   const client = getClientById(id);
 
@@ -141,6 +143,55 @@ export default function ClientViewPage() {
       };
     });
   }, [client?.paymentTerms, paymentTerms]);
+
+  const clientDeliveryTermsList = useMemo(() => {
+    if (!client?.deliveryTerms) return [];
+    const raw = client.deliveryTerms;
+    let items = [];
+    if (Array.isArray(raw)) {
+      items = raw;
+    } else if (typeof raw === 'string' && raw.trim()) {
+      if (raw.startsWith('[') && raw.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) items = parsed;
+        } catch (e) {
+          // not json array
+        }
+      }
+      if (items.length === 0) {
+        if (raw.includes(',')) {
+          items = raw.split(',').map((s) => s.trim()).filter(Boolean);
+        } else if (!/<[a-z][\s\S]*>/i.test(raw) && raw.length < 50) {
+          items = [raw.trim()];
+        }
+      }
+    }
+
+    if (items.length === 0) return [];
+
+    return items.map((val) => {
+      const termIdOrCode = typeof val === 'object' && val !== null
+        ? (val.deliveryTermId ?? val.id ?? val.termCode ?? val.code)
+        : val;
+
+      const match = deliveryTerms.find(
+        (dt) =>
+          dt.termCode?.toUpperCase() === String(termIdOrCode).toUpperCase() ||
+          dt.code?.toUpperCase() === String(termIdOrCode).toUpperCase() ||
+          dt.id === termIdOrCode ||
+          dt.deliveryTermId === termIdOrCode ||
+          String(dt.id) === String(termIdOrCode)
+      );
+
+      if (match) return match;
+      return {
+        deliveryTermId: termIdOrCode,
+        termCode: String(termIdOrCode),
+        description: '',
+      };
+    });
+  }, [client?.deliveryTerms, deliveryTerms]);
 
   if (!client) {
     return (
@@ -345,7 +396,41 @@ export default function ClientViewPage() {
             {/* Delivery Terms */}
             <div>
               <p className="text-xs font-medium text-text-muted mb-1.5">Delivery Terms</p>
-              {client.deliveryTerms ? (
+              {clientDeliveryTermsList.length > 0 ? (
+                <div className="space-y-2">
+                  {clientDeliveryTermsList.map((term, idx) => {
+                    const desc = term.description || '';
+                    const isHtml = /<[a-z][\s\S]*>/i.test(desc);
+
+                    return (
+                      <div
+                        key={term.deliveryTermId || term.termCode || idx}
+                        className="p-2.5 rounded-lg bg-surface/80 border border-border space-y-1.5 text-xs shadow-2xs"
+                      >
+                        <div>
+                          <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5">
+                            {term.termCode}
+                          </Badge>
+                        </div>
+                        {desc ? (
+                          isHtml ? (
+                            <div
+                              className="text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
+                              dangerouslySetInnerHTML={{ __html: desc }}
+                            />
+                          ) : (
+                            <p className="text-xs text-text whitespace-pre-line leading-relaxed">
+                              {desc}
+                            </p>
+                          )
+                        ) : (
+                          <p className="text-2xs text-text-muted italic">No terms description specified</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : client.deliveryTerms ? (
                 /<[a-z][\s\S]*>/i.test(client.deliveryTerms) ? (
                   <div
                     className="p-3 rounded-lg bg-surface/60 border border-border text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5 shadow-2xs"

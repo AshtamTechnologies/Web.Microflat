@@ -79,12 +79,15 @@ import {
   ScrollableTabs,
   ConfirmModal,
   StatusSwitch,
+  PaymentTermsSelect,
+  DeliveryTermsSelect,
 } from '../../components/ui';
 import RichTextEditor from '../../components/ui/RichTextEditor';
 import AddressesEditor from './components/AddressesEditor';
 import ContactsEditor from './components/ContactsEditor';
 import { useClientsContext } from '../../context/ClientsContext';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
+import { useDeliveryTermsContext } from '../../context/DeliveryTermsContext';
 import { useAuthContext } from '../../context/AuthContext';
 import {
   getContactTypeBadgeVariant,
@@ -191,6 +194,7 @@ export default function ClientEffectiveDatesPage() {
   } = useClientsContext();
 
   const { paymentTerms = [] } = usePaymentTermsContext();
+  const { deliveryTerms = [] } = useDeliveryTermsContext();
 
   const backPath = location.state?.from || '/clients';
   const backLabel = location.state?.backLabel || 'Clients';
@@ -385,6 +389,58 @@ export default function ClientEffectiveDatesPage() {
       };
     });
   }, [selectedVersion?.paymentTerms, paymentTerms, lookups?.paymentTerms]);
+
+  // Resolve delivery terms for selected version (VIEW mode)
+  const selectedDeliveryTermsList = useMemo(() => {
+    if (!selectedVersion?.deliveryTerms) return [];
+    const raw = selectedVersion.deliveryTerms;
+    const items = Array.isArray(raw)
+      ? raw
+      : typeof raw === 'string' && raw.trim()
+        ? (raw.startsWith('[') ? (() => { try { return JSON.parse(raw); } catch { return [raw]; } })() : [raw])
+        : [];
+
+    return items.map((val) => {
+      const termIdOrCode = typeof val === 'object' && val !== null
+        ? (val.deliveryTermId ?? val.id ?? val.termCode ?? val.code)
+        : val;
+
+      const match = deliveryTerms.find(
+        (dt) =>
+          dt.id === termIdOrCode ||
+          dt.deliveryTermId === termIdOrCode ||
+          String(dt.id) === String(termIdOrCode) ||
+          String(dt.deliveryTermId) === String(termIdOrCode) ||
+          dt.termCode?.toUpperCase() === String(termIdOrCode).toUpperCase() ||
+          dt.code?.toUpperCase() === String(termIdOrCode).toUpperCase()
+      );
+
+      if (typeof val === 'object' && val !== null) {
+        return {
+          ...val,
+          termCode: val.termCode || val.code || match?.termCode || match?.code || String(termIdOrCode),
+          termName: val.termName || val.name || match?.termName || match?.name || match?.description || '',
+          description: val.description || match?.description || '',
+        };
+      }
+
+      if (match) {
+        return {
+          deliveryTermId: match.id || match.deliveryTermId,
+          termCode: match.termCode || match.code,
+          termName: match.termName || match.name || '',
+          description: match.description || '',
+        };
+      }
+
+      return {
+        deliveryTermId: val,
+        termCode: String(val),
+        termName: String(val),
+        description: '',
+      };
+    });
+  }, [selectedVersion?.deliveryTerms, deliveryTerms]);
 
   // Payment Terms options from Configuration or lookups
   const paymentTermOptions = useMemo(() => {
@@ -1375,12 +1431,44 @@ export default function ClientEffectiveDatesPage() {
 
                 <div className="space-y-1.5">
                   <span className="view-field-label mf-detail-label">Delivery Terms</span>
-                  <div className="p-3 rounded-lg bg-surface/50 border border-border/60 min-h-[50px] text-xs">
-                    <FormattedHtmlBlock
-                      content={selectedVersion.deliveryTerms}
-                      emptyText="No delivery terms specified."
-                    />
-                  </div>
+                  {selectedDeliveryTermsList.length > 0 ? (
+                    <div className="space-y-2">
+                      {selectedDeliveryTermsList.map((term, idx) => {
+                        const code = term.termCode || term.code || 'TERM';
+                        const name = term.termName || term.name || '';
+                        return (
+                          <div
+                            key={term.deliveryTermId || term.termCode || idx}
+                            className="p-3 rounded-lg bg-surface/50 border border-border/60 space-y-1.5 text-xs shadow-2xs"
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5 font-bold">
+                                {code}
+                              </Badge>
+                              {name && (
+                                <span className="font-medium text-heading text-xs">
+                                  {name}
+                                </span>
+                              )}
+                            </div>
+                            {term.description && term.description !== name && (
+                              <FormattedHtmlBlock
+                                content={term.description}
+                                className="text-2xs text-text-muted mt-0.5"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-surface/50 border border-border/60 min-h-[50px] text-xs">
+                      <FormattedHtmlBlock
+                        content={selectedVersion.deliveryTerms}
+                        emptyText="No delivery terms specified."
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -1674,68 +1762,35 @@ export default function ClientEffectiveDatesPage() {
 
                 {/* Terms Section */}
                 <div className="space-y-4 pt-4 border-t border-border">
-                  <SearchableMultiSelect
-                    label="Payment Terms"
-                    id="paymentTerms"
-                    name="paymentTerms"
-                    options={paymentTermOptions}
-                    value={Array.isArray(formData.paymentTerms) ? formData.paymentTerms : []}
-                    onChange={(e) => handleFieldChange('paymentTerms', e.target.value)}
-                    placeholder="Select payment terms..."
-                    searchPlaceholder="Search payment terms..."
-                  />
-
-                  {formSelectedPaymentTermsList.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {formSelectedPaymentTermsList.map((term, idx) => {
-                        const code = term.termCode || term.code || 'TERM';
-                        const name = term.termName || term.name || '';
-                        return (
-                          <div
-                            key={term.paymentTermId || term.termCode || idx}
-                            className="flex items-center justify-between p-2 rounded-lg border border-border bg-surface/50 text-xs"
-                          >
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="font-semibold text-heading font-mono">{code}</span>
-                              {name && (
-                                <span className="text-text-muted text-2xs truncate">
-                                  — {name}
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePaymentTerm(term.id || term.paymentTermId || term.termCode)}
-                              className="text-text-muted hover:text-danger cursor-pointer ml-1 p-0.5"
-                              title="Remove term"
-                            >
-                              &times;
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                    <RichTextEditor
+                    <PaymentTermsSelect
+                      id="paymentTerms"
+                      name="paymentTerms"
+                      value={Array.isArray(formData.paymentTerms) ? formData.paymentTerms : (formData.paymentTerms ? [formData.paymentTerms] : [])}
+                      onChange={(e) => handleFieldChange('paymentTerms', e?.target ? e.target.value : e)}
+                      hint="Multiple terms can be selected from Configuration"
+                    />
+
+                    <DeliveryTermsSelect
                       id="deliveryTerms"
                       name="deliveryTerms"
-                      label="Delivery Terms"
-                      value={formData.deliveryTerms}
-                      onChange={(e) => handleFieldChange('deliveryTerms', e.target ? e.target.value : e)}
-                      placeholder="Specify shipping and freight clauses..."
-                    />
-
-                    <RichTextEditor
-                      id="comments"
-                      name="comments"
-                      label="Internal Comments"
-                      value={formData.comments}
-                      onChange={(e) => handleFieldChange('comments', e.target ? e.target.value : e)}
-                      placeholder="Add internal notes..."
+                      value={Array.isArray(formData.deliveryTerms) ? formData.deliveryTerms : (formData.deliveryTerms ? [formData.deliveryTerms] : [])}
+                      onChange={(e) => {
+                        const val = Array.isArray(e) ? e : e?.target?.value || [];
+                        handleFieldChange('deliveryTerms', val);
+                      }}
+                      hint="Multiple terms can be selected from Configuration"
                     />
                   </div>
+
+                  <RichTextEditor
+                    id="comments"
+                    name="comments"
+                    label="Internal Comments"
+                    value={formData.comments}
+                    onChange={(e) => handleFieldChange('comments', e.target ? e.target.value : e)}
+                    placeholder="Add internal notes..."
+                  />
                 </div>
               </div>
             )}
