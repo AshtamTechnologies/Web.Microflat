@@ -245,7 +245,7 @@ export default function ApprovalsPage() {
           // Module-specific counts for targetModule
           const [pendingRes, historyRes] = await Promise.allSettled([
             approvalsService.getAwaitingMeApprovals({ moduleCode: targetModule }),
-            approvalsService.getApprovalHistory({ moduleCode: targetModule, mine: false, pageSize: 500 }),
+            approvalsService.getApprovalHistory({ moduleCode: targetModule, mine: false, pageSize: 100 }),
           ]);
 
           const pendingItems =
@@ -882,7 +882,7 @@ export default function ApprovalsPage() {
                   : 'bg-border text-heading'
               }`}
             >
-              {activeTab === 'PENDING' ? items.length : summaryCounts.pending || 0}
+              {summaryCounts.pending || 0}
             </span>
           </button>
 

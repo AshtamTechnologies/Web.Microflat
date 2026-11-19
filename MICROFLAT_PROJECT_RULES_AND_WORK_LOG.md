@@ -87,6 +87,10 @@ Then:
 | **WL-009** | 2026-11-17 | Task 37 Context Wiring (Step 3) | Sales Orders Context | Connected `SalesOrdersContext.jsx` to `orderConfirmationService` and `isMockApi`. Implemented hybrid live API + direct order offline persistence. | Integrates live backend list, detail, lookups, create, update, status patch, doc upload/download/delete, and email sending, while preserving local storage fallback for Task 60 Direct Orders without breaking backend contracts. | Completed Step 3; verified build (0 errors). |
 | **WL-010** | 2026-11-17 | Task 37 Consumer Pages Wiring (Step 4) | Sales Orders UI | Aligned `SalesOrderFormPage.jsx`, `SalesOrderViewPage.jsx`, and `ChangeOrderStatusModal.jsx` with backend rules. | Enforced `quotationId` as Number, awaited async `createSalesOrder`/`updateSalesOrder` before navigating with submitting state, used direct `downloadUrl` for document downloads, governed status options strictly by `nextStatuses`, and edit by `isEditable`. | Completed Step 4; verified build (0 errors). |
 | **WL-011** | 2026-11-17 | Multi-Select Terms Alignment | Sales Orders UI | Upgraded Payment Terms and Delivery Terms in `SalesOrderFormPage.jsx` and `SalesOrderViewPage.jsx` to `SearchableMultiSelect` chips. | Aligned Sales Orders with Quotation module pattern (`QuotationFormPage.jsx`). Allows selecting multiple commercial terms while normalizing payloads safely for both array and comma-separated backend string compatibility. | Completed & verified build (0 errors). |
+| **WL-012** | 2026-11-18 | Uploader Isolation | Documents UI | Fixed duplicate "Client PO" dropdown options with strict module ID filtering (`moduleFilter="PO"`). | Prevents duplicate document category options in document uploaders. | Completed & verified build (0 errors). |
+| **WL-013** | 2026-11-18 | Commercial Terms Select | UI Components | Created unified `CommercialTermsSelect.jsx` with mobile-friendly info dialog and code-primary labels. | Reusable across Sales Orders, Quotations, and Clients. | Completed & verified build (0 errors). |
+| **WL-014** | 2026-11-18 | Quotations Core & Task 61 | Quotations | Implemented quotation service, model, endpoints, context, and wired Task 61 PO Recording modal. | Built multipart form-data upload for PO recording and hybrid live/mock state. | Completed & verified build (0 errors). |
+| **WL-015** | 2026-11-19 | Task 54 Standard to Grade Mapping | Standards & Specs | Implemented Phase 1 (Endpoints, Models, Service, Mock), Phase 2 (Context gradeMapping cache & methods), and Phase 3 (StandardsPage table column, modal checklist with drag/arrow sequence ordering, and view card). | Allows Admin to associate precision grades to standards and specify displayOrder sequence for downstream dropdowns (Task 53). Strictly preserved Task 54 boundaries (no flatness formula, no backend/DB changes, no touch to GradesPage/GradesContext). | Completed & verified build (0 errors). |
 
 ---
 
@@ -276,6 +280,30 @@ Then:
      - 100% frontend implementation. No backend C# files, controllers, or database migrations touched.
      - Krupal's protected files (`MyQueuePage.jsx`, notifications, delivery terms config) untouched.
 - **Verification**: `npm run build` passed cleanly with **0 errors** in 3.82s.
+
+---
+
+### Work Log Entry: WL-015
+- **Date**: 2026-11-19
+- **Module**: Standards Configuration (`StandardsPage.jsx`, `StandardsContext.jsx`, `standardsService.js`, `standardModel.js`, `standardsEndpoints.js`)
+- **Task**: Task 54 — Standard to Grade Mapping UI
+- **Summary of Implemented Changes**:
+  1. **Phase 1 — Service & Model Layer**:
+     - `standardsEndpoints.js`: Added `STANDARD_GRADES: (id) => '/api/standards/' + id + '/grades'` and `GRADE_MAPPING: '/api/standards/grade-mapping'`.
+     - `standardModel.js`: Added `StandardGradeModel` JSDoc typedef, initialized `grades: []` in `createEmptyStandard()`, updated `standardFromApi()` to map `grades` array (`mappingId`, `gradeId`, `gradeCode`, `displayOrder`, `isGradeActive`), and added `standardGradesToApi()` payload serializer with duplicate ID detection.
+     - `standardsService.js`: Added `getGradeMapping(activeOnly)`, `getStandardGrades(standardId)`, and `updateStandardGrades(standardId, gradesArray)` with client-side duplicate validation. Enabled `capabilities.gradeMapping = true`.
+     - `standardsService.mock.js`: Added mock data mapping for standard precision grades and implemented mock handlers for all three methods.
+  2. **Phase 2 — Context Layer**:
+     - `StandardsContext.jsx`: Added `gradeMapping` state (cached `getGradeMapping()` result), `fetchGradeMapping(activeOnly)` with mount effect, `fetchStandardGrades(standardId)`, and `saveStandardGrades(standardId, gradesArray)` (calls service, toasts success, refreshes standard details, and refreshes global grade mapping cache).
+  3. **Phase 3 — UI Layer (`StandardsPage.jsx`)**:
+     - **3A — Table Column**: Added "ALLOWED GRADES" column rendering grade codes as compact badge chips (`Gr-0`, `Gr-1`, etc.) or `—` when unmapped. Also rendered chips in mobile card view.
+     - **3B — Create/Edit Modal Section**: Added "Allowed Precision Grades" checklist under standard fields. Pre-checks existing mapped grades, greys out inactive grades, allows Admin to check/uncheck grades, and includes an up/down arrow display order sequence reordering list. Non-admins see a read-only list with guidance.
+     - **View Modal**: Added "Allowed Precision Grades" summary card showing mapped grades in `#` sequence order.
+  4. **Strict Boundary Compliance**:
+     - 0 backend or database changes.
+     - Flatness formulas strictly excluded from Task 54 (reserved for Task 53 product master variant specs).
+     - `GradesPage.jsx` and `GradesContext.jsx` were not modified.
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
 
 ---
 

@@ -17,11 +17,21 @@
  * @property {string} createdOn
  * @property {string|null} [lastUpdatedOn]
  *
+ * @typedef {Object} StandardGradeModel
+ * @property {number} mappingId
+ * @property {number} [standardId]
+ * @property {string} [standardCode]
+ * @property {number} gradeId
+ * @property {string} gradeCode
+ * @property {number} displayOrder
+ * @property {boolean} isGradeActive
+ *
  * @typedef {Object} StandardModel
  * @property {number} id
  * @property {string} standardCode
  * @property {string} description
  * @property {boolean} isActive
+ * @property {StandardGradeModel[]} grades
  * @property {string} createdOn
  * @property {string} createdAt
  * @property {string|null} lastUpdatedOn
@@ -38,6 +48,7 @@ export function createEmptyStandard() {
     standardCode: '',
     description: '',
     isActive: true,
+    grades: [],
     createdOn: '',
     createdAt: '',
     lastUpdatedOn: null,
@@ -63,6 +74,15 @@ export function standardFromApi(dto) {
     standardCode: dto.standardCode || '',
     description: dto.description || '',
     isActive: dto.isActive !== undefined ? Boolean(dto.isActive) : true,
+    grades: Array.isArray(dto.grades)
+      ? dto.grades.map((g) => ({
+          mappingId: g.id,
+          gradeId: g.gradeId,
+          gradeCode: g.gradeCode,
+          displayOrder: g.displayOrder,
+          isGradeActive: g.isGradeActive !== undefined ? Boolean(g.isGradeActive) : true,
+        }))
+      : [],
     createdOn: created,
     createdAt: created,
     lastUpdatedOn: updated,
@@ -153,4 +173,30 @@ export function standardStatusToApi(isActive) {
   return {
     isActive: Boolean(isActive),
   };
+}
+
+/**
+ * Normalizes and validates grades payload for PUT /api/standards/{id}/grades.
+ * Ensures each gradeId is included only once and displayOrder is sequenced.
+ *
+ * @param {Array<{ gradeId: number|string, displayOrder?: number }>} gradesArray
+ * @returns {Array<{ gradeId: number, displayOrder: number }>}
+ */
+export function standardGradesToApi(gradesArray = []) {
+  if (!Array.isArray(gradesArray)) return [];
+  const seen = new Set();
+  const sanitized = [];
+  gradesArray.forEach((item, index) => {
+    const gradeId = Number(item.gradeId);
+    if (!gradeId || seen.has(gradeId)) return;
+    seen.add(gradeId);
+    sanitized.push({
+      gradeId,
+      displayOrder:
+        item.displayOrder !== undefined && item.displayOrder !== null
+          ? Number(item.displayOrder)
+          : index + 1,
+    });
+  });
+  return sanitized;
 }

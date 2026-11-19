@@ -1,18 +1,24 @@
 import { useState } from 'react';
-import { Modal, Button, CancelButton, Input, SearchableSelect } from '../../../components/ui';
+import toast from 'react-hot-toast';
+import {
+  Modal,
+  Button,
+  CancelButton,
+  Input,
+  SearchableSelect,
+  DocumentUploader,
+} from '../../../components/ui';
 import { useQuotationsContext } from '../../../context/QuotationsContext';
-import { QUOTATION_DOC_TYPES, formatDocumentFileSize } from '../../../mocks/quotations';
 import { IconUploadCloud } from '../../../constants/icons';
 
 export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
   const { uploadDocument } = useQuotationsContext();
-  const [docType, setDocType] = useState('Signed Quotation');
+  const [fileData, setFileData] = useState(null);
+  const [fileError, setFileError] = useState('');
   const [revisionNo, setRevisionNo] = useState(
     quotation?.currentRevision !== undefined ? String(quotation.currentRevision) : '0'
   );
   const [stage, setStage] = useState('—');
-  const [fileName, setFileName] = useState('');
-  const [fileSize, setFileSize] = useState('');
   const [remarks, setRemarks] = useState('');
 
   const revisionOptions = (quotation?.revisions || []).map((r) => ({
@@ -28,27 +34,28 @@ export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
     })),
   ];
 
-  function handleFileChange(e) {
-    if (e.target.files && e.target.files[0]) {
-      const f = e.target.files[0];
-      setFileName(f.name);
-      setFileSize(formatDocumentFileSize(f.size));
-    }
-  }
-
   function handleUpload() {
     if (!quotation) return;
+    if (!fileData) {
+      setFileError('Please select or upload a document file.');
+      toast.error('Please select a file to upload.');
+      return;
+    }
+
     uploadDocument(quotation.id, {
-      fileName: fileName || `${docType.replace(/\s+/g, '_')}_${quotation.quotationNo}.pdf`,
-      documentType: docType,
+      fileName: fileData.fileName,
+      documentTypeId: fileData.documentTypeId || null,
+      documentType: fileData.documentTypeName || 'Quotation Document',
+      documentTypeName: fileData.documentTypeName || 'Quotation Document',
       revisionNo: Number(revisionNo),
       linkedStage: stage,
-      fileSize: fileSize || '320 KB',
+      fileSize: fileData.fileSize || '320 KB',
+      file: fileData.file || null,
       remarks,
     });
-    setFileName('');
-    setFileSize('');
+    setFileData(null);
     setRemarks('');
+    setFileError('');
     onClose();
   }
 
@@ -60,12 +67,18 @@ export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
       maxWidth="max-w-md"
     >
       <div className="space-y-4">
-        <SearchableSelect
-          label="Document Type"
-          required
-          options={QUOTATION_DOC_TYPES}
-          value={docType}
-          onChange={(e) => setDocType(e.target.value)}
+        <DocumentUploader
+          label="Document Attachment"
+          showDocTypeSelect={true}
+          moduleFilter="QUOTATION"
+          defaultDocTypeKeyword="Quotation"
+          value={fileData}
+          onChange={(val) => {
+            setFileData(val);
+            if (val) setFileError('');
+          }}
+          error={fileError}
+          compact={false}
         />
 
         <div className="grid grid-cols-2 gap-3">
@@ -83,24 +96,6 @@ export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-text-muted mb-1.5">
-            Select File <span className="text-danger">*</span>
-          </label>
-          <div className="border border-dashed border-border rounded-xl p-4 text-center bg-surface/50 hover:bg-surface transition-colors cursor-pointer relative">
-            <input
-              type="file"
-              onChange={handleFileChange}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-            />
-            <IconUploadCloud className="mx-auto text-primary mb-1" size={24} />
-            <div className="text-xs font-medium text-heading">
-              {fileName || 'Click to select or drag file here'}
-            </div>
-            <div className="text-3xs text-text-muted mt-0.5">PDF, DOC, XLS, PNG, JPG up to 15MB</div>
-          </div>
-        </div>
-
         <Input
           label="Remarks / Description (Optional)"
           placeholder="Brief notes about this attachment"
@@ -110,7 +105,12 @@ export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
 
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
           <CancelButton onClick={onClose}>Cancel</CancelButton>
-          <Button variant="primary" onClick={handleUpload} icon={<IconUploadCloud size={15} />}>
+          <Button
+            variant="primary"
+            onClick={handleUpload}
+            disabled={!fileData}
+            icon={<IconUploadCloud size={15} />}
+          >
             Upload Document
           </Button>
         </div>
@@ -118,4 +118,3 @@ export default function UploadDocumentModal({ isOpen, onClose, quotation }) {
     </Modal>
   );
 }
-

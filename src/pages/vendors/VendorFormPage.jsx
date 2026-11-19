@@ -51,6 +51,8 @@ import {
   Textarea,
   IconButton,
   FormActionsBar,
+  PaymentTermsSelect,
+  DeliveryTermsSelect,
 } from '../../components/ui';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 import { useVendorsContext } from '../../context/VendorsContext';
@@ -115,6 +117,8 @@ const INITIAL_FORM = {
   zipCode: '',
   address1: '',
   address2: '',
+  paymentTerms: [],
+  deliveryTerms: [],
   notes: '',
   attachments: [],
   isActive: true,
@@ -441,6 +445,8 @@ export default function VendorFormPage() {
           zipCode: existingVendor.zipCode || '',
           address1: existingVendor.address1 || '',
           address2: existingVendor.address2 || '',
+          paymentTerms: Array.isArray(existingVendor.paymentTerms) ? existingVendor.paymentTerms : (existingVendor.paymentTerms ? [existingVendor.paymentTerms] : []),
+          deliveryTerms: Array.isArray(existingVendor.deliveryTerms) ? existingVendor.deliveryTerms : (existingVendor.deliveryTerms ? [existingVendor.deliveryTerms] : []),
           notes: existingVendor.notes || '',
           attachments: existingVendor.attachments ? [...existingVendor.attachments] : [],
           isActive: existingVendor.isActive !== undefined ? existingVendor.isActive : true,
@@ -1365,24 +1371,49 @@ export default function VendorFormPage() {
         </div>
       </CollapsibleCard>
 
-      {/* ── SECTION 5: PROCUREMENT & QUALITY NOTES ── */}
+      {/* ── SECTION 5: COMMERCIAL TERMS & PROCUREMENT NOTES ── */}
       <CollapsibleCard
-        title="5. Procurement & Quality Notes"
-        subtitle="Optional supplier remarks"
+        title="5. Commercial Terms & Procurement Notes"
+        subtitle="Agreed payment terms, delivery terms, and operational remarks"
         icon={<IconFileText size={18} />}
         className="bg-bg"
         defaultOpen={true}
       >
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <PaymentTermsSelect
+              id="vendor-paymentTerms"
+              name="paymentTerms"
+              value={Array.isArray(form.paymentTerms) ? form.paymentTerms : (form.paymentTerms ? [form.paymentTerms] : [])}
+              onChange={(e) => {
+                const val = e?.target ? e.target.value : e;
+                setForm((prev) => ({ ...prev, paymentTerms: val }));
+              }}
+              hint="Multiple payment terms can be selected from Configuration"
+            />
 
-        <Textarea
-          id="notes"
-          name="notes"
-          label="Notes & Terms"
-          rows={4}
-          placeholder="Add any internal remarks, capability notes, tooling standards, or ISO certification references..."
-          value={form.notes}
-          onChange={handleChange}
-        />
+            <DeliveryTermsSelect
+              id="vendor-deliveryTerms"
+              name="deliveryTerms"
+              value={Array.isArray(form.deliveryTerms) ? form.deliveryTerms : (form.deliveryTerms ? [form.deliveryTerms] : [])}
+              onChange={(e) => {
+                const val = Array.isArray(e) ? e : e?.target?.value || [];
+                setForm((prev) => ({ ...prev, deliveryTerms: val }));
+              }}
+              hint="Multiple delivery terms can be selected from Configuration"
+            />
+          </div>
+
+          <Textarea
+            id="notes"
+            name="notes"
+            label="Procurement & Quality Notes"
+            rows={4}
+            placeholder="Add any internal remarks, capability notes, tooling standards, or ISO certification references..."
+            value={form.notes}
+            onChange={handleChange}
+          />
+        </div>
       </CollapsibleCard>
 
       {/* ── SECTION 6: ATTACHMENTS & SUPPORTING DOCUMENTS ── */}

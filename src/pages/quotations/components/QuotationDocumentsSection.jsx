@@ -2,11 +2,10 @@
  * QuotationDocumentsSection.jsx — Compact 2-column document staging & attachment section for QuotationFormPage.
  */
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import {
   CollapsibleCard,
-  SearchableSelect,
   Input,
   Button,
   Badge,
@@ -14,17 +13,16 @@ import {
   Th,
   Td,
   IconButton,
+  DocumentUploader,
 } from '../../../components/ui';
 import {
   IconAttachment,
   IconUpload,
   IconAdd,
   IconClose,
-  IconError,
   IconFileText,
   IconTrash,
 } from '../../../constants/icons';
-import { QUOTATION_DOC_TYPES, formatDocumentFileSize } from '../../../mocks/quotations';
 import useColumnResize from '../../../hooks/useColumnResize';
 
 const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -54,11 +52,8 @@ export default function QuotationDocumentsSection({
   isRevisionMode = false,
   existingDocuments = [],
 }) {
-  const fileInputRef = useRef(null);
-  const [docType, setDocType] = useState('Signed Quotation');
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [fileData, setFileData] = useState(null);
   const [remarks, setRemarks] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
   const [fileError, setFileError] = useState('');
 
   const { colWidths, resizingCol, handleStartResize } = useColumnResize(
@@ -71,19 +66,8 @@ export default function QuotationDocumentsSection({
     [colWidths]
   );
 
-  const handleFileSelected = (file) => {
-    if (!file) return;
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setFileError('File exceeds maximum allowed size of 15 MB.');
-      setSelectedFile(null);
-      return;
-    }
-    setFileError('');
-    setSelectedFile(file);
-  };
-
   const handleStageDocument = () => {
-    if (!selectedFile) {
+    if (!fileData) {
       setFileError('Please select or drop a file before adding.');
       toast.error('Please select a file to attach.');
       return;
@@ -91,20 +75,22 @@ export default function QuotationDocumentsSection({
 
     const newDoc = {
       id: `doc-staged-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      fileName: selectedFile.name,
-      documentType: docType,
+      fileName: fileData.fileName,
+      documentTypeId: fileData.documentTypeId || null,
+      documentType: fileData.documentTypeName || 'Quotation Attachment',
+      documentTypeName: fileData.documentTypeName || 'Quotation Attachment',
       revisionNo,
       linkedStage: '—',
-      fileSize: formatDocumentFileSize(selectedFile.size),
+      fileSize: fileData.fileSize || '250 KB',
+      file: fileData.file || null,
       remarks: remarks.trim(),
       uploadedAt: new Date().toISOString().split('T')[0],
     };
 
     onAddDocument(newDoc);
-    setSelectedFile(null);
+    setFileData(null);
     setRemarks('');
     setFileError('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
     toast.success('Document queued for upload');
   };
 
@@ -127,7 +113,7 @@ export default function QuotationDocumentsSection({
       }
     >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* ── LEFT (5 Cols): Compact Uploader ── */}
+        {/* ── LEFT (5 Cols): Reusable DocumentUploader Component ── */}
         <div className="lg:col-span-5 p-3.5 bg-surface/50 border border-border rounded-xl space-y-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-bold text-heading">Add Attachment</span>
@@ -136,116 +122,20 @@ export default function QuotationDocumentsSection({
             </span>
           </div>
 
-          <SearchableSelect
-            label="Document Type"
-            required
-            options={QUOTATION_DOC_TYPES}
-            value={docType}
-            onChange={(e) => setDocType(e.target.value)}
+          <DocumentUploader
+            label="Select Document File"
+            showDocTypeSelect={true}
+            moduleFilter="QUOTATION"
+            defaultDocTypeKeyword="Quotation"
+            value={fileData}
+            onChange={(val) => {
+              setFileData(val);
+              if (val) setFileError('');
+            }}
+            error={fileError}
+            compact={true}
           />
 
-          {/* Compact 1-Line Horizontal Drop Strip */}
-          <div className="space-y-1">
-            <span className="mf-label block">
-              Select File <span className="text-danger">*</span>
-            </span>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileSelected(file);
-              }}
-            />
-
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsDragging(true);
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsDragging(false);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsDragging(false);
-                const file = e.dataTransfer.files?.[0];
-                if (file) handleFileSelected(file);
-              }}
-              onClick={() => fileInputRef.current?.click()}
-              className={[
-                'border border-dashed rounded-lg px-3 py-2.5 cursor-pointer transition-all',
-                isDragging
-                  ? 'border-primary bg-primary/10'
-                  : fileError
-                    ? 'border-danger/60 bg-danger/5'
-                    : selectedFile
-                      ? 'border-primary/40 bg-primary/5'
-                      : 'border-border hover:border-primary/50 bg-bg',
-              ].join(' ')}
-            >
-              {selectedFile ? (
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <IconFileText size={16} className="text-primary shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-heading font-mono truncate">
-                        {selectedFile.name}
-                      </p>
-                      <p className="text-3xs text-text-muted font-mono tabular-nums">
-                        {formatDocumentFileSize(selectedFile.size)}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedFile(null);
-                      setFileError('');
-                      if (fileInputRef.current) fileInputRef.current.value = '';
-                    }}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-3xs font-medium text-danger hover:bg-danger/10 shrink-0 cursor-pointer"
-                  >
-                    <IconClose size={12} />
-                    Clear
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <IconUpload size={18} className="text-primary/80 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-heading truncate">
-                        Drop file or click to browse
-                      </p>
-                      <p className="text-3xs text-text-muted truncate">
-                        PDF, DOC, XLS, DWG, PNG, JPG · Max 15 MB
-                      </p>
-                    </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded border border-border bg-surface text-3xs font-semibold text-heading shrink-0">
-                    Browse
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {fileError && (
-              <p className="text-2xs text-danger flex items-center gap-1 mt-0.5">
-                <IconError size={12} />
-                <span>{fileError}</span>
-              </p>
-            )}
-          </div>
-
-          {/* Remarks & Add Button on Same Row */}
           <div className="flex items-end gap-2 pt-0.5">
             <div className="flex-1 min-w-0">
               <Input
@@ -262,6 +152,7 @@ export default function QuotationDocumentsSection({
               onClick={handleStageDocument}
               className="text-xs font-semibold shrink-0 h-9"
               icon={IconAdd}
+              disabled={!fileData}
             >
               Add
             </Button>

@@ -42,12 +42,19 @@ export async function getAwaitingMeApprovals(params = {}) {
     const query = {};
     const mod = params.moduleCode || params.ModuleCode;
     if (mod && mod !== 'ALL') {
-      query.moduleCode = mod;
+      query.ModuleCode = mod;
     }
-    if (params.approvalTypeId) query.approvalTypeId = params.approvalTypeId;
-    if (params.referenceId) query.referenceId = params.referenceId;
-    if (params.pageNumber) query.pageNumber = params.pageNumber;
-    if (params.pageSize) query.pageSize = params.pageSize;
+    const approvalTypeId = params.approvalTypeId || params.ApprovalTypeId;
+    if (approvalTypeId) query.ApprovalTypeId = approvalTypeId;
+
+    const referenceId = params.referenceId || params.ReferenceId;
+    if (referenceId) query.ReferenceId = referenceId;
+
+    const pageNumber = params.pageNumber || params.PageNumber;
+    if (pageNumber) query.PageNumber = pageNumber;
+
+    const pageSize = params.pageSize || params.PageSize;
+    if (pageSize) query.PageSize = pageSize;
 
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.AWAITING_ME, {
       params: query,

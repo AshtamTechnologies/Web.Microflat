@@ -14,6 +14,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import toast from 'react-hot-toast';
 import { INITIAL_QUOTATIONS, calculateQuotationTotals } from '../mocks/quotations';
 import { quotationService, isMockApi } from '../services';
+import { quotationDocumentFromApi } from '../models/quotations/quotationModel';
 
 const QuotationsContext = createContext(null);
 const STORAGE_KEY = 'microflat_quotations_data';
@@ -102,6 +103,22 @@ export function QuotationsProvider({ children }) {
       isMounted = false;
     };
   }, []);
+
+  /**
+   * Fetch/Refresh lookups on demand
+   */
+  const fetchLookups = useCallback(async () => {
+    try {
+      const data = await quotationService.getQuotationLookups();
+      if (data) {
+        setLookups(data);
+        return data;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch quotation lookups:', err);
+    }
+    return lookups;
+  }, [lookups]);
 
   /**
    * Refresh quotations list from backend API (or mock)
@@ -494,14 +511,19 @@ export function QuotationsProvider({ children }) {
   /**
    * Add Negotiation Stage
    */
-  const addNegotiationStage = useCallback(async (quotationId, stageData) => {
+  const addNegotiationStage = useCallback(async (quotationId, stageData, revisionId) => {
     let apiStage = null;
     const qObj = quotations.find((q) => String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId));
-    const revisionId = qObj?.latestRevision?.id || qObj?.currentRevision || quotationId;
+    const resolvedRevId = revisionId || stageData?.revisionId || qObj?.latestRevisionId || qObj?.revisions?.[0]?.id || quotationId;
 
     if (!isMockApi) {
       try {
-        apiStage = await quotationService.addNegotiationStage(revisionId, stageData);
+        const mappedStageData = {
+          ...stageData,
+          ourOfferAmount: stageData.ourOfferAmount ?? stageData.ourOffer ?? null,
+          clientCounterAmount: stageData.clientCounterAmount ?? stageData.clientCounter ?? null,
+        };
+        apiStage = await quotationService.addNegotiationStage(resolvedRevId, mappedStageData);
       } catch (err) {
         console.warn('Backend addNegotiationStage failed, using local fallback:', err);
       }
@@ -511,16 +533,26 @@ export function QuotationsProvider({ children }) {
       prev.map((q) => {
         if (String(q.id) !== String(quotationId) && String(q.quotationNo) !== String(quotationId)) return q;
 
+        const stageCount = (q.negotiations || []).length + 1;
         const newStage = apiStage || {
-          stageNo: (q.negotiations || []).length + 1,
-          dateTime: stageData.date ? `${stageData.date} 12:00` : new Date().toISOString().slice(0, 16),
+          id: `neg-${Date.now()}`,
+          stageId: `neg-${Date.now()}`,
+          stageNo: stageCount,
+          dateTime: stageData.dateTime || (stageData.date ? `${stageData.date} 12:00` : new Date().toISOString().slice(0, 16)),
+          negotiationOn: stageData.negotiationOn || stageData.date || new Date().toISOString().slice(0, 10),
+          date: stageData.negotiationOn || stageData.date || new Date().toISOString().slice(0, 10),
           mode: stageData.mode || 'Call',
-          handledBy: stageData.handledByName || 'Current User',
-          clientContact: stageData.contactPerson || q.contactPerson,
-          ourOffer: Number(stageData.ourOfferAmount) || 0,
-          clientCounter: Number(stageData.clientCounterAmount) || 0,
-          revisionNo: q.currentRevision,
-          discussion: stageData.notes || stageData.discussion || '',
+          handledBy: stageData.handledByName || stageData.handledBy || 'Current User',
+          handledByName: stageData.handledByName || stageData.handledBy || 'Current User',
+          clientContact: stageData.contactName || stageData.clientContact || q.contactPerson,
+          contactName: stageData.contactName || stageData.clientContact || q.contactPerson,
+          ourOffer: stageData.ourOfferAmount !== undefined && stageData.ourOfferAmount !== null ? Number(stageData.ourOfferAmount) : (stageData.ourOffer ? Number(stageData.ourOffer) : 0),
+          ourOfferAmount: stageData.ourOfferAmount !== undefined && stageData.ourOfferAmount !== null ? Number(stageData.ourOfferAmount) : (stageData.ourOffer ? Number(stageData.ourOffer) : 0),
+          clientCounter: stageData.clientCounterAmount !== undefined && stageData.clientCounterAmount !== null ? Number(stageData.clientCounterAmount) : (stageData.clientCounter ? Number(stageData.clientCounter) : 0),
+          clientCounterAmount: stageData.clientCounterAmount !== undefined && stageData.clientCounterAmount !== null ? Number(stageData.clientCounterAmount) : (stageData.clientCounter ? Number(stageData.clientCounter) : 0),
+          revisionNo: q.currentRevision ?? 0,
+          discussion: stageData.discussion || stageData.notes || '',
+          notes: stageData.discussion || stageData.notes || '',
         };
 
         return {
@@ -532,20 +564,122 @@ export function QuotationsProvider({ children }) {
       })
     );
     toast.success('Negotiation stage logged successfully');
+    return apiStage;
   }, [quotations]);
 
   /**
-   * Upload Document Attachment
+   * Update Negotiation Stage
    */
-  const uploadDocument = useCallback((quotationId, docData, revisionNo) => {
+  const updateNegotiationStage = useCallback(async (quotationId, stageId, stageData) => {
+    let apiUpdated = null;
+    if (!isMockApi) {
+      try {
+        apiUpdated = await quotationService.updateNegotiationStage(stageId, stageData);
+      } catch (err) {
+        console.warn('Backend updateNegotiationStage failed, using local update:', err);
+      }
+    }
+
     setQuotations((prev) =>
       prev.map((q) => {
         if (String(q.id) !== String(quotationId) && String(q.quotationNo) !== String(quotationId)) return q;
-        const newDoc = {
+        const updatedNegotiations = (q.negotiations || []).map((stg) => {
+          if (String(stg.id) === String(stageId) || String(stg.stageId) === String(stageId)) {
+            if (apiUpdated) return { ...stg, ...apiUpdated };
+            return {
+              ...stg,
+              mode: stageData.mode || stg.mode,
+              discussion: stageData.discussion || stageData.notes || stg.discussion,
+              notes: stageData.discussion || stageData.notes || stg.notes,
+              ourOfferAmount: stageData.ourOfferAmount !== undefined && stageData.ourOfferAmount !== null ? Number(stageData.ourOfferAmount) : (stageData.ourOffer ? Number(stageData.ourOffer) : stg.ourOfferAmount),
+              ourOffer: stageData.ourOfferAmount !== undefined && stageData.ourOfferAmount !== null ? Number(stageData.ourOfferAmount) : (stageData.ourOffer ? Number(stageData.ourOffer) : stg.ourOffer),
+              clientCounterAmount: stageData.clientCounterAmount !== undefined && stageData.clientCounterAmount !== null ? Number(stageData.clientCounterAmount) : (stageData.clientCounter ? Number(stageData.clientCounter) : stg.clientCounterAmount),
+              clientCounter: stageData.clientCounterAmount !== undefined && stageData.clientCounterAmount !== null ? Number(stageData.clientCounterAmount) : (stageData.clientCounter ? Number(stageData.clientCounter) : stg.clientCounter),
+              negotiationOn: stageData.negotiationOn || stageData.date || stg.negotiationOn,
+              date: stageData.negotiationOn || stageData.date || stg.date,
+              handledBy: stageData.handledByName || stageData.handledBy || stg.handledBy,
+              handledByName: stageData.handledByName || stageData.handledBy || stg.handledByName,
+              clientContact: stageData.contactName || stageData.clientContact || stg.clientContact,
+              contactName: stageData.contactName || stageData.clientContact || stg.contactName,
+            };
+          }
+          return stg;
+        });
+
+        return {
+          ...q,
+          negotiations: updatedNegotiations,
+          lastUpdatedAt: new Date().toISOString(),
+        };
+      })
+    );
+    toast.success('Negotiation stage updated successfully');
+  }, []);
+
+  /**
+   * Delete Negotiation Stage
+   */
+  const deleteNegotiationStage = useCallback(async (quotationId, stageId) => {
+    if (!isMockApi) {
+      try {
+        await quotationService.deleteNegotiationStage(stageId);
+      } catch (err) {
+        console.warn('Backend deleteNegotiationStage failed, removing from local state:', err);
+      }
+    }
+
+    setQuotations((prev) =>
+      prev.map((q) => {
+        if (String(q.id) !== String(quotationId) && String(q.quotationNo) !== String(quotationId)) return q;
+        const filteredNegotiations = (q.negotiations || []).filter(
+          (stg) => String(stg.id) !== String(stageId) && String(stg.stageId) !== String(stageId)
+        );
+
+        return {
+          ...q,
+          negotiations: filteredNegotiations,
+          lastUpdatedAt: new Date().toISOString(),
+        };
+      })
+    );
+    toast.success('Negotiation stage removed successfully');
+  }, []);
+
+  /**
+   * Upload Document Attachment
+   * POST /api/quotation-revisions/{revisionId}/documents
+   */
+  const uploadDocument = useCallback(async (quotationId, docData, revisionNo) => {
+    let apiDoc = null;
+    const qObj = quotations.find((q) => String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId));
+    const resolvedRevId = revisionNo || qObj?.latestRevisionId || qObj?.revisions?.[0]?.id || quotationId;
+
+    if (!isMockApi && docData?.file) {
+      try {
+        const formData = new FormData();
+        if (docData.documentTypeId) {
+          formData.append('documentTypeId', docData.documentTypeId);
+        }
+        formData.append('file', docData.file);
+        if (docData.remarks) {
+          formData.append('remarks', docData.remarks);
+        }
+        apiDoc = await quotationService.uploadQuotationDocument(resolvedRevId, formData);
+      } catch (err) {
+        console.warn('Backend uploadQuotationDocument failed, fallback to local state:', err);
+      }
+    }
+
+    setQuotations((prev) =>
+      prev.map((q) => {
+        if (String(q.id) !== String(quotationId) && String(q.quotationNo) !== String(quotationId)) return q;
+        const newDoc = apiDoc ? quotationDocumentFromApi(apiDoc) : {
           id: `doc-${Date.now()}`,
-          fileName: docData.fileName || 'Quotation_Attachment.pdf',
-          documentType: docData.documentType || 'Quotation',
-          revisionNo: revisionNo !== undefined ? Number(revisionNo) : q.currentRevision,
+          fileName: docData.fileName || docData.file?.name || 'Quotation_Attachment.pdf',
+          documentTypeId: docData.documentTypeId || null,
+          documentType: docData.documentType || docData.documentTypeName || 'Quotation',
+          documentTypeName: docData.documentTypeName || docData.documentType || 'Quotation',
+          revisionNo: revisionNo !== undefined ? Number(revisionNo) : (q.currentRevision ?? 0),
           linkedStage: docData.linkedStage || 'General',
           uploadedAt: new Date().toISOString().split('T')[0],
           fileSize: docData.fileSize || '250 KB',
@@ -560,14 +694,14 @@ export function QuotationsProvider({ children }) {
       })
     );
     toast.success('Document uploaded');
-  }, []);
+  }, [quotations]);
 
   /**
    * Send Mail Log
    */
   const sendMailLog = useCallback(async (quotationId, mailData) => {
     const qObj = quotations.find((q) => String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId));
-    const revisionId = qObj?.latestRevision?.id || qObj?.currentRevision || quotationId;
+    const revisionId = qObj?.latestRevisionId || quotationId;
 
     if (!isMockApi) {
       try {
@@ -604,12 +738,23 @@ export function QuotationsProvider({ children }) {
     toast.success(`Quotation email sent to ${mailData.to || 'client'}`);
   }, [quotations]);
 
+  const submitForApproval = useCallback(async (quotationId) => {
+    try {
+      await quotationService.submitQuotationForApproval(quotationId);
+      toast.success('Quotation submitted for approval.');
+      await fetchQuotationDetail(quotationId);
+    } catch (err) {
+      toast.error(err?.detail || err?.message || 'Failed to submit for approval.');
+    }
+  }, [fetchQuotationDetail]);
+
   return (
     <QuotationsContext.Provider
       value={{
         quotations,
         isLoading,
         lookups,
+        fetchLookups,
         refreshQuotations,
         getQuotationById,
         fetchQuotationDetail,
@@ -621,8 +766,11 @@ export function QuotationsProvider({ children }) {
         updateQuotationStatus,
         recordClientPO,
         addNegotiationStage,
+        updateNegotiationStage,
+        deleteNegotiationStage,
         uploadDocument,
         sendMailLog,
+        submitForApproval,
       }}
     >
       {children}
