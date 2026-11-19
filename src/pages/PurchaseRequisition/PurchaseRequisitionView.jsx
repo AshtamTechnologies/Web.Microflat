@@ -374,6 +374,37 @@ export default function PurchaseRequisitionView() {
                 </Badge>
               </DetailField>
 
+              {/* Payment & Delivery Terms */}
+              <div className="sm:col-span-2 md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/50">
+                <DetailField label="Payment Terms">
+                  {pr.paymentTerms && (Array.isArray(pr.paymentTerms) ? pr.paymentTerms.length > 0 : Boolean(pr.paymentTerms)) ? (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {(Array.isArray(pr.paymentTerms) ? pr.paymentTerms : [pr.paymentTerms]).map((t, idx) => (
+                        <Badge key={idx} variant="role" className="font-mono text-2xs px-2 py-0.5">
+                          {typeof t === 'object' ? (t.termCode || t.name || t) : t}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-text-muted italic">—</span>
+                  )}
+                </DetailField>
+
+                <DetailField label="Delivery Terms">
+                  {pr.deliveryTerms && (Array.isArray(pr.deliveryTerms) ? pr.deliveryTerms.length > 0 : Boolean(pr.deliveryTerms)) ? (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {(Array.isArray(pr.deliveryTerms) ? pr.deliveryTerms : [pr.deliveryTerms]).map((t, idx) => (
+                        <Badge key={idx} variant="neutral" className="font-mono text-2xs px-2 py-0.5">
+                          {typeof t === 'object' ? (t.termCode || t.name || t) : t}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-text-muted italic">—</span>
+                  )}
+                </DetailField>
+              </div>
+
               {/* Remarks / Justification across full width */}
               <div className="sm:col-span-2 md:col-span-3 pt-2 border-t border-border/50">
                 <span className="view-field-label">Remarks / Justification</span>

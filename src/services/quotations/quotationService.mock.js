@@ -203,13 +203,52 @@ export async function createRevision(id, data = {}) {
 export async function addNegotiationStage(revisionId, stageData = {}) {
   return {
     id: `neg-${Date.now()}`,
-    date: stageData.negotiationOn || new Date().toISOString().slice(0, 10),
-    handledByName: 'Current User',
+    stageId: `neg-${Date.now()}`,
+    revisionId,
+    date: stageData.negotiationOn || stageData.date || new Date().toISOString().slice(0, 10),
+    negotiationOn: stageData.negotiationOn || stageData.date || new Date().toISOString().slice(0, 10),
+    handledByName: stageData.handledByName || 'Current User',
     mode: stageData.mode || 'Call',
     notes: stageData.discussion || stageData.notes || '',
-    ourOfferAmount: stageData.ourOfferAmount,
-    clientCounterAmount: stageData.clientCounterAmount,
+    discussion: stageData.discussion || stageData.notes || '',
+    ourOfferAmount: stageData.ourOfferAmount !== undefined && stageData.ourOfferAmount !== null ? Number(stageData.ourOfferAmount) : null,
+    ourOffer: stageData.ourOfferAmount !== undefined && stageData.ourOfferAmount !== null ? Number(stageData.ourOfferAmount) : null,
+    clientCounterAmount: stageData.clientCounterAmount !== undefined && stageData.clientCounterAmount !== null ? Number(stageData.clientCounterAmount) : null,
+    clientCounter: stageData.clientCounterAmount !== undefined && stageData.clientCounterAmount !== null ? Number(stageData.clientCounterAmount) : null,
   };
+}
+
+export async function updateNegotiationStage(stageId, stageData = {}) {
+  return {
+    id: stageId,
+    stageId,
+    date: stageData.negotiationOn || stageData.date || new Date().toISOString().slice(0, 10),
+    negotiationOn: stageData.negotiationOn || stageData.date || new Date().toISOString().slice(0, 10),
+    handledByName: stageData.handledByName || 'Current User',
+    mode: stageData.mode || 'Call',
+    notes: stageData.discussion || stageData.notes || '',
+    discussion: stageData.discussion || stageData.notes || '',
+    ourOfferAmount: stageData.ourOfferAmount !== undefined && stageData.ourOfferAmount !== null ? Number(stageData.ourOfferAmount) : null,
+    ourOffer: stageData.ourOfferAmount !== undefined && stageData.ourOfferAmount !== null ? Number(stageData.ourOfferAmount) : null,
+    clientCounterAmount: stageData.clientCounterAmount !== undefined && stageData.clientCounterAmount !== null ? Number(stageData.clientCounterAmount) : null,
+    clientCounter: stageData.clientCounterAmount !== undefined && stageData.clientCounterAmount !== null ? Number(stageData.clientCounterAmount) : null,
+  };
+}
+
+export async function deleteNegotiationStage(stageId) {
+  return { success: true, id: stageId };
+}
+
+export async function getNegotiationStage(stageId) {
+  return { id: stageId };
+}
+
+export async function listQuotationNegotiations() {
+  return [];
+}
+
+export async function listRevisionNegotiations() {
+  return [];
 }
 
 export async function sendQuotationEmail(revisionId, mailData = {}) {

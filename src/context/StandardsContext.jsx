@@ -23,6 +23,7 @@ export function StandardsProvider({ children }) {
   }, []);
 
   const [standardsList, setStandardsList] = useState([]);
+  const [gradeMapping, setGradeMapping] = useState([]);
   const [pagination, setPagination] = useState({
     pageNumber: 1,
     pageSize: 10,
@@ -70,6 +71,27 @@ export function StandardsProvider({ children }) {
   }, [shouldFetch, fetchStandards]);
 
   /**
+   * Fetches full grade mapping for standards (cached for dropdowns/lookups).
+   * GET /api/standards/grade-mapping?activeOnly=true
+   */
+  const fetchGradeMapping = useCallback(async (activeOnly = true) => {
+    try {
+      const res = await standardsService.getGradeMapping(activeOnly);
+      const data = Array.isArray(res) ? res : [];
+      setGradeMapping(data);
+      return data;
+    } catch (err) {
+      console.warn('Failed to fetch standard grade mapping:', err);
+      return [];
+    }
+  }, []);
+
+  // Load gradeMapping on mount
+  useEffect(() => {
+    fetchGradeMapping().catch(() => {});
+  }, [fetchGradeMapping]);
+
+  /**
    * Synchronous helper to find a standard by ID in current loaded state.
    */
   const getStandardById = useCallback(
@@ -85,6 +107,11 @@ export function StandardsProvider({ children }) {
   const fetchStandardById = useCallback(async (id) => {
     try {
       const data = await standardsService.getStandard(id);
+      if (data) {
+        setStandardsList((prev) =>
+          prev.map((s) => (String(s.id) === String(id) ? { ...s, ...data } : s))
+        );
+      }
       return data;
     } catch (err) {
       const msg = err.message || 'Failed to fetch standard details.';
@@ -92,6 +119,41 @@ export function StandardsProvider({ children }) {
       throw err;
     }
   }, []);
+
+  /**
+   * Fetches allowed grades for a single standard.
+   * GET /api/standards/{id}/grades
+   */
+  const fetchStandardGrades = useCallback(async (standardId) => {
+    try {
+      return await standardsService.getStandardGrades(standardId);
+    } catch (err) {
+      const msg = err.message || 'Failed to fetch standard grades.';
+      toast.error(msg);
+      throw err;
+    }
+  }, []);
+
+  /**
+   * Saves allowed grades for a standard, refreshes standard details, and updates grade mapping.
+   * PUT /api/standards/{id}/grades
+   */
+  const saveStandardGrades = useCallback(
+    async (standardId, gradesArray) => {
+      try {
+        const res = await standardsService.updateStandardGrades(standardId, gradesArray);
+        toast.success('Grades updated successfully');
+        await fetchStandardById(standardId);
+        fetchGradeMapping().catch(() => {});
+        return res;
+      } catch (err) {
+        const msg = err.message || 'Failed to update standard grades.';
+        toast.error(msg);
+        throw err;
+      }
+    },
+    [fetchStandardById, fetchGradeMapping]
+  );
 
   /**
    * Creates a new Standard via POST /api/standards.
@@ -172,6 +234,7 @@ export function StandardsProvider({ children }) {
 
   const value = {
     standardsList,
+    gradeMapping,
     pagination,
     isLoading,
     error,
@@ -179,6 +242,9 @@ export function StandardsProvider({ children }) {
     fetchStandards,
     getStandardById,
     fetchStandardById,
+    fetchGradeMapping,
+    fetchStandardGrades,
+    saveStandardGrades,
     addStandard,
     updateStandard,
     updateStandardStatus,

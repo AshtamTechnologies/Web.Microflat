@@ -11,6 +11,7 @@ import {
   standardToApiCreate,
   standardToApiUpdate,
   standardStatusToApi,
+  standardGradesToApi,
 } from '../../models/standards/standardModel';
 
 export const capabilities = {
@@ -20,6 +21,7 @@ export const capabilities = {
   create: true,
   update: true,
   status: true,
+  gradeMapping: true,
 };
 
 /**
@@ -134,6 +136,67 @@ export async function updateStandardStatus(id, isActive) {
   try {
     const payload = standardStatusToApi(isActive);
     await axiosInstance.patch(STANDARDS_ENDPOINTS.STANDARD_STATUS(id), payload);
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Returns every standard with its allowed grades for dropdown filtering.
+ * GET /api/standards/grade-mapping?activeOnly=true
+ *
+ * @param {boolean} [activeOnly=true]
+ * @returns {Promise<Array<{ standardId: number, standardCode: string, isActive: boolean, grades: Array<{ id: number, standardId: number, standardCode: string, gradeId: number, gradeCode: string, isGradeActive: boolean, displayOrder: number }> }>>}
+ */
+export async function getGradeMapping(activeOnly = true) {
+  try {
+    const response = await axiosInstance.get(STANDARDS_ENDPOINTS.GRADE_MAPPING, {
+      params: { activeOnly },
+    });
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Returns allowed grades for a single standard in display order.
+ * GET /api/standards/{id}/grades
+ *
+ * @param {number|string} standardId
+ * @returns {Promise<Array<{ id: number, standardId: number, standardCode: string, gradeId: number, gradeCode: string, isGradeActive: boolean, displayOrder: number }>>}
+ */
+export async function getStandardGrades(standardId) {
+  try {
+    const response = await axiosInstance.get(STANDARDS_ENDPOINTS.STANDARD_GRADES(standardId));
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Replaces a standard's allowed grades.
+ * PUT /api/standards/{id}/grades
+ *
+ * @param {number|string} standardId
+ * @param {Array<{ gradeId: number, displayOrder?: number }>} gradesArray
+ * @returns {Promise<Array<{ id: number, standardId: number, standardCode: string, gradeId: number, gradeCode: string, isGradeActive: boolean, displayOrder: number }>>}
+ */
+export async function updateStandardGrades(standardId, gradesArray = []) {
+  try {
+    const seen = new Set();
+    for (let i = 0; i < gradesArray.length; i++) {
+      const gId = Number(gradesArray[i]?.gradeId);
+      if (seen.has(gId)) {
+        throw new Error(`Grade ID ${gId} is listed more than once.`);
+      }
+      if (gId) seen.add(gId);
+    }
+
+    const payload = standardGradesToApi(gradesArray);
+    const response = await axiosInstance.put(STANDARDS_ENDPOINTS.STANDARD_GRADES(standardId), payload);
+    return response.data;
   } catch (err) {
     throw normalizeApiError(err);
   }

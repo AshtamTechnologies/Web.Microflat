@@ -23,6 +23,7 @@ import {
   IconChevronUp,
   IconPhone,
   IconMail,
+  IconDelete,
 } from '../../constants/icons';
 import {
   PageHeader,
@@ -35,6 +36,7 @@ import {
   Th,
   Td,
   SearchableSelect,
+  ConfirmModal,
 } from '../../components/ui';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { TAX_TREATMENTS, calculateQuotationTotals, formatCurrency } from '../../mocks/quotations';
@@ -42,6 +44,7 @@ import { formatDate } from '../../utils/dateUtils';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import RecordPOModal from './components/RecordPOModal';
 import AddNegotiationModal from './components/AddNegotiationModal';
+import EditNegotiationModal from './components/EditNegotiationModal';
 import UploadDocumentModal from './components/UploadDocumentModal';
 import SendQuotationMailModal from './components/SendQuotationMailModal';
 import useColumnResize from '../../hooks/useColumnResize';
@@ -49,7 +52,7 @@ import useColumnResize from '../../hooks/useColumnResize';
 export default function QuotationViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getQuotationById, fetchQuotationDetail } = useQuotationsContext();
+  const { getQuotationById, fetchQuotationDetail, submitForApproval, deleteNegotiationStage } = useQuotationsContext();
 
   const quotation = getQuotationById(id);
 
@@ -63,6 +66,10 @@ export default function QuotationViewPage() {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isPoModalOpen, setIsPoModalOpen] = useState(false);
   const [isNegModalOpen, setIsNegModalOpen] = useState(false);
+  const [editingStage, setEditingStage] = useState(null);
+  const [isEditNegModalOpen, setIsEditNegModalOpen] = useState(false);
+  const [deletingStage, setDeletingStage] = useState(null);
+  const [isDeleteNegModalOpen, setIsDeleteNegModalOpen] = useState(false);
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [isMailModalOpen, setIsMailModalOpen] = useState(false);
 
@@ -300,6 +307,17 @@ export default function QuotationViewPage() {
             >
               Send Mail
             </Button>
+
+            {quotation.canSubmitForApproval && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => submitForApproval(quotation.id)}
+                icon={<IconCheck size={14} />}
+              >
+                Submit for Approval
+              </Button>
+            )}
 
             {quotation.status !== 'Cancelled' && quotation.status !== 'Rejected' && (
               <Button
@@ -753,16 +771,16 @@ export default function QuotationViewPage() {
                 {[
                   {
                     label: 'Payment Terms',
-                    items: (Array.isArray(quotation.paymentTerms)
-                      ? quotation.paymentTerms
-                      : [quotation.paymentTerms || 'Net 30 Days']
+                    items: (Array.isArray(activeRevision?.paymentTerms || quotation.paymentTerms)
+                      ? (activeRevision?.paymentTerms || quotation.paymentTerms)
+                      : (activeRevision?.paymentTerms || quotation.paymentTerms || quotation.paymentTermName ? [activeRevision?.paymentTerms || quotation.paymentTerms || quotation.paymentTermName] : [])
                     ).filter(Boolean),
                   },
                   {
                     label: 'Delivery Terms',
-                    items: (Array.isArray(quotation.deliveryTerms)
-                      ? quotation.deliveryTerms
-                      : [quotation.deliveryTerms || 'Ex-works Ahmedabad, 4–6 weeks']
+                    items: (Array.isArray(activeRevision?.deliveryTerms || quotation.deliveryTerms)
+                      ? (activeRevision?.deliveryTerms || quotation.deliveryTerms)
+                      : (activeRevision?.deliveryTerms || quotation.deliveryTerms ? [activeRevision?.deliveryTerms || quotation.deliveryTerms] : [])
                     ).filter(Boolean),
                   },
                 ].map((section) => (
@@ -771,21 +789,25 @@ export default function QuotationViewPage() {
                     className="bg-surface/40 border border-border/60 rounded-lg p-3.5"
                   >
                     <DetailField label={section.label}>
-                      <ul className="space-y-1.5 mt-1.5">
-                        {section.items.map((term, idx) => (
-                          <li
-                            key={idx}
-                            className="flex items-start gap-2 text-xs text-heading leading-relaxed"
-                          >
-                            <IconCheck
-                              size={13}
-                              className="text-primary shrink-0 mt-0.5"
-                              aria-hidden="true"
-                            />
-                            <span>{term}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      {section.items.length === 0 ? (
+                        <p className="text-xs text-text-muted italic mt-1.5">—</p>
+                      ) : (
+                        <ul className="space-y-1.5 mt-1.5">
+                          {section.items.map((term, idx) => (
+                            <li
+                              key={idx}
+                              className="flex items-start gap-2 text-xs text-heading leading-relaxed"
+                            >
+                              <IconCheck
+                                size={13}
+                                className="text-primary shrink-0 mt-0.5"
+                                aria-hidden="true"
+                              />
+                              <span>{typeof term === 'object' ? (term.name || term.termName || term.description || term.termCode || JSON.stringify(term)) : term}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </DetailField>
                   </div>
                 ))}
@@ -872,76 +894,121 @@ export default function QuotationViewPage() {
             <p className="text-xs text-text-muted">
               Log commercial meetings, client counter-offers, and agreed pricing adjustments.
             </p>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsNegModalOpen(true)}
-              icon={<IconAdd size={14} />}
-            >
-              Add Stage
-            </Button>
+            {quotation.status !== 'Confirmed' && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsNegModalOpen(true)}
+                icon={<IconAdd size={14} />}
+              >
+                Add Stage
+              </Button>
+            )}
           </div>
 
           {(quotation.negotiations || []).length === 0 ? (
             <div className="p-12 text-center bg-card dark:bg-card-dark rounded-xl border border-border">
               <p className="text-xs text-text-muted">No negotiation stages recorded yet.</p>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="mt-3"
-                onClick={() => setIsNegModalOpen(true)}
-              >
-                Record First Stage
-              </Button>
+              {quotation.status !== 'Confirmed' && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setIsNegModalOpen(true)}
+                >
+                  Record First Stage
+                </Button>
+              )}
             </div>
           ) : (
             <div className="max-h-[500px] overflow-y-auto pr-2 space-y-3 relative before:absolute before:inset-0 before:left-5 before:w-0.5 before:bg-border before:z-0 scrollbar-thin">
-              {quotation.negotiations.map((stg) => (
-                <div
-                  key={stg.stageNo}
-                  className="relative z-10 pl-10 group"
-                >
-                  <div className="absolute left-3.5 top-5 w-3.5 h-3.5 rounded-full bg-primary border-2 border-card" />
-                  <div className="bg-card dark:bg-card-dark p-4 rounded-xl border border-border shadow-2xs space-y-2">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-heading">
-                          Stage {stg.stageNo} · {stg.mode}
-                        </span>
-                        <Badge variant="neutral" size="sm">
-                          Rev {stg.revisionNo}
-                        </Badge>
+              {quotation.negotiations.map((stg, idx) => {
+                const stageNum = stg.stageNo ?? stg.stageId ?? (idx + 1);
+                const handledBy = stg.handledByName || stg.handledBy || 'Sales Exec';
+                const clientContact = stg.contactName || stg.clientContact || 'Client Contact';
+                const ourOffer = stg.ourOfferAmount ?? stg.ourOffer;
+                const clientCounter = stg.clientCounterAmount ?? stg.clientCounter;
+                const dateDisplay = (stg.negotiationOn || stg.createdOn || stg.dateTime || '').replace('T', ' ');
+
+                return (
+                  <div
+                    key={stg.id || stg.stageId || stageNum}
+                    className="relative z-10 pl-10 group"
+                  >
+                    <div className="absolute left-3.5 top-5 w-3.5 h-3.5 rounded-full bg-primary border-2 border-card" />
+                    <div className="bg-card dark:bg-card-dark p-4 rounded-xl border border-border shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-heading">
+                            Stage {stageNum} · {stg.mode || 'Call'}
+                          </span>
+                          <Badge variant="neutral" size="sm">
+                            Rev {stg.revisionNo ?? 0}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-2xs text-text-muted">
+                            {dateDisplay}
+                          </span>
+                          {quotation.status !== 'Confirmed' && (
+                            <div className="flex items-center gap-1 ml-2">
+                              <button
+                                type="button"
+                                title="Edit Stage"
+                                onClick={() => {
+                                  setEditingStage(stg);
+                                  setIsEditNegModalOpen(true);
+                                }}
+                                className="p-1 text-text-muted hover:text-primary hover:bg-surface rounded transition-colors cursor-pointer"
+                              >
+                                <IconEdit size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                title="Delete Stage"
+                                onClick={() => {
+                                  setDeletingStage(stg);
+                                  setIsDeleteNegModalOpen(true);
+                                }}
+                                className="p-1 text-text-muted hover:text-danger hover:bg-danger/10 rounded transition-colors cursor-pointer"
+                              >
+                                <IconDelete size={13} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <span className="font-mono text-2xs text-text-muted">
-                        {stg.dateTime?.replace('T', ' ')}
-                      </span>
-                    </div>
 
-                    <div className="text-2xs text-text-muted">
-                      {stg.handledBy} with <strong>{stg.clientContact}</strong>
-                    </div>
-
-                    <p className="text-xs text-heading mt-1">{stg.discussion}</p>
-
-                    {(stg.ourOffer || stg.clientCounter) && (
-                      <div className="pt-2 border-t border-border flex items-center gap-4 text-xs">
-                        <span>
-                          Our Offer:{' '}
-                          <strong className="font-mono text-heading">
-                            {formatCurrency(stg.ourOffer, quotation.currency)}
-                          </strong>
-                        </span>
-                        <span>
-                          Client Counter:{' '}
-                          <strong className="font-mono text-primary font-bold">
-                            {formatCurrency(stg.clientCounter, quotation.currency)}
-                          </strong>
-                        </span>
+                      <div className="text-2xs text-text-muted">
+                        {handledBy} with <strong>{clientContact}</strong>
                       </div>
-                    )}
+
+                      <p className="text-xs text-heading mt-1">{stg.discussion || stg.notes || ''}</p>
+
+                      {(ourOffer !== null && ourOffer !== undefined || clientCounter !== null && clientCounter !== undefined) && (
+                        <div className="pt-2 border-t border-border flex items-center gap-4 text-xs">
+                          {ourOffer !== null && ourOffer !== undefined && (
+                            <span>
+                              Our Offer:{' '}
+                              <strong className="font-mono text-heading">
+                                {formatCurrency(ourOffer, quotation.currency)}
+                              </strong>
+                            </span>
+                          )}
+                          {clientCounter !== null && clientCounter !== undefined && (
+                            <span>
+                              Client Counter:{' '}
+                              <strong className="font-mono text-primary font-bold">
+                                {formatCurrency(clientCounter, quotation.currency)}
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1091,6 +1158,35 @@ export default function QuotationViewPage() {
         isOpen={isNegModalOpen}
         onClose={() => setIsNegModalOpen(false)}
         quotation={quotation}
+      />
+
+      <EditNegotiationModal
+        isOpen={isEditNegModalOpen}
+        onClose={() => {
+          setIsEditNegModalOpen(false);
+          setEditingStage(null);
+        }}
+        stage={editingStage}
+        quotation={quotation}
+      />
+
+      <ConfirmModal
+        isOpen={isDeleteNegModalOpen}
+        onClose={() => {
+          setIsDeleteNegModalOpen(false);
+          setDeletingStage(null);
+        }}
+        onConfirm={async () => {
+          if (deletingStage && quotation) {
+            await deleteNegotiationStage(quotation.id, deletingStage.id || deletingStage.stageId);
+          }
+          setIsDeleteNegModalOpen(false);
+          setDeletingStage(null);
+        }}
+        title="Delete Negotiation Stage"
+        message={`Are you sure you want to delete Stage ${deletingStage?.stageNo ?? deletingStage?.stageId ?? ''}? This action cannot be undone.`}
+        confirmText="Delete Stage"
+        confirmVariant="danger"
       />
 
       <UploadDocumentModal

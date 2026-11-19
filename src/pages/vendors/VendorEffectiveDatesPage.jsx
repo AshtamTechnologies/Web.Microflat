@@ -67,8 +67,12 @@ import {
   Textarea,
   StatusBadge,
   Checkbox,
+  PaymentTermsSelect,
+  DeliveryTermsSelect,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
+import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
+import { useDeliveryTermsContext } from '../../context/DeliveryTermsContext';
 import { vendorService, approvalsService } from '../../services';
 import {
   COUNTRY_OPTIONS,
@@ -459,6 +463,9 @@ export default function VendorEffectiveDatesPage() {
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
 
+  const { paymentTerms = [] } = usePaymentTermsContext();
+  const { deliveryTerms = [] } = useDeliveryTermsContext();
+
   // Latest previous effective date that new revisions cannot precede
   const minAllowedEffectiveDate = useMemo(() => {
     const dates = versions
@@ -489,6 +496,8 @@ export default function VendorEffectiveDatesPage() {
     zipCode: '',
     address1: '',
     address2: '',
+    paymentTerms: [],
+    deliveryTerms: [],
     notes: '',
   });
 
@@ -698,6 +707,36 @@ export default function VendorEffectiveDatesPage() {
     };
   }, [versions, selectedVersionId, activeVersion, versionDetailsMap, vendor]);
 
+  const selectedVendorPaymentTerms = useMemo(() => {
+    if (!selectedVersion?.paymentTerms) return [];
+    const raw = selectedVersion.paymentTerms;
+    const items = Array.isArray(raw)
+      ? raw
+      : typeof raw === 'string' && raw.trim()
+        ? raw.split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
+    return items.map((val) => {
+      const idOrCode = typeof val === 'object' && val !== null ? (val.paymentTermId ?? val.id ?? val.termCode) : val;
+      const match = paymentTerms.find((pt) => pt.id === idOrCode || pt.paymentTermId === idOrCode || String(pt.termCode).toUpperCase() === String(idOrCode).toUpperCase());
+      return match || { termCode: String(idOrCode), name: String(idOrCode) };
+    });
+  }, [selectedVersion?.paymentTerms, paymentTerms]);
+
+  const selectedVendorDeliveryTerms = useMemo(() => {
+    if (!selectedVersion?.deliveryTerms) return [];
+    const raw = selectedVersion.deliveryTerms;
+    const items = Array.isArray(raw)
+      ? raw
+      : typeof raw === 'string' && raw.trim()
+        ? raw.split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
+    return items.map((val) => {
+      const idOrCode = typeof val === 'object' && val !== null ? (val.deliveryTermId ?? val.id ?? val.termCode ?? val.code) : val;
+      const match = deliveryTerms.find((dt) => dt.id === idOrCode || dt.deliveryTermId === idOrCode || String(dt.termCode || dt.code).toUpperCase() === String(idOrCode).toUpperCase());
+      return match || { termCode: String(idOrCode), name: String(idOrCode) };
+    });
+  }, [selectedVersion?.deliveryTerms, deliveryTerms]);
+
   // Attachments for the currently viewed version (version-scoped)
   const currentViewAttachments = useMemo(() => {
     if (!selectedVersion) return [];
@@ -811,6 +850,8 @@ export default function VendorEffectiveDatesPage() {
       zipCode: full.zipCode || ver.zipCode || '',
       address1: full.address1 || ver.address1 || '',
       address2: full.address2 || ver.address2 || '',
+      paymentTerms: Array.isArray(full.paymentTerms) ? full.paymentTerms : (full.paymentTerms ? [full.paymentTerms] : []),
+      deliveryTerms: Array.isArray(full.deliveryTerms) ? full.deliveryTerms : (full.deliveryTerms ? [full.deliveryTerms] : []),
       notes: full.notes || ver.notes || '',
     });
     setAttachments(Array.isArray(full.attachments) ? full.attachments : []);
@@ -841,6 +882,8 @@ export default function VendorEffectiveDatesPage() {
           zipCode: fetched.zipCode || '',
           address1: fetched.address1 || '',
           address2: fetched.address2 || '',
+          paymentTerms: Array.isArray(fetched.paymentTerms) ? fetched.paymentTerms : (fetched.paymentTerms ? [fetched.paymentTerms] : []),
+          deliveryTerms: Array.isArray(fetched.deliveryTerms) ? fetched.deliveryTerms : (fetched.deliveryTerms ? [fetched.deliveryTerms] : []),
           notes: fetched.notes || '',
         });
         setAttachments(Array.isArray(fetched.attachments) ? fetched.attachments : []);
@@ -954,6 +997,8 @@ export default function VendorEffectiveDatesPage() {
         zipCode: src.zipCode || '',
         address1: src.address1 || '',
         address2: src.address2 || '',
+        paymentTerms: Array.isArray(src.paymentTerms) ? src.paymentTerms : (src.paymentTerms ? [src.paymentTerms] : []),
+        deliveryTerms: Array.isArray(src.deliveryTerms) ? src.deliveryTerms : (src.deliveryTerms ? [src.deliveryTerms] : []),
         notes: src.notes || '',
       });
       const baseAtts = Array.isArray(src.attachments)
@@ -2463,16 +2508,55 @@ export default function VendorEffectiveDatesPage() {
               </div>
             </div>
 
-            {/* 4. Procurement Notes & Version Audit */}
+            {/* 4. Commercial Terms & Procurement Notes */}
             <div className="space-y-3 pt-6">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconFileText size={15} className="text-primary" />
-                Procurement & Quality Notes
+                Commercial Terms & Procurement Notes
               </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
+                {/* Payment Terms View */}
+                <div className="space-y-1">
+                  <span className="view-field-label mf-detail-label">Payment Terms</span>
+                  <div className="text-xs bg-surface/50 rounded-lg p-3 border border-border/60 min-h-[46px] flex items-center">
+                    {selectedVendorPaymentTerms.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedVendorPaymentTerms.map((term, idx) => (
+                          <Badge key={idx} variant="role" className="font-mono text-2xs px-2 py-0.5">
+                            {term.termCode || term.name || term}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-text-muted italic">No payment terms specified</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Delivery Terms View */}
+                <div className="space-y-1">
+                  <span className="view-field-label mf-detail-label">Delivery Terms</span>
+                  <div className="text-xs bg-surface/50 rounded-lg p-3 border border-border/60 min-h-[46px] flex items-center">
+                    {selectedVendorDeliveryTerms.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedVendorDeliveryTerms.map((term, idx) => (
+                          <Badge key={idx} variant="neutral" className="font-mono text-2xs px-2 py-0.5">
+                            {term.termCode || term.name || term}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-text-muted italic">No delivery terms specified</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-3 pt-1">
                 <div className="space-y-1">
                   <span className="view-field-label mf-detail-label">
-                    Notes & Terms
+                    Procurement & Quality Notes
                   </span>
   
                   <div className="text-xs text-heading font-medium bg-surface/50 rounded-lg p-3.5 border border-border/60 whitespace-pre-line leading-relaxed">
@@ -2884,18 +2968,42 @@ export default function VendorEffectiveDatesPage() {
               </div>
             </div>
 
-            {/* Section 4: Notes & Instructions */}
+            {/* Section 4: Commercial Terms & Notes */}
             <div className="space-y-4 pt-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
                 <IconFileText size={15} className="text-primary" />
-                Procurement & Quality Notes
+                Commercial Terms & Notes
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <PaymentTermsSelect
+                  id="version-paymentTerms"
+                  name="paymentTerms"
+                  value={Array.isArray(formData.paymentTerms) ? formData.paymentTerms : (formData.paymentTerms ? [formData.paymentTerms] : [])}
+                  onChange={(e) => {
+                    const val = e?.target ? e.target.value : e;
+                    setFormData((prev) => ({ ...prev, paymentTerms: val }));
+                  }}
+                  hint="Multiple terms can be selected from Configuration"
+                />
+
+                <DeliveryTermsSelect
+                  id="version-deliveryTerms"
+                  name="deliveryTerms"
+                  value={Array.isArray(formData.deliveryTerms) ? formData.deliveryTerms : (formData.deliveryTerms ? [formData.deliveryTerms] : [])}
+                  onChange={(e) => {
+                    const val = Array.isArray(e) ? e : e?.target?.value || [];
+                    setFormData((prev) => ({ ...prev, deliveryTerms: val }));
+                  }}
+                  hint="Multiple terms can be selected from Configuration"
+                />
               </div>
 
               <div>
                 <Textarea
                   id="notes"
                   name="notes"
-                  label="Notes & Terms"
+                  label="Procurement & Quality Notes"
                   rows={3}
                   value={formData.notes}
                   onChange={handleInputChange}

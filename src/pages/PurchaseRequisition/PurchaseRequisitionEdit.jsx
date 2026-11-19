@@ -37,6 +37,8 @@ import {
   PageHeader,
   IconButton,
   FormActionsBar,
+  PaymentTermsSelect,
+  DeliveryTermsSelect,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
 import {
@@ -67,6 +69,8 @@ export default function PurchaseRequisitionEdit() {
     requiredDate: '',
     priority: 'Normal',
     status: 'Pending Approval',
+    paymentTerms: [],
+    deliveryTerms: [],
     remarks: '',
   });
 
@@ -87,6 +91,8 @@ export default function PurchaseRequisitionEdit() {
         requiredDate: originalPR.requiredDate ? originalPR.requiredDate.split('T')[0] : '',
         priority: originalPR.priority || 'Normal',
         status: originalPR.status || 'Pending Approval',
+        paymentTerms: Array.isArray(originalPR.paymentTerms) ? originalPR.paymentTerms : (originalPR.paymentTerms ? [originalPR.paymentTerms] : []),
+        deliveryTerms: Array.isArray(originalPR.deliveryTerms) ? originalPR.deliveryTerms : (originalPR.deliveryTerms ? [originalPR.deliveryTerms] : []),
         remarks: originalPR.remarks || '',
       });
       setItems(
@@ -383,7 +389,28 @@ export default function PurchaseRequisitionEdit() {
             />
           </div>
 
-          {/* Row 3: Remarks (Rich Text Editor with Text Color) */}
+          {/* Row 4: Commercial & Delivery Terms */}
+          <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <PaymentTermsSelect
+              id="edit-pr-paymentTerms"
+              name="paymentTerms"
+              value={Array.isArray(formData.paymentTerms) ? formData.paymentTerms : (formData.paymentTerms ? [formData.paymentTerms] : [])}
+              onChange={(e) => handleFieldChange('paymentTerms', e?.target ? e.target.value : e)}
+              hint="Preferred payment terms for requisition"
+            />
+            <DeliveryTermsSelect
+              id="edit-pr-deliveryTerms"
+              name="deliveryTerms"
+              value={Array.isArray(formData.deliveryTerms) ? formData.deliveryTerms : (formData.deliveryTerms ? [formData.deliveryTerms] : [])}
+              onChange={(e) => {
+                const val = Array.isArray(e) ? e : e?.target?.value || [];
+                handleFieldChange('deliveryTerms', val);
+              }}
+              hint="Preferred delivery / dispatch terms"
+            />
+          </div>
+
+          {/* Row 5: Remarks (Rich Text Editor with Text Color) */}
           <div className="md:col-span-3">
             <RichTextEditor
               id="edit-pr-remarks"
