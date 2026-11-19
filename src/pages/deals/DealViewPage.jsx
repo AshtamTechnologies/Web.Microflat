@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   PageHeader,
   Button,
@@ -36,6 +36,7 @@ function formatCurrency(val, symbol = '₹') {
 export default function DealViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const {
     fetchDealDetail,
@@ -204,9 +205,9 @@ export default function DealViewPage() {
             variant="secondary"
             size="sm"
             icon={IconBack}
-            onClick={() => navigate('/deals')}
+            onClick={() => navigate(location.state?.from || '/deals')}
           >
-            Back to Deals
+            {location.state?.fromTitle || 'Back to Deals'}
           </Button>
         }
         actions={

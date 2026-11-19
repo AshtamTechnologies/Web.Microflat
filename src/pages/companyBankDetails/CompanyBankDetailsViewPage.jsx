@@ -67,11 +67,13 @@ function getFileIcon(fileName = '', fileType = '') {
   return <IconImage size={18} className="text-primary shrink-0" />;
 }
 
-export default function CompanyBankDetailsViewPage() {
-  const { companyId } = useParams();
+export default function CompanyBankDetailsViewPage({ companyId: propCompanyId, embedded = false }) {
+  const { companyId: routeCompanyId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const bankQueryId = searchParams.get('bank');
   const navigate = useNavigate();
+
+  const companyId = propCompanyId || routeCompanyId;
 
   const { companies = [], getCompanyById } = useCompanyContext();
   const {
@@ -305,61 +307,72 @@ export default function CompanyBankDetailsViewPage() {
       : `•••• ${String(selectedAccount.accountNumber).slice(-4)}`
     : '—';
 
+  const editUrl = embedded
+    ? `/company-registration/${companyId}/edit?tab=bank`
+    : `/company-bank-details/${companyId}/edit`;
+
+  const getEditAccountUrl = (accId) =>
+    embedded
+      ? `/company-registration/${companyId}/edit?tab=bank&bank=${accId}`
+      : `/company-bank-details/${companyId}/edit?bank=${accId}`;
+
   return (
-    <div className="space-y-6 pb-20 w-full">
-      {/* ── Top Header & Actions ── */}
-      <PageHeader
-        title={currentCompany.companyName}
-        icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
-        subtitle={`Company ID: ${currentCompany.id} • Corporate Banking & Disbursement Profiles`}
-        backButton={
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            icon={IconBack}
-            onClick={() => navigate('/company-bank-details')}
-          >
-            Back to Bank Details
-          </Button>
-        }
-        badge={
-          <Badge variant={currentCompany.isActive ? 'active' : 'inactive'}>
-            {currentCompany.isActive ? 'Active Company' : 'Inactive'}
-          </Badge>
-        }
-        actions={
-          <div className="flex items-center gap-2">
+    <div className={`space-y-6 ${embedded ? 'pb-6' : 'pb-20'} w-full`}>
+      {/* ── Top Header & Actions (shown only when standalone) ── */}
+      {!embedded && (
+        <PageHeader
+          title={currentCompany.companyName}
+          icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
+          subtitle={`Company ID: ${currentCompany.id} • Corporate Banking & Disbursement Profiles`}
+          backButton={
             <Button
               type="button"
               variant="secondary"
               size="sm"
-              icon={IconAdd}
-              onClick={() => navigate(`/company-bank-details/${companyId}/edit`)}
+              icon={IconBack}
+              onClick={() => navigate('/company-bank-details')}
             >
-              Add Account
+              Back to Bank Details
             </Button>
-
-            {selectedAccount && (
+          }
+          badge={
+            <Badge variant={currentCompany.isActive ? 'active' : 'inactive'}>
+              {currentCompany.isActive ? 'Active Company' : 'Inactive'}
+            </Badge>
+          }
+          actions={
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
-                variant="primary"
+                variant="secondary"
                 size="sm"
-                icon={IconEdit}
-                onClick={() =>
-                  navigate(
-                    `/company-bank-details/${companyId}/edit?bank=${
-                      selectedAccount.bankDetailId || selectedAccount.id
-                    }`
-                  )
-                }
+                icon={IconAdd}
+                onClick={() => navigate(editUrl)}
               >
-                Edit Account
+                Add Account
               </Button>
-            )}
-          </div>
-        }
-      />
+
+              {selectedAccount && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  icon={IconEdit}
+                  onClick={() =>
+                    navigate(
+                      getEditAccountUrl(
+                        selectedAccount.bankDetailId || selectedAccount.id
+                      )
+                    )
+                  }
+                >
+                  Edit Account
+                </Button>
+              )}
+            </div>
+          }
+        />
+      )}
 
       {/* ── 2-Column Responsive Bank Console Layout (xl:grid-cols-12) ── */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
@@ -389,7 +402,7 @@ export default function CompanyBankDetailsViewPage() {
                 variant="secondary"
                 size="xs"
                 icon={IconAdd}
-                onClick={() => navigate(`/company-bank-details/${companyId}/edit`)}
+                onClick={() => navigate(editUrl)}
                 className="text-2xs font-semibold h-7 px-2"
               >
                 Add Account
@@ -403,7 +416,7 @@ export default function CompanyBankDetailsViewPage() {
                   type="button"
                   variant="primary"
                   size="sm"
-                  onClick={() => navigate(`/company-bank-details/${companyId}/edit`)}
+                  onClick={() => navigate(editUrl)}
                   className="text-xs"
                 >
                   Configure Bank Account
@@ -487,6 +500,22 @@ export default function CompanyBankDetailsViewPage() {
                     <Badge variant={selectedAccount.isActive ? 'active' : 'inactive'}>
                       {selectedAccount.isActive ? 'Active' : 'Inactive'}
                     </Badge>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="xs"
+                      icon={IconEdit}
+                      onClick={() =>
+                        navigate(
+                          getEditAccountUrl(
+                            selectedAccount.bankDetailId || selectedAccount.id
+                          )
+                        )
+                      }
+                      className="text-2xs font-semibold h-7 px-2"
+                    >
+                      Edit Account
+                    </Button>
                   </div>
                 </div>
 

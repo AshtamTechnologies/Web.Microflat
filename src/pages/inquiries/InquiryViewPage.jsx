@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   IconActivity,
@@ -239,6 +239,7 @@ function useColumnResizing(initialWidths, minWidths = {}) {
 
 export default function InquiryViewPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
 
   const { getInquiryById, addInquiryComment } = useInquiriesContext();
@@ -1058,9 +1059,9 @@ export default function InquiryViewPage() {
             variant="secondary"
             size="sm"
             icon={IconBack}
-            onClick={() => navigate('/inquiries')}
+            onClick={() => navigate(location.state?.from || '/inquiries')}
           >
-            Back to Inquiries
+            {location.state?.fromTitle || 'Back to Inquiries'}
           </Button>
         }
         badge={

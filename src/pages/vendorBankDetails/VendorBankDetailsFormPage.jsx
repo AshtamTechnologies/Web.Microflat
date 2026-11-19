@@ -123,20 +123,25 @@ function getFileIcon(fileName = '', fileType = '') {
   return <IconAttachment size={18} className="text-primary" />;
 }
 
-export default function VendorBankDetailsFormPage() {
+export default function VendorBankDetailsFormPage({
+  vendorId: propVendorId,
+  vendor: propVendor,
+  embedded = false,
+}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { vendorId: routeVendorId } = useParams();
+  const vendorId = propVendorId || routeVendorId;
   const [searchParams] = useSearchParams();
   const bankParamId = searchParams.get('bank');
   const actionParam = searchParams.get('action') || searchParams.get('mode');
   const isAddAction = actionParam === 'add';
 
-  const { allVendors = [], getVendorById } = useVendorsContext();
+  const { allVendors = [], getVendorById, fetchVendorDetail } = useVendorsContext();
   const { getBanksForVendor, fetchBanksForVendor, saveVendorBanks, deleteBankDetail, toggleBankActive } = useVendorBankDetails();
   const { getCountryName } = useCountryState();
 
-  const isEditMode = Boolean(routeVendorId);
+  const isEditMode = Boolean(vendorId);
 
   // Dynamic lookups from GET /api/vendors/lookups
   const [accountTypeOptions, setAccountTypeOptions] = useState(ACCOUNT_TYPE_OPTIONS);
@@ -144,17 +149,47 @@ export default function VendorBankDetailsFormPage() {
   const [rawDocumentTypes, setRawDocumentTypes] = useState([]);
 
   // Selected vendor state (locked in edit mode, selectable in add mode; blank initially in add mode)
-  const [selectedVendorId, setSelectedVendorId] = useState(routeVendorId || '');
+  const [selectedVendorId, setSelectedVendorId] = useState(vendorId || '');
   const [pendingVendorSwitch, setPendingVendorSwitch] = useState(null);
+  const [fetchedVendor, setFetchedVendor] = useState(propVendor || null);
 
-  // Sync selectedVendorId whenever routeVendorId changes
+  // Sync selectedVendorId whenever vendorId changes
   useEffect(() => {
-    if (routeVendorId) {
-      setSelectedVendorId(routeVendorId);
+    if (vendorId) {
+      setSelectedVendorId(vendorId);
     } else {
       setSelectedVendorId('');
     }
-  }, [routeVendorId]);
+  }, [vendorId]);
+
+  // Load vendor detail fallback if not provided via props or cache
+  useEffect(() => {
+    let isMounted = true;
+    if (propVendor) {
+      setFetchedVendor(propVendor);
+      return;
+    }
+    if (!selectedVendorId) return;
+
+    const cached =
+      (getVendorById && getVendorById(selectedVendorId)) ||
+      allVendors.find(
+        (v) => String(v.id) === String(selectedVendorId) || String(v.vendorId) === String(selectedVendorId)
+      );
+
+    if (cached) {
+      setFetchedVendor(cached);
+    } else if (fetchVendorDetail) {
+      fetchVendorDetail(selectedVendorId)
+        .then((v) => {
+          if (isMounted && v) setFetchedVendor(v);
+        })
+        .catch((err) => console.warn('Could not fetch vendor detail:', err));
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [propVendor, selectedVendorId, getVendorById, allVendors, fetchVendorDetail]);
 
   // Fetch dropdown lookups (bankAccountTypes and documentTypes) from API
   useEffect(() => {
@@ -227,17 +262,23 @@ export default function VendorBankDetailsFormPage() {
   const [viewingAttachmentsRow, setViewingAttachmentsRow] = useState(null);
   const [previewingFile, setPreviewingFile] = useState(null);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [pendingDeleteAttachmentIds, setPendingDeleteAttachmentIds] = useState([]);
+  const [attachmentToDelete, setAttachmentToDelete] = useState(null);
   const lastFetchedBankIdRef = useRef(null);
 
   // Resolve current vendor entity
   const currentVendor = useMemo(() => {
+    if (propVendor) return propVendor;
+    if (fetchedVendor) return fetchedVendor;
     if (!selectedVendorId) return null;
     return (
       (getVendorById && getVendorById(selectedVendorId)) ||
-      allVendors.find((v) => v.id === selectedVendorId) ||
+      allVendors.find(
+        (v) => String(v.id) === String(selectedVendorId) || String(v.vendorId) === String(selectedVendorId)
+      ) ||
       null
     );
-  }, [selectedVendorId, getVendorById, allVendors]);
+  }, [propVendor, fetchedVendor, selectedVendorId, getVendorById, allVendors]);
 
   // Determine if selected vendor is India-based (controls IFSC requirement)
   const isIndiaVendor = useMemo(() => {
@@ -500,7 +541,11 @@ export default function VendorBankDetailsFormPage() {
         await fetchBanksForVendor(selectedVendorId, true);
 
         toast.success(`Bank account for ${formState.bankName || 'vendor'} added successfully`);
-        navigate('/vendor-bank-details');
+        if (embedded) {
+          navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+        } else {
+          navigate('/vendor-bank-details');
+        }
       } catch (err) {
         toast.error(err?.message || 'Failed to save bank account');
       } finally {
@@ -528,6 +573,7 @@ export default function VendorBankDetailsFormPage() {
 
   // Select an account from the grid to edit in the form above
   const handleSelectAccountForEdit = (row) => {
+    setPendingDeleteAttachmentIds([]);
     handleStartEdit({
       ...row,
       confirmAccountNumber: row.confirmAccountNumber || row.accountNumber || '',
@@ -563,6 +609,39 @@ export default function VendorBankDetailsFormPage() {
 
       // Persist directly to store so the update is immediately saved across the app
       if (selectedVendorId) {
+        // 1. Delete staged attachments from backend
+        if (pendingDeleteAttachmentIds.length > 0) {
+          for (const attId of pendingDeleteAttachmentIds) {
+            try {
+              await vendorService.deleteBankAttachment(attId);
+            } catch (delErr) {
+              console.warn('Failed to delete bank attachment:', attId, delErr);
+            }
+          }
+          setPendingDeleteAttachmentIds([]);
+        }
+
+        // 2. Upload any newly added local file attachments
+        if (targetId && Array.isArray(formState.attachments)) {
+          for (const att of formState.attachments) {
+            if (att.file instanceof File) {
+              try {
+                await vendorService.uploadBankDetailAttachment(targetId, {
+                  documentTypeId: att.documentTypeId || 1,
+                  documentName: att.documentName || att.fileName || 'bank_document',
+                  file: att.file,
+                });
+                att.file = null;
+              } catch (uploadErr) {
+                console.warn('Failed to upload new bank attachment:', uploadErr);
+              }
+            }
+          }
+        }
+
+        // Reset lastFetchedBankIdRef so fresh attachments are retrieved from backend
+        lastFetchedBankIdRef.current = null;
+
         // Ensure PATCH /api/vendor-bank-details/{id}/status is explicitly called for this account
         if (targetId && !String(targetId).startsWith('temp_') && !String(targetId).startsWith('bd_')) {
           try {
@@ -574,8 +653,24 @@ export default function VendorBankDetailsFormPage() {
 
         if (saveVendorBanks) {
           try {
-            await saveVendorBanks(selectedVendorId, nextRows);
-            setInitialSnapshot(JSON.parse(JSON.stringify(nextRows)));
+            // Strip any remaining File objects from nextRows so saveVendorBanks does not duplicate uploads
+            const sanitizedRows = nextRows.map((r) => {
+              if (Array.isArray(r.attachments)) {
+                return {
+                  ...r,
+                  attachments: r.attachments.map((a) => {
+                    if (a.file instanceof File) {
+                      const { file, ...rest } = a;
+                      return rest;
+                    }
+                    return a;
+                  }),
+                };
+              }
+              return r;
+            });
+            await saveVendorBanks(selectedVendorId, sanitizedRows);
+            setInitialSnapshot(JSON.parse(JSON.stringify(sanitizedRows)));
           } catch (err) {
             console.error('Failed to auto-persist bank update:', err);
           }
@@ -583,7 +678,11 @@ export default function VendorBankDetailsFormPage() {
       }
 
       toast.success(`Bank details for ${formState.bankName || 'account'} updated successfully`);
-      navigate('/vendor-bank-details');
+      if (embedded) {
+        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+      } else {
+        navigate('/vendor-bank-details');
+      }
     } else if (authModalState.action === 'delete') {
       const targetRow = authModalState.targetData;
       if (!targetRow) return;
@@ -627,40 +726,48 @@ export default function VendorBankDetailsFormPage() {
     }
   }, [selectedVendorId, currentVendor, isEditing, formState.accountHolderName, setFormState]);
 
-  // Preload account once when draftRows are loaded (does not loop or fight with user selection)
-  const preloadedBankRef = useRef(false);
+  // Preload account once when draftRows are loaded or when bank query param changes
+  const preloadedBankRef = useRef(null);
   useEffect(() => {
     if (selectedVendorId) {
-      preloadedBankRef.current = false;
+      preloadedBankRef.current = null;
     }
   }, [selectedVendorId]);
 
   useEffect(() => {
-    if (!preloadedBankRef.current && draftRows.length > 0) {
-      preloadedBankRef.current = true;
-      if (isAddAction) {
-        // Explicitly adding a new account — leave form empty for new entry
-        handleCancelEdit();
-        return;
-      }
-      if (bankParamId) {
-        const match = draftRows.find(
-          (r) => r.bankDetailId === bankParamId || r.id === bankParamId
-        );
-        if (match) {
+    if (draftRows.length === 0) return;
+
+    if (isAddAction) {
+      // Explicitly adding a new account — leave form empty for new entry
+      handleCancelEdit();
+      return;
+    }
+
+    if (bankParamId) {
+      const match = draftRows.find(
+        (r) =>
+          String(r.bankDetailId) === String(bankParamId) ||
+          String(r.id) === String(bankParamId) ||
+          String(r.vendorBankDetailId) === String(bankParamId)
+      );
+      if (match) {
+        if (preloadedBankRef.current !== String(bankParamId)) {
+          preloadedBankRef.current = String(bankParamId);
           handleStartEdit({
             ...match,
             confirmAccountNumber: match.confirmAccountNumber || match.accountNumber || '',
           });
-          return;
         }
+        return;
       }
-      if (isEditMode) {
-        handleStartEdit({
-          ...draftRows[0],
-          confirmAccountNumber: draftRows[0].confirmAccountNumber || draftRows[0].accountNumber || '',
-        });
-      }
+    }
+
+    if (isEditMode && !bankParamId && !preloadedBankRef.current) {
+      preloadedBankRef.current = 'default_first';
+      handleStartEdit({
+        ...draftRows[0],
+        confirmAccountNumber: draftRows[0].confirmAccountNumber || draftRows[0].accountNumber || '',
+      });
     }
   }, [bankParamId, isAddAction, draftRows, isEditMode, handleStartEdit, handleCancelEdit]);
 
@@ -859,8 +966,13 @@ export default function VendorBankDetailsFormPage() {
     const allowedExtList = currentDoc?.allowedExtensionList?.length
       ? currentDoc.allowedExtensionList.map((e) => e.toLowerCase())
       : (currentDoc?.allowedExtensions || '.pdf,.jpg,.jpeg,.png')
-          .split(',')
-          .map((e) => e.trim().toLowerCase());
+        .split(',')
+        .map((e) => e.trim().toLowerCase());
+
+    const current = Array.isArray(formState.attachments) ? formState.attachments : [];
+    const existingNames = new Set(
+      current.map((a) => (a.fileName || a.name || '').toLowerCase().trim())
+    );
 
     const validNewItems = [];
 
@@ -875,6 +987,14 @@ export default function VendorBankDetailsFormPage() {
         toast.error(`File "${f.name}" exceeds maximum allowed size of ${maxMB} MB.`);
         continue;
       }
+
+      const fileNameClean = (f.name || '').toLowerCase().trim();
+      if (existingNames.has(fileNameClean)) {
+        toast.error(`File "${f.name}" is already attached.`);
+        continue;
+      }
+
+      existingNames.add(fileNameClean);
 
       validNewItems.push({
         id: `att_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -892,7 +1012,6 @@ export default function VendorBankDetailsFormPage() {
     }
 
     if (validNewItems.length > 0) {
-      const current = Array.isArray(formState.attachments) ? formState.attachments : [];
       handleFieldChange('attachments', [...current, ...validNewItems]);
       toast.success(`${validNewItems.length} document attachment(s) added`);
     }
@@ -936,6 +1055,55 @@ export default function VendorBankDetailsFormPage() {
     }
   };
 
+  // Prompt remove attachment with confirmation modal
+  const handlePromptRemoveAttachment = (att, e) => {
+    if (e) e.stopPropagation();
+    setAttachmentToDelete(att);
+  };
+
+  // Confirmed remove attachment
+  const handleConfirmRemoveAttachment = () => {
+    if (!attachmentToDelete) return;
+    const targetId = attachmentToDelete.id;
+    const isBackendSaved =
+      (attachmentToDelete.attachmentId || typeof attachmentToDelete.id === 'number') &&
+      !String(attachmentToDelete.id).startsWith('att_') &&
+      !String(attachmentToDelete.id).startsWith('temp_');
+
+    if (isBackendSaved) {
+      const backendId = attachmentToDelete.attachmentId || attachmentToDelete.id;
+      setPendingDeleteAttachmentIds((prev) => [...prev, backendId]);
+    }
+
+    setFormState((prev) => ({
+      ...prev,
+      attachments: (prev.attachments || []).filter((a) => a.id !== targetId),
+    }));
+
+    // Also update draftRows for editing account so the grid stays in sync
+    if (editingId) {
+      setDraftRows((prevRows) =>
+        prevRows.map((r) => {
+          const id = r.bankDetailId || r.id;
+          if (String(id) === String(editingId)) {
+            const updatedAtts = (r.attachments || []).filter((a) => a.id !== targetId);
+            return {
+              ...r,
+              attachments: updatedAtts,
+              attachmentCount: updatedAtts.length,
+            };
+          }
+          return r;
+        })
+      );
+    }
+
+    toast.success(
+      `Attachment removed${isBackendSaved ? ' (will be permanently deleted on save)' : ''}`
+    );
+    setAttachmentToDelete(null);
+  };
+
   // Master submit — delegates directly to handleFormActionClick so top and bottom buttons work identically
   const handleSaveChanges = async (e) => {
     if (e?.preventDefault) e.preventDefault();
@@ -954,7 +1122,11 @@ export default function VendorBankDetailsFormPage() {
     if (hasUnsavedInput && !isEditMode) {
       setIsDiscardModalOpen(true);
     } else {
-      navigate('/vendor-bank-details');
+      if (embedded) {
+        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+      } else {
+        navigate('/vendor-bank-details');
+      }
     }
   };
 
@@ -972,24 +1144,54 @@ export default function VendorBankDetailsFormPage() {
 
   // Is currently editing an account that was already saved on record?
   return (
-    <div className="space-y-6 pb-12">
-      {/* ── Page Header ── */}
-      <PageHeader
-        title={isEditMode ? 'Edit Bank Details' : 'Add Bank Details'}
-        subtitle="Manage bank accounts, payment routes, and IFSC codes for vendor settlements"
-        icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
-        backButton={
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            icon={IconBack}
-            onClick={handleCancel}
-          >
-            Back to Bank Details
-          </Button>
-        }
-        actions={
+    <div className={`space-y-6 ${embedded ? 'pb-6' : 'pb-12'}`}>
+      {/* ── Page Header (when standalone) ── */}
+      {!embedded && (
+        <PageHeader
+          title={isEditMode ? 'Edit Bank Details' : 'Add Bank Details'}
+          subtitle="Manage bank accounts, payment routes, and IFSC codes for vendor settlements"
+          icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
+          backButton={
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={IconBack}
+              onClick={handleCancel}
+            >
+              Back to Bank Details
+            </Button>
+          }
+          actions={
+            <div className="flex items-center gap-2">
+              <CancelButton
+                onClick={handleCancel}
+                disabled={isSubmitting}
+                size="sm"
+              />
+              <SaveButton
+                onClick={handleSaveChanges}
+                loading={isSubmitting}
+                loadingText="Saving..."
+                disabled={isSubmitting || !selectedVendorId}
+                size="sm"
+              >
+                Save Changes
+              </SaveButton>
+            </div>
+          }
+        />
+      )}
+
+      {/* ── Sub-Header Action Bar (when embedded in Vendor tabs) ── */}
+      {embedded && (
+        <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-heading">Commercial Bank Accounts</h3>
+            <p className="text-2xs text-text-muted">
+              Configure settlement accounts, IFSC/SWIFT credentials, and upload bank proof documents
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <CancelButton
               onClick={handleCancel}
@@ -1003,11 +1205,11 @@ export default function VendorBankDetailsFormPage() {
               disabled={isSubmitting || !selectedVendorId}
               size="sm"
             >
-              Save Changes
+              Save Bank Changes
             </SaveButton>
           </div>
-        }
-      />
+        </div>
+      )}
 
       {/* ── 1. Vendor Card ── */}
       <CollapsibleCard
@@ -1401,6 +1603,20 @@ export default function VendorBankDetailsFormPage() {
               {/* File Dropzone */}
               <div className="md:col-span-2">
                 <span className="mf-label block mb-2">Upload Bank Document</span>
+
+                {/* Native file input placed outside clickable container to prevent event bubbling */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept={acceptedExtStr}
+                  onChange={(e) => {
+                    handleFilesUpload(e.target.files);
+                    e.target.value = '';
+                  }}
+                  className="hidden"
+                />
+
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -1420,28 +1636,16 @@ export default function VendorBankDetailsFormPage() {
                       : 'border-border hover:border-primary/60 bg-bg hover:bg-surface/60',
                   ].join(' ')}
                 >
-                  {/* Native file input hidden for custom drag-drop styling */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept={acceptedExtStr}
-                    onChange={(e) => {
-                      handleFilesUpload(e.target.files);
-                      e.target.value = '';
-                    }}
-                    className="hidden"
-                  />
-                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1.5">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1.5 pointer-events-none">
                     <IconUpload size={17} />
                   </div>
-                  <p className="text-xs font-medium text-heading">
+                  <p className="text-xs font-medium text-heading pointer-events-none">
                     <span className="text-primary hover:underline font-semibold">
                       Click to browse file
                     </span>{' '}
                     or drag & drop here
                   </p>
-                  <p className="text-2xs text-text-muted mt-0.5">
+                  <p className="text-2xs text-text-muted mt-0.5 pointer-events-none">
                     Accepted: <strong className="text-heading font-medium">{acceptedExtStr}</strong>{' '}
                     (Max {acceptedMaxMB} MB)
                   </p>
@@ -1466,28 +1670,41 @@ export default function VendorBankDetailsFormPage() {
                   {formState.attachments.map((att) => (
                     <div
                       key={att.id}
-                      className="p-2 rounded-lg border border-border bg-surface flex items-center justify-between gap-2 text-xs hover:border-primary/30 transition-colors shadow-2xs min-w-0"
+                      className="p-2.5 rounded-lg border border-border bg-surface flex items-center justify-between gap-2 text-xs hover:border-primary/30 transition-colors shadow-2xs min-w-0 overflow-hidden"
                     >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <div className="p-1 rounded-md bg-bg border border-border shrink-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                        <div className="p-1.5 rounded-md bg-bg border border-border shrink-0">
                           {getFileIcon(att.fileName, att.fileType)}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="font-semibold text-xs text-heading truncate">
-                              {att.documentName}
-                            </span>
-                            <Badge variant="neutral" size="sm" className="font-mono text-2xs px-1.5 py-0 shrink-0">
-                              {att.fileName}
-                            </Badge>
-                          </div>
-                          <p className="text-2xs text-text-muted mt-0.5 font-mono truncate">
-                            {att.fileSize || '1 file'} • {att.uploadedAt ? formatDate(att.uploadedAt) : 'Recently'}
+                        <div className="min-w-0 flex-1 overflow-hidden pr-1">
+                          {/* Line 1: Primary File Name with clean ellipsis truncation */}
+                          <p
+                            className="font-semibold text-xs text-heading truncate block"
+                            title={att.fileName || att.documentName}
+                          >
+                            {att.fileName || att.documentName}
                           </p>
+
+                          {/* Line 2: Document Type Badge + File Size + Date */}
+                          <div className="flex items-center gap-1.5 mt-0.5 min-w-0 text-2xs text-text-muted font-mono truncate">
+                            {att.documentName && att.documentName !== att.fileName && (
+                              <Badge
+                                variant="neutral"
+                                size="sm"
+                                className="text-3xs px-1.5 py-0 font-medium shrink-0 max-w-[110px] truncate"
+                                title={att.documentName}
+                              >
+                                {att.documentName}
+                              </Badge>
+                            )}
+                            <span className="truncate">
+                              {att.fileSize || '1 file'} • {att.uploadedAt ? formatDate(att.uploadedAt) : 'Recently'}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center shrink-0">
+                      <div className="flex items-center gap-1 shrink-0 ml-auto">
                         <IconButton
                           icon={IconDownload}
                           size="sm"
@@ -1496,6 +1713,15 @@ export default function VendorBankDetailsFormPage() {
                           aria-label="Download attachment"
                           onClick={(e) => handleDownloadAttachment(att, e)}
                           className="hover:text-primary hover:bg-primary/10 h-7 w-7 shrink-0"
+                        />
+                        <IconButton
+                          icon={IconDelete}
+                          size="sm"
+                          variant="ghost"
+                          title="Delete attachment"
+                          aria-label="Delete attachment"
+                          onClick={(e) => handlePromptRemoveAttachment(att, e)}
+                          className="hover:text-danger hover:bg-danger/10 text-danger h-7 w-7 shrink-0"
                         />
                       </div>
                     </div>
@@ -1838,13 +2064,35 @@ export default function VendorBankDetailsFormPage() {
       </CollapsibleCard>
 
 
+      {/* ── Confirm Delete Attachment Modal ── */}
+      <ConfirmModal
+        isOpen={Boolean(attachmentToDelete)}
+        onClose={() => setAttachmentToDelete(null)}
+        onConfirm={handleConfirmRemoveAttachment}
+        title="Remove Attachment?"
+        message={`Are you sure you want to remove "${attachmentToDelete?.documentName || attachmentToDelete?.fileName || 'this attachment'}"? ${attachmentToDelete &&
+            (attachmentToDelete.attachmentId || typeof attachmentToDelete.id === 'number') &&
+            !String(attachmentToDelete.id).startsWith('att_') &&
+            !String(attachmentToDelete.id).startsWith('temp_')
+            ? 'This file will be permanently deleted from the server when you save changes.'
+            : 'This file will be removed from the upload list.'
+          }`}
+        confirmText="Remove"
+        cancelText="Cancel"
+        variant="danger"
+      />
+
       {/* ── Confirm Discard Modal ── */}
       <ConfirmModal
         isOpen={isDiscardModalOpen}
         onClose={() => setIsDiscardModalOpen(false)}
         onConfirm={() => {
           setIsDiscardModalOpen(false);
-          navigate('/vendor-bank-details');
+          if (embedded) {
+            navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+          } else {
+            navigate('/vendor-bank-details');
+          }
         }}
         title="Discard Unsaved Changes?"
         message="You have unsaved changes in this vendor's bank accounts draft. If you leave now, these changes will be lost."
@@ -1908,18 +2156,23 @@ export default function VendorBankDetailsFormPage() {
                       <div className="w-10 h-10 rounded-xl bg-bg border border-border flex items-center justify-center shrink-0 shadow-2xs">
                         {getFileIcon(att.fileName, att.fileType)}
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-xs text-heading">
-                            {att.documentName || 'Bank Proof'}
-                          </span>
-                          <Badge variant="neutral" size="sm" className="font-mono text-2xs">
-                            {att.fileName}
-                          </Badge>
-                        </div>
-                        <p className="text-2xs text-text-muted mt-0.5 font-mono">
-                          {att.fileSize || 'Standard file'} • Uploaded {att.uploadedAt ? formatDate(att.uploadedAt) : 'Recently'}
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p
+                          className="font-semibold text-xs text-heading truncate block"
+                          title={att.fileName || att.documentName}
+                        >
+                          {att.fileName || att.documentName}
                         </p>
+                        <div className="flex items-center gap-1.5 mt-0.5 text-2xs text-text-muted font-mono truncate">
+                          {att.documentName && att.documentName !== att.fileName && (
+                            <Badge variant="neutral" size="sm" className="text-3xs px-1.5 py-0 shrink-0 font-medium">
+                              {att.documentName}
+                            </Badge>
+                          )}
+                          <span className="truncate">
+                            {att.fileSize || 'Standard file'} • Uploaded {att.uploadedAt ? formatDate(att.uploadedAt) : 'Recently'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 

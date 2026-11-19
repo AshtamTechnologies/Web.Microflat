@@ -106,9 +106,10 @@ function getFileIcon(fileName = '', fileType = '') {
   return <IconAttachment size={18} className="text-primary" />;
 }
 
-export default function CompanyBankDetailsFormPage() {
+export default function CompanyBankDetailsFormPage({ companyId: propCompanyId, embedded = false }) {
   const navigate = useNavigate();
   const { companyId: routeCompanyId } = useParams();
+  const companyId = propCompanyId || routeCompanyId;
   const [searchParams] = useSearchParams();
   const queryBankId = searchParams.get('bank');
 
@@ -120,24 +121,24 @@ export default function CompanyBankDetailsFormPage() {
     updateBankDetail,
   } = useCompanyBankDetails();
 
-  const isEditMode = Boolean(routeCompanyId);
+  const isEditMode = Boolean(companyId);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Company Selection — Bound to the single registered company
   const [selectedCompanyId, setSelectedCompanyId] = useState(
-    routeCompanyId || companies[0]?.id || ''
+    companyId || companies[0]?.id || ''
   );
   const [loadedCompany, setLoadedCompany] = useState(null);
   const [pendingDeleteAttachmentIds, setPendingDeleteAttachmentIds] = useState([]);
   const [lookups, setLookups] = useState({ bankAccountTypes: [], documentTypes: [], countries: [] });
 
   useEffect(() => {
-    if (routeCompanyId) {
-      setSelectedCompanyId(routeCompanyId);
+    if (companyId) {
+      setSelectedCompanyId(companyId);
     } else if (companies[0]?.id) {
       setSelectedCompanyId(companies[0].id);
     }
-  }, [routeCompanyId, companies]);
+  }, [companyId, companies]);
 
   const currentCompany = useMemo(() => {
     if (loadedCompany) return loadedCompany;
@@ -734,7 +735,11 @@ export default function CompanyBankDetailsFormPage() {
       }
 
       toast.success('Bank details saved successfully');
-      navigate('/company-bank-details');
+      if (embedded) {
+        navigate(`/company-registration/${effectiveCompId}?tab=bank`);
+      } else {
+        navigate('/company-bank-details');
+      }
     } catch (err) {
       toast.error(err.message || 'Failed to save bank details');
     } finally {
@@ -744,28 +749,61 @@ export default function CompanyBankDetailsFormPage() {
 
   // Back / Cancel handler
   const handleCancel = () => {
-    navigate('/company-bank-details');
+    if (embedded) {
+      navigate(`/company-registration/${selectedCompanyId || companyId}?tab=bank`);
+    } else {
+      navigate('/company-bank-details');
+    }
   };
 
   return (
-    <div className="space-y-6 pb-12 w-full">
-      {/* ── Page Header ── */}
-      <PageHeader
-        title={isEditMode ? 'Edit Bank Details' : 'Add Bank Details'}
-        subtitle="Manage corporate bank accounts, payment routes, and IFSC codes for company settlements"
-        icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
-        backButton={
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            icon={IconBack}
-            onClick={handleCancel}
-          >
-            Back to Bank Details
-          </Button>
-        }
-        actions={
+    <div className={`space-y-6 ${embedded ? 'pb-6' : 'pb-12'} w-full`}>
+      {/* ── Top Header & Actions (when standalone) ── */}
+      {!embedded && (
+        <PageHeader
+          title={isEditMode ? 'Edit Bank Details' : 'Add Bank Details'}
+          subtitle="Manage corporate bank accounts, payment routes, and IFSC codes for company settlements"
+          icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
+          backButton={
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon={IconBack}
+              onClick={handleCancel}
+            >
+              Back to Bank Details
+            </Button>
+          }
+          actions={
+            <div className="flex items-center gap-2">
+              <CancelButton
+                onClick={handleCancel}
+                disabled={isSubmitting}
+                size="sm"
+              />
+              <SaveButton
+                onClick={handleSaveChanges}
+                loading={isSubmitting}
+                disabled={isSubmitting || (!selectedCompanyId && !loadedCompany)}
+                size="sm"
+              >
+                {isEditMode ? 'Save Changes' : 'Save Bank Account'}
+              </SaveButton>
+            </div>
+          }
+        />
+      )}
+
+      {/* ── Embedded Action Bar (when inside Company tabs) ── */}
+      {embedded && (
+        <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-heading">Commercial Bank Accounts</h3>
+            <p className="text-2xs text-text-muted">
+              Configure settlement accounts, IFSC/SWIFT credentials, and upload bank proof documents
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <CancelButton
               onClick={handleCancel}
@@ -778,11 +816,11 @@ export default function CompanyBankDetailsFormPage() {
               disabled={isSubmitting || (!selectedCompanyId && !loadedCompany)}
               size="sm"
             >
-              {isEditMode ? 'Save Changes' : 'Save Bank Account'}
+              Save Bank Changes
             </SaveButton>
           </div>
-        }
-      />
+        </div>
+      )}
 
       {/* ── Company Information Card ── */}
       <Card padding="md" className="space-y-4">

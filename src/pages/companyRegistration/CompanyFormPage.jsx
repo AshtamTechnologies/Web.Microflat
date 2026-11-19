@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import {
@@ -15,15 +15,19 @@ import {
   Button,
   SaveButton,
   CancelButton,
+  Card,
 } from '../../components/ui';
 
 import {
   IconBuilding2,
   IconBack,
+  IconBankDetails,
+  IconSave,
 } from '../../constants/icons';
 
 import { useCompanyContext } from '../../context/CompanyContext';
 import CompanyDetailsTab from './components/CompanyDetailsTab';
+import CompanyBankDetailsFormPage from '../companyBankDetails/CompanyBankDetailsFormPage';
 
 const INITIAL_FORM = {
   companyName: '',
@@ -51,6 +55,8 @@ const PHONE_REGEX = /^\+?[0-9][0-9 ()\-]{5,19}$/;
 export default function CompanyFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'bank' ? 'bank' : 'details';
   const isEdit = Boolean(id);
 
   const { getCompanyById, fetchCompanyById, addCompany, updateCompany } = useCompanyContext();
@@ -226,11 +232,12 @@ export default function CompanyFormPage() {
       if (isEdit) {
         await updateCompany(id, form);
         toast.success('Company updated successfully');
+        navigate(`/company-registration/${id}`);
       } else {
         await addCompany(form);
         toast.success('Company registered successfully');
+        navigate('/company-registration');
       }
-      navigate('/company-registration');
     } catch (err) {
       toast.error(err.message || 'Failed to save company registration');
     } finally {
@@ -240,7 +247,11 @@ export default function CompanyFormPage() {
 
   // Direct cancel / back navigation without confirmation popup
   const handleCancel = () => {
-    navigate('/company-registration');
+    if (isEdit && id) {
+      navigate(`/company-registration/${id}`);
+    } else {
+      navigate('/company-registration');
+    }
   };
 
   if (isLoadingCompany) {
@@ -255,7 +266,7 @@ export default function CompanyFormPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 pb-12 w-full">
+    <div className="space-y-6 pb-12 w-full">
       {/* ── Page Header ── */}
       <PageHeader
         title={isEdit ? 'Edit Company Registration' : 'Register New Company'}
@@ -273,52 +284,123 @@ export default function CompanyFormPage() {
             icon={IconBack}
             onClick={handleCancel}
           >
-            Back to Companies
+            {isEdit ? 'Back to Company' : 'Back to Companies'}
           </Button>
         }
-        actions={
-          <div className="flex items-center gap-2">
+      />
+
+      {/* ── Tabs Navigation ── */}
+      <div className="flex items-center gap-2 border-b border-border">
+        <button
+          type="button"
+          onClick={() => setSearchParams({ tab: 'details' })}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'details'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-muted hover:text-heading'
+          }`}
+        >
+          <IconBuilding2 size={15} />
+          <span>Company Master Details</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSearchParams({ tab: 'bank' })}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'bank'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-muted hover:text-heading'
+          }`}
+        >
+          <IconBankDetails size={15} />
+          <span>Bank Accounts</span>
+        </button>
+      </div>
+
+      {/* ── Tab 1: Company Master Details Content ── */}
+      {activeTab === 'details' && (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Sub-Header matching Bank Accounts tab */}
+          <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-heading">Company Master Details</h3>
+              <p className="text-2xs text-text-muted">
+                {isEdit
+                  ? `Modify corporate profile, contact details, and registered address for ${form.companyName || 'company'}`
+                  : 'Register your organization master profile, contact details, and registered address'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <CancelButton
+                onClick={handleCancel}
+                disabled={isSubmitting}
+                size="sm"
+              />
+              <SaveButton
+                type="submit"
+                loading={isSubmitting}
+                disabled={isSubmitting}
+                size="sm"
+              >
+                {isEdit ? 'Save Changes' : 'Save Company'}
+              </SaveButton>
+            </div>
+          </div>
+          <CompanyDetailsTab
+            form={form}
+            onChange={handleFieldChange}
+            errors={errors}
+          />
+
+          {/* ── Bottom Action Buttons ── */}
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
             <CancelButton
+              size="sm"
               onClick={handleCancel}
               disabled={isSubmitting}
-              size="sm"
             />
             <SaveButton
               type="submit"
-              loading={isSubmitting}
-              disabled={isSubmitting}
               size="sm"
+              disabled={isSubmitting}
+              loading={isSubmitting}
+              className="font-semibold shadow-2xs"
             >
               {isEdit ? 'Save Changes' : 'Save Company'}
             </SaveButton>
           </div>
-        }
-      />
+        </form>
+      )}
 
-      {/* ── Company Details Content ── */}
-      <CompanyDetailsTab
-        form={form}
-        onChange={handleFieldChange}
-        errors={errors}
-      />
-
-      {/* ── Bottom Action Buttons ── */}
-      <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border">
-        <CancelButton
-          size="sm"
-          onClick={handleCancel}
-          disabled={isSubmitting}
-        />
-        <SaveButton
-          type="submit"
-          size="sm"
-          disabled={isSubmitting}
-          loading={isSubmitting}
-          className="font-semibold shadow-2xs"
-        >
-          {isEdit ? 'Save Changes' : 'Save Company'}
-        </SaveButton>
-      </div>
-    </form>
+      {/* ── Tab 2: Bank Accounts Content ── */}
+      {activeTab === 'bank' && (
+        isEdit ? (
+          <CompanyBankDetailsFormPage companyId={id} embedded />
+        ) : (
+          <Card padding="lg" className="text-center py-12 space-y-4 max-w-xl mx-auto border-dashed my-6 bg-surface/30">
+            <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+              <IconBankDetails size={24} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-heading">Save Company to Configure Bank Details</h3>
+              <p className="text-xs text-text-muted leading-relaxed max-w-md mx-auto">
+                Commercial bank accounts, IFSC/SWIFT payment routes, and cheque proof documents can be configured once the company profile is registered in the database.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleSubmit}
+              loading={isSubmitting}
+              disabled={isSubmitting}
+              icon={<IconSave size={14} />}
+            >
+              Save Company First
+            </Button>
+          </Card>
+        )
+      )}
+    </div>
   );
 }

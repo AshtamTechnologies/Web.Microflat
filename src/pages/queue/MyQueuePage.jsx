@@ -51,37 +51,48 @@ import {
 
 import { myQueueService, notificationsService } from '../../services';
 import { useNotifications } from '../../context/NotificationsContext';
+import { useAuthContext } from '../../context/AuthContext';
+import { useUsersContext } from '../../context/UsersContext';
+import { formatDateTime, formatDate, formatRelative, formatRelative as formatRelativeTime } from '../../utils/dateUtils';
 
 const queueColumnHelper = createColumnHelper();
 const notifColumnHelper = createColumnHelper();
 
-function formatDateTime(dateStr) {
-  if (!dateStr) return '—';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return dateStr;
-  }
+// Date classification helpers for Queue sorting and badges
+function isSameDayDate(dateVal) {
+  if (!dateVal) return false;
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return false;
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
 }
 
-function formatRelativeTime(dateStr) {
-  if (!dateStr) return '';
-  const now = new Date();
-  const d = new Date(dateStr);
-  const diffSec = Math.floor((now - d) / 1000);
+function isTaskToday(item) {
+  if (item?.isToday) return true;
+  return isSameDayDate(item?.dueDate || item?.showFromDate);
+}
 
-  if (diffSec < 60) return 'Just now';
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-  if (diffSec < 172800) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+function isTaskOverdue(item) {
+  if (item?.status !== 'Pending') return false;
+  if (isTaskToday(item)) return false; // Today's tasks are never overdue
+  const dateVal = item?.dueDate || item?.showFromDate;
+  if (!dateVal) return false;
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return false;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  return d < todayStart;
+}
+
+function getTaskTier(item) {
+  if (item?.status !== 'Pending') return 3; // Tier 3: Completed / Cancelled
+  if (isTaskOverdue(item)) return 0;        // Tier 0: Overdue pending tasks (show 1st)
+  if (isTaskToday(item)) return 1;          // Tier 1: Today's pending tasks (show 2nd)
+  return 2;                                 // Tier 2: Future scheduled pending tasks (show 3rd)
 }
 
 export default function MyQueuePage() {
@@ -95,6 +106,25 @@ export default function MyQueuePage() {
     refreshQueueSummary,
   } = useNotifications();
 
+  const { user } = useAuthContext();
+  const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
+  const userList = allUsers.length > 0 ? allUsers : users;
+
+  const isAdmin = useMemo(() => {
+    const roles = Array.isArray(user?.roles) ? user.roles : [user?.roles];
+    return roles.some((r) => {
+      const name = typeof r === 'string' ? r : r?.roleName || r?.name || '';
+      const norm = name.trim().toLowerCase();
+      return norm === 'admin' || norm === 'super admin';
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (isAdmin && userList.length === 0 && ensureUsersLoaded) {
+      ensureUsersLoaded();
+    }
+  }, [isAdmin, userList.length, ensureUsersLoaded]);
+
   // ── Tab 1: Queue State ──
   const [queueItems, setQueueItems] = useState([]);
   const [queueTotal, setQueueTotal] = useState(0);
@@ -107,9 +137,11 @@ export default function MyQueuePage() {
   });
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueSearch, setQueueSearch] = useState('');
-  const [queueStatus, setQueueStatus] = useState('ALL');
-  const [queueType, setQueueType] = useState('ALL');
-  const [queuePagination, setQueuePagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const [queueStatus, setQueueStatus] = useState('ALL'); // 'ALL' | 'Pending' | 'Completed' | 'Cancelled'
+  const [queueType, setQueueType] = useState('ALL'); // 'ALL' | 'Meeting' | 'Approval' | 'Notification' | 'FollowUp'
+  const [queueView, setQueueView] = useState('All'); // 'All' | '' (Today & Overdue) | 'Upcoming'
+  const [assignedToUserId, setAssignedToUserId] = useState('');
+  const [queuePagination, setQueuePagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [queueSorting, setQueueSorting] = useState([]);
 
   // Queue Action Modals
@@ -126,18 +158,24 @@ export default function MyQueuePage() {
   const [notifSearch, setNotifSearch] = useState('');
   const [notifReadFilter, setNotifReadFilter] = useState('ALL');
   const [notifTypeFilter, setNotifTypeFilter] = useState('ALL');
-  const [notifPagination, setNotifPagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const [notifPagination, setNotifPagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [notifSorting, setNotifSorting] = useState([]);
 
   // ── Active Filters Checks ──
   const hasQueueActiveFilters = Boolean(
-    queueSearch.trim() || queueType !== 'ALL' || queueStatus !== 'ALL'
+    queueSearch.trim() ||
+    queueType !== 'ALL' ||
+    queueStatus !== 'ALL' ||
+    queueView !== 'All' ||
+    assignedToUserId !== ''
   );
 
   const resetQueueFilters = () => {
     setQueueSearch('');
     setQueueType('ALL');
     setQueueStatus('ALL');
+    setQueueView('All');
+    setAssignedToUserId('');
     setQueuePagination((p) => ({ ...p, pageIndex: 0 }));
   };
 
@@ -158,9 +196,10 @@ export default function MyQueuePage() {
       setQueueLoading(true);
       const [listRes, summaryRes] = await Promise.all([
         myQueueService.listQueue({
-          search: queueSearch,
           status: queueStatus,
           itemType: queueType,
+          view: queueView || undefined,
+          assignedToUserId: assignedToUserId || undefined,
           pageNumber: queuePagination.pageIndex + 1,
           pageSize: queuePagination.pageSize,
         }),
@@ -168,8 +207,32 @@ export default function MyQueuePage() {
       ]);
 
       if (listRes) {
-        setQueueItems(listRes.items || []);
-        setQueueTotal(listRes.totalCount ?? (listRes.items || []).length);
+        let items = listRes.items || [];
+        if (queueSearch.trim()) {
+          const q = queueSearch.trim().toLowerCase();
+          items = items.filter(
+            (i) =>
+              i.title?.toLowerCase().includes(q) ||
+              i.description?.toLowerCase().includes(q) ||
+              i.referenceType?.toLowerCase().includes(q) ||
+              String(i.referenceId || '').includes(q) ||
+              i.assignedToName?.toLowerCase().includes(q) ||
+              i.metadata?.documentCode?.toLowerCase().includes(q)
+          );
+        }
+
+        // Sort: 1st Overdue -> 2nd Today -> 3rd Scheduled -> 4th Completed/Cancelled
+        items.sort((a, b) => {
+          const tierA = getTaskTier(a);
+          const tierB = getTaskTier(b);
+          if (tierA !== tierB) return tierA - tierB;
+          const dateA = a.dueDate || a.showFromDate ? new Date(a.dueDate || a.showFromDate).getTime() : 0;
+          const dateB = b.dueDate || b.showFromDate ? new Date(b.dueDate || b.showFromDate).getTime() : 0;
+          return dateA - dateB;
+        });
+
+        setQueueItems(items);
+        setQueueTotal(listRes.totalCount ?? items.length);
       }
       if (summaryRes) {
         setQueueSummary(summaryRes);
@@ -179,7 +242,7 @@ export default function MyQueuePage() {
     } finally {
       setQueueLoading(false);
     }
-  }, [queueSearch, queueStatus, queueType, queuePagination]);
+  }, [queueSearch, queueStatus, queueType, queueView, assignedToUserId, queuePagination]);
 
   // ── Load Notifications Data ──
   const loadNotificationsData = useCallback(async () => {
@@ -283,6 +346,20 @@ export default function MyQueuePage() {
     }
   }, []);
 
+  const handleNavigateRecord = useCallback(
+    (actionUrl) => {
+      if (!actionUrl) return;
+      navigate(actionUrl, {
+        state: {
+          from: '/my-queue',
+          fromTitle: 'Back to My Queue',
+          backLabel: 'Back to My Queue',
+        },
+      });
+    },
+    [navigate]
+  );
+
   // ── Tab 1: TanStack Table Columns (Matching Image 2 Style) ──
   const queueColumns = useMemo(
     () => [
@@ -290,17 +367,24 @@ export default function MyQueuePage() {
         header: 'TYPE',
         size: 110,
         cell: (info) => {
-          const type = info.getValue();
+          const type = info.getValue() || 'Task';
+          const isMeeting = type === 'Meeting';
+          const isApproval = type.includes('Approval') || type === 'Approval';
+          const isNotif = type === 'Notification';
           return (
             <Badge
-              variant={type === 'Meeting' ? 'primary' : 'warning'}
+              variant={isMeeting ? 'primary' : isApproval ? 'warning' : isNotif ? 'info' : 'secondary'}
               size="xs"
               className="font-medium"
             >
-              {type === 'Meeting' ? (
+              {isMeeting ? (
                 <Calendar size={12} className="mr-1 shrink-0" />
-              ) : (
+              ) : isApproval ? (
                 <CheckSquare size={12} className="mr-1 shrink-0" />
+              ) : isNotif ? (
+                <Bell size={12} className="mr-1 shrink-0" />
+              ) : (
+                <Clock size={12} className="mr-1 shrink-0" />
               )}
               {type}
             </Badge>
@@ -358,16 +442,24 @@ export default function MyQueuePage() {
         cell: (info) => {
           const due = info.getValue();
           const item = info.row.original;
-          const isOverdue = due && new Date(due) < new Date() && item.status === 'Pending';
+          const isToday = isTaskToday(item);
+          const isOverdue = isTaskOverdue(item);
           return (
             <div className="text-xs space-y-0.5">
               <div className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger font-medium' : 'text-text'}`}>
                 <Clock size={13} className="shrink-0 text-text-muted" />
                 <span>{formatDateTime(due)}</span>
               </div>
-              {isOverdue && (
-                <span className="inline-block text-3xs text-danger font-semibold">Overdue</span>
-              )}
+              <div className="flex items-center gap-1">
+                {isToday && item.status === 'Pending' && (
+                  <span className="inline-block text-3xs text-primary font-semibold px-1 rounded bg-primary/10 border border-primary/20">
+                    Today
+                  </span>
+                )}
+                {isOverdue && (
+                  <span className="inline-block text-3xs text-danger font-semibold">Overdue</span>
+                )}
+              </div>
             </div>
           );
         },
@@ -401,12 +493,15 @@ export default function MyQueuePage() {
       queueColumnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        size: 150,
+        size: 160,
         cell: (info) => {
           const item = info.row.original;
+          const canMarkDone = item.canMarkDone !== false && item.status === 'Pending' && !item.itemType?.includes('Approval');
+          const isApproval = item.itemType?.includes('Approval');
+
           return (
-            <div className="flex items-center justify-end gap-1.5 w-full">
-              {item.itemType === 'Meeting' && item.status === 'Pending' && (
+            <div className="flex items-center justify-end gap-2 w-full">
+              {canMarkDone && (
                 <Button
                   size="xs"
                   variant="primary"
@@ -420,25 +515,27 @@ export default function MyQueuePage() {
                 </Button>
               )}
 
-              {item.itemType === 'Approval' && item.status === 'Pending' && (
+              {isApproval && item.status === 'Pending' && (
                 <Button
                   size="xs"
                   variant="primary"
-                  onClick={() => navigate(item.actionUrl || '/approvals')}
+                  onClick={() => handleNavigateRecord(item.actionUrl || '/approvals')}
                   iconRight={<ExternalLink size={12} />}
                 >
                   Review
                 </Button>
               )}
 
-              <IconButton
-                size="sm"
-                variant="ghost"
-                icon={<Eye size={15} />}
-                aria-label="View task details"
-                onClick={() => handleOpenDetail(item)}
-                title="View full task details"
-              />
+              {!isApproval && item.actionUrl && (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  onClick={() => handleNavigateRecord(item.actionUrl)}
+                  iconRight={<ExternalLink size={12} />}
+                >
+                  Open
+                </Button>
+              )}
             </div>
           );
         },
@@ -522,7 +619,7 @@ export default function MyQueuePage() {
         size: 140,
         cell: (info) => (
           <div className="text-2xs text-text-muted space-y-0.5">
-            <p className="font-medium text-text">{formatRelativeTime(info.getValue())}</p>
+            <p className="font-medium text-text capitalize">{formatRelative(info.getValue())}</p>
             <p className="text-3xs text-text-muted">{formatDateTime(info.getValue())}</p>
           </div>
         ),
@@ -590,9 +687,30 @@ export default function MyQueuePage() {
         {/* Card Header: Type + Priority badges on left, Status badge on right */}
         <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2.5">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Badge variant={item.itemType === 'Meeting' ? 'primary' : 'warning'} size="xs">
+            <Badge
+              variant={
+                item.itemType === 'Meeting'
+                  ? 'primary'
+                  : item.itemType?.includes('Approval')
+                  ? 'warning'
+                  : item.itemType === 'Notification'
+                  ? 'info'
+                  : 'secondary'
+              }
+              size="xs"
+            >
               {item.itemType}
             </Badge>
+            {isTaskToday(item) && item.status === 'Pending' && (
+              <span className="inline-block text-3xs text-primary font-semibold px-1 rounded bg-primary/10 border border-primary/20">
+                Today
+              </span>
+            )}
+            {isTaskOverdue(item) && (
+              <span className="inline-block text-3xs text-danger font-semibold px-1 rounded bg-danger/10 border border-danger/20">
+                Overdue
+              </span>
+            )}
             {item.priority && (
               <Badge variant="outline" size="xs">
                 {item.priority}
@@ -630,7 +748,7 @@ export default function MyQueuePage() {
         <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40 text-2xs">
           <div>
             <span className="text-3xs uppercase tracking-wider text-text-muted font-semibold block">Scheduled</span>
-            <span className="text-text font-medium flex items-center gap-1 mt-0.5">
+            <span className={`font-medium flex items-center gap-1 mt-0.5 ${isTaskOverdue(item) ? 'text-danger' : 'text-text'}`}>
               <Clock size={11} className="text-text-muted shrink-0" />
               {formatDateTime(item.dueDate || item.showFromDate)}
             </span>
@@ -646,16 +764,7 @@ export default function MyQueuePage() {
 
         {/* Card Actions Footer */}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => handleOpenDetail(item)}
-            icon={<Eye size={13} />}
-          >
-            Details
-          </Button>
-
-          {item.itemType === 'Meeting' && item.status === 'Pending' && (
+          {item.canMarkDone !== false && item.status === 'Pending' && !item.itemType?.includes('Approval') && (
             <Button
               size="xs"
               variant="primary"
@@ -669,14 +778,25 @@ export default function MyQueuePage() {
             </Button>
           )}
 
-          {item.itemType === 'Approval' && item.status === 'Pending' && (
+          {item.itemType?.includes('Approval') && item.status === 'Pending' && (
             <Button
               size="xs"
               variant="primary"
-              onClick={() => navigate(item.actionUrl || '/approvals')}
+              onClick={() => handleNavigateRecord(item.actionUrl || '/approvals')}
               iconRight={<ExternalLink size={12} />}
             >
               Review
+            </Button>
+          )}
+
+          {!item.itemType?.includes('Approval') && item.actionUrl && (
+            <Button
+              size="xs"
+              variant="secondary"
+              onClick={() => handleNavigateRecord(item.actionUrl)}
+              iconRight={<ExternalLink size={12} />}
+            >
+              Open
             </Button>
           )}
         </div>
@@ -706,7 +826,7 @@ export default function MyQueuePage() {
               </span>
             )}
           </div>
-          <span className="text-3xs text-text-muted">{formatRelativeTime(item.createdOn)}</span>
+          <span className="text-3xs text-text-muted capitalize">{formatRelative(item.createdOn)}</span>
         </div>
 
         <div>
@@ -811,7 +931,27 @@ export default function MyQueuePage() {
             onReset={resetQueueFilters}
             resetLabel="Reset Filters"
           >
-            <div className="w-full sm:w-44">
+            {/* 1. View / Horizon Filter */}
+            <div className="w-full sm:w-48">
+              <SearchableSelect
+                id="filter-queue-view"
+                placeholder="Queue Timeline"
+                searchPlaceholder="Search timeline…"
+                value={queueView}
+                onChange={(e) => {
+                  setQueueView(e.target.value);
+                  setQueuePagination((p) => ({ ...p, pageIndex: 0 }));
+                }}
+                options={[
+                  { value: 'All', label: 'All Tasks' },
+                  { value: '', label: 'Today & Overdue' },
+                  { value: 'Upcoming', label: 'Upcoming' },
+                ]}
+              />
+            </div>
+
+            {/* 2. Item Type Filter */}
+            <div className="w-full sm:w-40">
               <SearchableSelect
                 id="filter-queue-type"
                 placeholder="All Types"
@@ -825,11 +965,14 @@ export default function MyQueuePage() {
                   { value: 'ALL', label: 'All Types' },
                   { value: 'Meeting', label: 'Meetings' },
                   { value: 'Approval', label: 'Approvals' },
+                  { value: 'Notification', label: 'Notifications' },
+                  { value: 'FollowUp', label: 'Follow-ups' },
                 ]}
               />
             </div>
 
-            <div className="w-full sm:w-44">
+            {/* 3. Status Filter */}
+            <div className="w-full sm:w-40">
               <SearchableSelect
                 id="filter-queue-status"
                 placeholder="All Statuses"
@@ -843,9 +986,36 @@ export default function MyQueuePage() {
                   { value: 'ALL', label: 'All Statuses' },
                   { value: 'Pending', label: 'Pending Only' },
                   { value: 'Completed', label: 'Completed' },
+                  { value: 'Cancelled', label: 'Cancelled' },
                 ]}
               />
             </div>
+
+            {/* 4. Admin User Selector (Inspect another user's queue) */}
+            {isAdmin && (
+              <div className="w-full sm:w-52">
+                <SearchableSelect
+                  id="filter-queue-user"
+                  placeholder="View User's Queue"
+                  searchPlaceholder="Search user…"
+                  value={assignedToUserId}
+                  onChange={(e) => {
+                    setAssignedToUserId(e.target.value);
+                    setQueuePagination((p) => ({ ...p, pageIndex: 0 }));
+                  }}
+                  options={[
+                    { value: '', label: 'My Queue (Me)' },
+                    ...userList.map((u) => {
+                      const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim();
+                      return {
+                        value: String(u.id ?? u.userId),
+                        label: fullName || u.username || u.email || `User #${u.id ?? u.userId}`,
+                      };
+                    }),
+                  ]}
+                />
+              </div>
+            )}
           </TableToolbar>
 
           {/* DataTable — Table on Desktop, Cards on Mobile */}

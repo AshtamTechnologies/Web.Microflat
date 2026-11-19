@@ -73,29 +73,75 @@ function getFileIcon(fileName = '', fileType = '') {
   return <IconImage size={18} className="text-primary shrink-0" />;
 }
 
-export default function VendorBankDetailsViewPage() {
-  const { vendorId } = useParams();
+export default function VendorBankDetailsViewPage({
+  vendorId: propVendorId,
+  vendor: propVendor,
+  embedded = false,
+}) {
+  const { vendorId: routeVendorId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const bankQueryId = searchParams.get('bank');
   const navigate = useNavigate();
   const location = useLocation();
 
+  const vendorId = propVendorId || routeVendorId;
+
   const backPath = location.state?.from || '/vendor-bank-details';
   const backLabel = location.state?.backLabel || 'Bank Details';
 
-  const { allVendors = [], getVendorById } = useVendorsContext();
+  const { allVendors = [], getVendorById, fetchVendorDetail, isLoading: isVendorsLoading } = useVendorsContext();
   const { getBanksForVendor, fetchBanksForVendor } = useVendorBankDetails();
   const { getCountryName } = useCountryState();
 
+  const [fetchedVendor, setFetchedVendor] = useState(propVendor || null);
+  const [isFetchingVendor, setIsFetchingVendor] = useState(false);
+
+  // If vendor was not passed and not in cache, fetch it asynchronously
+  useEffect(() => {
+    let isMounted = true;
+    if (propVendor) {
+      setFetchedVendor(propVendor);
+      return;
+    }
+    if (!vendorId) return;
+
+    const cached =
+      (getVendorById && getVendorById(vendorId)) ||
+      allVendors.find(
+        (v) => String(v.id) === String(vendorId) || String(v.vendorId) === String(vendorId)
+      );
+
+    if (cached) {
+      setFetchedVendor(cached);
+    } else if (fetchVendorDetail) {
+      setIsFetchingVendor(true);
+      fetchVendorDetail(vendorId)
+        .then((v) => {
+          if (isMounted && v) setFetchedVendor(v);
+        })
+        .catch((err) => console.warn('Could not fetch vendor detail:', err))
+        .finally(() => {
+          if (isMounted) setIsFetchingVendor(false);
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [propVendor, vendorId, getVendorById, allVendors, fetchVendorDetail]);
+
   // Resolve vendor
   const vendor = useMemo(() => {
+    if (propVendor) return propVendor;
+    if (fetchedVendor) return fetchedVendor;
     if (!vendorId) return null;
     return (
       (getVendorById && getVendorById(vendorId)) ||
-      allVendors.find((v) => v.id === vendorId) ||
+      allVendors.find(
+        (v) => String(v.id) === String(vendorId) || String(v.vendorId) === String(vendorId)
+      ) ||
       null
     );
-  }, [vendorId, getVendorById, allVendors]);
+  }, [propVendor, fetchedVendor, vendorId, getVendorById, allVendors]);
 
   // Load bank accounts for this vendor
   const [bankAccounts, setBankAccounts] = useState(() => getBanksForVendor(vendorId));
@@ -288,8 +334,18 @@ export default function VendorBankDetailsViewPage() {
     toast.success(`Downloading ${att.fileName || 'document'}...`);
   };
 
-  // Not found fallback
+  // Loading or Not found fallback
   if (!vendor) {
+    if (isFetchingVendor || isVendorsLoading) {
+      return (
+        <div className="w-full py-16 px-4 text-center">
+          <div className="flex flex-col items-center justify-center space-y-3">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-text-muted">Loading vendor bank details...</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="w-full py-12 px-4 sm:px-6">
         <div className="bg-surface border border-border rounded-2xl p-8 text-center space-y-4 max-w-xl mx-auto shadow-sm">
@@ -298,9 +354,12 @@ export default function VendorBankDetailsViewPage() {
           <p className="text-sm text-text-muted">
             The requested vendor record with ID &quot;{vendorId}&quot; does not exist or has been removed.
           </p>
-          <Button variant="primary" onClick={() => navigate('/vendor-bank-details')}>
+          <Button
+            variant="primary"
+            onClick={() => navigate(embedded ? `/vendors/${vendorId}` : '/vendor-bank-details')}
+          >
             <IconBack size={16} className="mr-2" />
-            Back to Bank Details
+            {embedded ? 'Back to Vendor' : 'Back to Bank Details'}
           </Button>
         </div>
       </div>
@@ -310,66 +369,73 @@ export default function VendorBankDetailsViewPage() {
   const selectedAccId = selectedAccount?.bankDetailId || selectedAccount?.id;
   const isSelectedAccountRevealed = selectedAccId ? revealedIds.has(selectedAccId) : false;
 
+  const editUrl = embedded
+    ? `/vendors/${vendorId}/edit?tab=bank&action=add`
+    : `/vendor-bank-details/${vendorId}/edit?action=add`;
+
+  const getEditAccountUrl = (accId) =>
+    embedded
+      ? `/vendors/${vendorId}/edit?tab=bank&bank=${accId}`
+      : `/vendor-bank-details/${vendorId}/edit?bank=${accId}`;
+
   return (
-    <div className="w-full space-y-6 pb-16">
-      {/* ── 1. HEADER (FULL SCREEN WIDTH) ── */}
-      <PageHeader
-        title={vendor.vendorName}
-        subtitle="Beneficiary banking details, official disbursement accounts, and verification proof"
-        icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
-        badge={
-          <span className="font-mono text-xs font-bold px-2.5 py-0.5 bg-primary/10 text-primary rounded-md border border-primary/20">
-            {vendor.vendorCode}
-          </span>
-        }
-        backButton={{
-          onClick: () => navigate(backPath),
-          label: backLabel,
-        }}
-        actions={
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {selectedAccount && (
+    <div className={`w-full space-y-6 ${embedded ? 'pb-6' : 'pb-16'}`}>
+      {/* ── 1. HEADER (when standalone) ── */}
+      {!embedded && (
+        <PageHeader
+          title={vendor.vendorName}
+          subtitle="Beneficiary banking details, official disbursement accounts, and verification proof"
+          icon={<IconBankDetails className="h-6 w-6 text-primary" aria-hidden="true" />}
+          badge={
+            <span className="font-mono text-xs font-bold px-2.5 py-0.5 bg-primary/10 text-primary rounded-md border border-primary/20">
+              {vendor.vendorCode}
+            </span>
+          }
+          backButton={{
+            onClick: () => navigate(backPath),
+            label: backLabel,
+          }}
+          actions={
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {selectedAccount && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate(getEditAccountUrl(selectedAccId))}
+                  disabled={vendor.isActive === false}
+                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title={
+                    vendor.isActive === false
+                      ? 'Vendor is inactive. Activate vendor to edit details.'
+                      : `Edit ${selectedAccount.bankName} details`
+                  }
+                >
+                  <IconEdit size={13} aria-hidden="true" />
+                  Edit Bank Details
+                </Button>
+              )}
+
               <Button
                 type="button"
-                variant="secondary"
+                variant="primary"
                 size="sm"
-                onClick={() =>
-                  navigate(
-                    `/vendor-bank-details/${vendorId}/edit?bank=${selectedAccId}`
-                  )
-                }
+                onClick={() => navigate(editUrl)}
                 disabled={vendor.isActive === false}
-                className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                className="text-xs font-semibold transition-all h-8 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer"
                 title={
                   vendor.isActive === false
-                    ? 'Vendor is inactive. Activate vendor to edit details.'
-                    : `Edit ${selectedAccount.bankName} details`
+                    ? 'Vendor is inactive. Activate vendor to add bank accounts.'
+                    : 'Add a new bank account for this vendor'
                 }
               >
-                <IconEdit size={13} aria-hidden="true" />
-                Edit Bank Details
+                <IconAdd size={14} className="" aria-hidden="true" />
+                Add Bank Account
               </Button>
-            )}
-
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => navigate(`/vendor-bank-details/${vendorId}/edit?action=add`)}
-              disabled={vendor.isActive === false}
-              className="text-xs font-semibold transition-all h-8 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-              title={
-                vendor.isActive === false
-                  ? 'Vendor is inactive. Activate vendor to add bank accounts.'
-                  : 'Add a new bank account for this vendor'
-              }
-            >
-              <IconAdd size={14} className="" aria-hidden="true" />
-              Add Bank Account
-            </Button>
-          </div>
-        }
-      />
+            </div>
+          }
+        />
+      )}
 
       {/* ── INACTIVE VENDOR NOTICE ── */}
       {vendor.isActive === false && (
@@ -473,7 +539,7 @@ export default function VendorBankDetailsViewPage() {
                 type="button"
                 variant="primary"
                 size="sm"
-                onClick={() => navigate(`/vendor-bank-details/${vendorId}/edit?action=add`)}
+                onClick={() => navigate(editUrl)}
                 disabled={vendor.isActive === false}
                 className="text-2xs px-2.5 h-7 font-semibold shrink-0 cursor-pointer"
                 title={
@@ -526,6 +592,11 @@ export default function VendorBankDetailsViewPage() {
                               {acc.isActive ? 'Active' : 'Inactive'}
                             </Badge>
                           </div>
+                          {acc.accountName && (
+                            <span className="text-2xs text-text-muted truncate block mt-0.5">
+                              {acc.accountName}
+                            </span>
+                          )}
 
                           <div className="mt-1.5 flex items-center gap-2 text-2xs text-text-muted font-mono">
                             <span className="font-semibold text-heading">
@@ -552,7 +623,7 @@ export default function VendorBankDetailsViewPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() =>
-                              navigate(`/vendor-bank-details/${vendorId}/edit?bank=${accId}`)
+                              navigate(getEditAccountUrl(accId))
                             }
                             title="Edit this account"
                             className="h-7 w-7 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors"
@@ -612,7 +683,7 @@ export default function VendorBankDetailsViewPage() {
                     variant="secondary"
                     size="sm"
                     onClick={() =>
-                      navigate(`/vendor-bank-details/${vendorId}/edit?bank=${selectedAccId}`)
+                      navigate(getEditAccountUrl(selectedAccId))
                     }
                     disabled={vendor.isActive === false}
                     className="text-xs h-8 px-3 shadow-2xs cursor-pointer flex items-center gap-1.5"
@@ -638,6 +709,12 @@ export default function VendorBankDetailsViewPage() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5 pt-0.5">
+                    {/* Account Name */}
+                    <DetailField
+                      label="Account Name"
+                      value={selectedAccount.accountName || '—'}
+                    />
+
                     {/* Account Holder Name */}
                     <DetailField
                       label="Account Holder Name"
@@ -992,7 +1069,7 @@ export default function VendorBankDetailsViewPage() {
               <div className="pt-2">
                 <Button
                   variant="primary"
-                  onClick={() => navigate(`/vendor-bank-details/${vendorId}/edit?action=add`)}
+                  onClick={() => navigate(editUrl)}
                   disabled={vendor.isActive === false}
                   className="text-xs font-semibold shadow-2xs"
                 >

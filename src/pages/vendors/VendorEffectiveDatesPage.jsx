@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import {
   useReactTable,
   getCoreRowModel,
@@ -16,6 +16,7 @@ import {
   IconAdd,
   IconAttachment,
   IconBack,
+  IconBankDetails,
   IconBuilding2,
   IconCalendar,
   IconCheck,
@@ -69,7 +70,9 @@ import {
   Checkbox,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
+import { useVendorBankDetails } from '../../context/VendorBankDetailsContext';
 import { vendorService, approvalsService } from '../../services';
+import VendorBankDetailsViewPage from '../vendorBankDetails/VendorBankDetailsViewPage';
 import {
   COUNTRY_OPTIONS,
   STATE_OPTIONS,
@@ -158,7 +161,15 @@ export default function VendorEffectiveDatesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'bank' ? 'bank' : 'profile';
+
   const { getVendorById, updateVendorVersions, updateVendor, toggleStatus, fetchVendorDetail } = useVendorsContext();
+  const { getBanksForVendor } = useVendorBankDetails();
+
+  const bankAccounts = useMemo(() => {
+    return (id && getBanksForVendor ? getBanksForVendor(id) : []) || [];
+  }, [id, getBanksForVendor]);
 
   const [fetchedVendor, setFetchedVendor] = useState(null);
   const [fetchingVendor, setFetchingVendor] = useState(Boolean(id && !getVendorById(id)));
@@ -1805,97 +1816,150 @@ export default function VendorEffectiveDatesPage() {
           label: backLabel,
         }}
         actions={
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Approved && (
-              <span
-                className={[
-                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none',
-                  vendor.isActive
-                    ? 'bg-success/10 text-success border border-success/20'
-                    : 'bg-danger/10 text-danger border border-danger/20',
-                ].join(' ')}
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${vendor.isActive ? 'bg-success' : 'bg-danger'
-                    }`}
-                  aria-hidden="true"
-                />
-                {vendor.isActive ? 'Active' : 'Inactive'}
-              </span>
-            )}
-
-            <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
-              {getApprovalStatusLabel(vendor.approvalStatus)}
-            </Badge>
-
-            {!isReadOnly && mode === 'VIEW' && selectedVersion && isDraftOrRejected && (
+          activeTab === 'bank' ? (
+            <div className="flex items-center gap-2.5">
               <Button
                 type="button"
-                variant="secondary"
+                variant="primary"
                 size="sm"
-                onClick={() => handleStartEdit(selectedVersion)} disabled={!vendor.isActive} icon={IconEdit} className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : `Edit ${vendor.vendorName} effective date details`}
+                icon={IconAdd}
+                onClick={() => navigate(`/vendors/${id}/edit?tab=bank&action=add`)}
+                disabled={!vendor.isActive}
+                className="text-xs font-semibold transition-all h-8 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit details.' : 'Add / Manage Bank Details'}
               >
-                Edit Vendor
+                Manage Bank Details
               </Button>
-            )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Approved && (
+                <span
+                  className={[
+                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium select-none',
+                    vendor.isActive
+                      ? 'bg-success/10 text-success border border-success/20'
+                      : 'bg-danger/10 text-danger border border-danger/20',
+                  ].join(' ')}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${vendor.isActive ? 'bg-success' : 'bg-danger'
+                      }`}
+                    aria-hidden="true"
+                  />
+                  {vendor.isActive ? 'Active' : 'Inactive'}
+                </span>
+              )}
 
-            {!isReadOnly && normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Approved && (
-              vendor.isActive ? (
-                <Button
-                  type="button"
-                  variant="danger-soft"
-                  size="sm"
-                  onClick={handleOpenDeactivate} icon={IconClose} className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                  title="Mark vendor inactive"
-                >
-                  Deactivate
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  onClick={handleOpenActivate} icon={IconCheck} className="text-xs font-semibold transition-all h-8 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer bg-success hover:bg-success/90 text-white border-transparent"
-                  title="Re-activate vendor"
-                >
-                  Activate
-                </Button>
-              )
-            )}
+              <Badge variant={getApprovalBadgeVariant(vendor.approvalStatus)}>
+                {getApprovalStatusLabel(vendor.approvalStatus)}
+              </Badge>
 
-            {isFromApproval && normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Pending && (
-              <div className="flex items-center gap-2 pl-2 border-l border-border">
+              {!isReadOnly && mode === 'VIEW' && selectedVersion && isDraftOrRejected && (
                 <Button
                   type="button"
-                  variant="success"
+                  variant="secondary"
                   size="sm"
-                  onClick={handleOpenApprove}
-                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                  title={`Approve ${vendor.vendorName}`}
+                  onClick={() => handleStartEdit(selectedVersion)} disabled={!vendor.isActive} icon={IconEdit} className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title={!vendor.isActive ? 'Vendor is inactive. Activate vendor to edit version.' : `Edit ${vendor.vendorName} effective date details`}
                 >
-                  <IconCheck size={14} className="" aria-hidden="true" />
-                  Approve
+                  Edit Vendor
                 </Button>
+              )}
 
-                <Button
-                  type="button"
-                  variant="danger-soft"
-                  size="sm"
-                  onClick={handleOpenReject}
-                  className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                  title={`Reject ${vendor.vendorName}`}
-                >
-                  <IconClose size={14} className="" aria-hidden="true" />
-                  Reject
-                </Button>
-              </div>
-            )}
-          </div>
+              {!isReadOnly && normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Approved && (
+                vendor.isActive ? (
+                  <Button
+                    type="button"
+                    variant="danger-soft"
+                    size="sm"
+                    onClick={handleOpenDeactivate} icon={IconClose} className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                    title="Mark vendor inactive"
+                  >
+                    Deactivate
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={handleOpenActivate} icon={IconCheck} className="text-xs font-semibold transition-all h-8 px-3.5 shadow-2xs flex items-center gap-1.5 cursor-pointer bg-success hover:bg-success/90 text-white border-transparent"
+                    title="Re-activate vendor"
+                  >
+                    Activate
+                  </Button>
+                )
+              )}
+
+              {isFromApproval && normalizeApprovalStatus(vendor.approvalStatus) === ApprovalStatus.Pending && (
+                <div className="flex items-center gap-2 pl-2 border-l border-border">
+                  <Button
+                    type="button"
+                    variant="success"
+                    size="sm"
+                    onClick={handleOpenApprove}
+                    className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                    title={`Approve ${vendor.vendorName}`}
+                  >
+                    <IconCheck size={14} className="" aria-hidden="true" />
+                    Approve
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="danger-soft"
+                    size="sm"
+                    onClick={handleOpenReject}
+                    className="text-xs font-semibold transition-all h-8 px-3 shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                    title={`Reject ${vendor.vendorName}`}
+                  >
+                    <IconClose size={14} className="" aria-hidden="true" />
+                    Reject
+                  </Button>
+                </div>
+              )}
+            </div>
+          )
         }
       />
 
-      {/* ── INACTIVE VENDOR NOTICE (SIMPLE & SINGLE) ── */}
+      {/* ── Tabs Navigation ── */}
+      <div className="flex items-center gap-2 border-b border-border">
+        <button
+          type="button"
+          onClick={() => setSearchParams({ tab: 'profile' })}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'profile'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-muted hover:text-heading'
+          }`}
+        >
+          <IconVendor size={15} />
+          <span>Vendor Profile & Versions</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSearchParams({ tab: 'bank' })}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'bank'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-muted hover:text-heading'
+          }`}
+        >
+          <IconBankDetails size={15} />
+          <span>Bank Accounts</span>
+          {bankAccounts.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-3xs font-bold bg-primary/10 text-primary">
+              {bankAccounts.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ── Tab 1: Vendor Profile & Versions ── */}
+      {activeTab === 'profile' && (
+        <>
+          {/* ── INACTIVE VENDOR NOTICE (SIMPLE & SINGLE) ── */}
       {!vendor.isActive && (
         <div className="rounded-xl border border-danger/30 bg-danger/[0.04] p-3.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-start sm:items-center gap-2.5 min-w-0">
@@ -3124,6 +3188,17 @@ export default function VendorEffectiveDatesPage() {
           </form>
         )}
       </CollapsibleCard>
+      </>
+      )}
+
+      {/* ── Tab 2: Bank Accounts ── */}
+      {activeTab === 'bank' && (
+        <VendorBankDetailsViewPage
+          vendorId={id}
+          vendor={vendor}
+          embedded
+        />
+      )}
 
       {/* ── Document Screen Popup (Modal) ── */}
       {previewItem && (

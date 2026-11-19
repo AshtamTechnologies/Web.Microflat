@@ -12,11 +12,12 @@
  */
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   IconAttachment,
   IconBack,
+  IconBankDetails,
   IconBuilding2,
   IconClose,
   IconContact,
@@ -53,12 +54,13 @@ import {
 } from '../../components/ui';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 import { useVendorsContext } from '../../context/VendorsContext';
-import { ApprovalStatus, ApprovalStatusLabel, getApprovalStatusLabel, normalizeApprovalStatus } from '../../constants/approvalStatus';
+import { ApprovalStatus, ApprovalStatusLabel, getApprovalStatusLabel, getApprovalBadgeVariant, normalizeApprovalStatus } from '../../constants/approvalStatus';
 import { vendorService } from '../../services';
 import { useCountryState } from '../../context/CountryStateContext';
 import {
   getTodayIsoDate,
 } from '../../utils/effectiveDateUtils';
+import VendorBankDetailsFormPage from '../vendorBankDetails/VendorBankDetailsFormPage';
 
 
 
@@ -261,6 +263,8 @@ export default function VendorFormPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'bank' ? 'bank' : 'details';
 
   const {
     getVendorById,
@@ -690,7 +694,11 @@ export default function VendorFormPage() {
   }
 
   function handleCancel() {
-    navigate('/vendors');
+    if (isEdit && id) {
+      navigate(`/vendors/${id}`);
+    } else {
+      navigate('/vendors');
+    }
   }
 
   async function handleSubmit(e) {
@@ -713,7 +721,7 @@ export default function VendorFormPage() {
       if (isEdit && existingVendor) {
         const res = await updateVendor(existingVendor.id, form);
         if (res?.ok) {
-          navigate('/vendors');
+          navigate(`/vendors/${existingVendor?.id || id}`);
         } else {
           // Server returned an error - stay on page and map field errors
           if (res?.fieldErrors && Object.keys(res.fieldErrors).length > 0) {
@@ -735,7 +743,7 @@ export default function VendorFormPage() {
       } else {
         const res = await createVendor(form);
         if (res?.ok && res.vendor) {
-          navigate('/vendors');
+          navigate(`/vendors/${res.vendor.id || res.vendor.vendorId || ''}`);
         } else {
           // Server returned an error - stay on page and map field errors
           if (res?.fieldErrors && Object.keys(res.fieldErrors).length > 0) {
@@ -800,11 +808,16 @@ export default function VendorFormPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-6 pb-20">
+    <div className="space-y-6 pb-20 w-full">
       {/* ── Top Page Header & Navigation ── */}
       <PageHeader
-        title={isEdit ? `Edit Vendor: ${existingVendor?.vendorName}` : 'Add Vendor'}
+        title={isEdit ? `Edit Vendor: ${existingVendor?.vendorName || ''}` : 'Add Vendor'}
         icon={<IconVendor className="h-6 w-6 text-primary" aria-hidden="true" />}
+        subtitle={
+          isEdit
+            ? `Modify corporate profile, contact details, and registered address for ${form.vendorName || existingVendor?.vendorName || 'vendor'}`
+            : 'Register your organization master profile, contact details, and registered address'
+        }
         backButton={
           <Button
             type="button"
@@ -813,27 +826,74 @@ export default function VendorFormPage() {
             icon={IconBack}
             onClick={handleCancel}
           >
-            Back to Vendors
+            {isEdit ? 'Back to Vendor' : 'Back to Vendors'}
           </Button>
         }
-        actions={
-          <div className="flex items-center gap-2 sm:gap-3">
-            <CancelButton
-              onClick={handleCancel}
-              disabled={loading}
-              size="sm"
-            />
-            <SaveButton
-              type="submit"
-              loading={loading}
-              disabled={loading}
-              size="sm"
-            >
-              {isEdit ? 'Save Changes' : 'Save Vendor'}
-            </SaveButton>
-          </div>
-        }
       />
+
+      {/* ── Tabs Navigation ── */}
+      <div className="flex items-center gap-2 border-b border-border">
+        <button
+          type="button"
+          onClick={() => {
+            if (isEdit && id) {
+              navigate(`/vendors/${id}`);
+            } else {
+              setSearchParams({ tab: 'details' });
+            }
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'details'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-muted hover:text-heading'
+          }`}
+        >
+          <IconVendor size={15} />
+          <span>{isEdit ? 'Vendor Profile & Versions' : 'Vendor Master Details'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setSearchParams({ tab: 'bank' })}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'bank'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-muted hover:text-heading'
+          }`}
+        >
+          <IconBankDetails size={15} />
+          <span>Bank Accounts</span>
+        </button>
+      </div>
+
+      {/* ── Tab 1: Vendor Master Details Content ── */}
+      {activeTab === 'details' && (
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
+          {/* Sub-Header matching Bank Accounts tab */}
+          <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-heading">Vendor Master Details</h3>
+              <p className="text-2xs text-text-muted">
+                {isEdit
+                  ? `Modify corporate profile, contact details, and registered address for ${form.vendorName || existingVendor?.vendorName || 'vendor'}`
+                  : 'Register your organization master profile, contact details, and registered address'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <CancelButton
+                onClick={handleCancel}
+                disabled={loading}
+                size="sm"
+              />
+              <SaveButton
+                type="submit"
+                loading={loading}
+                disabled={loading}
+                size="sm"
+              >
+                {isEdit ? 'Save Changes' : 'Save Vendor'}
+              </SaveButton>
+            </div>
+          </div>
 
       {/* ── SECTION 1: VENDOR MASTER DETAILS ── */}
       <CollapsibleCard
@@ -869,7 +929,7 @@ export default function VendorFormPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             {/* Vendor Name */}
-            <div className="md:col-span-2">
+            <div>
               <Input
                 id="vendorName"
                 name="vendorName"
@@ -902,7 +962,7 @@ export default function VendorFormPage() {
             </div>
 
             {/* Effective Date */}
-            <div className="md:col-span-3">
+            <div>
               <DatePicker
                 id="effectiveDate"
                 name="effectiveDate"
@@ -1506,13 +1566,13 @@ export default function VendorFormPage() {
                   <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
                     Approval Status
                   </span>
-                  <Badge variant={existingVendor.approvalStatus?.toLowerCase() || 'pending'}>
+                  <Badge variant={getApprovalBadgeVariant(existingVendor.approvalStatus)}>
                     {getApprovalStatusLabel(existingVendor.approvalStatus)}
                   </Badge>
                 </div>
 
                 {/* Approver Name */}
-                {existingVendor.approvalStatus !== 'Pending' && (
+                {getApprovalStatusLabel(existingVendor.approvalStatus) !== 'Pending' && (
                   <div className="space-y-1">
                     <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
                       Approved / Reviewed By
@@ -1524,7 +1584,7 @@ export default function VendorFormPage() {
                 )}
 
                 {/* Approval Date */}
-                {existingVendor.approvalStatus !== 'Pending' && (
+                {getApprovalStatusLabel(existingVendor.approvalStatus) !== 'Pending' && (
                   <div className="space-y-1">
                     <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted block">
                       Approved Date
@@ -1537,7 +1597,7 @@ export default function VendorFormPage() {
               </div>
 
               {/* Approval Comments */}
-              {existingVendor.approvalStatus !== 'Pending' && existingVendor.approvedByComments && (
+              {getApprovalStatusLabel(existingVendor.approvalStatus) !== 'Pending' && existingVendor.approvedByComments && (
                 <div className="bg-bg/80 p-3 rounded-lg border border-border text-xs space-y-1">
                   <span className="font-semibold text-text-muted">Reviewer Comments:</span>
                   <p className="text-text">{existingVendor.approvedByComments}</p>
@@ -1590,6 +1650,38 @@ export default function VendorFormPage() {
           </SaveButton>
         </div>
       </div>
+        </form>
+      )}
+
+      {/* ── Tab 2: Bank Accounts Content ── */}
+      {activeTab === 'bank' && (
+        isEdit ? (
+          <VendorBankDetailsFormPage vendorId={id} vendor={existingVendor} embedded />
+        ) : (
+          <Card padding="lg" className="text-center py-12 space-y-4 max-w-xl mx-auto border-dashed my-6 bg-surface/30">
+            <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+              <IconBankDetails size={24} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-heading">Save Vendor to Configure Bank Details</h3>
+              <p className="text-xs text-text-muted leading-relaxed max-w-md mx-auto">
+                Commercial bank accounts, payment routes, and cheque documents can be added once the vendor is created.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleSubmit}
+              loading={loading}
+              disabled={loading}
+              icon={<IconSave size={14} />}
+            >
+              Save Vendor First
+            </Button>
+          </Card>
+        )
+      )}
 
       {/* ── Document Preview Modal ── */}
       {previewItem && (
@@ -1660,6 +1752,6 @@ export default function VendorFormPage() {
         </Modal>
       )}
 
-    </form>
+    </div>
   );
 }
