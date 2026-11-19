@@ -242,17 +242,6 @@ const navigation = [
               path: '/vendors/new',
             },
           },
-          {
-            label: 'Bank Details',
-            icon: IconBankDetails,
-            path: '/vendor-bank-details',
-            roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
-            quickAction: {
-              icon: IconAdd,
-              title: 'Add Bank Details',
-              path: '/vendor-bank-details/new',
-            },
-          },
         ],
       },
       {
@@ -277,17 +266,6 @@ const navigation = [
             icon: IconList,
             path: '/company-registration',
             roles: ['ADMIN', 'MANAGER'],
-          },
-          {
-            label: 'Company Bank Details',
-            icon: IconBankDetails,
-            path: '/company-bank-details',
-            roles: ['ADMIN', 'MANAGER'],
-            quickAction: {
-              icon: IconAdd,
-              title: 'Add Bank Details',
-              path: '/company-bank-details/new',
-            },
           },
         ],
       },

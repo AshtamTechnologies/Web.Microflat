@@ -7,6 +7,7 @@ export const MY_QUEUE_ENDPOINTS = {
   QUEUE: '/api/my-queue',
   SUMMARY: '/api/my-queue/summary',
   QUEUE_ITEM: (id) => `/api/my-queue/${id}`,
+  DONE: (id) => `/api/my-queue/${id}/done`,
   COMPLETE: (id) => `/api/my-queue/${id}/complete`,
 };
 

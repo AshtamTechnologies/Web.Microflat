@@ -10,12 +10,42 @@ import { normalizeApiError } from '../../utils/apiError';
 export async function listQueue(params = {}) {
   try {
     const query = {};
-    if (params.search || params.Search) query.search = params.search || params.Search;
-    if (params.status && params.status !== 'ALL') query.status = params.status;
-    if (params.itemType && params.itemType !== 'ALL') query.itemType = params.itemType;
-    if (params.includeUpcoming !== undefined) query.includeUpcoming = params.includeUpcoming;
-    if (params.pageNumber) query.pageNumber = params.pageNumber;
-    if (params.pageSize) query.pageSize = params.pageSize;
+
+    // 1. Status (Pending default, Completed, Cancelled)
+    const status = params.status || params.Status;
+    if (status && status !== 'ALL') {
+      query.Status = status;
+    }
+
+    // 2. ItemType (Meeting, Approval, Notification, FollowUp, etc.)
+    const itemType = params.itemType || params.ItemType;
+    if (itemType && itemType !== 'ALL') {
+      query.ItemType = itemType;
+    }
+
+    // 3. View (Upcoming, All, etc.)
+    const view = params.view || params.View;
+    if (view && view !== '') {
+      query.View = view.toLowerCase() === 'all' ? 'All' : view;
+    }
+
+    // 4. IncludeUpcoming (boolean)
+    const includeUpcoming = params.includeUpcoming ?? params.IncludeUpcoming;
+    if (includeUpcoming !== undefined && includeUpcoming !== null && includeUpcoming !== '') {
+      query.IncludeUpcoming = includeUpcoming;
+    }
+
+    // 5. AssignedToUserId (Admin only)
+    const assignedToUserId = params.assignedToUserId || params.AssignedToUserId;
+    if (assignedToUserId) {
+      query.AssignedToUserId = assignedToUserId;
+    }
+
+    // 6. Pagination (PageNumber & PageSize)
+    const pageNumber = params.pageNumber || params.PageNumber || 1;
+    const pageSize = params.pageSize || params.PageSize || 20;
+    query.PageNumber = pageNumber;
+    query.PageSize = pageSize;
 
     const response = await axiosInstance.get(MY_QUEUE_ENDPOINTS.QUEUE, { params: query });
     const data = response.data;
@@ -23,21 +53,21 @@ export async function listQueue(params = {}) {
       return {
         items: data,
         totalCount: data.length,
-        pageNumber: params.pageNumber || 1,
-        pageSize: params.pageSize || 10,
-        totalPages: Math.ceil(data.length / (params.pageSize || 10)) || 1,
+        pageNumber,
+        pageSize,
+        totalPages: Math.ceil(data.length / pageSize) || 1,
       };
     }
     return {
       items: data?.items || [],
       totalCount: data?.totalCount ?? (data?.items || []).length,
-      pageNumber: data?.pageNumber || params.pageNumber || 1,
-      pageSize: data?.pageSize || params.pageSize || 10,
+      pageNumber: data?.pageNumber || pageNumber,
+      pageSize: data?.pageSize || pageSize,
       totalPages: data?.totalPages || 1,
     };
   } catch (error) {
     if (error.response?.status === 404) {
-      return { items: [], totalCount: 0, pageNumber: 1, pageSize: 10, totalPages: 1 };
+      return { items: [], totalCount: 0, pageNumber: 1, pageSize: 20, totalPages: 1 };
     }
     throw normalizeApiError(error);
   }
@@ -68,6 +98,21 @@ export async function getQueueItem(id) {
     const response = await axiosInstance.get(MY_QUEUE_ENDPOINTS.QUEUE_ITEM(id));
     return response.data;
   } catch (error) {
+    throw normalizeApiError(error);
+  }
+}
+
+export async function doneQueueItem(id) {
+  try {
+    // Prefer PUT /api/my-queue/{id}/done according to Section 3.4 of API guide
+    const response = await axiosInstance.put(MY_QUEUE_ENDPOINTS.DONE(id));
+    return response.data;
+  } catch (error) {
+    // Fallback to PATCH /api/my-queue/{id}/complete if PUT isn't supported
+    if (error.response?.status === 404 || error.response?.status === 405) {
+      const fallback = await axiosInstance.patch(MY_QUEUE_ENDPOINTS.COMPLETE(id));
+      return fallback.data;
+    }
     throw normalizeApiError(error);
   }
 }

@@ -4,6 +4,13 @@
  */
 
 import { useState, useEffect } from 'react';
+import {
+  CheckCircle2,
+  XCircle,
+  PauseCircle,
+  AlertCircle,
+  AlertTriangle,
+} from 'lucide-react';
 import { Modal, Button, Textarea, CancelButton } from '../../components/ui';
 
 export default function DealStatusModal({
@@ -20,7 +27,11 @@ export default function DealStatusModal({
   const statusName = targetStatus?.statusName || '';
   const isHoldOrLost = statusName === 'On Hold' || statusName === 'Lost';
   const isWon = statusName === 'Won';
-  const isMissingNegotiatedValue = isWon && (deal?.negotiatedValue === null || deal?.negotiatedValue === undefined || deal?.negotiatedValue === '');
+  const isMissingNegotiatedValue =
+    isWon &&
+    (deal?.negotiatedValue === null ||
+      deal?.negotiatedValue === undefined ||
+      deal?.negotiatedValue === '');
 
   useEffect(() => {
     if (isOpen) {
@@ -42,51 +53,84 @@ export default function DealStatusModal({
     onConfirm(targetStatus.id, remarks.trim());
   };
 
+  const modalIcon = isWon ? (
+    <div className="w-8 h-8 rounded-control bg-success-bg text-success border border-success-border flex items-center justify-center shrink-0">
+      <CheckCircle2 size={18} />
+    </div>
+  ) : statusName === 'Lost' ? (
+    <div className="w-8 h-8 rounded-control bg-danger-bg text-danger border border-danger-border flex items-center justify-center shrink-0">
+      <XCircle size={18} />
+    </div>
+  ) : (
+    <div className="w-8 h-8 rounded-control bg-warning-bg text-warning border border-warning-border flex items-center justify-center shrink-0">
+      <PauseCircle size={18} />
+    </div>
+  );
+
+  const subtitle = deal
+    ? [deal.dealNo, deal.clientName || deal.customerName].filter(Boolean).join(' • ')
+    : undefined;
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={`Move Deal to "${statusName}"`}
+      subtitle={subtitle}
+      icon={modalIcon}
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {isWon && (
-          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 p-3.5 rounded-lg text-xs space-y-1.5 text-emerald-800 dark:text-emerald-300">
-            <p className="font-semibold">Confirming Deal as Won</p>
-            <p>
-              Marking this deal as Won is final and locks editing. You can subsequently generate a formal quotation for the agreed amount (
-              <span className="font-mono font-bold">
-                {deal?.currencySymbol || '₹'}{Number(deal?.negotiatedValue || 0).toLocaleString('en-IN')}
-              </span>
-              ).
-            </p>
+          <div className="flex items-start gap-3 p-3.5 rounded-lg bg-success-bg border border-success-border text-success-text text-xs">
+            <CheckCircle2 size={18} className="shrink-0 mt-0.5 text-success" />
+            <div className="space-y-1">
+              <p className="font-semibold text-success-text">Confirming Deal as Won</p>
+              <p className="text-text leading-relaxed">
+                Marking this deal as Won is final and locks editing. You can subsequently generate a formal quotation for the agreed amount (
+                <span className="font-mono font-bold text-heading">
+                  {deal?.currencySymbol || '₹'}{Number(deal?.negotiatedValue || 0).toLocaleString('en-IN')}
+                </span>
+                ).
+              </p>
+            </div>
           </div>
         )}
 
         {isHoldOrLost && (
-          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 p-3.5 rounded-lg text-xs text-amber-800 dark:text-amber-300">
-            <p className="font-semibold">Status Remarks Required</p>
-            <p className="mt-1">
-              Please enter the specific reason why this deal is being marked as {statusName} (e.g. competitor pricing, budget postponed, etc.).
-            </p>
+          <div
+            className={`flex items-start gap-3 p-3.5 rounded-lg border text-xs ${
+              statusName === 'Lost'
+                ? 'bg-danger-bg border-danger-border text-danger-text'
+                : 'bg-warning-bg border-warning-border text-warning-text'
+            }`}
+          >
+            {statusName === 'Lost' ? (
+              <AlertTriangle size={18} className="shrink-0 mt-0.5 text-danger" />
+            ) : (
+              <AlertCircle size={18} className="shrink-0 mt-0.5 text-warning" />
+            )}
+            <div className="space-y-0.5">
+              <p className="font-semibold">Reason Required for {statusName}</p>
+              <p className="text-text-muted text-xs leading-relaxed">
+                Please provide the reason why this deal is transitioning to {statusName} to maintain accurate pipeline analytics.
+              </p>
+            </div>
           </div>
         )}
 
         {isMissingNegotiatedValue && (
-          <div className="p-3 bg-danger/10 border border-danger/30 rounded-lg text-xs text-danger font-medium">
-            Negotiated value is missing! Please edit the deal first to set the finalized negotiated amount before marking as Won.
+          <div className="flex items-start gap-2.5 p-3 bg-danger-bg border border-danger-border rounded-lg text-xs text-danger font-medium">
+            <AlertCircle size={16} className="shrink-0 mt-0.5 text-danger" />
+            <span>Negotiated value is missing! Please edit the deal first to set the finalized negotiated amount before marking as Won.</span>
           </div>
         )}
 
-        {error && (
-          <p className="text-xs text-danger font-medium">{error}</p>
-        )}
-
         <div>
-          <label className="block text-xs font-medium text-heading mb-1.5">
-            Status Remarks / Reason {isHoldOrLost && <span className="text-danger">*</span>}
-          </label>
           <Textarea
+            id="deal-status-remarks"
+            label="Status Remarks / Reason"
+            required={isHoldOrLost}
             value={remarks}
             onChange={(e) => {
               setRemarks(e.target.value);
@@ -99,18 +143,17 @@ export default function DealStatusModal({
             }
             rows={3}
             maxLength={500}
+            showCharCount={true}
+            error={error}
             className="w-full text-xs"
           />
-          <p className="text-3xs text-text-muted text-right mt-1">
-            {remarks.length} / 500
-          </p>
         </div>
 
         <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
           <CancelButton onClick={onClose} size="sm" disabled={isSubmitting} />
           <Button
             type="submit"
-            variant={isWon ? 'primary' : statusName === 'Lost' ? 'danger' : 'secondary'}
+            variant={statusName === 'Lost' ? 'danger' : 'primary'}
             size="sm"
             disabled={isSubmitting || isMissingNegotiatedValue}
           >

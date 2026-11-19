@@ -189,25 +189,21 @@ export function VendorBankDetailsProvider({ children }) {
             }
           }
 
-          // Upload any pending file attachments if present
-          if (Array.isArray(row.attachments)) {
-            for (const att of row.attachments) {
-              if (att.file instanceof File) {
-                try {
-                  await vendorService.uploadBankDetailAttachment(bankId, {
-                    documentTypeId: att.documentTypeId || 1,
-                    documentName: att.documentName || att.name,
-                    file: att.file,
-                  });
-                } catch (attErr) {
-                  console.warn('Attachment upload failed:', attErr);
+          // Clean local file objects so they are not retained in state
+          const cleanAttachments = Array.isArray(row.attachments)
+            ? row.attachments.map((att) => {
+                if (att.file instanceof File) {
+                  const { file, ...rest } = att;
+                  return rest;
                 }
-              }
-            }
-          }
+                return att;
+              })
+            : [];
 
           processedRows.push({
             ...row,
+            attachments: cleanAttachments,
+            attachmentCount: cleanAttachments.length,
             bankDetailId: bankId,
             id: bankId,
             vendorId,
