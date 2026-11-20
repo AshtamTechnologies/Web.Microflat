@@ -228,10 +228,9 @@ export default function ProductStandardsEditor({
 
               // Applicability state
               const isAllInherited = !item.applicableGradeIds || !Array.isArray(item.applicableGradeIds);
-              const activeGradeIdSet = useMemo(() => {
-                if (isAllInherited) return new Set(allGradeIds);
-                return new Set(item.applicableGradeIds.map(Number));
-              }, [isAllInherited, allGradeIds, item.applicableGradeIds]);
+              const activeGradeIdSet = isAllInherited
+                ? new Set(allGradeIds)
+                : new Set((item.applicableGradeIds || []).map(Number));
 
               // Filter available standards dropdown to prevent duplicates
               const standardOptions = availableStandards
