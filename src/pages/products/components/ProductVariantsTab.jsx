@@ -604,7 +604,19 @@ export default function ProductVariantsTab({
 
   // Change parameter in spec row
   const handleChangeSpecParam = (index, paramId) => {
-    const param = specParameters.find((p) => p.id === Number(paramId));
+    const rawId = Number(paramId);
+    if (!rawId) return;
+
+    // Backend rule: Each spec parameter can be listed only once
+    const isDuplicate = variantSpecs.some(
+      (s, i) => i !== index && Number(s.specParameterId) === rawId
+    );
+    if (isDuplicate) {
+      toast.error('Each spec parameter can be listed only once.');
+      return;
+    }
+
+    const param = specParameters.find((p) => p.id === rawId);
     const paramName = param?.parameterName || '';
     const isFlatness = isExactFlatnessParameter(paramName);
 
@@ -628,7 +640,7 @@ export default function ProductVariantsTab({
 
       next[index] = {
         ...next[index],
-        specParameterId: Number(paramId),
+        specParameterId: rawId,
         parameterName: paramName,
         unitSymbol: param?.unitSymbol || '',
         valueDecimal: autoVal,
@@ -655,6 +667,19 @@ export default function ProductVariantsTab({
       if (!selectedStandardId || !selectedGradeId) {
         toast.error('Both Standard and Grade must be selected together, or switch to Common Figures.');
         return;
+      }
+    }
+
+    // Backend rule: Each spec parameter can be listed only once
+    const seenParamIds = new Set();
+    for (const spec of variantSpecs) {
+      const pid = Number(spec.specParameterId);
+      if (pid) {
+        if (seenParamIds.has(pid)) {
+          toast.error(`Each spec parameter can be listed only once. "${spec.parameterName || 'Spec'}" is duplicated.`);
+          return;
+        }
+        seenParamIds.add(pid);
       }
     }
 
@@ -1235,7 +1260,12 @@ export default function ProductVariantsTab({
                 size="xs"
                 onClick={handleAddSpecRow}
                 className="flex items-center gap-1"
-                disabled={isSavingSpecs}
+                disabled={isSavingSpecs || (specParameters.length > 0 && variantSpecs.length >= specParameters.length)}
+                title={
+                  specParameters.length > 0 && variantSpecs.length >= specParameters.length
+                    ? 'All available parameters have already been added'
+                    : 'Add specification parameter'
+                }
               >
                 <IconAdd size={13} />
                 <span>Add Spec</span>
@@ -1274,6 +1304,19 @@ export default function ProductVariantsTab({
                     '';
                   const isExactFlatnessParam = isExactFlatnessParameter(paramName);
 
+                  // Filter out parameters already selected in other rows (Backend rule: Each spec parameter can be listed only once)
+                  const rowParamOptions = specParameters
+                    .filter((p) => {
+                      const isSelectedInOtherRow = variantSpecs.some(
+                        (s, idx) => idx !== sIdx && Number(s.specParameterId) === Number(p.id)
+                      );
+                      return !isSelectedInOtherRow;
+                    })
+                    .map((p) => ({
+                      value: Number(p.id),
+                      label: `${p.parameterName}${p.unitSymbol ? ` (${p.unitSymbol})` : ''}`,
+                    }));
+
                   return (
                     <tr key={sIdx}>
                       <td className="p-2">
@@ -1291,7 +1334,7 @@ export default function ProductVariantsTab({
                                   : val;
                               handleChangeSpecParam(sIdx, rawId);
                             }}
-                            options={specParamOptions}
+                            options={rowParamOptions}
                             placeholder="Select Parameter"
                             size="sm"
                           />
