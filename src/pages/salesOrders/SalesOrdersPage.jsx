@@ -5,7 +5,7 @@
  * Aligned with Frontend-API-Guide.md §5.4g.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   useReactTable,
@@ -37,33 +37,63 @@ import {
 } from '../../mocks/salesOrders';
 import { formatDate } from '../../utils/dateUtils';
 
+const SOURCE_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Sources' },
+  { value: 'QUOTATION', label: 'Quotation Orders' },
+  { value: 'DIRECT', label: 'Direct Orders' },
+];
+
 const columnHelper = createColumnHelper();
 
 export default function SalesOrdersPage() {
   const navigate = useNavigate();
-  const { salesOrders = [] } = useSalesOrdersContext();
+  const { salesOrders = [], refreshSalesOrders } = useSalesOrdersContext();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [sourceFilter, setSourceFilter] = useState('ALL');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
 
   const hasActiveFilters = Boolean(
-    searchQuery.trim() || statusFilter !== 'ALL' || fromDate || toDate
+    searchQuery.trim() || statusFilter !== 'ALL' || sourceFilter !== 'ALL' || fromDate || toDate
   );
 
   function handleResetFilters() {
     setSearchQuery('');
     setStatusFilter('ALL');
+    setSourceFilter('ALL');
     setFromDate('');
     setToDate('');
   }
 
+  // Sync server-side list when filters change
+  useEffect(() => {
+    if (typeof refreshSalesOrders === 'function') {
+      const params = {};
+      if (sourceFilter === 'DIRECT') params.orderSource = true;
+      else if (sourceFilter === 'QUOTATION') params.orderSource = false;
+      if (statusFilter !== 'ALL') params.status = statusFilter;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
+      if (fromDate) params.fromDate = fromDate;
+      if (toDate) params.toDate = toDate;
+      refreshSalesOrders(params);
+    }
+  }, [sourceFilter, statusFilter, fromDate, toDate, refreshSalesOrders]);
+
   const filteredData = useMemo(() => {
     return salesOrders.filter((order) => {
       if (statusFilter !== 'ALL' && order.status !== statusFilter) {
+        return false;
+      }
+
+      const isDirect = Boolean(order.orderSource === true || order.isDirectOrder || !order.quotationId);
+      if (sourceFilter === 'QUOTATION' && isDirect) {
+        return false;
+      }
+      if (sourceFilter === 'DIRECT' && !isDirect) {
         return false;
       }
 
@@ -79,6 +109,7 @@ export default function SalesOrdersPage() {
         const q = searchQuery.toLowerCase();
         const combined = [
           order.orderConfirmationNo,
+          order.orderSourceName,
           order.quotationNo,
           order.inquiryNo,
           order.clientName,
@@ -94,7 +125,7 @@ export default function SalesOrdersPage() {
 
       return true;
     });
-  }, [salesOrders, statusFilter, fromDate, toDate, searchQuery]);
+  }, [salesOrders, statusFilter, sourceFilter, fromDate, toDate, searchQuery]);
 
   const columns = useMemo(
     () => [
@@ -118,9 +149,23 @@ export default function SalesOrdersPage() {
           );
         },
       }),
+      columnHelper.accessor('orderSourceName', {
+        header: 'Source',
+        size: 110,
+        cell: (info) => {
+          const row = info.row.original;
+          const isDirect = Boolean(row.orderSource === true || row.isDirectOrder || !row.quotationId);
+          const sourceLabel = row.orderSourceName || (isDirect ? 'Direct' : 'Quotation');
+          return (
+            <Badge variant={isDirect ? 'warning' : 'info'} size="sm">
+              {sourceLabel}
+            </Badge>
+          );
+        },
+      }),
       columnHelper.accessor('clientName', {
         header: 'Client / Quotation',
-        size: 230,
+        size: 220,
         cell: (info) => {
           const row = info.row.original;
           return (
@@ -131,18 +176,20 @@ export default function SalesOrdersPage() {
               >
                 {info.getValue()}
               </div>
-              <div className="font-mono text-2xs text-text-muted flex items-center gap-1.5">
-                {row.quotationId ? (
-                  <Link
-                    to={`/quotations/${row.quotationId}`}
-                    className="text-primary hover:underline"
-                  >
-                    {row.quotationNo}
-                  </Link>
+              <div className="font-mono text-2xs text-text-muted flex items-center gap-1.5 mt-0.5">
+                {row.quotationNo ? (
+                  row.quotationId ? (
+                    <Link
+                      to={`/quotations/${row.quotationId}`}
+                      className="text-primary hover:underline"
+                    >
+                      {row.quotationNo}
+                    </Link>
+                  ) : (
+                    <span>{row.quotationNo}</span>
+                  )
                 ) : (
-                  <Badge variant="neutral" size="xs">
-                    Direct Order
-                  </Badge>
+                  <span className="text-text-muted">—</span>
                 )}
                 {row.inquiryNo && <span>· {row.inquiryNo}</span>}
               </div>
@@ -285,6 +332,17 @@ export default function SalesOrdersPage() {
         hasActiveFilters={hasActiveFilters}
         onReset={handleResetFilters}
       >
+        <div className="w-full sm:w-40">
+          <SearchableSelect
+            id="sales-order-source-filter"
+            placeholder="All Sources"
+            searchPlaceholder="Search sources..."
+            options={SOURCE_FILTER_OPTIONS}
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+          />
+        </div>
+
         <div className="w-full sm:w-44">
           <SearchableSelect
             id="sales-order-status-filter"
@@ -371,15 +429,23 @@ export default function SalesOrdersPage() {
                     {order.clientName}
                   </div>
                 </div>
-                <Badge variant={getOrderStatusBadgeVariant(order.status)} size="sm">
-                  {order.status}
-                </Badge>
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  <Badge
+                    variant={order.orderSource || order.isDirectOrder || !order.quotationId ? 'warning' : 'info'}
+                    size="sm"
+                  >
+                    {order.orderSourceName || (order.orderSource || order.isDirectOrder || !order.quotationId ? 'Direct' : 'Quotation')}
+                  </Badge>
+                  <Badge variant={getOrderStatusBadgeVariant(order.status)} size="sm">
+                    {order.status}
+                  </Badge>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs text-text-muted pt-2 border-t border-border/60">
                 <div>
                   <span className="block text-3xs uppercase tracking-wider">Quotation</span>
-                  <span className="font-mono text-heading">{order.quotationNo}</span>
+                  <span className="font-mono text-heading">{order.quotationNo || '—'}</span>
                 </div>
                 <div>
                   <span className="block text-3xs uppercase tracking-wider">Client PO</span>

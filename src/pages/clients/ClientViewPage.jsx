@@ -34,6 +34,7 @@ import {
   Th,
   Td,
   PageHeader,
+  FormattedHtmlBlock,
 } from '../../components/ui';
 import { useClientsContext } from '../../context/ClientsContext';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
@@ -46,65 +47,7 @@ import {
 } from '../../mocks/clients';
 import { formatDate } from '../../utils/dateUtils';
 import { getEffectiveDateStatus, formatDateDisplay } from '../../utils/effectiveDateUtils';
-
-function decodeHtmlString(str) {
-  if (!str || typeof str !== 'string') return '';
-  let res = str.trim();
-
-  if (res.startsWith('"') && res.endsWith('"') && res.length >= 2) {
-    try {
-      res = JSON.parse(res);
-    } catch {
-      // ignore
-    }
-  }
-
-  if (/&(?:lt|gt|amp|quot|#39|#x27|nbsp);/i.test(res)) {
-    try {
-      const txt = document.createElement('textarea');
-      txt.innerHTML = res;
-      res = txt.value;
-      if (/&lt;[a-z/!]/i.test(res)) {
-        txt.innerHTML = res;
-        res = txt.value;
-      }
-    } catch {
-      res = res
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&');
-    }
-  }
-
-  return res;
-}
-
-function FormattedHtmlBlock({ content, emptyText = '—' }) {
-  const decoded = useMemo(() => decodeHtmlString(content), [content]);
-
-  if (!decoded) {
-    return <span className="text-xs text-text-muted">{emptyText}</span>;
-  }
-
-  const hasHtmlTags = /<[a-z][\s\S]*>/i.test(decoded);
-
-  if (hasHtmlTags) {
-    return (
-      <div
-        className="p-3 rounded-lg bg-surface/60 border border-border text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:my-1.5 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:my-1.5 [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-heading [&_em]:italic [&_a]:text-primary [&_a]:underline shadow-2xs"
-        dangerouslySetInnerHTML={{ __html: decoded }}
-      />
-    );
-  }
-
-  return (
-    <p className="text-xs text-heading font-medium whitespace-pre-line leading-relaxed p-3 rounded-lg bg-surface/60 border border-border shadow-2xs">
-      {decoded}
-    </p>
-  );
-}
+import { decodeHtmlString, isHtmlMarkup } from '../../utils/htmlUtils';
 
 export default function ClientViewPage() {
   const { id } = useParams();
@@ -118,6 +61,9 @@ export default function ClientViewPage() {
   const clientPaymentTermsList = useMemo(() => {
     if (!client?.paymentTerms) return [];
     const raw = client.paymentTerms;
+    if (isHtmlMarkup(raw)) {
+      return [];
+    }
     let items = [];
     if (Array.isArray(raw)) {
       items = raw;
@@ -129,24 +75,38 @@ export default function ClientViewPage() {
       }
     }
 
-    return items.map((val) => {
+    const resolved = [];
+    for (const val of items) {
+      if (!val || isHtmlMarkup(val)) continue;
+      const termIdOrCode = typeof val === 'object' && val !== null
+        ? (val.paymentTermId ?? val.id ?? val.termCode)
+        : val;
+      if (isHtmlMarkup(termIdOrCode)) continue;
       const match = paymentTerms.find(
         (pt) =>
-          pt.termCode?.toUpperCase() === String(val).toUpperCase() ||
-          pt.paymentTermId === val
+          pt.termCode?.toUpperCase() === String(termIdOrCode).toUpperCase() ||
+          pt.paymentTermId === termIdOrCode ||
+          String(pt.id) === String(termIdOrCode)
       );
-      if (match) return match;
-      return {
-        paymentTermId: val,
-        termCode: val,
-        description: '',
-      };
-    });
+      if (match) {
+        resolved.push(match);
+      } else if (String(termIdOrCode).length < 50) {
+        resolved.push({
+          paymentTermId: termIdOrCode,
+          termCode: String(termIdOrCode),
+          description: '',
+        });
+      }
+    }
+    return resolved;
   }, [client?.paymentTerms, paymentTerms]);
 
   const clientDeliveryTermsList = useMemo(() => {
     if (!client?.deliveryTerms) return [];
     const raw = client.deliveryTerms;
+    if (isHtmlMarkup(raw)) {
+      return [];
+    }
     let items = [];
     if (Array.isArray(raw)) {
       items = raw;
@@ -162,7 +122,7 @@ export default function ClientViewPage() {
       if (items.length === 0) {
         if (raw.includes(',')) {
           items = raw.split(',').map((s) => s.trim()).filter(Boolean);
-        } else if (!/<[a-z][\s\S]*>/i.test(raw) && raw.length < 50) {
+        } else if (!isHtmlMarkup(raw) && raw.length < 50) {
           items = [raw.trim()];
         }
       }
@@ -170,10 +130,13 @@ export default function ClientViewPage() {
 
     if (items.length === 0) return [];
 
-    return items.map((val) => {
+    const resolved = [];
+    for (const val of items) {
+      if (!val || isHtmlMarkup(val)) continue;
       const termIdOrCode = typeof val === 'object' && val !== null
         ? (val.deliveryTermId ?? val.id ?? val.termCode ?? val.code)
         : val;
+      if (isHtmlMarkup(termIdOrCode)) continue;
 
       const match = deliveryTerms.find(
         (dt) =>
@@ -184,13 +147,17 @@ export default function ClientViewPage() {
           String(dt.id) === String(termIdOrCode)
       );
 
-      if (match) return match;
-      return {
-        deliveryTermId: termIdOrCode,
-        termCode: String(termIdOrCode),
-        description: '',
-      };
-    });
+      if (match) {
+        resolved.push(match);
+      } else if (String(termIdOrCode).length < 50) {
+        resolved.push({
+          deliveryTermId: termIdOrCode,
+          termCode: String(termIdOrCode),
+          description: '',
+        });
+      }
+    }
+    return resolved;
   }, [client?.deliveryTerms, deliveryTerms]);
 
   if (!client) {
@@ -354,41 +321,32 @@ export default function ClientViewPage() {
             {/* Payment Terms */}
             <div>
               <p className="text-xs font-medium text-text-muted mb-1.5">Payment Terms</p>
-              {clientPaymentTermsList.length === 0 ? (
-                <span className="text-sm font-semibold text-heading">—</span>
-              ) : (
+              {clientPaymentTermsList.length > 0 ? (
                 <div className="space-y-2">
-                  {clientPaymentTermsList.map((term) => {
-                    const desc = term.description || '';
-                    const isHtml = /<[a-z][\s\S]*>/i.test(desc);
-
-                    return (
-                      <div
-                        key={term.paymentTermId || term.termCode}
-                        className="p-2.5 rounded-lg bg-surface/80 border border-border space-y-1.5 text-xs shadow-2xs"
-                      >
-                        <div>
-                          <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5">
-                            {term.termCode}
-                          </Badge>
-                        </div>
-                        {desc ? (
-                              isHtml ? (
-                                <div
-                                  className="text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
-                                  dangerouslySetInnerHTML={{ __html: desc }}
-                                />
-                              ) : (
-                                <p className="text-xs text-text whitespace-pre-line leading-relaxed">
-                                  {desc}
-                                </p>
-                              )
-                        ) : (
-                          <p className="text-2xs text-text-muted italic">No terms description specified</p>
-                        )}
+                  {clientPaymentTermsList.map((term) => (
+                    <div
+                      key={term.paymentTermId || term.termCode}
+                      className="p-2.5 rounded-lg bg-surface/80 border border-border space-y-1.5 text-xs shadow-2xs"
+                    >
+                      <div>
+                        <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5">
+                          {term.termCode}
+                        </Badge>
                       </div>
-                    );
-                  })}
+                      <FormattedHtmlBlock
+                        content={term.description}
+                        emptyText="No terms description specified"
+                        className="text-2xs text-text-muted mt-0.5"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-3 rounded-lg bg-surface/60 border border-border min-h-[46px] text-xs">
+                  <FormattedHtmlBlock
+                    content={client?.paymentTerms}
+                    emptyText="—"
+                  />
                 </div>
               )}
             </div>
@@ -398,71 +356,43 @@ export default function ClientViewPage() {
               <p className="text-xs font-medium text-text-muted mb-1.5">Delivery Terms</p>
               {clientDeliveryTermsList.length > 0 ? (
                 <div className="space-y-2">
-                  {clientDeliveryTermsList.map((term, idx) => {
-                    const desc = term.description || '';
-                    const isHtml = /<[a-z][\s\S]*>/i.test(desc);
-
-                    return (
-                      <div
-                        key={term.deliveryTermId || term.termCode || idx}
-                        className="p-2.5 rounded-lg bg-surface/80 border border-border space-y-1.5 text-xs shadow-2xs"
-                      >
-                        <div>
-                          <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5">
-                            {term.termCode}
-                          </Badge>
-                        </div>
-                        {desc ? (
-                          isHtml ? (
-                            <div
-                              className="text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
-                              dangerouslySetInnerHTML={{ __html: desc }}
-                            />
-                          ) : (
-                            <p className="text-xs text-text whitespace-pre-line leading-relaxed">
-                              {desc}
-                            </p>
-                          )
-                        ) : (
-                          <p className="text-2xs text-text-muted italic">No terms description specified</p>
-                        )}
+                  {clientDeliveryTermsList.map((term, idx) => (
+                    <div
+                      key={term.deliveryTermId || term.termCode || idx}
+                      className="p-2.5 rounded-lg bg-surface/80 border border-border space-y-1.5 text-xs shadow-2xs"
+                    >
+                      <div>
+                        <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5">
+                          {term.termCode}
+                        </Badge>
                       </div>
-                    );
-                  })}
+                      <FormattedHtmlBlock
+                        content={term.description}
+                        emptyText="No terms description specified"
+                        className="text-2xs text-text-muted mt-0.5"
+                      />
+                    </div>
+                  ))}
                 </div>
-              ) : client.deliveryTerms ? (
-                /<[a-z][\s\S]*>/i.test(client.deliveryTerms) ? (
-                  <div
-                    className="p-3 rounded-lg bg-surface/60 border border-border text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5 shadow-2xs"
-                    dangerouslySetInnerHTML={{ __html: client.deliveryTerms }}
-                  />
-                ) : (
-                  <p className="text-xs text-heading font-medium whitespace-pre-line leading-relaxed p-3 rounded-lg bg-surface/60 border border-border shadow-2xs">
-                    {client.deliveryTerms}
-                  </p>
-                )
               ) : (
-                <span className="text-xs text-text-muted">—</span>
+                <div className="p-3 rounded-lg bg-surface/60 border border-border min-h-[46px] text-xs">
+                  <FormattedHtmlBlock
+                    content={client?.deliveryTerms}
+                    emptyText="—"
+                  />
+                </div>
               )}
             </div>
 
             {/* Internal Comments */}
             <div>
               <p className="text-xs font-medium text-text-muted mb-1.5">Internal Comments</p>
-              {client.comments ? (
-                /<[a-z][\s\S]*>/i.test(client.comments) ? (
-                  <div
-                    className="p-3 rounded-lg bg-surface/60 border border-border text-xs text-text leading-relaxed prose prose-xs max-w-none [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5 shadow-2xs"
-                    dangerouslySetInnerHTML={{ __html: client.comments }}
-                  />
-                ) : (
-                  <p className="text-xs text-heading font-medium whitespace-pre-line leading-relaxed p-3 rounded-lg bg-surface/60 border border-border shadow-2xs">
-                    {client.comments}
-                  </p>
-                )
-              ) : (
-                <span className="text-xs text-text-muted">—</span>
-              )}
+              <div className="p-3 rounded-lg bg-surface/60 border border-border min-h-[46px] text-xs">
+                <FormattedHtmlBlock
+                  content={client?.comments}
+                  emptyText="—"
+                />
+              </div>
             </div>
           </div>
         </Card>

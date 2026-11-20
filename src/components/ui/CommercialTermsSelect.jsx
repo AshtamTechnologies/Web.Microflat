@@ -19,9 +19,11 @@ import SearchableMultiSelect from './SearchableMultiSelect';
 import Modal from './Modal';
 import Badge from './Badge';
 import Button from './Button';
+import FormattedHtmlBlock from './FormattedHtmlBlock';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
 import { useDeliveryTermsContext } from '../../context/DeliveryTermsContext';
 import { IconFileText, IconCheck, IconInfo } from '../../constants/icons';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 
 function stripHtml(str = '') {
   if (typeof str !== 'string') return '';
@@ -92,8 +94,16 @@ export default function CommercialTermsSelect({
       });
   }, [termsList]);
 
-  // Selected values array normalized
-  const selectedValues = Array.isArray(value) ? value : value ? [value] : [];
+  // Selected values array normalized, filtering out legacy raw HTML markup
+  const selectedValues = useMemo(() => {
+    const rawArr = Array.isArray(value) ? value : value ? [value] : [];
+    return rawArr.filter((v) => {
+      if (typeof v === 'string') {
+        return !isHtmlMarkup(v);
+      }
+      return Boolean(v);
+    });
+  }, [value]);
 
   function handleTagInfo(optOrVal) {
     if (!optOrVal) return;
@@ -194,11 +204,10 @@ export default function CommercialTermsSelect({
                 Commercial Clause / Description
               </label>
               <div className="p-3 bg-surface/70 border border-border rounded-lg text-sm text-heading leading-relaxed">
-                {viewingTerm.description || (
-                  <span className="text-text-muted italic">
-                    No description or specific terms clause has been configured for this term.
-                  </span>
-                )}
+                <FormattedHtmlBlock
+                  content={viewingTerm.description}
+                  emptyText="No description or specific terms clause has been configured for this term."
+                />
               </div>
             </div>
 

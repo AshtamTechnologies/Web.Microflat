@@ -48,6 +48,7 @@ import {
   PROJECT_OPTIONS,
   getPRStatusBadgeVariant,
 } from '../../mocks/purchaseRequisitions';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 import ItemsEditor from './components/ItemsEditor';
 
 export default function PurchaseRequisitionEdit() {
@@ -91,8 +92,8 @@ export default function PurchaseRequisitionEdit() {
         requiredDate: originalPR.requiredDate ? originalPR.requiredDate.split('T')[0] : '',
         priority: originalPR.priority || 'Normal',
         status: originalPR.status || 'Pending Approval',
-        paymentTerms: Array.isArray(originalPR.paymentTerms) ? originalPR.paymentTerms : (originalPR.paymentTerms ? [originalPR.paymentTerms] : []),
-        deliveryTerms: Array.isArray(originalPR.deliveryTerms) ? originalPR.deliveryTerms : (originalPR.deliveryTerms ? [originalPR.deliveryTerms] : []),
+        paymentTerms: (Array.isArray(originalPR.paymentTerms) ? originalPR.paymentTerms : (originalPR.paymentTerms ? [originalPR.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
+        deliveryTerms: (Array.isArray(originalPR.deliveryTerms) ? originalPR.deliveryTerms : (originalPR.deliveryTerms ? [originalPR.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
         remarks: originalPR.remarks || '',
       });
       setItems(

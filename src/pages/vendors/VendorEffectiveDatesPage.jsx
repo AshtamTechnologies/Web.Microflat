@@ -70,6 +70,7 @@ import {
   Checkbox,
   PaymentTermsSelect,
   DeliveryTermsSelect,
+  FormattedHtmlBlock,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
@@ -88,6 +89,7 @@ import { getActiveVendorVersion } from '../../utils/vendorVersions';
 import { formatDateDisplay, getTodayIsoDate } from '../../utils/effectiveDateUtils';
 import { formatDate, getTodayISO } from '../../utils/dateUtils';
 import { countryIdToCode, stateIdToCode } from '../../models/vendors/vendorModel';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 import {
   ApprovalStatus,
   ApprovalStatusLabel,
@@ -721,31 +723,159 @@ export default function VendorEffectiveDatesPage() {
   const selectedVendorPaymentTerms = useMemo(() => {
     if (!selectedVersion?.paymentTerms) return [];
     const raw = selectedVersion.paymentTerms;
-    const items = Array.isArray(raw)
-      ? raw
-      : typeof raw === 'string' && raw.trim()
-        ? raw.split(',').map((s) => s.trim()).filter(Boolean)
-        : [];
-    return items.map((val) => {
-      const idOrCode = typeof val === 'object' && val !== null ? (val.paymentTermId ?? val.id ?? val.termCode) : val;
-      const match = paymentTerms.find((pt) => pt.id === idOrCode || pt.paymentTermId === idOrCode || String(pt.termCode).toUpperCase() === String(idOrCode).toUpperCase());
-      return match || { termCode: String(idOrCode), name: String(idOrCode) };
-    });
+
+    // If raw contains legacy HTML markup, don't parse as term badges
+    if (isHtmlMarkup(raw)) {
+      return [];
+    }
+
+    let items = [];
+    if (Array.isArray(raw)) {
+      items = raw;
+    } else if (typeof raw === 'string' && raw.trim()) {
+      const trimmed = raw.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) items = parsed;
+        } catch {
+          // ignore
+        }
+      }
+      if (items.length === 0) {
+        if (trimmed.includes(',')) {
+          items = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+        } else {
+          items = [trimmed];
+        }
+      }
+    }
+
+    if (items.length === 0) return [];
+
+    const resolved = [];
+    for (const val of items) {
+      if (!val || isHtmlMarkup(val)) continue;
+
+      let idOrCode = typeof val === 'object' && val !== null ? (val.paymentTermId ?? val.id ?? val.termCode) : val;
+      if (isHtmlMarkup(idOrCode)) continue;
+
+      let codePrefix = null;
+      let nameSuffix = null;
+      if (typeof idOrCode === 'string' && idOrCode.includes(' — ')) {
+        const parts = idOrCode.split(' — ');
+        codePrefix = parts[0].trim();
+        nameSuffix = parts.slice(1).join(' — ').trim();
+      }
+
+      const match = paymentTerms.find(
+        (pt) =>
+          pt.id === idOrCode ||
+          pt.paymentTermId === idOrCode ||
+          String(pt.id) === String(idOrCode) ||
+          String(pt.paymentTermId) === String(idOrCode) ||
+          String(pt.termCode).toUpperCase() === String(idOrCode).toUpperCase() ||
+          (codePrefix && (String(pt.termCode).toUpperCase() === codePrefix.toUpperCase() || String(pt.id) === codePrefix)) ||
+          (nameSuffix && (pt.termName?.toLowerCase() === nameSuffix.toLowerCase() || pt.name?.toLowerCase() === nameSuffix.toLowerCase()))
+      );
+
+      if (match) {
+        resolved.push({
+          termCode: match.termCode || match.code,
+          name: match.termName || match.name || '',
+          description: match.description || '',
+        });
+      } else {
+        const strVal = String(idOrCode).trim();
+        if (strVal && !isHtmlMarkup(strVal) && strVal.length < 50) {
+          resolved.push({
+            termCode: codePrefix || strVal,
+            name: nameSuffix || (codePrefix ? '' : strVal),
+            description: '',
+          });
+        }
+      }
+    }
+    return resolved;
   }, [selectedVersion?.paymentTerms, paymentTerms]);
 
   const selectedVendorDeliveryTerms = useMemo(() => {
     if (!selectedVersion?.deliveryTerms) return [];
     const raw = selectedVersion.deliveryTerms;
-    const items = Array.isArray(raw)
-      ? raw
-      : typeof raw === 'string' && raw.trim()
-        ? raw.split(',').map((s) => s.trim()).filter(Boolean)
-        : [];
-    return items.map((val) => {
-      const idOrCode = typeof val === 'object' && val !== null ? (val.deliveryTermId ?? val.id ?? val.termCode ?? val.code) : val;
-      const match = deliveryTerms.find((dt) => dt.id === idOrCode || dt.deliveryTermId === idOrCode || String(dt.termCode || dt.code).toUpperCase() === String(idOrCode).toUpperCase());
-      return match || { termCode: String(idOrCode), name: String(idOrCode) };
-    });
+
+    // If raw contains legacy HTML markup, don't parse as term badges
+    if (isHtmlMarkup(raw)) {
+      return [];
+    }
+
+    let items = [];
+    if (Array.isArray(raw)) {
+      items = raw;
+    } else if (typeof raw === 'string' && raw.trim()) {
+      const trimmed = raw.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) items = parsed;
+        } catch {
+          // ignore
+        }
+      }
+      if (items.length === 0) {
+        if (trimmed.includes(',')) {
+          items = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+        } else {
+          items = [trimmed];
+        }
+      }
+    }
+
+    if (items.length === 0) return [];
+
+    const resolved = [];
+    for (const val of items) {
+      if (!val || isHtmlMarkup(val)) continue;
+
+      let idOrCode = typeof val === 'object' && val !== null ? (val.deliveryTermId ?? val.id ?? val.termCode ?? val.code) : val;
+      if (isHtmlMarkup(idOrCode)) continue;
+
+      let codePrefix = null;
+      let nameSuffix = null;
+      if (typeof idOrCode === 'string' && idOrCode.includes(' — ')) {
+        const parts = idOrCode.split(' — ');
+        codePrefix = parts[0].trim();
+        nameSuffix = parts.slice(1).join(' — ').trim();
+      }
+
+      const match = deliveryTerms.find(
+        (dt) =>
+          dt.id === idOrCode ||
+          dt.deliveryTermId === idOrCode ||
+          String(dt.id) === String(idOrCode) ||
+          String(dt.deliveryTermId) === String(idOrCode) ||
+          String(dt.termCode || dt.code).toUpperCase() === String(idOrCode).toUpperCase() ||
+          (codePrefix && (String(dt.termCode || dt.code).toUpperCase() === codePrefix.toUpperCase() || String(dt.id) === codePrefix)) ||
+          (nameSuffix && (dt.termName?.toLowerCase() === nameSuffix.toLowerCase() || dt.name?.toLowerCase() === nameSuffix.toLowerCase()))
+      );
+
+      if (match) {
+        resolved.push({
+          termCode: match.termCode || match.code,
+          name: match.termName || match.name || '',
+          description: match.description || '',
+        });
+      } else {
+        const strVal = String(idOrCode).trim();
+        if (strVal && !isHtmlMarkup(strVal) && strVal.length < 50) {
+          resolved.push({
+            termCode: codePrefix || strVal,
+            name: nameSuffix || (codePrefix ? '' : strVal),
+            description: '',
+          });
+        }
+      }
+    }
+    return resolved;
   }, [selectedVersion?.deliveryTerms, deliveryTerms]);
 
   // Attachments for the currently viewed version (version-scoped)
@@ -861,8 +991,8 @@ export default function VendorEffectiveDatesPage() {
       zipCode: full.zipCode || ver.zipCode || '',
       address1: full.address1 || ver.address1 || '',
       address2: full.address2 || ver.address2 || '',
-      paymentTerms: Array.isArray(full.paymentTerms) ? full.paymentTerms : (full.paymentTerms ? [full.paymentTerms] : []),
-      deliveryTerms: Array.isArray(full.deliveryTerms) ? full.deliveryTerms : (full.deliveryTerms ? [full.deliveryTerms] : []),
+      paymentTerms: (Array.isArray(full.paymentTerms) ? full.paymentTerms : (full.paymentTerms ? [full.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
+      deliveryTerms: (Array.isArray(full.deliveryTerms) ? full.deliveryTerms : (full.deliveryTerms ? [full.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
       notes: full.notes || ver.notes || '',
     });
     setAttachments(Array.isArray(full.attachments) ? full.attachments : []);
@@ -893,8 +1023,8 @@ export default function VendorEffectiveDatesPage() {
           zipCode: fetched.zipCode || '',
           address1: fetched.address1 || '',
           address2: fetched.address2 || '',
-          paymentTerms: Array.isArray(fetched.paymentTerms) ? fetched.paymentTerms : (fetched.paymentTerms ? [fetched.paymentTerms] : []),
-          deliveryTerms: Array.isArray(fetched.deliveryTerms) ? fetched.deliveryTerms : (fetched.deliveryTerms ? [fetched.deliveryTerms] : []),
+          paymentTerms: (Array.isArray(fetched.paymentTerms) ? fetched.paymentTerms : (fetched.paymentTerms ? [fetched.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
+          deliveryTerms: (Array.isArray(fetched.deliveryTerms) ? fetched.deliveryTerms : (fetched.deliveryTerms ? [fetched.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
           notes: fetched.notes || '',
         });
         setAttachments(Array.isArray(fetched.attachments) ? fetched.attachments : []);
@@ -1008,8 +1138,8 @@ export default function VendorEffectiveDatesPage() {
         zipCode: src.zipCode || '',
         address1: src.address1 || '',
         address2: src.address2 || '',
-        paymentTerms: Array.isArray(src.paymentTerms) ? src.paymentTerms : (src.paymentTerms ? [src.paymentTerms] : []),
-        deliveryTerms: Array.isArray(src.deliveryTerms) ? src.deliveryTerms : (src.deliveryTerms ? [src.deliveryTerms] : []),
+        paymentTerms: (Array.isArray(src.paymentTerms) ? src.paymentTerms : (src.paymentTerms ? [src.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
+        deliveryTerms: (Array.isArray(src.deliveryTerms) ? src.deliveryTerms : (src.deliveryTerms ? [src.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
         notes: src.notes || '',
       });
       const baseAtts = Array.isArray(src.attachments)
@@ -2593,7 +2723,10 @@ export default function VendorEffectiveDatesPage() {
                         ))}
                       </div>
                     ) : (
-                      <span className="text-text-muted italic">No payment terms specified</span>
+                      <FormattedHtmlBlock
+                        content={selectedVersion?.paymentTerms}
+                        emptyText="No payment terms specified"
+                      />
                     )}
                   </div>
                 </div>
@@ -2611,7 +2744,10 @@ export default function VendorEffectiveDatesPage() {
                         ))}
                       </div>
                     ) : (
-                      <span className="text-text-muted italic">No delivery terms specified</span>
+                      <FormattedHtmlBlock
+                        content={selectedVersion?.deliveryTerms}
+                        emptyText="No delivery terms specified"
+                      />
                     )}
                   </div>
                 </div>

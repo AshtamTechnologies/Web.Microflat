@@ -44,3 +44,5 @@ export {
   PaymentTermsSelect,
   DeliveryTermsSelect,
 } from './CommercialTermsSelect';
+export { default as FormattedHtmlBlock } from './FormattedHtmlBlock';
+

@@ -63,6 +63,7 @@ import {
 import useColumnResize from '../../hooks/useColumnResize';
 import NegotiationStageFields from './components/NegotiationStageFields';
 import QuotationDocumentsSection from './components/QuotationDocumentsSection';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 
 const CATALOG_OPTIONS = [
   'Rexine Cover (Standard)',
@@ -364,11 +365,11 @@ export default function QuotationFormPage() {
       contactPhone: defaultContactPhone,
       currency: resolvedCurrency,
       currencyId: prefillCurrencyId,
-      paymentTerms: prefillPaymentTerms || prev.paymentTerms,
+      paymentTerms: (prefillPaymentTerms || prev.paymentTerms || []).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
       paymentTermId: prefill?.paymentTermId || prev.paymentTermId,
-      deliveryTerms: prefill?.deliveryTerms
+      deliveryTerms: (prefill?.deliveryTerms
         ? (Array.isArray(prefill.deliveryTerms) ? prefill.deliveryTerms : [prefill.deliveryTerms])
-        : prev.deliveryTerms,
+        : prev.deliveryTerms || []).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
       items: mappedItems.length > 0 ? mappedItems : prev.items,
     }));
 
@@ -458,12 +459,12 @@ export default function QuotationFormPage() {
         contactPhone: targetQuotation.contactPhone,
         currency: targetQuotation.currency || 'INR',
         validUntil: targetQuotation.validUntil || '',
-        paymentTerms: Array.isArray(targetQuotation.paymentTerms)
+        paymentTerms: (Array.isArray(targetQuotation.paymentTerms)
           ? targetQuotation.paymentTerms
-          : (targetQuotation.paymentTerms ? [targetQuotation.paymentTerms] : []),
-        deliveryTerms: Array.isArray(targetQuotation.deliveryTerms)
+          : (targetQuotation.paymentTerms ? [targetQuotation.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
+        deliveryTerms: (Array.isArray(targetQuotation.deliveryTerms)
           ? targetQuotation.deliveryTerms
-          : (targetQuotation.deliveryTerms ? [targetQuotation.deliveryTerms] : []),
+          : (targetQuotation.deliveryTerms ? [targetQuotation.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
         termsAndConditions: targetQuotation.termsAndConditions || '',
         taxTreatment: targetQuotation.taxTreatment || 'INTRA_STATE',
         selectedTaxIds: (targetQuotation.taxes || latestRev?.taxes || [])

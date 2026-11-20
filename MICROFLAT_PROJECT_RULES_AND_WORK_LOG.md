@@ -91,6 +91,8 @@ Then:
 | **WL-013** | 2026-11-18 | Commercial Terms Select | UI Components | Created unified `CommercialTermsSelect.jsx` with mobile-friendly info dialog and code-primary labels. | Reusable across Sales Orders, Quotations, and Clients. | Completed & verified build (0 errors). |
 | **WL-014** | 2026-11-18 | Quotations Core & Task 61 | Quotations | Implemented quotation service, model, endpoints, context, and wired Task 61 PO Recording modal. | Built multipart form-data upload for PO recording and hybrid live/mock state. | Completed & verified build (0 errors). |
 | **WL-015** | 2026-11-19 | Task 54 Standard to Grade Mapping | Standards & Specs | Implemented Phase 1 (Endpoints, Models, Service, Mock), Phase 2 (Context gradeMapping cache & methods), and Phase 3 (StandardsPage table column, modal checklist with drag/arrow sequence ordering, and view card). | Allows Admin to associate precision grades to standards and specify displayOrder sequence for downstream dropdowns (Task 53). Strictly preserved Task 54 boundaries (no flatness formula, no backend/DB changes, no touch to GradesPage/GradesContext). | Completed & verified build (0 errors). |
+| **WL-016** | 2026-11-20 | Task 53 Product Master Specs & Flatness | Products / Accuracy Specs | Implemented Phase 1 (flatnessFormula engine tested with 15/15 Excel benchmarks), Phase 2 (service query params StandardId/GradeId & resolve endpoint), Phase 3 (ProductVariantsTab Scope selector, Standard+Grade dropdowns, "⚡ Calculate Flatness" auto-fill, RBAC 403 protection, and inline table grouped badges). | Aligns accuracy specifications with Standard + Grade backend architecture (`ProductVariantsController.cs:103`), eliminates manual math errors with automated engineering formula calculation. | Completed & verified build (0 errors). |
+| **WL-017** | 2026-11-20 | Task 58 Product Master Standard to Grade Map | Products / Standards | Integrated Standard → Grade mapping into Product Master (`ProductStandardsEditor.jsx`, `ProductFormPage.jsx`, `ProductViewPage.jsx`, and `ProductVariantsTab.jsx`). Displayed mapped precision grades, supported product-level grade scope (Inherit All vs Custom toggle chips), prevented duplicate standards, single primary promotion, Overview grade badges, and Standards tab summary cards. | Connects Task 54's global standard-grade mapping directly into Product Master workflow. Enforces that products and downstream variants/accuracy specs are strictly governed by their allowed precision grades. | Completed & verified build (0 errors). |
 
 ---
 
@@ -303,6 +305,110 @@ Then:
      - 0 backend or database changes.
      - Flatness formulas strictly excluded from Task 54 (reserved for Task 53 product master variant specs).
      - `GradesPage.jsx` and `GradesContext.jsx` were not modified.
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
+
+---
+
+### Work Log Entry: WL-016
+- **Date**: 2026-11-20
+- **Module**: Products & Precision Metrology Accuracy Specs (`ProductVariantsTab.jsx`, `productService.js`, `productEndpoints.js`, `flatnessFormula.js`, `ProductViewPage.jsx`)
+- **Task**: Task 53 — Changes to Product master - Standard, Grade & Flatness Formulas
+- **Summary of Implemented Changes**:
+  1. **Phase 1 — Formula Calculation Engine (`src/utils/flatnessFormula.js`)**:
+     - Built `calculateFlatnessTolerance({ standardCode, gradeCode, lengthMm, widthMm })` and `calculateNominalDiagonal(lengthMm, widthMm)` ($\lceil\sqrt{L^2 + W^2} / 100\rceil \times 100$ mm).
+     - Verified with 15 automated test cases against `Flatness for various sizes.xlsx` across IS 7327 (Gr 0..3), BS 817 (Gr 0..2), DIN 876 (Gr 00..3), and GGG-P-463C / ASME B89.3.7 (Gr AA..B).
+     - Standardized storage unit as micrometers ($\mu\text{m}$) across all standards with formula breakdown text.
+  2. **Phase 2 — Service Layer**:
+     - `productEndpoints.js`: Added `VARIANT_SPECS_RESOLVE: (id) => '/api/product-variants/' + id + '/specs/resolve'`.
+     - `productService.js`: Updated `setVariantSpecs(variantId, specsList, options)` to enforce the backend rule: "Send both standardId and gradeId, or neither" and pass `{ StandardId, GradeId }` query parameters (`PUT /api/product-variants/{id}/specs?StandardId=&GradeId=`). Added `getResolvedVariantSpecs(variantId, options)`.
+  3. **Phase 3 — UI Layer (`ProductVariantsTab.jsx` & `ProductViewPage.jsx`)**:
+     - **Accuracy Specs Modal**:
+       - Added **Specification Scope Selector**: allows toggling between "Standard + Grade" figures and "Common Figures".
+       - In Standard + Grade mode: provides Manufacturing Standard dropdown and dynamically populates Allowed Precision Grade dropdown strictly from Task 54's `gradeMapping`.
+        - **Formula Auto-Populate & Locking**: Selecting `Flatness (µm)` under Standard + Grade automatically computes the exact tolerance from dimensions (L x W) and standard formula (e.g., 4.6 µm for 500x500 Gr-0 under IS 7327). The input is locked (`readOnly` / `disabled`) with a `Locked` badge to prevent invalid arbitrary inputs, and dynamically updates when changing Standard or Grade.
+        - **Clean Tolerance UI**: For Flatness parameters, +/- tolerances and text values show non-editable "—" dashes, reflecting that Flatness is a single total allowable indicator limit.
+        - **Modal Layout**: Widened modal to `size="2xl"` (1024px) with expanded Parameter column to eliminate horizontal scrollbars and cramping. Clean formula derivation step banner rendered below the table.
+       - **RBAC & 403 Protection**: If product is Approved and user is non-Admin, modal is read-only with an informative warning banner.
+     - **Inline Variant Table**:
+       - Enhanced expanded specs table to display each configured figure grouped with its Standard & Grade badge (e.g. `[IS-7327 / Gr-0]` vs `[Common]`).
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
+
+---
+
+### Work Log Entry: WL-017
+- **Date**: 2026-11-20
+- **Module**: Products (`ProductStandardsEditor.jsx`, `ProductFormPage.jsx`, `ProductViewPage.jsx`, `ProductVariantsTab.jsx`, `StandardsContext.jsx`)
+- **Task**: Task 58 — Product Master Changes (Standard to Grade Mapping)
+- **Summary of Implemented Changes**:
+  1. **StandardsContext Route Expansion (`StandardsContext.jsx`)**:
+     - Included `/products` within `isRelevantRoute` to guarantee `standardsList` and global `gradeMapping` are fetched and cached in memory across all product routes.
+  2. **ProductStandardsEditor Redesign (`ProductStandardsEditor.jsx`)**:
+     - **Standard → Grade Mapping Integration**: Consumes `gradeMapping` from `StandardsContext`. Dynamically resolves all precision grades mapped to each standard (e.g. `Gr-00`, `Gr-0`, `Gr-1`, `Gr-2`, `Gr-3`).
+     - **Product-Level Grade Applicability**:
+       - By default, products inherit all mapped precision grades from the standard (`Inherit All`).
+       - In Edit Mode, engineers can interactively click individual grade pills to restrict applicable grades for specific products (`Custom Scope`), or click "Reset to All".
+       - In Read-Only Mode, renders clean font-mono grade badges with scope indicators (`Inherit All (N)` vs `Custom (M of N)`).
+       - Shows guidance banner if a standard has no precision grades mapped in master.
+     - **Duplicate Standard Prevention**: Filters the available standards dropdown in each row to exclude standards already selected in other rows.
+     - **Primary Standard Management**: Single primary standard enforced with radio button in edit mode, auto-selection on first standard, and auto-promotion to the first remaining standard upon removal.
+     - **Metrology Engineering Policy Banner**: Clean card communicating that tolerance calculations and variants are strictly derived from linked standards.
+  3. **Product Detail View Enhancements (`ProductViewPage.jsx`)**:
+     - **Overview Card**: Enhanced the "Primary Standard" metric to render the primary standard code alongside its mapped precision grade badges (`[Gr-00] [Gr-0] [Gr-1] ...`).
+     - **Standards Tab Summary Cards**: Added 3 high-density metric cards at the top of the Standards tab:
+       1. *Linked Standards* count.
+       2. *Primary Standard* code with metrology icon.
+       3. *Applicable Precision Grades* count with visual grade badge pills.
+     - **Quick Edit & Persistence**: Enabled quick edit of standards & grades in Standards tab, preserving custom product grade scopes via localStorage cache.
+  4. **Product Form & Variant Downstream Wiring (`ProductFormPage.jsx` & `ProductVariantsTab.jsx`)**:
+     - `ProductFormPage.jsx`: Hydrates and persists product standard grade configurations on create and edit.
+     - `ProductVariantsTab.jsx`: Updated `availableGradesForStandard` and `gradeOptions` to strictly respect product-level grade applicability when creating variants and configuring accuracy specifications.
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
+
+---
+
+### Work Log Entry: WL-018
+- **Date**: 2026-11-20
+- **Module**: Products (`ProductFormPage.jsx`)
+- **Task**: Align Product Edit Specs Modal with Product View Specs Modal (Task 53 Alignment)
+- **Summary of Implemented Changes**:
+  1. **Modal Sizing & Layout (`ProductFormPage.jsx`)**:
+     - Upgraded the accuracy specifications modal size to `size="2xl"` (1024px) for full horizontal width with zero cramped horizontal scrolling.
+     - Widened the Parameter column (`w-64 min-w-56`), Decimal Value column (`w-56 min-w-48`), tolerances (`w-24`), and Text Value (`w-44`).
+  2. **Specification Scope Selector**:
+     - Implemented the pill selector toggle between **Standard + Grade** figures and **Common Figures**.
+     - In **Standard + Grade** mode, provided Manufacturing Standard and Allowed Precision Grade dropdowns.
+     - Wired `gradeMapping` from `useStandardsContext()` and linked product standards to dynamically filter grades based on standard selection and product-specific applicable grade scopes.
+  3. **Flatness Formula Auto-Calculation & Input Locking**:
+     - Integrated `calculateFlatnessTolerance` from `src/utils/flatnessFormula.js`.
+     - When `Flatness (µm)` is selected under Standard + Grade mode:
+       - Automatically computes the exact tolerance from the variant's dimensions ($L \times W$) and selected standard & grade.
+       - Locks the decimal value input (`disabled` and `readOnly`) with a `[Locked]` badge with `<IconLock />`.
+       - Dynamically recalculates the value if standard or grade selection changes.
+       - Renders a clean formula derivation breakdown banner below the table (e.g. `FORMULA IS 7327 Gr 0: 0.003 × 700 + 2.5 = 4.6 µm`).
+  4. **Single Total Allowable Limit for Flatness**:
+     - For `Flatness (µm)`, displays non-editable `—` dashes for `+ Tol`, `- Tol`, and `Or Text Value`, adhering to metrology principles that flatness is a single total allowable indicator limit.
+  5. **Parameter Uniqueness Enforcement**:
+     - Enforces backend rule: *"Each spec parameter can be listed only once"*.
+     - Filters out already-selected parameters from dropdown options for subsequent rows so users cannot select duplicates.
+     - Disables `+ Add Spec` button when all available parameters have been added.
+  6. **Persistence & Deferred Staging**:
+     - Directly saves via `productService.setVariantSpecs(v.id, variantSpecs, options)` for existing variants, refreshing detail cache and local variant state.
+     - Preserves `specsOptions` for draft variants created on the fly so query parameters (`StandardId`, `GradeId`) are properly dispatched upon form submission.
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
+
+---
+
+### Work Log Entry: WL-019
+- **Date**: 2026-11-20
+- **Module**: Products (`ProductFormPage.jsx`)
+- **Task**: Reorganize Product Form Sections Layout (Full-Width Standards & Variants, Paired Options & Docs Grid)
+- **Summary of Implemented Changes**:
+  1. **Manufacturing & Calibration Standards**:
+     - Converted into a full-width section across the desktop view to give ample room for standard dropdowns, radio primary standard selection, grade applicability chips, and metrology guidance banners.
+  2. **Product Variants & Dimensions**:
+     - Converted into a full-width section across the desktop view, eliminating cramped table layout and horizontal scrollbars so all dimensional columns ($L \times W \times H \times \varnothing$), active statuses, and Accuracy Specs buttons fit comfortably.
+  3. **Product Options & Technical Documents**:
+     - Grouped **Product Options & Accessories** and **Technical Documents & Attachments** side-by-side into a balanced 2-column grid (`grid-cols-1 lg:grid-cols-2`), creating an aesthetically clean, well-proportioned lower section for supporting entity queues.
 - **Verification**: `npm run build` passed cleanly with **0 errors**.
 
 ---

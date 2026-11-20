@@ -50,6 +50,7 @@ import {
   IconDelete,
   IconEdit,
   IconFileText,
+  IconInfo,
   IconInquiry,
   IconLocation,
   IconMail,
@@ -81,6 +82,7 @@ import {
   StatusSwitch,
   PaymentTermsSelect,
   DeliveryTermsSelect,
+  FormattedHtmlBlock,
 } from '../../components/ui';
 import RichTextEditor from '../../components/ui/RichTextEditor';
 import AddressesEditor from './components/AddressesEditor';
@@ -101,76 +103,43 @@ import {
   getTodayIsoDate,
   getEffectiveDateStatus,
 } from '../../utils/effectiveDateUtils';
+import { decodeHtmlString, isHtmlMarkup } from '../../utils/htmlUtils';
 
 const columnHelper = createColumnHelper();
 
 /**
- * Safely decodes HTML entities (e.g. &lt;p&gt; -> <p>, &amp; -> &, &quot; -> ")
- * and cleans up pre-encoded or double-encoded HTML strings from the API.
+ * Normalizes deliveryTerms from API/version state for the DeliveryTermsSelect input.
+ * Strips legacy HTML tags so rich-text content from older releases isn't rendered as chips.
  */
-function decodeHtmlString(str) {
-  if (!str || typeof str !== 'string') return '';
-  let res = str.trim();
-
-  // If the string starts and ends with JSON quotes
-  if (res.startsWith('"') && res.endsWith('"') && res.length >= 2) {
-    try {
-      res = JSON.parse(res);
-    } catch {
-      // ignore
-    }
+function normalizeDeliveryTermsForInput(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => (typeof item === 'object' && item !== null ? (item.termCode || item.code || item.name || item.id) : item))
+      .filter((item) => (typeof item === 'string' ? !isHtmlMarkup(item) : Boolean(item)));
   }
-
-  // If the string contains HTML entities (like &lt;, &gt;, &amp;, &quot;, &#39;, &nbsp;)
-  if (/&(?:lt|gt|amp|quot|#39|#x27|nbsp);/i.test(res)) {
-    try {
-      const txt = document.createElement('textarea');
-      txt.innerHTML = res;
-      res = txt.value;
-      // Handle potential double-encoding (e.g. &amp;lt;p&amp;gt;)
-      if (/&lt;[a-z/!]/i.test(res)) {
-        txt.innerHTML = res;
-        res = txt.value;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    if (isHtmlMarkup(trimmed)) {
+      return [];
+    }
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item) => typeof item !== 'string' || !isHtmlMarkup(item));
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      res = res
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&');
     }
+    if (trimmed.includes(',')) {
+      return trimmed.split(',').map((s) => s.trim()).filter((s) => s && !isHtmlMarkup(s));
+    }
+    return [trimmed];
   }
-
-  return res;
-}
-
-/**
- * Renders formatted HTML or fallback plain text cleanly with typography styling.
- */
-function FormattedHtmlBlock({ content, emptyText = 'None specified.', className = '' }) {
-  const decoded = useMemo(() => decodeHtmlString(content), [content]);
-
-  if (!decoded) {
-    return <span className="text-text-muted italic">{emptyText}</span>;
-  }
-
-  const hasHtmlTags = /<[a-z][\s\S]*>/i.test(decoded);
-
-  if (hasHtmlTags) {
-    return (
-      <div
-        className={`text-xs text-text leading-relaxed max-w-none prose prose-xs [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:my-1.5 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:my-1.5 [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-heading [&_em]:italic [&_a]:text-primary [&_a]:underline ${className}`}
-        dangerouslySetInnerHTML={{ __html: decoded }}
-      />
-    );
-  }
-
-  return (
-    <p className={`text-xs text-text whitespace-pre-line leading-relaxed ${className}`}>
-      {decoded}
-    </p>
-  );
+  return [];
 }
 
 export default function ClientEffectiveDatesPage() {
@@ -279,6 +248,7 @@ export default function ClientEffectiveDatesPage() {
   const [formErrors, setFormErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [sameAsCompany, setSameAsCompany] = useState(false);
+  const [legacyDeliveryTermsNotice, setLegacyDeliveryTermsNotice] = useState(null);
 
   // Default selection on mount: select active version or first version
   useEffect(() => {
@@ -339,20 +309,39 @@ export default function ClientEffectiveDatesPage() {
   const selectedPaymentTermsList = useMemo(() => {
     if (!selectedVersion?.paymentTerms) return [];
     const raw = selectedVersion.paymentTerms;
+
+    // If raw contains HTML markup, do NOT treat it as term badges
+    if (isHtmlMarkup(raw)) {
+      return [];
+    }
+
     const items = Array.isArray(raw)
       ? raw
       : typeof raw === 'string' && raw.trim()
-        ? raw.split(',').map((s) => s.trim()).filter(Boolean)
+        ? raw.split(',').map((s) => s.trim()).filter((s) => s && !isHtmlMarkup(s))
         : [];
 
     const source = (lookups?.paymentTerms && lookups.paymentTerms.length > 0)
       ? lookups.paymentTerms
       : paymentTerms;
 
-    return items.map((val) => {
+    const resolved = [];
+    for (const val of items) {
+      if (!val || isHtmlMarkup(val)) continue;
+
       const termIdOrCode = typeof val === 'object' && val !== null
         ? (val.paymentTermId ?? val.id ?? val.termCode)
         : val;
+
+      if (isHtmlMarkup(termIdOrCode)) continue;
+
+      let codePrefix = null;
+      let nameSuffix = null;
+      if (typeof termIdOrCode === 'string' && termIdOrCode.includes(' — ')) {
+        const parts = termIdOrCode.split(' — ');
+        codePrefix = parts[0].trim();
+        nameSuffix = parts.slice(1).join(' — ').trim();
+      }
 
       const match = source.find(
         (pt) =>
@@ -360,50 +349,98 @@ export default function ClientEffectiveDatesPage() {
           pt.paymentTermId === termIdOrCode ||
           String(pt.id) === String(termIdOrCode) ||
           String(pt.paymentTermId) === String(termIdOrCode) ||
-          pt.termCode?.toUpperCase() === String(termIdOrCode).toUpperCase()
+          pt.termCode?.toUpperCase() === String(termIdOrCode).toUpperCase() ||
+          (codePrefix && (
+            pt.termCode?.toUpperCase() === codePrefix.toUpperCase() ||
+            String(pt.id) === codePrefix
+          )) ||
+          (nameSuffix && (
+            pt.termName?.toLowerCase() === nameSuffix.toLowerCase() ||
+            pt.name?.toLowerCase() === nameSuffix.toLowerCase()
+          ))
       );
 
       if (typeof val === 'object' && val !== null) {
-        return {
+        resolved.push({
           ...val,
           termCode: val.termCode || match?.termCode || String(termIdOrCode),
           termName: val.termName || match?.termName || match?.name || match?.description || '',
           description: val.description || match?.description || '',
-        };
-      }
-
-      if (match) {
-        return {
+        });
+      } else if (match) {
+        resolved.push({
           ...match,
           termCode: match.termCode || match.code || String(termIdOrCode),
           termName: match.termName || match.name || match.description || String(termIdOrCode),
           description: match.description || '',
-        };
+        });
+      } else {
+        const strVal = String(termIdOrCode).trim();
+        if (strVal && !isHtmlMarkup(strVal) && strVal.length < 50) {
+          resolved.push({
+            paymentTermId: val,
+            termCode: codePrefix || strVal,
+            termName: nameSuffix || (codePrefix ? '' : strVal),
+            description: '',
+          });
+        }
       }
+    }
 
-      return {
-        paymentTermId: val,
-        termCode: String(val),
-        termName: String(val),
-        description: '',
-      };
-    });
+    return resolved;
   }, [selectedVersion?.paymentTerms, paymentTerms, lookups?.paymentTerms]);
 
   // Resolve delivery terms for selected version (VIEW mode)
   const selectedDeliveryTermsList = useMemo(() => {
     if (!selectedVersion?.deliveryTerms) return [];
     const raw = selectedVersion.deliveryTerms;
-    const items = Array.isArray(raw)
-      ? raw
-      : typeof raw === 'string' && raw.trim()
-        ? (raw.startsWith('[') ? (() => { try { return JSON.parse(raw); } catch { return [raw]; } })() : [raw])
-        : [];
 
-    return items.map((val) => {
+    // If raw is legacy rich text (contains HTML tags), do NOT treat it as term badges
+    if (isHtmlMarkup(raw)) {
+      return [];
+    }
+
+    let items = [];
+    if (Array.isArray(raw)) {
+      items = raw;
+    } else if (typeof raw === 'string' && raw.trim()) {
+      const trimmed = raw.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) items = parsed;
+        } catch {
+          // not json array
+        }
+      }
+      if (items.length === 0) {
+        if (trimmed.includes(',')) {
+          items = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+        } else {
+          items = [trimmed];
+        }
+      }
+    }
+
+    if (items.length === 0) return [];
+
+    const resolved = [];
+    for (const val of items) {
+      if (!val || isHtmlMarkup(val)) continue;
+
       const termIdOrCode = typeof val === 'object' && val !== null
         ? (val.deliveryTermId ?? val.id ?? val.termCode ?? val.code)
         : val;
+
+      if (isHtmlMarkup(termIdOrCode)) continue;
+
+      let codePrefix = null;
+      let nameSuffix = null;
+      if (typeof termIdOrCode === 'string' && termIdOrCode.includes(' — ')) {
+        const parts = termIdOrCode.split(' — ');
+        codePrefix = parts[0].trim();
+        nameSuffix = parts.slice(1).join(' — ').trim();
+      }
 
       const match = deliveryTerms.find(
         (dt) =>
@@ -412,34 +449,47 @@ export default function ClientEffectiveDatesPage() {
           String(dt.id) === String(termIdOrCode) ||
           String(dt.deliveryTermId) === String(termIdOrCode) ||
           dt.termCode?.toUpperCase() === String(termIdOrCode).toUpperCase() ||
-          dt.code?.toUpperCase() === String(termIdOrCode).toUpperCase()
+          dt.code?.toUpperCase() === String(termIdOrCode).toUpperCase() ||
+          (codePrefix && (
+            dt.termCode?.toUpperCase() === codePrefix.toUpperCase() ||
+            dt.code?.toUpperCase() === codePrefix.toUpperCase() ||
+            String(dt.id) === codePrefix
+          )) ||
+          (nameSuffix && (
+            dt.termName?.toLowerCase() === nameSuffix.toLowerCase() ||
+            dt.name?.toLowerCase() === nameSuffix.toLowerCase()
+          ))
       );
 
       if (typeof val === 'object' && val !== null) {
-        return {
+        resolved.push({
           ...val,
           termCode: val.termCode || val.code || match?.termCode || match?.code || String(termIdOrCode),
           termName: val.termName || val.name || match?.termName || match?.name || match?.description || '',
           description: val.description || match?.description || '',
-        };
-      }
-
-      if (match) {
-        return {
+        });
+      } else if (match) {
+        resolved.push({
           deliveryTermId: match.id || match.deliveryTermId,
           termCode: match.termCode || match.code,
           termName: match.termName || match.name || '',
           description: match.description || '',
-        };
+        });
+      } else {
+        const strVal = String(termIdOrCode).trim();
+        // Only return as fallback badge if it's a short valid identifier (not HTML or long notes)
+        if (strVal && !isHtmlMarkup(strVal) && strVal.length < 50) {
+          resolved.push({
+            deliveryTermId: strVal,
+            termCode: codePrefix || strVal,
+            termName: nameSuffix || (codePrefix ? '' : strVal),
+            description: '',
+          });
+        }
       }
+    }
 
-      return {
-        deliveryTermId: val,
-        termCode: String(val),
-        termName: String(val),
-        description: '',
-      };
-    });
+    return resolved;
   }, [selectedVersion?.deliveryTerms, deliveryTerms]);
 
   // Payment Terms options from Configuration or lookups
@@ -559,6 +609,13 @@ export default function ClientEffectiveDatesPage() {
       typeof pt === 'object' && pt !== null ? (pt.paymentTermId ?? pt.id ?? pt.termCode) : pt
     );
 
+    const rawDeliveryTerms = decodeHtmlString(detailSource.deliveryTerms || client?.deliveryTerms || '');
+    const isLegacyHtmlDt = isHtmlMarkup(rawDeliveryTerms);
+    const legacyNoticeText = isLegacyHtmlDt
+      ? rawDeliveryTerms.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      : null;
+    setLegacyDeliveryTermsNotice(legacyNoticeText);
+
     setFormData({
       clientDetailId: detailSource.clientDetailId || detailSource.id || numId,
       effectiveDate: detailSource.effectiveDate ? String(detailSource.effectiveDate).slice(0, 10) : '',
@@ -570,7 +627,7 @@ export default function ClientEffectiveDatesPage() {
       gstNo: detailSource.gstNo || client?.gstNo || '',
       isActive: detailSource.isActive !== false,
       paymentTerms: normalizedPaymentTerms,
-      deliveryTerms: decodeHtmlString(detailSource.deliveryTerms || client?.deliveryTerms || ''),
+      deliveryTerms: normalizeDeliveryTermsForInput(rawDeliveryTerms),
       comments: decodeHtmlString(detailSource.internalComments || detailSource.comments || client?.comments || ''),
       addresses: sourceAddresses.map((a) => ({ ...a })),
       contacts: sourceContacts.map((c) => ({ ...c })),
@@ -597,6 +654,13 @@ export default function ClientEffectiveDatesPage() {
       typeof pt === 'object' && pt !== null ? (pt.paymentTermId ?? pt.id ?? pt.termCode) : pt
     );
 
+    const rawDeliveryTerms = decodeHtmlString(base.deliveryTerms || client?.deliveryTerms || '');
+    const isLegacyHtmlDt = isHtmlMarkup(rawDeliveryTerms);
+    const legacyNoticeText = isLegacyHtmlDt
+      ? rawDeliveryTerms.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      : null;
+    setLegacyDeliveryTermsNotice(legacyNoticeText);
+
     setFormData({
       effectiveDate: today,
       companyName: cName,
@@ -607,7 +671,7 @@ export default function ClientEffectiveDatesPage() {
       gstNo: base.gstNo || client?.gstNo || '',
       isActive: base.isActive !== false,
       paymentTerms: normalizedPaymentTerms,
-      deliveryTerms: decodeHtmlString(base.deliveryTerms || client?.deliveryTerms || ''),
+      deliveryTerms: normalizeDeliveryTermsForInput(rawDeliveryTerms),
       comments: decodeHtmlString(base.internalComments || base.comments || client?.comments || ''),
       addresses: sourceAddresses.map((a) => ({
         ...a,
@@ -628,6 +692,7 @@ export default function ClientEffectiveDatesPage() {
 
   function handleCancel() {
     setMode('VIEW');
+    setLegacyDeliveryTermsNotice(null);
     setFormErrors({});
   }
 
@@ -714,6 +779,7 @@ export default function ClientEffectiveDatesPage() {
         if (freshVer) {
           setDetailedVersion(freshVer);
         }
+        setLegacyDeliveryTermsNotice(null);
         setMode('VIEW');
       } else if (mode === 'ADD') {
         const newVer = await addClientVersion(id, formData);
@@ -729,6 +795,7 @@ export default function ClientEffectiveDatesPage() {
             setDetailedVersion(freshVer);
           }
         }
+        setLegacyDeliveryTermsNotice(null);
         setMode('VIEW');
       }
     } catch (err) {
@@ -1392,11 +1459,7 @@ export default function ClientEffectiveDatesPage() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-1">
                 <div className="space-y-1.5">
                   <span className="view-field-label mf-detail-label">Payment Terms</span>
-                  {selectedPaymentTermsList.length === 0 ? (
-                    <div className="p-3 rounded-lg bg-surface/50 border border-border/60 text-xs text-text-muted italic">
-                      No payment terms recorded for this revision.
-                    </div>
-                  ) : (
+                  {selectedPaymentTermsList.length > 0 ? (
                     <div className="space-y-2">
                       {selectedPaymentTermsList.map((term, idx) => {
                         const code = term.termCode || term.code || 'TERM';
@@ -1410,13 +1473,13 @@ export default function ClientEffectiveDatesPage() {
                               <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5 font-bold">
                                 {code}
                               </Badge>
-                              {name && (
+                              {name && name !== code && (
                                 <span className="font-medium text-heading text-xs">
                                   {name}
                                 </span>
                               )}
                             </div>
-                            {term.description && term.description !== name && (
+                            {term.description && term.description !== name && term.description !== code && (
                               <FormattedHtmlBlock
                                 content={term.description}
                                 className="text-2xs text-text-muted mt-0.5"
@@ -1425,6 +1488,13 @@ export default function ClientEffectiveDatesPage() {
                           </div>
                         );
                       })}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-surface/50 border border-border/60 min-h-[50px] text-xs">
+                      <FormattedHtmlBlock
+                        content={selectedVersion?.paymentTerms}
+                        emptyText="No payment terms recorded for this revision."
+                      />
                     </div>
                   )}
                 </div>
@@ -1445,13 +1515,13 @@ export default function ClientEffectiveDatesPage() {
                               <Badge variant="role" className="font-mono text-2xs px-1.5 py-0.5 font-bold">
                                 {code}
                               </Badge>
-                              {name && (
+                              {name && name !== code && (
                                 <span className="font-medium text-heading text-xs">
                                   {name}
                                 </span>
                               )}
                             </div>
-                            {term.description && term.description !== name && (
+                            {term.description && term.description !== name && term.description !== code && (
                               <FormattedHtmlBlock
                                 content={term.description}
                                 className="text-2xs text-text-muted mt-0.5"
@@ -1771,16 +1841,24 @@ export default function ClientEffectiveDatesPage() {
                       hint="Multiple terms can be selected from Configuration"
                     />
 
-                    <DeliveryTermsSelect
-                      id="deliveryTerms"
-                      name="deliveryTerms"
-                      value={Array.isArray(formData.deliveryTerms) ? formData.deliveryTerms : (formData.deliveryTerms ? [formData.deliveryTerms] : [])}
-                      onChange={(e) => {
-                        const val = Array.isArray(e) ? e : e?.target?.value || [];
-                        handleFieldChange('deliveryTerms', val);
-                      }}
-                      hint="Multiple terms can be selected from Configuration"
-                    />
+                    <div className="space-y-1">
+                      <DeliveryTermsSelect
+                        id="deliveryTerms"
+                        name="deliveryTerms"
+                        value={Array.isArray(formData.deliveryTerms) ? formData.deliveryTerms : (formData.deliveryTerms ? [formData.deliveryTerms] : [])}
+                        onChange={(e) => {
+                          const val = Array.isArray(e) ? e : e?.target?.value || [];
+                          handleFieldChange('deliveryTerms', val);
+                        }}
+                        hint="Multiple terms can be selected from Configuration"
+                      />
+                      {legacyDeliveryTermsNotice && (
+                        <p className="text-2xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                          <IconInfo size={12} className="shrink-0" />
+                          <span>Previous revision note: &ldquo;{legacyDeliveryTermsNotice}&rdquo;. Select standard delivery terms above to update.</span>
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <RichTextEditor

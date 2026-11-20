@@ -23,7 +23,7 @@ function cleanId(id) {
 /**
  * 1. Paged list of order confirmations.
  * GET /api/order-confirmations
- * @param {{ search?: string, status?: string, quotationId?: number, inquiryId?: number, clientId?: number, fromDate?: string, toDate?: string, pageNumber?: number, pageSize?: number }} [params]
+ * @param {{ search?: string, status?: string, orderSource?: boolean|string, quotationId?: number, inquiryId?: number, clientId?: number, fromDate?: string, toDate?: string, pageNumber?: number, pageSize?: number }} [params]
  */
 export async function listOrderConfirmations(params = {}) {
   try {
@@ -35,6 +35,9 @@ export async function listOrderConfirmations(params = {}) {
     if (params.clientId) query.ClientId = cleanId(params.clientId);
     if (params.fromDate) query.FromDate = params.fromDate;
     if (params.toDate) query.ToDate = params.toDate;
+    if (params.orderSource !== undefined && params.orderSource !== null && params.orderSource !== '' && params.orderSource !== 'ALL') {
+      query.orderSource = params.orderSource;
+    }
     if (params.pageNumber) query.PageNumber = Number(params.pageNumber);
     if (params.pageSize) query.PageSize = Number(params.pageSize);
 

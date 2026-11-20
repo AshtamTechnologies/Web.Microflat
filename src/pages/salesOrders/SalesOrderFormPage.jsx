@@ -49,6 +49,7 @@ import {
 import { useSalesOrdersContext } from '../../context/SalesOrdersContext';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useClientsContext } from '../../context/ClientsContext';
+import { clientService, productService } from '../../services';
 import {
   calculateSalesOrderTotals,
   formatCurrency,
@@ -59,6 +60,7 @@ import {
 import { formatDate } from '../../utils/dateUtils';
 import { triggerPdfDownload } from '../../utils/fileHelpers';
 import useColumnResize from '../../hooks/useColumnResize';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 
 function formatReadableFileSize(bytes = 0) {
   if (!bytes || bytes <= 0) return '—';
@@ -69,9 +71,12 @@ function formatReadableFileSize(bytes = 0) {
 }
 
 function toTermsArray(val, fallback = []) {
-  if (Array.isArray(val)) return val;
+  if (Array.isArray(val)) {
+    return val.filter((item) => typeof item !== 'string' || !isHtmlMarkup(item));
+  }
   if (typeof val === 'string' && val.trim()) {
-    return val.split(',').map((s) => s.trim()).filter(Boolean);
+    if (isHtmlMarkup(val)) return fallback;
+    return val.split(',').map((s) => s.trim()).filter((s) => s && !isHtmlMarkup(s));
   }
   return fallback;
 }
@@ -141,6 +146,7 @@ export default function SalesOrderFormPage() {
 
   const isEditMode = Boolean(id);
   const {
+    lookups,
     getSalesOrderById,
     getNextOrderConfirmationNo,
     fetchNextOrderConfirmationNo,
@@ -150,9 +156,60 @@ export default function SalesOrderFormPage() {
   const { quotations = [] } = useQuotationsContext();
   const { clients = [], ensureLoaded: ensureClientsLoaded } = useClientsContext();
 
+  const [activeClients, setActiveClients] = useState([]);
+  const [clientDetailData, setClientDetailData] = useState(null);
+  const [productsList, setProductsList] = useState([]);
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+
   useEffect(() => {
     ensureClientsLoaded?.();
   }, [ensureClientsLoaded]);
+
+  // Load active clients from backend API for direct orders
+  useEffect(() => {
+    let isMounted = true;
+    async function loadActiveClients() {
+      try {
+        setIsLoadingClients(true);
+        const data = await clientService.getActiveClients();
+        if (isMounted && Array.isArray(data)) {
+          setActiveClients(data);
+        }
+      } catch (err) {
+        console.warn('Failed to load active clients:', err);
+      } finally {
+        if (isMounted) setIsLoadingClients(false);
+      }
+    }
+    loadActiveClients();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Load products list from backend API for line items picker
+  useEffect(() => {
+    let isMounted = true;
+    async function loadProducts() {
+      try {
+        setIsLoadingProducts(true);
+        const res = await productService.listProducts({ IsActive: true, PageSize: 100 });
+        const items = Array.isArray(res?.items) ? res.items : [];
+        if (isMounted) {
+          setProductsList(items);
+        }
+      } catch (err) {
+        console.warn('Failed to load products list:', err);
+      } finally {
+        if (isMounted) setIsLoadingProducts(false);
+      }
+    }
+    loadProducts();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const existingOrder = useMemo(
     () => (isEditMode ? getSalesOrderById(id) : null),
@@ -177,8 +234,10 @@ export default function SalesOrderFormPage() {
   );
 
   const [orderMode, setOrderMode] = useState(() => {
-    if (isEditMode) {
-      return existingOrder?.quotationId ? 'QUOTATION' : 'DIRECT';
+    if (isEditMode && existingOrder) {
+      return existingOrder.orderSource === true || existingOrder.isDirectOrder || !existingOrder.quotationId
+        ? 'DIRECT'
+        : 'QUOTATION';
     }
     return initialQuotationId ? 'QUOTATION' : 'QUOTATION';
   });
@@ -196,7 +255,9 @@ export default function SalesOrderFormPage() {
         inquiryNo: existingOrder.inquiryNo || '',
         clientId: existingOrder.clientId || '',
         clientName: existingOrder.clientName || '',
+        clientAddressId: existingOrder.clientAddressId || null,
         clientAddress: existingOrder.clientAddress || '',
+        clientContactId: existingOrder.clientContactId || null,
         contactPerson: existingOrder.contactPerson || '',
         contactEmail: existingOrder.contactEmail || '',
         contactPhone: existingOrder.contactPhone || '',
@@ -205,7 +266,8 @@ export default function SalesOrderFormPage() {
         expectedDeliveryDate: existingOrder.expectedDeliveryDate || '',
         paymentTerms: toTermsArray(existingOrder.paymentTerms, []),
         deliveryTerms: toTermsArray(existingOrder.deliveryTerms, []),
-        currency: existingOrder.currency || 'INR',
+        currencyId: existingOrder.currencyId || null,
+        currency: existingOrder.currencyCode || existingOrder.currency || 'INR',
         taxTreatment: existingOrder.taxTreatment || 'INTRA_STATE',
         otherCharges: existingOrder.otherCharges || 0,
         otherChargesDescription: existingOrder.otherChargesDescription || '',
@@ -237,7 +299,9 @@ export default function SalesOrderFormPage() {
       inquiryNo: prefill?.inquiryNo || '',
       clientId: prefill?.clientId || '',
       clientName: prefill?.clientName || '',
+      clientAddressId: null,
       clientAddress: prefill?.clientAddress || '',
+      clientContactId: null,
       contactPerson: prefill?.contactPerson || '',
       contactEmail: prefill?.contactEmail || '',
       contactPhone: prefill?.contactPhone || '',
@@ -246,6 +310,7 @@ export default function SalesOrderFormPage() {
       expectedDeliveryDate: prefill?.expectedDeliveryDate || '',
       paymentTerms: prefill?.paymentTerms ? toTermsArray(prefill.paymentTerms) : [],
       deliveryTerms: prefill?.deliveryTerms ? toTermsArray(prefill.deliveryTerms) : [],
+      currencyId: lookups?.defaultCurrencyId || 1,
       currency: prefill?.currency || 'INR',
       taxTreatment: prefill?.taxTreatment || 'INTRA_STATE',
       otherCharges: 0,
@@ -256,6 +321,41 @@ export default function SalesOrderFormPage() {
       documents: prefill?.documents || [],
     };
   });
+
+  // Preselect default currency from lookups if creating a direct order
+  useEffect(() => {
+    if (orderMode === 'DIRECT' && !formData.currencyId && lookups?.defaultCurrencyId) {
+      const defaultCur = lookups.currencies?.find((c) => c.currencyId === lookups.defaultCurrencyId);
+      setFormData((prev) => ({
+        ...prev,
+        currencyId: lookups.defaultCurrencyId,
+        currency: defaultCur?.currencyCode || prev.currency,
+      }));
+    }
+  }, [orderMode, formData.currencyId, lookups]);
+
+  // Load client detail (addresses/contacts) whenever clientId is set
+  useEffect(() => {
+    if (!formData.clientId) {
+      setClientDetailData(null);
+      return;
+    }
+    let isMounted = true;
+    async function loadClientDetail() {
+      try {
+        const detail = await clientService.getClientById(formData.clientId);
+        if (isMounted && detail) {
+          setClientDetailData(detail);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch client detail for clientId:', formData.clientId, err);
+      }
+    }
+    loadClientDetail();
+    return () => {
+      isMounted = false;
+    };
+  }, [formData.clientId]);
 
   // Sync prefill if confirmedQuotations loaded after initial render
   useEffect(() => {
@@ -292,18 +392,18 @@ export default function SalesOrderFormPage() {
   const [errors, setErrors] = useState({});
   const [docRemarks, setDocRemarks] = useState('');
 
-  const clientOptions = useMemo(
-    () =>
-      clients.map((c) => {
-        const id = c.id || c.clientId;
-        const name = c.companyName || c.name || c.clientName || 'Unknown Client';
-        return {
-          value: String(id),
-          label: `${name}${c.clientCode ? ` (${c.clientCode})` : ''}`,
-        };
-      }),
-    [clients]
-  );
+  const clientOptions = useMemo(() => {
+    const sourceList = activeClients.length > 0 ? activeClients : clients;
+    return sourceList.map((c) => {
+      const cid = c.id || c.clientId;
+      const name = c.companyName || c.clientName || c.name || 'Unknown Client';
+      const code = c.clientCode || '';
+      return {
+        value: String(cid),
+        label: `${name}${code ? ` (${code})` : ''}`,
+      };
+    });
+  }, [activeClients, clients]);
 
   const selectedClient = useMemo(
     () =>
@@ -315,59 +415,167 @@ export default function SalesOrderFormPage() {
     [clients, formData.clientId, formData.clientName]
   );
 
-  function handleSelectClient(selectedId) {
-    const c = clients.find(
-      (client) => String(client.id || client.clientId) === String(selectedId)
-    );
-    if (!c) return;
-    const name = c.companyName || c.name || c.clientName || '';
-    const firstAddr = c.addresses?.[0];
-    const defaultAddress = firstAddr
-      ? [firstAddr.label, firstAddr.line1, firstAddr.city, firstAddr.state].filter(Boolean).join(' · ')
-      : '';
-    const firstContact = c.contacts?.[0];
+  async function handleSelectClient(selectedId) {
+    if (!selectedId) return;
+    const pickedClient =
+      activeClients.find((c) => String(c.id || c.clientId) === String(selectedId)) ||
+      clients.find((c) => String(c.id || c.clientId) === String(selectedId));
+    const clientName = pickedClient?.companyName || pickedClient?.clientName || pickedClient?.name || '';
 
     setFormData((prev) => ({
       ...prev,
       clientId: String(selectedId),
-      clientName: name,
-      clientAddress: defaultAddress,
-      contactPerson: firstContact?.name || '',
-      contactEmail: firstContact?.email || '',
-      contactPhone: firstContact?.phone || '',
+      clientName,
+      clientAddressId: null,
+      clientAddress: '',
+      clientContactId: null,
+      contactPerson: '',
+      contactEmail: '',
+      contactPhone: '',
     }));
-    setErrors((prev) => ({ ...prev, clientId: undefined }));
-    toast.success(`Selected client "${name}"`);
+    setErrors((prev) => ({ ...prev, clientId: undefined, clientAddressId: undefined }));
+
+    try {
+      const fullClient = await clientService.getClientById(selectedId);
+      if (fullClient) {
+        setClientDetailData(fullClient);
+        const addrs = (fullClient.currentDetail?.addresses || []).filter((a) => a.isActive !== false);
+        const contacts = (fullClient.currentDetail?.contacts || []).filter((c) => c.isActive !== false);
+        const firstAddr = addrs[0];
+        const primaryContact = contacts.find((c) => c.isPrimary) || contacts[0];
+
+        const defaultAddressStr = firstAddr
+          ? [firstAddr.addressLabel, firstAddr.address1, firstAddr.address2, firstAddr.city, firstAddr.stateName, firstAddr.zipCode]
+              .filter(Boolean)
+              .join(', ')
+          : '';
+
+        setFormData((prev) => ({
+          ...prev,
+          clientAddressId: firstAddr?.clientAddressId || firstAddr?.id || null,
+          clientAddress: defaultAddressStr,
+          clientContactId: primaryContact?.clientContactId || primaryContact?.id || null,
+          contactPerson: primaryContact?.fullName || `${primaryContact?.firstName || ''} ${primaryContact?.lastName || ''}`.trim() || '',
+          contactEmail: primaryContact?.email || '',
+          contactPhone: primaryContact?.phoneNo || '',
+        }));
+      }
+    } catch (err) {
+      console.warn('Could not fetch client addresses/contacts:', err);
+    }
+
+    toast.success(`Selected client "${clientName}"`);
   }
 
   const clientAddressOptions = useMemo(() => {
-    const opts = (selectedClient?.addresses || []).map((a) => {
-      const label = [a.label, a.line1, a.city, a.state].filter(Boolean).join(' · ');
-      return { value: label, label };
+    const rawAddrs =
+      clientDetailData?.currentDetail?.addresses ||
+      selectedClient?.currentDetail?.addresses ||
+      selectedClient?.addresses ||
+      [];
+    const activeAddrs = rawAddrs.filter((a) => a.isActive !== false);
+    const opts = activeAddrs.map((a) => {
+      const aid = a.clientAddressId || a.id;
+      const labelParts = [a.addressLabel, a.address1, a.address2, a.city, a.stateName || a.state, a.zipCode].filter(Boolean);
+      const display = labelParts.join(', ') || `Address #${aid}`;
+      return {
+        value: String(aid),
+        label: display,
+        rawAddress: display,
+      };
     });
-    if (formData.clientAddress && !opts.some((o) => o.value === formData.clientAddress)) {
-      opts.unshift({ value: formData.clientAddress, label: formData.clientAddress });
+    if (formData.clientAddress && !opts.some((o) => o.rawAddress === formData.clientAddress || o.value === String(formData.clientAddressId))) {
+      opts.unshift({
+        value: formData.clientAddressId ? String(formData.clientAddressId) : 'current',
+        label: formData.clientAddress,
+        rawAddress: formData.clientAddress,
+      });
     }
     return opts;
-  }, [selectedClient, formData.clientAddress]);
+  }, [clientDetailData, selectedClient, formData.clientAddress, formData.clientAddressId]);
+
+  function handleSelectAddress(addrId) {
+    const found = clientAddressOptions.find((o) => String(o.value) === String(addrId));
+    setFormData((prev) => ({
+      ...prev,
+      clientAddressId: addrId && addrId !== 'current' ? Number(addrId) : prev.clientAddressId,
+      clientAddress: found?.rawAddress || prev.clientAddress,
+    }));
+    setErrors((prev) => ({ ...prev, clientAddressId: undefined }));
+  }
 
   const clientContactOptions = useMemo(() => {
-    const opts = (selectedClient?.contacts || []).map((c) => ({
-      value: c.name,
-      label: `${c.name}${c.designation ? ` (${c.designation})` : ''}`,
-      email: c.email,
-      phone: c.phone,
-    }));
-    if (formData.contactPerson && !opts.some((o) => o.value === formData.contactPerson)) {
+    const rawContacts =
+      clientDetailData?.currentDetail?.contacts ||
+      selectedClient?.currentDetail?.contacts ||
+      selectedClient?.contacts ||
+      [];
+    const activeContacts = rawContacts.filter((c) => c.isActive !== false);
+    const opts = activeContacts.map((c) => {
+      const cid = c.clientContactId || c.id;
+      const name = c.fullName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || `Contact #${cid}`;
+      return {
+        value: String(cid),
+        label: `${name}${c.phoneNo ? ` (${c.phoneNo})` : c.phone ? ` (${c.phone})` : ''}`,
+        name,
+        email: c.email || '',
+        phone: c.phoneNo || c.phone || '',
+      };
+    });
+    if (formData.contactPerson && !opts.some((o) => o.name === formData.contactPerson || o.value === String(formData.clientContactId))) {
       opts.unshift({
-        value: formData.contactPerson,
+        value: formData.clientContactId ? String(formData.clientContactId) : 'current',
         label: formData.contactPerson,
+        name: formData.contactPerson,
         email: formData.contactEmail,
         phone: formData.contactPhone,
       });
     }
     return opts;
-  }, [selectedClient, formData.contactPerson, formData.contactEmail, formData.contactPhone]);
+  }, [clientDetailData, selectedClient, formData.contactPerson, formData.contactEmail, formData.contactPhone, formData.clientContactId]);
+
+  function handleSelectContact(contactId) {
+    const found = clientContactOptions.find((o) => String(o.value) === String(contactId));
+    setFormData((prev) => ({
+      ...prev,
+      clientContactId: contactId && contactId !== 'current' ? Number(contactId) : prev.clientContactId,
+      contactPerson: found?.name || prev.contactPerson,
+      contactEmail: found?.email || prev.contactEmail,
+      contactPhone: found?.phone || prev.contactPhone,
+    }));
+  }
+
+  const currencyOptions = useMemo(() => {
+    if (Array.isArray(lookups?.currencies) && lookups.currencies.length > 0) {
+      return lookups.currencies.map((c) => ({
+        value: String(c.currencyId),
+        label: `${c.currencyCode || c.code}${c.currencyName ? ` — ${c.currencyName}` : ''}${c.symbol ? ` (${c.symbol})` : ''}`,
+        code: c.currencyCode || c.code,
+      }));
+    }
+    return [
+      { value: '1', label: 'INR (₹)', code: 'INR' },
+      { value: '2', label: 'USD ($)', code: 'USD' },
+      { value: '3', label: 'EUR (€)', code: 'EUR' },
+    ];
+  }, [lookups?.currencies]);
+
+  function handleCurrencyChange(currencyId) {
+    const opt = currencyOptions.find((c) => String(c.value) === String(currencyId));
+    setFormData((prev) => ({
+      ...prev,
+      currencyId: Number(currencyId),
+      currency: opt?.code || prev.currency,
+    }));
+  }
+
+  const productOptions = useMemo(() => {
+    return productsList.map((p) => ({
+      value: String(p.id),
+      label: `${p.productCode ? `[${p.productCode}] ` : ''}${p.productName}`,
+      product: p,
+    }));
+  }, [productsList]);
 
   const totals = useMemo(
     () =>
@@ -549,8 +757,13 @@ export default function SalesOrderFormPage() {
     if (orderMode === 'QUOTATION' && !formData.quotationId) {
       nextErrors.quotationId = 'Please select a Confirmed quotation.';
     }
-    if (orderMode === 'DIRECT' && !formData.clientId) {
-      nextErrors.clientId = 'Please select a Client for this direct sales order.';
+    if (orderMode === 'DIRECT') {
+      if (!formData.clientId) {
+        nextErrors.clientId = 'Please select a Client for this direct sales order.';
+      }
+      if (!formData.clientAddressId) {
+        nextErrors.clientAddressId = 'Client address is required for a direct order.';
+      }
     }
     if (!formData.orderConfirmationDate) {
       nextErrors.orderConfirmationDate = 'Order confirmation date is required.';
@@ -563,6 +776,9 @@ export default function SalesOrderFormPage() {
     }
     if (formData.lineItems.some((item) => Number(item.quantity) <= 0)) {
       nextErrors.lineItems = 'All line item quantities must be greater than 0.';
+    }
+    if (orderMode === 'DIRECT' && formData.lineItems.some((item) => !item.productId)) {
+      nextErrors.lineItems = 'Please select a product for all line items.';
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -584,24 +800,45 @@ export default function SalesOrderFormPage() {
       ? Number(rawQuoteId)
       : null;
 
+    const isDirect = orderMode === 'DIRECT' || !formData.quotationId;
+
     const payload = {
       ...formData,
+      orderSource: isDirect,
+      isDirectOrder: isDirect,
+      quotationId: isDirect ? null : finalQuotationId,
+      clientId: formData.clientId ? Number(formData.clientId) : null,
+      clientAddressId: formData.clientAddressId ? Number(formData.clientAddressId) : null,
+      clientContactId: formData.clientContactId ? Number(formData.clientContactId) : null,
+      currencyId: formData.currencyId ? Number(formData.currencyId) : null,
       paymentTerms: Array.isArray(formData.paymentTerms)
         ? formData.paymentTerms.join(', ')
         : (formData.paymentTerms || ''),
       deliveryTerms: Array.isArray(formData.deliveryTerms)
         ? formData.deliveryTerms.join(', ')
         : (formData.deliveryTerms || ''),
-      quotationId: finalQuotationId,
       status: targetStatus,
-      isDirectOrder: orderMode === 'DIRECT' || !formData.quotationId,
+      lineItems: isDirect
+        ? formData.lineItems.map((item) => ({
+            productId: Number(item.productId || 1),
+            productName: item.productName,
+            productCode: item.productCode || item.itemCode,
+            quantity: Number(item.quantity) || 1,
+            rate: Number(item.rate) || 0,
+            taxConfigDetailId: item.taxConfigDetailId ? Number(item.taxConfigDetailId) : null,
+            otherCharges: item.otherCharges !== undefined && item.otherCharges !== null ? Number(item.otherCharges) : null,
+            remarks: item.remarks || null,
+          }))
+        : formData.lineItems,
     };
 
     try {
       setIsSubmitting(true);
       if (isEditMode) {
         const updated = await updateSalesOrder(existingOrder.id, payload);
-        navigate(`/sales-orders/${updated?.id || existingOrder.id}`);
+        if (updated?.id || existingOrder?.id) {
+          navigate(`/sales-orders/${updated?.id || existingOrder.id}`);
+        }
       } else {
         const created = await createSalesOrder(payload);
         if (created?.id) {
@@ -775,10 +1012,12 @@ export default function SalesOrderFormPage() {
               <SearchableSelect
                 label="Direct Client"
                 required
-                placeholder="-- Select Client --"
-                searchPlaceholder="Search clients..."
+                disabled={isEditMode}
+                hint={isEditMode ? 'Client cannot be changed after creation' : undefined}
+                placeholder={isLoadingClients ? 'Loading active clients...' : '-- Select Client --'}
+                searchPlaceholder="Search active clients..."
                 options={clientOptions}
-                value={formData.clientId}
+                value={String(formData.clientId || '')}
                 error={errors.clientId}
                 onChange={(e) => handleSelectClient(e.target.value)}
               />
@@ -860,32 +1099,33 @@ export default function SalesOrderFormPage() {
 
             <SearchableSelect
               label="Client Address"
+              required={orderMode === 'DIRECT'}
               placeholder="Select address..."
               options={clientAddressOptions}
-              value={formData.clientAddress}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, clientAddress: e.target.value }))
-              }
+              value={formData.clientAddressId ? String(formData.clientAddressId) : ''}
+              error={errors.clientAddressId}
+              onChange={(e) => handleSelectAddress(e.target.value)}
             />
 
             <SearchableSelect
               label="Contact Person"
               placeholder="Select contact..."
               options={clientContactOptions}
-              value={formData.contactPerson}
-              onChange={(e) => {
-                const picked = clientContactOptions.find((c) => c.value === e.target.value);
-                setFormData((prev) => ({
-                  ...prev,
-                  contactPerson: e.target.value,
-                  contactEmail: picked?.email || prev.contactEmail,
-                  contactPhone: picked?.phone || prev.contactPhone,
-                }));
-              }}
+              value={formData.clientContactId ? String(formData.clientContactId) : ''}
+              onChange={(e) => handleSelectContact(e.target.value)}
             />
           </FormGrid>
 
-          <FormGrid columns={3}>
+          <FormGrid columns={4}>
+            <SearchableSelect
+              label="Currency"
+              options={currencyOptions}
+              value={String(formData.currencyId || '')}
+              disabled={orderMode === 'QUOTATION'}
+              hint={orderMode === 'QUOTATION' ? 'Locked from quotation' : 'Order billing currency'}
+              onChange={(e) => handleCurrencyChange(e.target.value)}
+            />
+
             <PaymentTermsSelect
               value={formData.paymentTerms}
               name="paymentTerms"
@@ -1046,14 +1286,24 @@ export default function SalesOrderFormPage() {
                       <Td className="text-xs">
                         {orderMode === 'DIRECT' ? (
                           <div className="space-y-1.5 py-1">
-                            <Input
-                              size="sm"
-                              placeholder="Product Name"
-                              value={item.productName}
-                              onChange={(e) =>
-                                handleLineItemChange(idx, 'productName', e.target.value)
-                              }
-                            />
+                            {productOptions.length > 0 ? (
+                              <SearchableSelect
+                                size="sm"
+                                placeholder={isLoadingProducts ? 'Loading products...' : '-- Select Product --'}
+                                options={productOptions}
+                                value={String(item.productId || '')}
+                                onChange={(e) => handleProductPickerChange(idx, e.target.value)}
+                              />
+                            ) : (
+                              <Input
+                                size="sm"
+                                placeholder="Product Name"
+                                value={item.productName}
+                                onChange={(e) =>
+                                  handleLineItemChange(idx, 'productName', e.target.value)
+                                }
+                              />
+                            )}
                             <div className="flex gap-2">
                               <Input
                                 size="sm"

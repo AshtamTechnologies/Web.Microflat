@@ -1,9 +1,16 @@
 /**
- * ProductStandardsEditor.jsx — Sub-component for managing product standards.
- * Supports adding, removing, and choosing exactly one primary standard.
+ * ProductStandardsEditor.jsx — Sub-component for managing product standards and precision grade mapping.
+ *
+ * Capabilities:
+ * - Link manufacturing and calibration standards (IS 7327, DIN 876, BS 817, ASME B89.3.7, etc.).
+ * - Integrates with Task 54's Standard → Grade mapping (StandardsContext).
+ * - Displays mapped precision grades for each standard (e.g. Gr-00, Gr-0, Gr-1, Gr-2, Gr-3).
+ * - Supports product-level grade applicability: inherit all mapped grades or specify custom allowed grades.
+ * - Enforces single primary standard with radio selection and auto-promotion.
+ * - Prevents duplicate standard selection across rows.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Button,
   SearchableSelect,
@@ -14,30 +21,65 @@ import {
   Th,
   Td,
 } from '../../../components/ui';
-import { IconAdd, IconDelete, IconStandards } from '../../../constants/icons';
+import {
+  IconAdd,
+  IconDelete,
+  IconStandards,
+  IconCheck,
+  IconInfo,
+  IconShieldCheck,
+  IconRefresh,
+} from '../../../constants/icons';
+import { useStandardsContext } from '../../../context/StandardsContext';
 
 export default function ProductStandardsEditor({
   standards = [],
   onChange,
   availableStandards = [],
   readOnly = false,
+  gradeMapping: propGradeMapping = null,
 }) {
-  // Options for available standards dropdown
-  const standardOptions = availableStandards.map((s) => ({
-    value: Number(s.id),
-    label: s.standardCode,
-  }));
+  const standardsCtx = useStandardsContext?.() || {};
+  const { gradeMapping: contextGradeMapping = [], fetchGradeMapping } = standardsCtx;
 
+  // Active grade mapping from props or context
+  const activeGradeMapping = useMemo(() => {
+    if (propGradeMapping && Array.isArray(propGradeMapping)) return propGradeMapping;
+    if (contextGradeMapping && Array.isArray(contextGradeMapping)) return contextGradeMapping;
+    return [];
+  }, [propGradeMapping, contextGradeMapping]);
+
+  // Ensure grade mapping is loaded if empty
+  useEffect(() => {
+    if (activeGradeMapping.length === 0 && typeof fetchGradeMapping === 'function') {
+      fetchGradeMapping().catch(() => {});
+    }
+  }, [activeGradeMapping.length, fetchGradeMapping]);
+
+  // Set of all selected standard IDs to prevent duplicate additions
+  const selectedStandardIds = useMemo(() => {
+    return new Set(
+      standards
+        .map((s) => Number(s.standardId || s.id))
+        .filter((id) => !isNaN(id) && id > 0)
+    );
+  }, [standards]);
+
+  // Handler to add a new standard row
   const handleAdd = () => {
     if (standards.length >= availableStandards.length) return;
 
+    // Find the first unselected standard to suggest
+    const firstUnused = availableStandards.find((s) => !selectedStandardIds.has(Number(s.id)));
     const isFirst = standards.length === 0;
+
     const nextList = [
       ...standards,
       {
-        standardId: '',
-        standardCode: '',
+        standardId: firstUnused ? Number(firstUnused.id) : '',
+        standardCode: firstUnused?.standardCode || '',
         isPrimary: isFirst,
+        applicableGradeIds: null, // null = inherit all grades mapped to this standard
       },
     ];
     onChange?.(nextList);
@@ -45,12 +87,13 @@ export default function ProductStandardsEditor({
 
   const [indexToDelete, setIndexToDelete] = useState(null);
 
+  // Handler to confirm delete of a standard row
   const handleConfirmDelete = () => {
     if (indexToDelete === null) return;
     const itemToRemove = standards[indexToDelete];
     const nextList = standards.filter((_, i) => i !== indexToDelete);
 
-    // If removed item was primary and there are remaining items, make the first one primary
+    // If removed item was primary and there are remaining items, promote the first one to primary
     if (itemToRemove?.isPrimary && nextList.length > 0) {
       nextList[0].isPrimary = true;
     }
@@ -58,6 +101,7 @@ export default function ProductStandardsEditor({
     setIndexToDelete(null);
   };
 
+  // Handler to change standard dropdown for a row
   const handleChangeStandard = (index, val) => {
     const rawId = val && typeof val === 'object' && 'target' in val ? val.target.value : val;
     const id = Number(rawId);
@@ -67,10 +111,12 @@ export default function ProductStandardsEditor({
       ...nextList[index],
       standardId: id,
       standardCode: matched?.standardCode || '',
+      applicableGradeIds: null, // Reset to inherit all when standard changes
     };
     onChange?.(nextList);
   };
 
+  // Handler to designate standard as primary
   const handleSetPrimary = (index) => {
     const nextList = standards.map((item, i) => ({
       ...item,
@@ -79,12 +125,57 @@ export default function ProductStandardsEditor({
     onChange?.(nextList);
   };
 
+  // Handler to toggle an individual grade for a standard
+  const handleToggleGrade = (standardIndex, gradeId, allGradeIds) => {
+    if (readOnly) return;
+    const item = standards[standardIndex];
+    const currentApplicable = item.applicableGradeIds;
+    let nextApplicable;
+
+    if (!currentApplicable || !Array.isArray(currentApplicable)) {
+      // Currently inheriting all: uncheck this one grade
+      nextApplicable = allGradeIds.filter((id) => id !== gradeId);
+    } else {
+      const exists = currentApplicable.includes(gradeId);
+      if (exists) {
+        // Remove grade
+        nextApplicable = currentApplicable.filter((id) => id !== gradeId);
+      } else {
+        // Add grade
+        nextApplicable = [...currentApplicable, gradeId];
+      }
+      // If all grades are re-selected, reset back to null (inherit all)
+      if (nextApplicable.length === allGradeIds.length) {
+        nextApplicable = null;
+      }
+    }
+
+    const nextList = [...standards];
+    nextList[standardIndex] = {
+      ...nextList[standardIndex],
+      applicableGradeIds: nextApplicable,
+    };
+    onChange?.(nextList);
+  };
+
+  // Handler to reset a standard's grades to inherit all
+  const handleResetToAllGrades = (standardIndex) => {
+    if (readOnly) return;
+    const nextList = [...standards];
+    nextList[standardIndex] = {
+      ...nextList[standardIndex],
+      applicableGradeIds: null,
+    };
+    onChange?.(nextList);
+  };
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3.5">
+      {/* Header bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <IconStandards size={18} className="text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">Applicable Standards</h3>
+          <h3 className="text-sm font-semibold text-foreground">Applicable Standards & Grades</h3>
           <span className="text-xs text-muted-foreground">({standards.length})</span>
         </div>
         {!readOnly && (
@@ -103,79 +194,247 @@ export default function ProductStandardsEditor({
       </div>
 
       {standards.length === 0 ? (
-        <div className="p-4 text-center rounded-lg border border-dashed border-border bg-muted/20 text-muted-foreground text-xs">
-          No standards linked to this product yet.
+        <div className="p-6 text-center rounded-lg border border-dashed border-border bg-muted/20 text-muted-foreground text-xs space-y-2">
+          <IconStandards size={24} className="mx-auto text-muted-foreground/60" />
+          <p>No manufacturing standards linked to this product yet.</p>
+          {!readOnly && (
+            <Button type="button" variant="outline" size="xs" onClick={handleAdd}>
+              <IconAdd size={12} className="mr-1" />
+              Link First Standard
+            </Button>
+          )}
         </div>
       ) : (
         <TableContainer
-          className="border border-border rounded-lg max-h-60 overflow-y-auto"
+          className="border border-border rounded-lg overflow-x-auto"
           tableClassName="w-full text-xs table-auto"
         >
-          <thead className="sticky top-0 bg-surface z-10">
-            <tr className="bg-surface border-b border-border">
+          <thead className="bg-surface border-b border-border">
+            <tr>
               <Th className="w-16 text-center">Primary</Th>
-              <Th>Standard Code</Th>
+              <Th className="w-56 min-w-[200px]">Standard</Th>
+              <Th className="min-w-[280px]">Allowed Precision Grades</Th>
               {!readOnly && <Th className="w-16 text-center">Action</Th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-              {standards.map((item, index) => {
-                const currentId = item.standardId || item.id ? Number(item.standardId || item.id) : '';
-                return (
-                  <tr key={index} className="hover:bg-muted/20">
-                    <td className="p-2.5 text-center">
-                      {readOnly ? (
-                        item.isPrimary ? (
-                          <Badge variant="success">Primary</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )
+            {standards.map((item, index) => {
+              const currentId = item.standardId || item.id ? Number(item.standardId || item.id) : '';
+
+              // Mapped grades for this standard from global standard-grade mapping
+              const mapping = activeGradeMapping.find((m) => Number(m.standardId) === currentId);
+              const mappedGrades = (mapping?.grades || []).filter((g) => g.isGradeActive !== false);
+              const allGradeIds = mappedGrades.map((g) => Number(g.gradeId));
+
+              // Applicability state
+              const isAllInherited = !item.applicableGradeIds || !Array.isArray(item.applicableGradeIds);
+              const activeGradeIdSet = isAllInherited
+                ? new Set(allGradeIds)
+                : new Set((item.applicableGradeIds || []).map(Number));
+
+              // Filter available standards dropdown to prevent duplicates
+              const standardOptions = availableStandards
+                .filter((s) => !selectedStandardIds.has(Number(s.id)) || Number(s.id) === currentId)
+                .map((s) => ({
+                  value: Number(s.id),
+                  label: s.standardCode,
+                }));
+
+              return (
+                <tr key={index} className="hover:bg-muted/10 transition-colors align-top">
+                  {/* Primary Standard Radio / Badge */}
+                  <td className="p-3 text-center align-middle">
+                    {readOnly ? (
+                      item.isPrimary ? (
+                        <Badge variant="success" size="sm" className="font-medium">
+                          Primary
+                        </Badge>
                       ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )
+                    ) : (
+                      <div className="flex flex-col items-center gap-1">
                         <input
                           type="radio"
                           name="primaryStandard"
                           checked={Boolean(item.isPrimary)}
                           onChange={() => handleSetPrimary(index)}
                           className="h-4 w-4 text-primary cursor-pointer accent-primary"
-                          title="Mark as primary standard"
+                          title="Set as primary manufacturing standard"
                         />
-                      )}
-                    </td>
-                    <td className="p-2.5">
-                      {readOnly ? (
-                        <span className="font-medium text-foreground">
-                          {item.standardCode || availableStandards.find((s) => s.id === currentId)?.standardCode}
+                        {item.isPrimary && (
+                          <span className="text-3xs font-semibold text-primary uppercase">Primary</span>
+                        )}
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Standard Code Selector / Label */}
+                  <td className="p-3">
+                    {readOnly ? (
+                      <div>
+                        <span className="font-mono font-semibold text-sm text-foreground">
+                          {item.standardCode ||
+                            availableStandards.find((s) => Number(s.id) === currentId)?.standardCode ||
+                            `Standard #${currentId}`}
                         </span>
-                      ) : (
+                        {mapping?.description && (
+                          <p className="text-2xs text-muted-foreground mt-0.5 line-clamp-1">
+                            {mapping.description}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
                         <SearchableSelect
                           value={currentId || ''}
                           onChange={(val) => handleChangeStandard(index, val)}
                           options={standardOptions}
                           placeholder="Select Standard"
-                          className="w-full max-w-sm"
+                          className="w-full"
+                          size="sm"
                         />
-                      )}
-                    </td>
-                    {!readOnly && (
-                      <td className="p-2.5 text-center">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => setIndexToDelete(index)}
-                          className="text-danger hover:bg-danger/10"
-                          title="Remove standard"
-                        >
-                          <IconDelete size={14} />
-                        </Button>
-                      </td>
+                        {mapping?.description && (
+                          <p className="text-3xs text-muted-foreground line-clamp-1 pl-1">
+                            {mapping.description}
+                          </p>
+                        )}
+                      </div>
                     )}
-                  </tr>
-                );
-              })}
-            </tbody>
+                  </td>
+
+                  {/* Allowed Precision Grades Column */}
+                  <td className="p-3">
+                    {!currentId ? (
+                      <span className="text-2xs text-muted-foreground italic">
+                        Select a standard to view mapped precision grades.
+                      </span>
+                    ) : mappedGrades.length === 0 ? (
+                      <div className="flex items-center gap-1.5 text-2xs text-amber-600 dark:text-amber-400">
+                        <IconInfo size={13} className="shrink-0" />
+                        <span>No precision grades mapped to this standard in master setup.</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {/* Scope Header / Badges */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-3xs font-semibold uppercase text-muted-foreground tracking-wider">
+                              Scope:
+                            </span>
+                            {isAllInherited ? (
+                              <Badge variant="neutral" size="xs" className="text-3xs font-medium">
+                                Inherit All ({mappedGrades.length})
+                              </Badge>
+                            ) : (
+                              <Badge variant="primary" size="xs" className="text-3xs font-medium">
+                                Custom ({activeGradeIdSet.size} of {mappedGrades.length})
+                              </Badge>
+                            )}
+                          </div>
+                          {!readOnly && !isAllInherited && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetToAllGrades(index)}
+                              className="text-3xs text-primary hover:underline font-medium cursor-pointer"
+                              title="Reset to all standard grades"
+                            >
+                              Reset to All
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Grade Chips */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {mappedGrades.map((grade) => {
+                            const isSelected = activeGradeIdSet.has(Number(grade.gradeId));
+
+                            if (readOnly) {
+                              if (!isSelected) return null;
+                              return (
+                                <Badge
+                                  key={grade.gradeId}
+                                  variant="neutral"
+                                  size="sm"
+                                  className="font-mono text-xs font-semibold px-2 py-0.5"
+                                  title={`Grade ${grade.gradeCode} (Display order: ${grade.displayOrder ?? '—'})`}
+                                >
+                                  {grade.gradeCode}
+                                </Badge>
+                              );
+                            }
+
+                            // Interactive toggle chips in edit mode
+                            return (
+                              <button
+                                key={grade.gradeId}
+                                type="button"
+                                onClick={() => handleToggleGrade(index, Number(grade.gradeId), allGradeIds)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-semibold transition-all cursor-pointer border ${
+                                  isSelected
+                                    ? 'bg-primary/10 text-primary border-primary/40 hover:bg-primary/20 shadow-2xs'
+                                    : 'bg-muted/30 text-muted-foreground border-dashed border-border hover:bg-muted/60 opacity-60'
+                                }`}
+                                title={
+                                  isSelected
+                                    ? `Click to exclude ${grade.gradeCode} for this product`
+                                    : `Click to include ${grade.gradeCode} for this product`
+                                }
+                              >
+                                {isSelected ? (
+                                  <IconCheck size={12} className="text-primary shrink-0" />
+                                ) : (
+                                  <span className="w-3 text-center text-3xs font-sans text-muted-foreground">✕</span>
+                                )}
+                                <span>{grade.gradeCode}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {!readOnly && (
+                          <p className="text-3xs text-muted-foreground italic pt-0.5">
+                            {isAllInherited
+                              ? 'Inheriting all grades from master mapping. Click any grade to restrict scope.'
+                              : 'Custom scope applied. Variants for this product will be restricted to checked grades.'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Actions Column */}
+                  {!readOnly && (
+                    <td className="p-3 text-center align-middle">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setIndexToDelete(index)}
+                        className="text-danger hover:bg-danger/10"
+                        title="Remove standard"
+                      >
+                        <IconDelete size={14} />
+                      </Button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
         </TableContainer>
       )}
+
+      {/* Metrology Policy Banner */}
+      <div className="p-3 rounded-lg border border-border bg-surface/50 flex items-start gap-2.5 text-xs text-muted-foreground">
+        <IconShieldCheck size={16} className="text-primary shrink-0 mt-0.5" />
+        <div className="leading-relaxed">
+          <span className="font-semibold text-foreground">Metrology Standard & Grade Policy:</span> Accuracy
+          specifications and variant accuracy grades are strictly derived from the standards linked above. Downstream
+          tolerance calculations (e.g. flatness per IS 7327 or DIN 876) automatically reference these assigned
+          precision grades.
+        </div>
+      </div>
 
       {/* Confirmation Modal for Standard Removal */}
       <ConfirmModal
@@ -183,11 +442,16 @@ export default function ProductStandardsEditor({
         onClose={() => setIndexToDelete(null)}
         onConfirm={handleConfirmDelete}
         title="Remove Standard"
-        message={`Are you sure you want to remove standard "${standards[indexToDelete]?.standardCode || availableStandards.find((s) => s.id === (standards[indexToDelete]?.standardId || standards[indexToDelete]?.id))?.standardCode || 'Standard'}"?`}
+        message={`Are you sure you want to remove standard "${
+          standards[indexToDelete]?.standardCode ||
+          availableStandards.find(
+            (s) => Number(s.id) === Number(standards[indexToDelete]?.standardId || standards[indexToDelete]?.id)
+          )?.standardCode ||
+          'Standard'
+        }" from this product?`}
         confirmText="Remove"
         variant="danger"
       />
     </div>
   );
 }
-

@@ -14,7 +14,8 @@ export function StandardsProvider({ children }) {
   const [hasRequested, setHasRequested] = useState(false);
   const isRelevantRoute = Boolean(
     location?.pathname?.startsWith('/configuration/standards') ||
-    location?.pathname?.startsWith('/inquiries')
+    location?.pathname?.startsWith('/inquiries') ||
+    location?.pathname?.startsWith('/products')
   );
   const shouldFetch = isRelevantRoute || hasRequested;
 
