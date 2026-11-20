@@ -62,6 +62,7 @@ import { useCountryState } from '../../context/CountryStateContext';
 import {
   getTodayIsoDate,
 } from '../../utils/effectiveDateUtils';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 import VendorBankDetailsFormPage from '../vendorBankDetails/VendorBankDetailsFormPage';
 
 
@@ -445,8 +446,8 @@ export default function VendorFormPage() {
           zipCode: existingVendor.zipCode || '',
           address1: existingVendor.address1 || '',
           address2: existingVendor.address2 || '',
-          paymentTerms: Array.isArray(existingVendor.paymentTerms) ? existingVendor.paymentTerms : (existingVendor.paymentTerms ? [existingVendor.paymentTerms] : []),
-          deliveryTerms: Array.isArray(existingVendor.deliveryTerms) ? existingVendor.deliveryTerms : (existingVendor.deliveryTerms ? [existingVendor.deliveryTerms] : []),
+          paymentTerms: (Array.isArray(existingVendor.paymentTerms) ? existingVendor.paymentTerms : (existingVendor.paymentTerms ? [existingVendor.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
+          deliveryTerms: (Array.isArray(existingVendor.deliveryTerms) ? existingVendor.deliveryTerms : (existingVendor.deliveryTerms ? [existingVendor.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
           notes: existingVendor.notes || '',
           attachments: existingVendor.attachments ? [...existingVendor.attachments] : [],
           isActive: existingVendor.isActive !== undefined ? existingVendor.isActive : true,

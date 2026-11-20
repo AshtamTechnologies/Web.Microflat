@@ -21,6 +21,8 @@ export function orderConfirmationListItemFromApi(dto) {
   if (!dto) return null;
   const status = dto.orderStatus || 'Draft';
   const grandTotal = Number(dto.totalAmount) || 0;
+  const orderSource = dto.orderSource ?? false;
+  const orderSourceName = dto.orderSourceName || (orderSource ? 'Direct' : 'Quotation');
 
   return {
     id: dto.id,
@@ -28,12 +30,15 @@ export function orderConfirmationListItemFromApi(dto) {
     orderConfirmationDate: dto.orderConfirmationDate ? String(dto.orderConfirmationDate).slice(0, 10) : '',
     status,
     orderStatus: status,
-    quotationDetailId: dto.quotationDetailId,
-    quotationId: dto.quotationId,
-    quotationNo: dto.quotationNo || '',
-    quotationRevisionNo: dto.quotationRevisionNo ?? 0,
-    inquiryId: dto.inquiryId,
-    inquiryNo: dto.inquiryNo || '',
+    orderSource,
+    orderSourceName,
+    isDirectOrder: Boolean(orderSource),
+    quotationDetailId: dto.quotationDetailId ?? null,
+    quotationId: dto.quotationId ?? null,
+    quotationNo: dto.quotationNo || null,
+    quotationRevisionNo: dto.quotationRevisionNo ?? null,
+    inquiryId: dto.inquiryId ?? null,
+    inquiryNo: dto.inquiryNo || null,
     clientId: dto.clientId,
     clientCode: dto.clientCode || '',
     clientName: dto.clientName || '',
@@ -141,21 +146,28 @@ export function orderConfirmationDetailFromApi(dto) {
     errorMessage: log.errorMessage || '',
   }));
 
+  const orderSource = dto.orderSource ?? false;
+  const orderSourceName = dto.orderSourceName || (orderSource ? 'Direct' : 'Quotation');
+
   return {
     id: dto.id,
     orderConfirmationNo: dto.orderConfirmationNo || '',
     orderConfirmationDate: dto.orderConfirmationDate ? String(dto.orderConfirmationDate).slice(0, 10) : '',
     status,
     orderStatus: status,
+    orderSource,
+    orderSourceName,
+    isDirectOrder: Boolean(orderSource),
     isEditable: Boolean(dto.isEditable),
     nextStatuses: Array.isArray(dto.nextStatuses) ? dto.nextStatuses : [],
-    quotationDetailId: dto.quotationDetailId,
-    quotationId: dto.quotationId,
-    quotationNo: dto.quotationNo || '',
-    quotationRevisionNo: dto.quotationRevisionNo ?? 0,
-    inquiryId: dto.inquiryId,
-    inquiryNo: dto.inquiryNo || '',
+    quotationDetailId: dto.quotationDetailId ?? null,
+    quotationId: dto.quotationId ?? null,
+    quotationNo: dto.quotationNo || null,
+    quotationRevisionNo: dto.quotationRevisionNo ?? null,
+    inquiryId: dto.inquiryId ?? null,
+    inquiryNo: dto.inquiryNo || null,
     clientId: dto.clientId,
+    clientDetailId: dto.clientDetailId ?? null,
     clientCode: dto.clientCode || '',
     clientName: dto.clientName || '',
     gstNo: dto.gstNo || '',
@@ -203,14 +215,28 @@ export function orderConfirmationDetailFromApi(dto) {
 /**
  * Builds CreateOrderConfirmationRequestDto for POST /api/order-confirmations
  * Rules:
- *   - quotationId is mandatory integer
- *   - lineItems and taxes must be null (backend auto-copies from quotation latest revision)
+ *   - Direct order (orderSource: true):
+ *       quotationId must be null
+ *       clientId, clientAddressId are required
+ *       currencyId defaults to selected/INR
+ *       lineItems is an array (at least 1 line needed to Confirm)
+ *   - Quotation order (orderSource: false):
+ *       quotationId is mandatory integer
+ *       lineItems and taxes must be null (backend auto-copies from quotation latest revision)
+ *       currencyId and clientId should not be sent
  * @param {object} form
  * @returns {object}
  */
 export function buildCreateOrderConfirmationPayload(form) {
+  const isDirect = Boolean(
+    form.orderSource === true ||
+    form.isDirectOrder ||
+    (!form.quotationId && form.clientId)
+  );
+
   const payload = {
-    quotationId: Number(form.quotationId),
+    orderSource: isDirect,
+    quotationId: isDirect ? null : Number(form.quotationId),
     orderConfirmationDate: form.orderConfirmationDate || null,
     clientAddressId: form.clientAddressId ? Number(form.clientAddressId) : null,
     clientContactId: form.clientContactId ? Number(form.clientContactId) : null,
@@ -224,9 +250,35 @@ export function buildCreateOrderConfirmationPayload(form) {
     otherCharges: form.otherCharges !== undefined && form.otherCharges !== null ? Number(form.otherCharges) : 0,
     otherChargesDescription: form.otherChargesDescription ? String(form.otherChargesDescription).trim() : null,
     remarks: form.remarks ? String(form.remarks).trim() : null,
-    lineItems: null, // Required null per Swagger & Guide §5.4g
-    taxes: null,     // Required null per Swagger & Guide §5.4g
   };
+
+  if (isDirect) {
+    payload.clientId = Number(form.clientId);
+    if (form.currencyId) {
+      payload.currencyId = Number(form.currencyId);
+    }
+    payload.lineItems = Array.isArray(form.lineItems) && form.lineItems.length > 0
+      ? form.lineItems.map((item) => ({
+          productId: Number(item.productId),
+          quantity: Number(item.quantity) || 1,
+          rate: Number(item.rate) || 0,
+          taxConfigDetailId: item.taxConfigDetailId ? Number(item.taxConfigDetailId) : null,
+          otherCharges: item.otherCharges !== undefined && item.otherCharges !== null ? Number(item.otherCharges) : null,
+          remarks: item.remarks ? String(item.remarks).trim() : null,
+        }))
+      : [];
+
+    payload.taxes = Array.isArray(form.taxes) && form.taxes.length > 0
+      ? form.taxes
+          .filter((t) => t.taxConfigDetailId)
+          .map((t) => ({
+            taxConfigDetailId: Number(t.taxConfigDetailId),
+          }))
+      : null;
+  } else {
+    payload.lineItems = null;
+    payload.taxes = null;
+  }
 
   return payload;
 }
@@ -254,24 +306,27 @@ export function buildUpdateOrderConfirmationPayload(form) {
     remarks: form.remarks ? String(form.remarks).trim() : null,
   };
 
+  if (form.currencyId !== undefined) {
+    payload.currencyId = form.currencyId ? Number(form.currencyId) : null;
+  }
+
   // On PUT: if lineItems is passed as an array, send SalesLineRequestDto[]
-  if (Array.isArray(form.lineItems) && form.lineItems.length > 0) {
+  if (Array.isArray(form.lineItems)) {
     payload.lineItems = form.lineItems.map((item) => ({
       id: typeof item.id === 'number' ? item.id : null,
       productId: Number(item.productId || 1),
-      description: item.description || item.technicalDetails || null,
       quantity: Number(item.quantity) || 1,
       rate: Number(item.rate) || 0,
       taxConfigDetailId: item.taxConfigDetailId ? Number(item.taxConfigDetailId) : null,
-      otherCharges: item.otherCharges !== undefined ? Number(item.otherCharges) : 0,
-      remarks: item.remarks || null,
+      otherCharges: item.otherCharges !== undefined && item.otherCharges !== null ? Number(item.otherCharges) : null,
+      remarks: item.remarks ? String(item.remarks).trim() : null,
     }));
   } else {
     payload.lineItems = null;
   }
 
   // On PUT: taxes can be null or array
-  if (Array.isArray(form.taxes) && form.taxes.length > 0) {
+  if (Array.isArray(form.taxes)) {
     payload.taxes = form.taxes
       .filter((t) => t.taxConfigDetailId)
       .map((t) => ({

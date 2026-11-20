@@ -49,9 +49,12 @@ import {
   IconEdit,
   IconDelete,
   IconSpecParameters,
+  IconLock,
 } from '../../constants/icons';
 import { productService } from '../../services';
 import { useProductsContext } from '../../context/ProductsContext';
+import { useStandardsContext } from '../../context/StandardsContext';
+import { calculateFlatnessTolerance } from '../../utils/flatnessFormula';
 import ProductStandardsEditor from './components/ProductStandardsEditor';
 import ProductOptionsEditor from './components/ProductOptionsEditor';
 import { createEmptyProductForm } from '../../models/products/productModel';
@@ -63,12 +66,29 @@ function extractVal(e) {
   return e;
 }
 
+/**
+ * Matches strictly the primary working surface Flatness (e.g. "Flatness (µm)" or "Flatness").
+ * Excludes secondary surfaces like "Flatness of End Faces".
+ */
+const isExactFlatnessParameter = (paramName) => {
+  const p = (paramName || '').toLowerCase().trim();
+  return (
+    p === 'flatness' ||
+    p.startsWith('flatness (µm)') ||
+    p.startsWith('flatness (um)') ||
+    p === 'working surface flatness'
+  );
+};
+
 export default function ProductFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditMode = Boolean(id);
 
   const { lookups, refreshProducts, loadSummary } = useProductsContext();
+  const { gradeMapping = [] } = useStandardsContext?.() || {};
+
+  const specParameters = useMemo(() => lookups?.specParameters || [], [lookups?.specParameters]);
 
   const [form, setForm] = useState(createEmptyProductForm());
   const [errors, setErrors] = useState({});
@@ -104,14 +124,145 @@ export default function ProductFormPage() {
     file: null,
   });
 
-  // Staged Specs modal state
+  // Accuracy Specs modal state (aligned with ProductVariantsTab Task 53/58)
   const [selectedVariantIndexForSpecs, setSelectedVariantIndexForSpecs] = useState(null);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
+  const [variantDetailData, setVariantDetailData] = useState(null);
   const [variantSpecs, setVariantSpecs] = useState([]);
   const [isLoadingSpecs, setIsLoadingSpecs] = useState(false);
+  const [isSavingSpecs, setIsSavingSpecs] = useState(false);
+
+  // Standard + Grade Scope State
+  const [specsScope, setSpecsScope] = useState('STANDARD_GRADE'); // 'STANDARD_GRADE' | 'COMMON'
+  const [selectedStandardId, setSelectedStandardId] = useState('');
+  const [selectedGradeId, setSelectedGradeId] = useState('');
+  const [flatnessNotice, setFlatnessNotice] = useState(null);
 
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
+
+  const selectedVariantForSpecs = useMemo(() => {
+    if (selectedVariantIndexForSpecs === null || selectedVariantIndexForSpecs === undefined) return null;
+    return variants[selectedVariantIndexForSpecs] || null;
+  }, [selectedVariantIndexForSpecs, variants]);
+
+  // Available standards combining product standards and grade mapping
+  const availableStandards = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    (standards || []).forEach((s) => {
+      const sid = Number(s.standardId || s.id);
+      if (sid && !seen.has(sid)) {
+        seen.add(sid);
+        list.push({ value: sid, label: s.standardCode || `Standard #${sid}` });
+      }
+    });
+    (gradeMapping || []).forEach((m) => {
+      const sid = Number(m.standardId);
+      if (sid && !seen.has(sid)) {
+        seen.add(sid);
+        list.push({ value: sid, label: m.standardCode || `Standard #${sid}` });
+      }
+    });
+    return list;
+  }, [standards, gradeMapping]);
+
+  // Dynamically filtered grades for the selected standard (strictly adhering to backend rule and product grade scope)
+  const availableGradesForStandard = useMemo(() => {
+    if (!selectedStandardId) return [];
+    const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === Number(selectedStandardId));
+    const productStd = (standards || []).find(
+      (s) => Number(s.standardId || s.id) === Number(selectedStandardId)
+    );
+    let allowedGrades =
+      mapping && Array.isArray(mapping.grades) && mapping.grades.length > 0
+        ? mapping.grades.filter((g) => g.isGradeActive !== false)
+        : [];
+
+    // If product specifies custom applicable grades for this standard, filter by them
+    if (
+      productStd?.applicableGradeIds &&
+      Array.isArray(productStd.applicableGradeIds) &&
+      productStd.applicableGradeIds.length > 0
+    ) {
+      const allowedSet = new Set(productStd.applicableGradeIds.map(Number));
+      allowedGrades = allowedGrades.filter((g) => allowedSet.has(Number(g.gradeId)));
+    }
+
+    if (allowedGrades.length > 0) {
+      return allowedGrades.map((g) => ({
+        value: Number(g.gradeId),
+        label: g.gradeCode || `Grade #${g.gradeId}`,
+      }));
+    }
+    // Fallback if mapping not loaded
+    return (lookups?.grades || []).map((g) => ({ value: Number(g.id), label: g.gradeCode }));
+  }, [selectedStandardId, gradeMapping, standards, lookups?.grades]);
+
+  // Helper to extract spec figures for the active scope from loaded variant specs
+  const syncSpecsForScope = useCallback((allSpecs, scope, stdId, grdId) => {
+    if (!allSpecs || !Array.isArray(allSpecs)) return [];
+    return allSpecs.map((spec) => {
+      const vals = Array.isArray(spec.values) ? spec.values : [];
+      let matched = null;
+
+      if (scope === 'COMMON') {
+        matched = vals.find((v) => v.isCommon || (!v.standardId && !v.gradeId));
+        return {
+          specParameterId: spec.specParameterId,
+          parameterName: spec.parameterName,
+          unitSymbol: spec.unitSymbol,
+          valueDecimal: matched ? (matched.valueDecimal ?? '') : (spec.valueDecimal ?? ''),
+          valueText: matched ? (matched.valueText ?? '') : (spec.valueText ?? ''),
+          tolerancePlus: matched ? (matched.tolerancePlus ?? '') : (spec.tolerancePlus ?? ''),
+          toleranceMinus: matched ? (matched.toleranceMinus ?? '') : (spec.toleranceMinus ?? ''),
+        };
+      } else {
+        matched = vals.find(
+          (v) => Number(v.standardId) === Number(stdId) && Number(v.gradeId) === Number(grdId)
+        );
+        return {
+          specParameterId: spec.specParameterId,
+          parameterName: spec.parameterName,
+          unitSymbol: spec.unitSymbol,
+          valueDecimal: matched ? (matched.valueDecimal ?? '') : '',
+          valueText: matched ? (matched.valueText ?? '') : '',
+          tolerancePlus: matched ? (matched.tolerancePlus ?? '') : '',
+          toleranceMinus: matched ? (matched.toleranceMinus ?? '') : '',
+        };
+      }
+    });
+  }, []);
+
+  // Helper to compute standard formula flatness tolerance for this variant
+  const computeStandardFlatness = useCallback(
+    (stdId, grdId) => {
+      if (!selectedVariantForSpecs) return null;
+      const { lengthMm, widthMm } = selectedVariantForSpecs;
+      if (!lengthMm || !widthMm) return null;
+      if (!stdId || !grdId) return null;
+
+      const stdItem = availableStandards.find((s) => Number(s.value) === Number(stdId));
+      const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === Number(stdId));
+      let grdLabel = '';
+      if (mapping && Array.isArray(mapping.grades)) {
+        const match = mapping.grades.find((g) => Number(g.gradeId) === Number(grdId));
+        if (match) grdLabel = match.gradeCode;
+      }
+      if (!grdLabel) {
+        const grdItem = (lookups?.grades || []).find((g) => Number(g.id) === Number(grdId));
+        grdLabel = grdItem?.gradeCode || '';
+      }
+
+      return calculateFlatnessTolerance({
+        standardCode: stdItem?.label || '',
+        gradeCode: grdLabel,
+        lengthMm,
+        widthMm,
+      });
+    },
+    [selectedVariantForSpecs, availableStandards, gradeMapping, lookups?.grades]
+  );
 
   const handleOpenAddVariant = () => {
     setEditingVariantIndex(null);
@@ -163,34 +314,246 @@ export default function ProductFormPage() {
     setItemToDelete(null);
   };
 
-  // Specs Modal local handlers (100% deferred staging)
+  // Open Specs Modal for a specific variant (aligned with ProductVariantsTab)
   const handleOpenSpecsModal = async (idx) => {
     setSelectedVariantIndexForSpecs(idx);
-    const v = variants[idx];
-    if (v.specs) {
-      setVariantSpecs(v.specs);
-      setIsSpecsModalOpen(true);
-    } else if (v.id) {
-      setIsLoadingSpecs(true);
-      setIsSpecsModalOpen(true);
-      try {
-        const data = await productService.getVariantById(v.id);
-        const fetchedSpecs = data?.specs || [];
-        setVariantSpecs(fetchedSpecs);
-        setVariants((prev) => {
-          const next = [...prev];
-          next[idx] = { ...next[idx], specs: fetchedSpecs, specCount: fetchedSpecs.length };
-          return next;
-        });
-      } catch (err) {
-        console.warn('Could not load variant specs:', err);
-        setVariantSpecs([]);
-      } finally {
-        setIsLoadingSpecs(false);
+    setFlatnessNotice(null);
+    setIsLoadingSpecs(true);
+    setIsSpecsModalOpen(true);
+
+    const variant = variants[idx];
+    if (!variant) {
+      setIsLoadingSpecs(false);
+      return;
+    }
+
+    // Default scope determination
+    let initScope = 'STANDARD_GRADE';
+    let initStd = availableStandards[0]?.value || '';
+    let initGrd = '';
+
+    if (initStd) {
+      const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === Number(initStd));
+      const productStd = (standards || []).find(
+        (s) => Number(s.standardId || s.id) === Number(initStd)
+      );
+      let allowed = (mapping?.grades || []).filter((g) => g.isGradeActive !== false);
+      if (productStd?.applicableGradeIds?.length > 0) {
+        const allowedSet = new Set(productStd.applicableGradeIds.map(Number));
+        allowed = allowed.filter((g) => allowedSet.has(Number(g.gradeId)));
       }
+      if (allowed.length > 0) {
+        initGrd = Number(allowed[0].gradeId);
+      } else if (mapping?.grades?.length > 0) {
+        initGrd = Number(mapping.grades[0].gradeId);
+      }
+    }
+
+    // If no valid standard/grade exists, fall back to Common
+    if (!initStd || !initGrd) {
+      initScope = 'COMMON';
+      initStd = '';
+      initGrd = '';
+    }
+
+    setSpecsScope(initScope);
+    setSelectedStandardId(initStd);
+    setSelectedGradeId(initGrd);
+
+    try {
+      let data = null;
+      if (variant.id) {
+        data = await productService.getVariantById(variant.id);
+      } else {
+        data = { specs: variant.specs || [] };
+      }
+      setVariantDetailData(data);
+
+      const initialSpecs = syncSpecsForScope(data?.specs, initScope, initStd, initGrd);
+
+      // Auto-populate flatness from standard formula if in STANDARD_GRADE mode
+      if (initScope === 'STANDARD_GRADE' && initStd && initGrd && variant.lengthMm && variant.widthMm) {
+        const stdItem = availableStandards.find((s) => Number(s.value) === Number(initStd));
+        const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === Number(initStd));
+        let grdLabel = mapping?.grades?.find((g) => Number(g.gradeId) === Number(initGrd))?.gradeCode || '';
+        if (!grdLabel) {
+          grdLabel = (lookups?.grades || []).find((g) => Number(g.id) === Number(initGrd))?.gradeCode || '';
+        }
+
+        const calc = calculateFlatnessTolerance({
+          standardCode: stdItem?.label || '',
+          gradeCode: grdLabel,
+          lengthMm: variant.lengthMm,
+          widthMm: variant.widthMm,
+        });
+
+        if (calc.isSupported && calc.valueMicrons !== null) {
+          setFlatnessNotice(calc.detailText);
+          const withCalc = initialSpecs.map((spec) => {
+            const pName =
+              spec.parameterName ||
+              specParameters.find((p) => Number(p.id) === Number(spec.specParameterId))?.parameterName ||
+              '';
+            if (isExactFlatnessParameter(pName)) {
+              return {
+                ...spec,
+                valueDecimal: calc.valueMicrons,
+                valueText: '',
+                tolerancePlus: '',
+                toleranceMinus: '',
+              };
+            }
+            return spec;
+          });
+          setVariantSpecs(withCalc);
+          return;
+        }
+      }
+
+      setVariantSpecs(initialSpecs);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to load variant specifications');
+      setVariantSpecs([]);
+    } finally {
+      setIsLoadingSpecs(false);
+    }
+  };
+
+  // Scope Toggle: Standard + Grade vs Common
+  const handleScopeChange = (newScope) => {
+    setSpecsScope(newScope);
+    setFlatnessNotice(null);
+
+    if (newScope === 'COMMON') {
+      setSelectedStandardId('');
+      setSelectedGradeId('');
+      setVariantSpecs(syncSpecsForScope(variantDetailData?.specs, 'COMMON', '', ''));
     } else {
-      setVariantSpecs(v.specs || []);
-      setIsSpecsModalOpen(true);
+      const firstStd = availableStandards[0]?.value || '';
+      setSelectedStandardId(firstStd);
+      let firstGrd = '';
+      if (firstStd) {
+        const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === Number(firstStd));
+        const productStd = (standards || []).find(
+          (s) => Number(s.standardId || s.id) === Number(firstStd)
+        );
+        let allowed = (mapping?.grades || []).filter((g) => g.isGradeActive !== false);
+        if (productStd?.applicableGradeIds?.length > 0) {
+          const allowedSet = new Set(productStd.applicableGradeIds.map(Number));
+          allowed = allowed.filter((g) => allowedSet.has(Number(g.gradeId)));
+        }
+        if (allowed.length > 0) {
+          firstGrd = Number(allowed[0].gradeId);
+        } else if (mapping?.grades?.length > 0) {
+          firstGrd = Number(mapping.grades[0].gradeId);
+        }
+      }
+      setSelectedGradeId(firstGrd);
+      const synced = syncSpecsForScope(variantDetailData?.specs, 'STANDARD_GRADE', firstStd, firstGrd);
+      const calc = computeStandardFlatness(firstStd, firstGrd);
+      if (calc && calc.isSupported && calc.valueMicrons !== null) {
+        setFlatnessNotice(calc.detailText);
+        setVariantSpecs(
+          synced.map((spec) => {
+            const pName =
+              spec.parameterName ||
+              specParameters.find((p) => Number(p.id) === Number(spec.specParameterId))?.parameterName ||
+              '';
+            if (isExactFlatnessParameter(pName)) {
+              return {
+                ...spec,
+                valueDecimal: calc.valueMicrons,
+                valueText: '',
+                tolerancePlus: '',
+                toleranceMinus: '',
+              };
+            }
+            return spec;
+          })
+        );
+      } else {
+        setVariantSpecs(synced);
+      }
+    }
+  };
+
+  const handleStandardChange = (stdId) => {
+    const sId = Number(stdId);
+    setSelectedStandardId(sId);
+    let nextGrade = '';
+    const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === sId);
+    const productStd = (standards || []).find(
+      (s) => Number(s.standardId || s.id) === sId
+    );
+    let allowed = (mapping?.grades || []).filter((g) => g.isGradeActive !== false);
+    if (productStd?.applicableGradeIds?.length > 0) {
+      const allowedSet = new Set(productStd.applicableGradeIds.map(Number));
+      allowed = allowed.filter((g) => allowedSet.has(Number(g.gradeId)));
+    }
+    if (allowed.length > 0) {
+      nextGrade = Number(allowed[0].gradeId);
+    } else if (mapping?.grades?.length > 0) {
+      nextGrade = Number(mapping.grades[0].gradeId);
+    }
+    setSelectedGradeId(nextGrade);
+
+    const synced = syncSpecsForScope(variantDetailData?.specs, 'STANDARD_GRADE', sId, nextGrade);
+    const calc = computeStandardFlatness(sId, nextGrade);
+    if (calc && calc.isSupported && calc.valueMicrons !== null) {
+      setFlatnessNotice(calc.detailText);
+      setVariantSpecs(
+        synced.map((spec) => {
+          const pName =
+            spec.parameterName ||
+            specParameters.find((p) => Number(p.id) === Number(spec.specParameterId))?.parameterName ||
+            '';
+          if (isExactFlatnessParameter(pName)) {
+            return {
+              ...spec,
+              valueDecimal: calc.valueMicrons,
+              valueText: '',
+              tolerancePlus: '',
+              toleranceMinus: '',
+            };
+          }
+          return spec;
+        })
+      );
+    } else {
+      setFlatnessNotice(null);
+      setVariantSpecs(synced);
+    }
+  };
+
+  const handleGradeChange = (grdId) => {
+    const gId = Number(grdId);
+    setSelectedGradeId(gId);
+
+    const synced = syncSpecsForScope(variantDetailData?.specs, 'STANDARD_GRADE', selectedStandardId, gId);
+    const calc = computeStandardFlatness(selectedStandardId, gId);
+    if (calc && calc.isSupported && calc.valueMicrons !== null) {
+      setFlatnessNotice(calc.detailText);
+      setVariantSpecs(
+        synced.map((spec) => {
+          const pName =
+            spec.parameterName ||
+            specParameters.find((p) => Number(p.id) === Number(spec.specParameterId))?.parameterName ||
+            '';
+          if (isExactFlatnessParameter(pName)) {
+            return {
+              ...spec,
+              valueDecimal: calc.valueMicrons,
+              valueText: '',
+              tolerancePlus: '',
+              toleranceMinus: '',
+            };
+          }
+          return spec;
+        })
+      );
+    } else {
+      setFlatnessNotice(null);
+      setVariantSpecs(synced);
     }
   };
 
@@ -209,28 +572,83 @@ export default function ProductFormPage() {
     ]);
   };
 
-  const handleRemoveSpecRow = (sIdx) => {
-    setVariantSpecs((prev) => prev.filter((_, i) => i !== sIdx));
-  };
+  const handleChangeSpecParam = (index, paramId) => {
+    const rawId = Number(paramId);
+    if (!rawId) return;
 
-  const handleChangeSpecParam = (sIdx, paramId) => {
-    const param = (lookups?.specParameters || []).find((p) => Number(p.id) === Number(paramId));
+    // Backend rule: Each spec parameter can be listed only once
+    const isDuplicate = variantSpecs.some(
+      (s, i) => i !== index && Number(s.specParameterId) === rawId
+    );
+    if (isDuplicate) {
+      toast.error('Each spec parameter can be listed only once.');
+      return;
+    }
+
+    const param = specParameters.find((p) => Number(p.id) === rawId);
+    const paramName = param?.parameterName || '';
+    const isFlatness = isExactFlatnessParameter(paramName);
+
     setVariantSpecs((prev) => {
       const next = [...prev];
-      next[sIdx] = {
-        ...next[sIdx],
-        specParameterId: Number(paramId),
-        parameterName: param?.parameterName || '',
+      let autoVal = next[index]?.valueDecimal ?? '';
+      let autoText = next[index]?.valueText ?? '';
+      let autoTolPlus = next[index]?.tolerancePlus ?? '';
+      let autoTolMinus = next[index]?.toleranceMinus ?? '';
+
+      if (isFlatness && specsScope === 'STANDARD_GRADE') {
+        const calc = computeStandardFlatness(selectedStandardId, selectedGradeId);
+        if (calc && calc.isSupported && calc.valueMicrons !== null) {
+          autoVal = calc.valueMicrons;
+          autoText = '';
+          autoTolPlus = '';
+          autoTolMinus = '';
+          setFlatnessNotice(calc.detailText);
+        }
+      }
+
+      next[index] = {
+        ...next[index],
+        specParameterId: rawId,
+        parameterName: paramName,
         unitSymbol: param?.unitSymbol || '',
+        valueDecimal: autoVal,
+        valueText: autoText,
+        tolerancePlus: autoTolPlus,
+        toleranceMinus: autoTolMinus,
       };
       return next;
     });
   };
 
-  const handleSaveSpecsLocally = (e) => {
+  const handleSaveSpecs = async (e) => {
     e?.preventDefault();
     if (selectedVariantIndexForSpecs === null) return;
+    const currentVariant = variants[selectedVariantIndexForSpecs];
+    if (!currentVariant) return;
 
+    // Backend rule: send both standardId and gradeId, or neither
+    if (specsScope === 'STANDARD_GRADE') {
+      if (!selectedStandardId || !selectedGradeId) {
+        toast.error('Both Standard and Grade must be selected together, or switch to Common Figures.');
+        return;
+      }
+    }
+
+    // Backend rule: Each spec parameter can be listed only once
+    const seenParamIds = new Set();
+    for (const spec of variantSpecs) {
+      const pid = Number(spec.specParameterId);
+      if (pid) {
+        if (seenParamIds.has(pid)) {
+          toast.error(`Each spec parameter can be listed only once. "${spec.parameterName || 'Spec'}" is duplicated.`);
+          return;
+        }
+        seenParamIds.add(pid);
+      }
+    }
+
+    // Validate that either decimal or text is filled
     for (const spec of variantSpecs) {
       if (!spec.specParameterId) {
         toast.error('Please select a specification parameter for each row');
@@ -248,21 +666,63 @@ export default function ProductFormPage() {
       }
     }
 
-    setVariants((prev) => {
-      const next = [...prev];
-      const target = next[selectedVariantIndexForSpecs];
-      next[selectedVariantIndexForSpecs] = {
-        ...target,
-        specs: variantSpecs,
-        specCount: variantSpecs.length,
-        _isSpecsModified: true,
-      };
-      return next;
-    });
+    const options =
+      specsScope === 'STANDARD_GRADE' && selectedStandardId && selectedGradeId
+        ? { standardId: selectedStandardId, gradeId: selectedGradeId }
+        : {};
 
-    toast.success('Accuracy specifications updated');
-    setIsSpecsModalOpen(false);
-    setSelectedVariantIndexForSpecs(null);
+    if (currentVariant.id) {
+      setIsSavingSpecs(true);
+      try {
+        await productService.setVariantSpecs(currentVariant.id, variantSpecs, options);
+        toast.success(
+          options.standardId
+            ? 'Accuracy specifications saved for Standard + Grade'
+            : 'Common accuracy specifications saved'
+        );
+
+        // Refresh variant detail to get updated values array
+        const fresh = await productService.getVariantById(currentVariant.id);
+        setVariantDetailData(fresh);
+
+        setVariants((prev) => {
+          const next = [...prev];
+          next[selectedVariantIndexForSpecs] = {
+            ...next[selectedVariantIndexForSpecs],
+            specs: fresh?.specs || variantSpecs,
+            specCount: (fresh?.specs || variantSpecs).length,
+            _isSpecsModified: false,
+          };
+          return next;
+        });
+        setIsSpecsModalOpen(false);
+        setSelectedVariantIndexForSpecs(null);
+      } catch (err) {
+        toast.error(err?.message || 'Failed to save accuracy specifications');
+      } finally {
+        setIsSavingSpecs(false);
+      }
+    } else {
+      // Staged locally for new variant without id (e.g. newly added in create or edit mode)
+      setVariants((prev) => {
+        const next = [...prev];
+        next[selectedVariantIndexForSpecs] = {
+          ...next[selectedVariantIndexForSpecs],
+          specs: variantSpecs,
+          specsOptions: options,
+          specCount: variantSpecs.length,
+          _isSpecsModified: true,
+        };
+        return next;
+      });
+      toast.success(
+        options.standardId
+          ? 'Accuracy specifications updated for Standard + Grade'
+          : 'Common accuracy specifications updated'
+      );
+      setIsSpecsModalOpen(false);
+      setSelectedVariantIndexForSpecs(null);
+    }
   };
 
   // Lookups options
@@ -335,11 +795,27 @@ export default function ProductFormPage() {
           requiresCalibration: Boolean(data.requiresCalibration),
         });
 
-        const stds = (data.standards || []).map((s) => ({
+        let stds = (data.standards || []).map((s) => ({
           standardId: Number(s.standardId || s.id),
           standardCode: s.standardCode || '',
           isPrimary: Boolean(s.isPrimary),
+          applicableGradeIds: s.applicableGradeIds || null,
         }));
+        try {
+          const cached = localStorage.getItem(`product_standards_grades_${id}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            stds = stds.map((s) => {
+              const sid = Number(s.standardId);
+              const found = parsed.find((p) => Number(p.standardId || p.id) === sid);
+              return found && found.applicableGradeIds !== undefined
+                ? { ...s, applicableGradeIds: found.applicableGradeIds }
+                : s;
+            });
+          }
+        } catch (e) {
+          console.warn('Could not read cached product grade preferences:', e);
+        }
         setStandards(stds);
 
         const opts = (data.options || []).map((o) => ({
@@ -355,8 +831,8 @@ export default function ProductFormPage() {
         const loadedVariants = Array.isArray(variantsRes?.items)
           ? variantsRes.items
           : Array.isArray(variantsRes)
-          ? variantsRes
-          : [];
+            ? variantsRes
+            : [];
         setVariants(loadedVariants);
         setDeletedVariantIds([]);
       } catch (err) {
@@ -459,6 +935,11 @@ export default function ProductFormPage() {
           productId,
           standards.filter((s) => s.standardId)
         );
+        try {
+          localStorage.setItem(`product_standards_grades_${productId}`, JSON.stringify(standards));
+        } catch (e) {
+          console.warn('Could not cache product grade preferences:', e);
+        }
 
         // 4. Update options
         await productService.setOptions(
@@ -494,7 +975,7 @@ export default function ProductFormPage() {
         );
         for (const v of existingVariantsWithSpecs) {
           try {
-            await productService.setVariantSpecs(v.id, v.specs);
+            await productService.setVariantSpecs(v.id, v.specs, v.specsOptions || {});
           } catch (spErr) {
             console.warn(`Could not save specs for variant #${v.id}:`, spErr);
           }
@@ -511,7 +992,7 @@ export default function ProductFormPage() {
                 await productService.updateVariantStatus(newVarId, false);
               }
               if (Array.isArray(v.specs) && v.specs.length > 0) {
-                await productService.setVariantSpecs(newVarId, v.specs);
+                await productService.setVariantSpecs(newVarId, v.specs, v.specsOptions || {});
               }
             }
           } catch (addErr) {
@@ -549,6 +1030,11 @@ export default function ProductFormPage() {
               productId,
               standards.filter((s) => s.standardId)
             );
+            try {
+              localStorage.setItem(`product_standards_grades_${productId}`, JSON.stringify(standards));
+            } catch (e) {
+              console.warn('Could not cache product grade preferences:', e);
+            }
           } catch (stdErr) {
             console.warn('Could not save standards on create:', stdErr);
           }
@@ -577,7 +1063,7 @@ export default function ProductFormPage() {
                   await productService.updateVariantStatus(newVarId, false);
                 }
                 if (Array.isArray(v.specs) && v.specs.length > 0) {
-                  await productService.setVariantSpecs(newVarId, v.specs);
+                  await productService.setVariantSpecs(newVarId, v.specs, v.specsOptions || {});
                 }
               }
             } catch (vErr) {
@@ -763,92 +1249,78 @@ export default function ProductFormPage() {
           </div>
         </CollapsibleCard>
 
-        {/* ── Sections 2 & 3: Standards & Options (2-Column Desktop Grid) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* ── Section 3: Applicable Standards ── */}
-          <CollapsibleCard
-            title="Manufacturing & Calibration Standards"
-            subtitle="IS, DIN, BS, and GGG metrology specifications"
-            icon={<IconStandards size={18} />}
-            defaultOpen={true}
-          >
-            <ProductStandardsEditor
-              standards={standards}
-              onChange={setStandards}
-              availableStandards={lookups?.standards || []}
-            />
-          </CollapsibleCard>
+        {/* ── Section 2: Manufacturing & Calibration Standards (Full Width) ── */}
+        <CollapsibleCard
+          title="Manufacturing & Calibration Standards"
+          subtitle="IS, DIN, BS, and GGG metrology specifications"
+          icon={<IconStandards size={18} />}
+          defaultOpen={true}
+        >
+          <ProductStandardsEditor
+            standards={standards}
+            onChange={setStandards}
+            availableStandards={lookups?.standards || []}
+          />
+        </CollapsibleCard>
 
-          {/* ── Section 4: Product Options & Accessories ── */}
-          <CollapsibleCard
-            title="Product Options & Accessories"
-            subtitle="Optional fixtures, covers, and attachment configurations"
-            icon={<IconLayers size={18} />}
-            defaultOpen={true}
-          >
-            <ProductOptionsEditor
-              options={options}
-              onChange={setOptions}
-            />
-          </CollapsibleCard>
-        </div>
-
-        {/* ── Sections 5 & 6: Variants & Attachments (2-Column Desktop Grid) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* ── Section 5: Product Variants & Specifications ── */}
-          <CollapsibleCard
-            title="Product Variants & Dimensions"
-            subtitle="Physical sizes, grades, and dimensional figures"
-            icon={<IconLayers size={18} />}
-            defaultOpen={true}
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-heading">
-                    Product Variants & Sizes
-                  </h4>
-                  <p className="text-2xs text-text-muted">
-                    {isEditMode
-                      ? 'Configure dimensions, grades, and active statuses. Changes are saved upon updating product.'
-                      : 'You can define product sizes now or add them later after registration.'}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleOpenAddVariant}
-                  className="flex items-center gap-1.5"
-                >
-                  <IconAdd size={14} />
-                  <span>Add Variant</span>
-                </Button>
+        {/* ── Section 3: Product Variants & Dimensions (Full Width) ── */}
+        <CollapsibleCard
+          title="Product Variants & Dimensions"
+          subtitle="Physical sizes, grades, and dimensional figures"
+          icon={<IconLayers size={18} />}
+          defaultOpen={true}
+        >
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-semibold text-heading">
+                  Product Variants & Sizes
+                </h4>
+                <p className="text-2xs text-text-muted">
+                  {isEditMode
+                    ? 'Configure dimensions, grades, and active statuses. Changes are saved upon updating product.'
+                    : 'You can define product sizes now or add them later after registration.'}
+                </p>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleOpenAddVariant}
+                className="flex items-center gap-1.5"
+              >
+                <IconAdd size={14} />
+                <span>Add Variant</span>
+              </Button>
+            </div>
 
-              {variants.length === 0 ? (
-                <div className="p-4 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
-                  No variants added yet. Click &quot;Add Variant&quot; above to configure dimensions and grades.
-                </div>
-              ) : (
-                <TableContainer
-                  className="border border-border rounded-lg max-h-80 overflow-y-auto"
-                  tableClassName="w-full text-xs table-auto"
-                >
-                  <thead className="sticky top-0 bg-surface z-10">
-                    <tr className="bg-surface border-b border-border">
-                      <Th>Variant Code</Th>
-                      <Th>Grade</Th>
-                      <Th className="text-right">Length (mm)</Th>
-                      <Th className="text-right">Width (mm)</Th>
-                      <Th className="text-right">Height (mm)</Th>
-                      <Th className="text-right">Diameter (mm)</Th>
-                      <Th className="text-center">Status</Th>
-                      <Th className="w-32 text-center">Actions</Th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {variants.map((v, idx) => (
+            {variants.length === 0 ? (
+              <div className="p-4 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
+                No variants added yet. Click &quot;Add Variant&quot; above to configure dimensions and grades.
+              </div>
+            ) : (
+              <TableContainer
+                className="border border-border rounded-lg max-h-[580px] overflow-y-auto"
+                tableClassName="w-full text-xs table-auto"
+              >
+                <thead className="sticky top-0 bg-surface z-10">
+                  <tr className="bg-surface border-b border-border">
+                    <Th>Variant Code</Th>
+                    <Th>Grade</Th>
+                    <Th className="text-right">Length (mm)</Th>
+                    <Th className="text-right">Width (mm)</Th>
+                    <Th className="text-right">Height (mm)</Th>
+                    <Th className="text-right">Diameter (mm)</Th>
+                    <Th className="text-center">Accuracy Specs</Th>
+                    <Th className="w-24 text-center">Status</Th>
+                    <Th className="w-40 text-center">Actions</Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {variants.map((v, idx) => {
+                    const specCount = v.specs !== undefined ? v.specs.length : (v.specCount || 0);
+
+                    return (
                       <tr key={v.id || v._tempId || idx} className="hover:bg-surface/30">
                         <td className="p-2.5 font-mono font-medium text-heading">
                           <div className="flex items-center gap-1.5">
@@ -872,26 +1344,40 @@ export default function ProductFormPage() {
                         <td className="p-2.5 text-right font-mono">{v.heightMm ?? '—'}</td>
                         <td className="p-2.5 text-right font-mono">{v.diameterMm ?? '—'}</td>
                         <td className="p-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSpecsModal(idx)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all shadow-xs border ${specCount > 0
+                              ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 hover:border-primary/50'
+                              : 'bg-muted/30 text-text-muted border-dashed border-border hover:bg-primary/5 hover:text-primary hover:border-primary/40'
+                              }`}
+                            title="Click to configure accuracy specifications"
+                          >
+                            <IconStandards size={13} className={specCount > 0 ? 'text-primary' : 'text-text-muted'} />
+                            <span>
+                              {specCount > 0
+                                ? `${specCount} ${specCount === 1 ? 'Spec' : 'Specs'}`
+                                : '+ Add Specs'}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="p-2.5 text-center">
                           <Badge variant={v.isActive ? 'success' : 'neutral'} size="xs">
                             {v.isActive ? 'Active' : 'Inactive'}
                           </Badge>
                         </td>
                         <td className="p-2.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex items-center justify-center gap-1.5">
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant="outline"
                               size="xs"
                               onClick={() => handleOpenSpecsModal(idx)}
-                              className="text-text-muted hover:text-primary flex items-center gap-1 px-1.5 py-1 border border-border/70 rounded hover:bg-surface/70"
-                              title="Configure accuracy specifications"
+                              className="text-xs flex items-center gap-1 text-primary border-primary/30 hover:bg-primary/10 font-medium"
+                              title="Configure Accuracy Specifications"
                             >
-                              <IconSpecParameters size={13} className="text-primary shrink-0" />
-                              <span className="text-2xs font-mono">
-                                {(v.specs !== undefined ? v.specs.length : (v.specCount || 0)) > 0
-                                  ? `${v.specs !== undefined ? v.specs.length : v.specCount} Specs`
-                                  : 'Add Specs'}
-                              </span>
+                              <IconStandards size={12} className="text-primary" />
+                              <span>Specs</span>
                             </Button>
                             <Button
                               type="button"
@@ -923,14 +1409,30 @@ export default function ProductFormPage() {
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </TableContainer>
-              )}
-            </div>
+                    );
+                  })}
+                </tbody>
+              </TableContainer>
+            )}
+          </div>
+        </CollapsibleCard>
+
+        {/* ── Sections 4 & 5: Options & Attachments (2-Column Desktop Grid) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* ── Section 4: Product Options & Accessories ── */}
+          <CollapsibleCard
+            title="Product Options & Accessories"
+            subtitle="Optional fixtures, covers, and attachment configurations"
+            icon={<IconLayers size={18} />}
+            defaultOpen={true}
+          >
+            <ProductOptionsEditor
+              options={options}
+              onChange={setOptions}
+            />
           </CollapsibleCard>
 
-          {/* ── Section 6: Technical Documents & Attachments ── */}
+          {/* ── Section 5: Technical Documents & Attachments ── */}
           <CollapsibleCard
             title="Technical Documents & Attachments"
             subtitle="CAD drawings, calibration certificates, and datasheets"
@@ -976,7 +1478,7 @@ export default function ProductFormPage() {
                 </div>
               ) : (
                 <TableContainer
-                  className="border border-border rounded-lg max-h-80 overflow-y-auto"
+                  className="border border-border rounded-lg max-h-[580px] overflow-y-auto"
                   tableClassName="w-full text-xs table-auto"
                 >
                   <thead className="sticky top-0 bg-surface z-10">
@@ -1331,171 +1833,360 @@ export default function ProductFormPage() {
         </form>
       </Modal>
 
-      {/* ── Modal: Manage Accuracy Specifications (Deferred Staging) ── */}
+      {/* ── Modal: Accuracy Specifications (Aligned with ProductVariantsTab Task 53/58) ── */}
       <Modal
         isOpen={isSpecsModalOpen}
         onClose={() => {
-          setIsSpecsModalOpen(false);
-          setSelectedVariantIndexForSpecs(null);
+          if (!isSavingSpecs) {
+            setIsSpecsModalOpen(false);
+            setSelectedVariantIndexForSpecs(null);
+          }
         }}
-        title={`Accuracy Specifications — ${
-          selectedVariantIndexForSpecs !== null && variants[selectedVariantIndexForSpecs]
-            ? variants[selectedVariantIndexForSpecs].variantCode || `Variant #${selectedVariantIndexForSpecs + 1}`
-            : ''
-        }`}
-        size="lg"
+        title={`Accuracy Specifications: ${selectedVariantForSpecs?.variantCode || ''}`}
+        size="2xl"
       >
         <div className="space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-border">
-            <div>
-              <p className="text-xs text-text-muted">
-                Define metrological limits, tolerances, and calibration parameters for this variant size.
-              </p>
+          {/* Standard & Grade Scope Selector Bar */}
+          <div className="p-3.5 bg-surface/60 border border-border rounded-xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
+                  Specification Scope
+                </span>
+                <p className="text-2xs text-text-muted mt-0.5">
+                  Save figures for a specific Standard + Grade pair, or configure common figures across all grades.
+                </p>
+              </div>
+
+              <div className="inline-flex rounded-lg border border-border p-0.5 bg-surface shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleScopeChange('STANDARD_GRADE')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'STANDARD_GRADE'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-text-muted hover:text-heading'
+                    }`}
+                >
+                  Standard + Grade
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleScopeChange('COMMON')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'COMMON'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-text-muted hover:text-heading'
+                    }`}
+                >
+                  Common Figures
+                </button>
+              </div>
             </div>
+
+            {specsScope === 'STANDARD_GRADE' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-border/60">
+                <div>
+                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider block mb-1">
+                    Manufacturing Standard
+                  </label>
+                  <SearchableSelect
+                    value={selectedStandardId || ''}
+                    onChange={(val) => {
+                      const raw = val && typeof val === 'object' && 'target' in val ? val.target.value : val;
+                      handleStandardChange(raw);
+                    }}
+                    options={availableStandards}
+                    placeholder="Select Standard"
+                    disabled={isSavingSpecs}
+                    size="sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider block mb-1">
+                    Allowed Precision Grade
+                  </label>
+                  <SearchableSelect
+                    value={selectedGradeId || ''}
+                    onChange={(val) => {
+                      const raw = val && typeof val === 'object' && 'target' in val ? val.target.value : val;
+                      handleGradeChange(raw);
+                    }}
+                    options={availableGradesForStandard}
+                    placeholder={selectedStandardId ? 'Select Allowed Grade' : 'Select standard first'}
+                    disabled={!selectedStandardId || isSavingSpecs}
+                    size="sm"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="pt-2 border-t border-border/60 text-2xs text-text-muted italic">
+                Editing figures common to all standards and grades (standardId & gradeId will be stored as empty).
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pb-2 border-b border-border">
+            <p className="text-xs text-muted-foreground">
+              Define measured values with ± tolerances. Fill Decimal OR Text.
+            </p>
             <Button
               type="button"
               variant="outline"
               size="xs"
               onClick={handleAddSpecRow}
               className="flex items-center gap-1"
+              disabled={isSavingSpecs || (specParameters.length > 0 && variantSpecs.length >= specParameters.length)}
+              title={
+                specParameters.length > 0 && variantSpecs.length >= specParameters.length
+                  ? 'All available parameters have already been added'
+                  : 'Add specification parameter'
+              }
             >
               <IconAdd size={13} />
-              <span>Add Parameter Row</span>
+              <span>Add Spec</span>
             </Button>
           </div>
 
           {isLoadingSpecs ? (
-            <div className="p-8 text-center text-text-muted text-xs animate-pulse">
-              Loading specifications...
-            </div>
+            <div className="h-32 bg-muted/20 animate-pulse rounded-lg" />
           ) : variantSpecs.length === 0 ? (
-            <div className="p-6 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
-              No accuracy specifications defined yet. Click &quot;Add Parameter Row&quot; above to configure Flatness, Parallelism, etc.
+            <div className="p-6 text-center rounded-lg border border-dashed border-border bg-muted/10 text-muted-foreground text-xs">
+              No specifications recorded for this selection yet.{' '}
+              Click &quot;Add Spec&quot; to configure.
             </div>
           ) : (
             <TableContainer
-              className="border border-border rounded-lg max-h-72 overflow-y-auto"
+              className="border border-border rounded-lg overflow-hidden"
               tableClassName="w-full text-xs table-auto"
             >
-              <thead className="sticky top-0 bg-surface z-10">
-                <tr className="bg-surface border-b border-border">
-                  <Th className="w-48">Parameter</Th>
-                  <Th className="w-24">Decimal</Th>
-                  <Th className="w-20">+ Tol</Th>
-                  <Th className="w-20">− Tol</Th>
-                  <Th className="w-36">Or Text Value</Th>
-                  <Th className="w-12 text-center">Action</Th>
+              <thead>
+                <tr className="bg-muted/40 border-b border-border">
+                  <Th className="w-64 min-w-56">Parameter</Th>
+                  <Th className="w-56 min-w-48">Decimal Value</Th>
+                  <Th className="w-24">+ Tol</Th>
+                  <Th className="w-24">− Tol</Th>
+                  <Th className="w-44">Or Text Value</Th>
+                  <Th className="w-14 text-center">Action</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {variantSpecs.map((spec, sIdx) => (
-                  <tr key={sIdx} className="hover:bg-surface/30">
-                    <td className="p-2">
-                      <SearchableSelect
-                        value={spec.specParameterId ? Number(spec.specParameterId) : ''}
-                        onChange={(val) => {
-                          const rawId = val && typeof val === 'object' && 'target' in val ? val.target.value : val;
-                          handleChangeSpecParam(sIdx, rawId);
-                        }}
-                        options={specParamOptions}
-                        placeholder="Select Parameter"
-                        size="sm"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <Input
-                        type="number"
-                        step="any"
-                        size="sm"
-                        value={spec.valueDecimal ?? ''}
-                        onChange={(e) => {
-                          const next = [...variantSpecs];
-                          next[sIdx].valueDecimal = e.target.value;
-                          setVariantSpecs(next);
-                        }}
-                        placeholder="e.g. 3"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <Input
-                        type="number"
-                        step="any"
-                        size="sm"
-                        value={spec.tolerancePlus ?? ''}
-                        onChange={(e) => {
-                          const next = [...variantSpecs];
-                          next[sIdx].tolerancePlus = e.target.value;
-                          setVariantSpecs(next);
-                        }}
-                        placeholder="+0.5"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <Input
-                        type="number"
-                        step="any"
-                        size="sm"
-                        value={spec.toleranceMinus ?? ''}
-                        onChange={(e) => {
-                          const next = [...variantSpecs];
-                          next[sIdx].toleranceMinus = e.target.value;
-                          setVariantSpecs(next);
-                        }}
-                        placeholder="0.5"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <Input
-                        size="sm"
-                        value={spec.valueText ?? ''}
-                        onChange={(e) => {
-                          const next = [...variantSpecs];
-                          next[sIdx].valueText = e.target.value;
-                          setVariantSpecs(next);
-                        }}
-                        placeholder="e.g. Grade 0"
-                      />
-                    </td>
-                    <td className="p-2 text-center">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => {
-                          const pName =
-                            spec.parameterName ||
-                            lookups?.specParameters?.find((p) => Number(p.id) === Number(spec.specParameterId))?.parameterName ||
-                            `Parameter #${sIdx + 1}`;
-                          setItemToDelete({
-                            type: 'spec',
-                            index: sIdx,
-                            name: pName,
-                          });
-                        }}
-                        className="text-danger hover:bg-danger/10"
-                        title="Remove parameter"
-                      >
-                        <IconDelete size={14} />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {variantSpecs.map((spec, sIdx) => {
+                  const paramName =
+                    spec.parameterName ||
+                    specParameters.find((p) => Number(p.id) === Number(spec.specParameterId))
+                      ?.parameterName ||
+                    '';
+                  const isExactFlatnessParam = isExactFlatnessParameter(paramName);
+
+                  // Filter out parameters already selected in other rows (Backend rule: Each spec parameter can be listed only once)
+                  const rowParamOptions = specParameters
+                    .filter((p) => {
+                      const isSelectedInOtherRow = variantSpecs.some(
+                        (s, idx) => idx !== sIdx && Number(s.specParameterId) === Number(p.id)
+                      );
+                      return !isSelectedInOtherRow;
+                    })
+                    .map((p) => ({
+                      value: Number(p.id),
+                      label: `${p.parameterName}${p.unitSymbol ? ` (${p.unitSymbol})` : ''}`,
+                    }));
+
+                  return (
+                    <tr key={sIdx}>
+                      <td className="p-2">
+                        <SearchableSelect
+                          value={spec.specParameterId ? Number(spec.specParameterId) : ''}
+                          onChange={(val) => {
+                            const rawId =
+                              val && typeof val === 'object' && 'target' in val
+                                ? val.target.value
+                                : val;
+                            handleChangeSpecParam(sIdx, rawId);
+                          }}
+                          options={rowParamOptions}
+                          placeholder="Select Parameter"
+                          size="sm"
+                          disabled={isSavingSpecs}
+                        />
+                      </td>
+                      <td className="p-2">
+                        {isExactFlatnessParam && specsScope === 'STANDARD_GRADE' ? (
+                          <div className="flex items-center gap-1.5 w-full">
+                            <Input
+                              type="number"
+                              size="sm"
+                              value={spec.valueDecimal ?? ''}
+                              readOnly
+                              disabled
+                              className="font-mono flex-1 bg-muted/40 cursor-not-allowed font-semibold text-foreground select-none"
+                              title="Locked to standard formula tolerance (auto-calculated from dimensions & standard grade)"
+                            />
+                            <div
+                              className="shrink-0 h-[var(--control-height-sm)] px-2 bg-muted/60 text-muted-foreground border border-border rounded-control flex items-center gap-1 text-2xs font-medium select-none cursor-default"
+                              title="Locked to standard formula tolerance"
+                            >
+                              <IconLock size={11} className="text-muted-foreground shrink-0" />
+                              <span>Locked</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <Input
+                            type="number"
+                            step="any"
+                            size="sm"
+                            value={spec.valueDecimal ?? ''}
+                            onChange={(e) => {
+                              const next = [...variantSpecs];
+                              next[sIdx].valueDecimal = e.target.value;
+                              setVariantSpecs(next);
+                            }}
+                            placeholder="e.g. 6.1"
+                            disabled={isSavingSpecs}
+                            className="font-mono flex-1 min-w-0"
+                          />
+                        )}
+                      </td>
+                      <td className="p-2">
+                        {isExactFlatnessParam ? (
+                          <span
+                            className="font-mono text-text-muted text-center block text-xs select-none"
+                            title="Flatness is a single total allowable limit (no ± bilateral tolerance)"
+                          >
+                            —
+                          </span>
+                        ) : (
+                          <Input
+                            type="number"
+                            step="any"
+                            size="sm"
+                            value={spec.tolerancePlus ?? ''}
+                            onChange={(e) => {
+                              const next = [...variantSpecs];
+                              next[sIdx].tolerancePlus = e.target.value;
+                              setVariantSpecs(next);
+                            }}
+                            placeholder="+0.5"
+                            disabled={isSavingSpecs}
+                          />
+                        )}
+                      </td>
+                      <td className="p-2">
+                        {isExactFlatnessParam ? (
+                          <span
+                            className="font-mono text-text-muted text-center block text-xs select-none"
+                            title="Flatness is a single total allowable limit (no ± bilateral tolerance)"
+                          >
+                            —
+                          </span>
+                        ) : (
+                          <Input
+                            type="number"
+                            step="any"
+                            size="sm"
+                            value={spec.toleranceMinus ?? ''}
+                            onChange={(e) => {
+                              const next = [...variantSpecs];
+                              next[sIdx].toleranceMinus = e.target.value;
+                              setVariantSpecs(next);
+                            }}
+                            placeholder="0.5"
+                            disabled={isSavingSpecs}
+                          />
+                        )}
+                      </td>
+                      <td className="p-2">
+                        {isExactFlatnessParam ? (
+                          <span
+                            className="font-mono text-text-muted text-center block text-xs select-none"
+                            title="Flatness is a numeric metrology figure"
+                          >
+                            —
+                          </span>
+                        ) : (
+                          <Input
+                            size="sm"
+                            value={spec.valueText ?? ''}
+                            onChange={(e) => {
+                              const next = [...variantSpecs];
+                              next[sIdx].valueText = e.target.value;
+                              setVariantSpecs(next);
+                            }}
+                            placeholder="e.g. 3 – 25"
+                            disabled={isSavingSpecs}
+                          />
+                        )}
+                      </td>
+                      <td className="p-2 text-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => {
+                            const pName =
+                              spec.parameterName ||
+                              specParameters.find(
+                                (p) => Number(p.id) === Number(spec.specParameterId)
+                              )?.parameterName ||
+                              `Parameter #${sIdx + 1}`;
+                            setItemToDelete({
+                              type: 'spec',
+                              index: sIdx,
+                              name: pName,
+                            });
+                          }}
+                          className="text-danger hover:bg-danger/10"
+                          title="Remove parameter"
+                          disabled={isSavingSpecs}
+                        >
+                          <IconDelete size={14} />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </TableContainer>
+          )}
+
+          {/* Formula calculation notice banner */}
+          {flatnessNotice && (
+            <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 text-xs text-primary flex items-center justify-between gap-2 animate-in fade-in duration-150">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono text-3xs font-bold px-1.5 py-0.5 rounded bg-primary/20 shrink-0">
+                  FORMULA
+                </span>
+                <span className="font-mono text-xs">{flatnessNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFlatnessNotice(null)}
+                className="text-text-muted hover:text-primary text-xs shrink-0 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
           )}
 
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
             <CancelButton
               size="sm"
+              label="Close"
               onClick={() => {
                 setIsSpecsModalOpen(false);
                 setSelectedVariantIndexForSpecs(null);
               }}
+              disabled={isSavingSpecs}
             />
             <SaveButton
+              type="button"
               size="sm"
-              label="Apply Specs"
-              onClick={handleSaveSpecsLocally}
+              label={
+                specsScope === 'STANDARD_GRADE'
+                  ? 'Save Standard + Grade Specs'
+                  : 'Save Common Specs'
+              }
+              onClick={handleSaveSpecs}
+              loading={isSavingSpecs}
             />
           </div>
         </div>
@@ -1603,13 +2294,12 @@ export default function ProductFormPage() {
         isOpen={Boolean(itemToDelete)}
         onClose={() => setItemToDelete(null)}
         onConfirm={handleConfirmDelete}
-        title={`Remove ${
-          itemToDelete?.type === 'variant'
-            ? 'Variant'
-            : itemToDelete?.type === 'attachment'
+        title={`Remove ${itemToDelete?.type === 'variant'
+          ? 'Variant'
+          : itemToDelete?.type === 'attachment'
             ? 'Attachment'
             : 'Specification Parameter'
-        }`}
+          }`}
         message={`Are you sure you want to remove "${itemToDelete?.name}"? This action cannot be undone.`}
         confirmText="Remove"
         variant="danger"

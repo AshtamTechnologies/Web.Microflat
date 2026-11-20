@@ -31,6 +31,7 @@ import {
   Th,
   Td,
   EmptyState,
+  FormattedHtmlBlock,
 } from '../../components/ui';
 import { useSalesOrdersContext } from '../../context/SalesOrdersContext';
 import {
@@ -39,6 +40,7 @@ import {
   TAX_TREATMENTS,
 } from '../../mocks/salesOrders';
 import { formatDate } from '../../utils/dateUtils';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 import useColumnResize from '../../hooks/useColumnResize';
 import ChangeOrderStatusModal from './components/ChangeOrderStatusModal';
 import UploadOrderDocumentModal from './components/UploadOrderDocumentModal';
@@ -174,12 +176,18 @@ export default function SalesOrderViewPage() {
     ? order.nextStatuses.length > 0
     : Boolean(order.nextStatuses?.length);
 
+  const isDirect = Boolean(order.orderSource === true || order.isDirectOrder || !order.quotationId);
+  const sourceLabel = order.orderSourceName || (isDirect ? 'Direct' : 'Quotation');
+
   return (
     <div className="w-full space-y-6 pb-20">
       <PageHeader
         title={
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-mono text-heading">{order.orderConfirmationNo}</span>
+            <Badge variant={isDirect ? 'warning' : 'info'} size="md">
+              {sourceLabel}
+            </Badge>
             <Badge variant={getOrderStatusBadgeVariant(order.status)} size="md">
               {order.status}
             </Badge>
@@ -193,22 +201,24 @@ export default function SalesOrderViewPage() {
         subtitle={
           <div className="text-xs text-text-muted mt-0.5 flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-heading">{order.clientName}</span>
-            <span>·</span>
-            {order.quotationId ? (
-              <span>
-                Quotation:{' '}
-                <Link
-                  to={`/quotations/${order.quotationId}`}
-                  className="font-mono text-primary hover:underline"
-                >
-                  {order.quotationNo}
-                </Link>
-              </span>
-            ) : (
-              <Badge variant="neutral" size="xs">
-                Direct Order (Without Quotation)
-              </Badge>
-            )}
+            {order.quotationNo ? (
+              <>
+                <span>·</span>
+                <span>
+                  Quotation:{' '}
+                  {order.quotationId ? (
+                    <Link
+                      to={`/quotations/${order.quotationId}`}
+                      className="font-mono text-primary hover:underline"
+                    >
+                      {order.quotationNo}
+                    </Link>
+                  ) : (
+                    <span className="font-mono text-heading">{order.quotationNo}</span>
+                  )}
+                </span>
+              </>
+            ) : null}
             {order.inquiryNo && (
               <>
                 <span>·</span>
@@ -338,16 +348,22 @@ export default function SalesOrderViewPage() {
                   }
                 />
                 <DetailField label="Source Quotation">
-                  {order.quotationId ? (
-                    <Link
-                      to={`/quotations/${order.quotationId}`}
-                      className="view-field-value mf-detail-value font-mono text-primary hover:underline"
-                    >
-                      {order.quotationNo} (Rev {order.quotationRevisionNo ?? 0})
-                    </Link>
+                  {order.quotationNo ? (
+                    order.quotationId ? (
+                      <Link
+                        to={`/quotations/${order.quotationId}`}
+                        className="view-field-value mf-detail-value font-mono text-primary hover:underline"
+                      >
+                        {order.quotationNo} {order.quotationRevisionNo !== null && order.quotationRevisionNo !== undefined ? `(Rev ${order.quotationRevisionNo})` : ''}
+                      </Link>
+                    ) : (
+                      <span className="view-field-value mf-detail-value font-mono text-heading">
+                        {order.quotationNo}
+                      </span>
+                    )
                   ) : (
                     <span className="view-field-value mf-detail-value font-mono text-text-muted">
-                      Direct Order (None)
+                      — (Direct Order)
                     </span>
                   )}
                 </DetailField>
@@ -371,7 +387,12 @@ export default function SalesOrderViewPage() {
 
             <Card title="Client Details">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <DetailField label="Client Company" value={order.clientName} />
+                <DetailField label="Client Company" value={order.clientName || '—'} />
+                <DetailField
+                  label="Billing Currency"
+                  mono
+                  value={`${order.currency || 'INR'}${order.currencyCode && order.currencyCode !== order.currency ? ` (${order.currencyCode})` : ''}`}
+                />
                 <DetailField
                   label="Contact Person"
                   value={order.contactPerson || '—'}
@@ -387,6 +408,13 @@ export default function SalesOrderViewPage() {
                   isEmail={Boolean(order.contactEmail)}
                   value={order.contactEmail || '—'}
                 />
+                {order.gstNo && (
+                  <DetailField
+                    label="GST No"
+                    mono
+                    value={order.gstNo}
+                  />
+                )}
                 <DetailField
                   label="Billing / Shipping Address"
                   className="sm:col-span-2"
@@ -398,7 +426,11 @@ export default function SalesOrderViewPage() {
 
           <Card
             title="Ordered Line Items"
-            subtitle="Items linked to quotation revision lines with applied taxes"
+            subtitle={
+              isDirect
+                ? 'Product line items with quantities, rates, and applied taxes'
+                : 'Items linked to quotation revision lines with applied taxes'
+            }
             bodyClassName="p-0"
           >
             <div className="overflow-x-auto">
@@ -564,46 +596,48 @@ export default function SalesOrderViewPage() {
           <Card title="Commercial & Delivery Terms">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <DetailField label="Payment Terms">
-                {Array.isArray(order.paymentTerms) && order.paymentTerms.length > 0 ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {order.paymentTerms.map((t, idx) => (
-                      <Badge key={idx} variant="neutral" size="xs">
-                        {t}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : typeof order.paymentTerms === 'string' && order.paymentTerms.includes(',') ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {order.paymentTerms.split(',').map((t, idx) => (
-                      <Badge key={idx} variant="neutral" size="xs">
-                        {t.trim()}
-                      </Badge>
-                    ))}
-                  </div>
+                {order.paymentTerms && (Array.isArray(order.paymentTerms) ? order.paymentTerms.length > 0 : Boolean(order.paymentTerms)) ? (
+                  isHtmlMarkup(order.paymentTerms) ? (
+                    <FormattedHtmlBlock content={order.paymentTerms} className="mt-1" />
+                  ) : (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(Array.isArray(order.paymentTerms)
+                        ? order.paymentTerms
+                        : typeof order.paymentTerms === 'string'
+                        ? (order.paymentTerms.includes(',') ? order.paymentTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.paymentTerms.trim()])
+                        : [order.paymentTerms]
+                      ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
+                        <Badge key={idx} variant="neutral" size="xs">
+                          {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )
                 ) : (
-                  <span>{order.paymentTerms || '—'}</span>
+                  <span>—</span>
                 )}
               </DetailField>
 
               <DetailField label="Delivery Terms">
-                {Array.isArray(order.deliveryTerms) && order.deliveryTerms.length > 0 ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {order.deliveryTerms.map((t, idx) => (
-                      <Badge key={idx} variant="neutral" size="xs">
-                        {t}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : typeof order.deliveryTerms === 'string' && order.deliveryTerms.includes(',') ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {order.deliveryTerms.split(',').map((t, idx) => (
-                      <Badge key={idx} variant="neutral" size="xs">
-                        {t.trim()}
-                      </Badge>
-                    ))}
-                  </div>
+                {order.deliveryTerms && (Array.isArray(order.deliveryTerms) ? order.deliveryTerms.length > 0 : Boolean(order.deliveryTerms)) ? (
+                  isHtmlMarkup(order.deliveryTerms) ? (
+                    <FormattedHtmlBlock content={order.deliveryTerms} className="mt-1" />
+                  ) : (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(Array.isArray(order.deliveryTerms)
+                        ? order.deliveryTerms
+                        : typeof order.deliveryTerms === 'string'
+                        ? (order.deliveryTerms.includes(',') ? order.deliveryTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.deliveryTerms.trim()])
+                        : [order.deliveryTerms]
+                      ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
+                        <Badge key={idx} variant="neutral" size="xs">
+                          {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )
                 ) : (
-                  <span>{order.deliveryTerms || '—'}</span>
+                  <span>—</span>
                 )}
               </DetailField>
 

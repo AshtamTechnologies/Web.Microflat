@@ -37,10 +37,12 @@ import {
   Td,
   SearchableSelect,
   ConfirmModal,
+  FormattedHtmlBlock,
 } from '../../components/ui';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { TAX_TREATMENTS, calculateQuotationTotals, formatCurrency } from '../../mocks/quotations';
 import { formatDate } from '../../utils/dateUtils';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import RecordPOModal from './components/RecordPOModal';
 import AddNegotiationModal from './components/AddNegotiationModal';
@@ -829,46 +831,68 @@ export default function QuotationViewPage() {
                 {[
                   {
                     label: 'Payment Terms',
-                    items: (Array.isArray(activeRevision?.paymentTerms || quotation.paymentTerms)
-                      ? (activeRevision?.paymentTerms || quotation.paymentTerms)
-                      : (activeRevision?.paymentTerms || quotation.paymentTerms || quotation.paymentTermName ? [activeRevision?.paymentTerms || quotation.paymentTerms || quotation.paymentTermName] : [])
-                    ).filter(Boolean),
+                    raw: activeRevision?.paymentTerms || quotation.paymentTerms || quotation.paymentTermName,
                   },
                   {
                     label: 'Delivery Terms',
-                    items: (Array.isArray(activeRevision?.deliveryTerms || quotation.deliveryTerms)
-                      ? (activeRevision?.deliveryTerms || quotation.deliveryTerms)
-                      : (activeRevision?.deliveryTerms || quotation.deliveryTerms ? [activeRevision?.deliveryTerms || quotation.deliveryTerms] : [])
-                    ).filter(Boolean),
+                    raw: activeRevision?.deliveryTerms || quotation.deliveryTerms,
                   },
-                ].map((section) => (
-                  <div
-                    key={section.label}
-                    className="bg-surface/40 border border-border/60 rounded-lg p-3.5"
-                  >
-                    <DetailField label={section.label}>
-                      {section.items.length === 0 ? (
-                        <p className="text-xs text-text-muted italic mt-1.5">—</p>
-                      ) : (
-                        <ul className="space-y-1.5 mt-1.5">
-                          {section.items.map((term, idx) => (
-                            <li
-                              key={idx}
-                              className="flex items-start gap-2 text-xs text-heading leading-relaxed"
-                            >
-                              <IconCheck
-                                size={13}
-                                className="text-primary shrink-0 mt-0.5"
-                                aria-hidden="true"
-                              />
-                              <span>{typeof term === 'object' ? (term.name || term.termName || term.description || term.termCode || JSON.stringify(term)) : term}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </DetailField>
-                  </div>
-                ))}
+                ].map((section) => {
+                  const raw = section.raw;
+                  const isHtml = isHtmlMarkup(raw);
+                  let items = [];
+                  if (!isHtml && raw) {
+                    if (Array.isArray(raw)) {
+                      items = raw.filter((i) => !isHtmlMarkup(i));
+                    } else if (typeof raw === 'string' && raw.trim()) {
+                      const trimmed = raw.trim();
+                      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                        try {
+                          const p = JSON.parse(trimmed);
+                          if (Array.isArray(p)) items = p.filter((i) => !isHtmlMarkup(i));
+                        } catch {
+                          // ignore
+                        }
+                      }
+                      if (items.length === 0) {
+                        items = trimmed.includes(',')
+                          ? trimmed.split(',').map((s) => s.trim()).filter((s) => s && !isHtmlMarkup(s))
+                          : [trimmed];
+                      }
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={section.label}
+                      className="bg-surface/40 border border-border/60 rounded-lg p-3.5"
+                    >
+                      <DetailField label={section.label}>
+                        {isHtml ? (
+                          <FormattedHtmlBlock content={raw} className="mt-1.5" />
+                        ) : items.length === 0 ? (
+                          <p className="text-xs text-text-muted italic mt-1.5">—</p>
+                        ) : (
+                          <ul className="space-y-1.5 mt-1.5">
+                            {items.map((term, idx) => (
+                              <li
+                                key={idx}
+                                className="flex items-start gap-2 text-xs text-heading leading-relaxed"
+                              >
+                                <IconCheck
+                                  size={13}
+                                  className="text-primary shrink-0 mt-0.5"
+                                  aria-hidden="true"
+                                />
+                                <span>{typeof term === 'object' ? (term.name || term.termName || term.description || term.termCode || JSON.stringify(term)) : term}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </DetailField>
+                    </div>
+                  );
+                })}
               </div>
 
               {quotation.termsAndConditions && (

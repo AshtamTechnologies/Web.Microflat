@@ -79,7 +79,12 @@ export function clientDetailToApi(formData) {
     contactType: formData.contactType || formData.contactTypeId || 'Customer',
     officialEmail: (formData.officialEmail || formData.email || '').trim().toLowerCase() || null,
     gstNo: (formData.gstNo || '').trim().toUpperCase() || null,
-    deliveryTerms: formData.deliveryTerms?.trim() || null,
+    deliveryTerms: Array.isArray(formData.deliveryTerms)
+      ? (formData.deliveryTerms
+          .map((t) => (typeof t === 'object' && t !== null ? (t.termCode || t.code || t.name || t.termName || t.id) : t))
+          .filter(Boolean)
+          .join(', ') || null)
+      : (typeof formData.deliveryTerms === 'string' ? formData.deliveryTerms.trim() || null : null),
     internalComments: (formData.internalComments || formData.comments || '').trim() || null,
     isActive: formData.isActive !== false,
     paymentTermIds,
