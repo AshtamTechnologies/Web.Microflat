@@ -117,8 +117,8 @@ export function QuotationsProvider({ children }) {
     } catch (err) {
       console.warn('Failed to fetch quotation lookups:', err);
     }
-    return lookups;
-  }, [lookups]);
+    return null;
+  }, []);
 
   /**
    * Refresh quotations list from backend API (or mock)

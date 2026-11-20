@@ -290,6 +290,19 @@ export async function cancelRequest(id, data = {}) {
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
+ * Returns lookups for approval settings: approverTypes, roles, users.
+ * GET /api/approval-settings/lookups
+ */
+export async function getApprovalSettingsLookups() {
+  try {
+    const response = await axiosInstance.get(APPROVAL_ENDPOINTS.SETTINGS_LOOKUPS);
+    return response.data || { approverTypes: [], roles: [], users: [] };
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
  * Returns all system modules with their current approval requirement configuration.
  * GET /api/approval-settings/modules?isModuleActive=true
  * @param {{ isModuleActive?: boolean }} [params]
@@ -353,15 +366,20 @@ export async function getApprovalSetting(id) {
 /**
  * Creates approval setting for a module (Admin only).
  * POST /api/approval-settings
- * @param {{ moduleId: number, isApprovalRequired: boolean, approverRoleId?: number }} data
+ * @param {{ moduleId: number, isApprovalRequired: boolean, approverType?: number, approverRoleId?: number, approverUserId?: number }} data
  */
 export async function createApprovalSetting(data) {
   try {
-    const response = await axiosInstance.post(APPROVAL_ENDPOINTS.SETTINGS, {
+    const isApprovalRequired = Boolean(data.isApprovalRequired);
+    const approverType = data.approverType ? Number(data.approverType) : 1;
+    const payload = {
       moduleId: Number(data.moduleId),
-      isApprovalRequired: Boolean(data.isApprovalRequired),
-      approverRoleId: data.approverRoleId ? Number(data.approverRoleId) : undefined,
-    });
+      isApprovalRequired,
+      approverType,
+      approverRoleId: isApprovalRequired && approverType === 1 && data.approverRoleId ? Number(data.approverRoleId) : null,
+      approverUserId: isApprovalRequired && approverType === 2 && data.approverUserId ? Number(data.approverUserId) : null,
+    };
+    const response = await axiosInstance.post(APPROVAL_ENDPOINTS.SETTINGS, payload);
     return response.data;
   } catch (err) {
     throw normalizeApiError(err);
@@ -372,15 +390,20 @@ export async function createApprovalSetting(data) {
  * Updates approval setting for a module (Admin only).
  * PUT /api/approval-settings/{id}
  * @param {number|string} id
- * @param {{ isApprovalRequired: boolean, approverRoleId?: number }} data
+ * @param {{ isApprovalRequired: boolean, approverType?: number, approverRoleId?: number, approverUserId?: number }} data
  */
 export async function updateApprovalSetting(id, data) {
   try {
     const validId = cleanId(id);
-    const response = await axiosInstance.put(APPROVAL_ENDPOINTS.SETTINGS_BY_ID(validId), {
-      isApprovalRequired: Boolean(data.isApprovalRequired),
-      approverRoleId: data.approverRoleId ? Number(data.approverRoleId) : undefined,
-    });
+    const isApprovalRequired = Boolean(data.isApprovalRequired);
+    const approverType = data.approverType ? Number(data.approverType) : 1;
+    const payload = {
+      isApprovalRequired,
+      approverType,
+      approverRoleId: isApprovalRequired && approverType === 1 && data.approverRoleId ? Number(data.approverRoleId) : null,
+      approverUserId: isApprovalRequired && approverType === 2 && data.approverUserId ? Number(data.approverUserId) : null,
+    };
+    const response = await axiosInstance.put(APPROVAL_ENDPOINTS.SETTINGS_BY_ID(validId), payload);
     return response.data;
   } catch (err) {
     throw normalizeApiError(err);

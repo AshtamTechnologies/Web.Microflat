@@ -19,6 +19,16 @@ export const ApprovalStatus = {
   NotRequired: 6,
 };
 
+export const ApproverType = {
+  Role: 1,
+  User: 2,
+};
+
+export const ApproverTypeLabel = {
+  1: 'Role',
+  2: 'User',
+};
+
 export const ApprovalStatusLabel = {
   1: 'Draft',
   2: 'Pending',

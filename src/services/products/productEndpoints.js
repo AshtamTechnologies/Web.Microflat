@@ -22,4 +22,11 @@ export const PRODUCT_ENDPOINTS = {
   VARIANT_STATUS: (id) => `/api/product-variants/${id}/status`,
   VARIANT_SPECS: (id) => `/api/product-variants/${id}/specs`,
   VARIANT_SPECS_RESOLVE: (id) => `/api/product-variants/${id}/specs/resolve`,
+
+  // Product Options (from Swagger /api/product-options)
+  PRODUCT_OPTIONS: '/api/product-options',
+
+  // Product Prices (from ProductPriceList.md)
+  PRODUCT_PRICES: '/api/product-prices',
+  PRODUCT_PRICES_LOOKUP: '/api/product-prices/lookup',
 };

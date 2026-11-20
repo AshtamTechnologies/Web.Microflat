@@ -450,6 +450,27 @@ export async function getResolvedVariantSpecs(variantId, options = {}) {
       params: queryParams,
     });
     return Array.isArray(res?.data) ? res.data : [];
+ * Paged list of product options, filtered by product, option name, and standard flag.
+ * GET /api/product-options?ProductId={productId}
+ */
+export async function listProductOptions(params = {}) {
+  try {
+    const query = {};
+    if (params.productId) query.ProductId = Number(params.productId);
+    if (params.search) query.Search = params.search;
+    if (params.isStandard !== undefined && params.isStandard !== null) query.IsStandard = Boolean(params.isStandard);
+    query.PageNumber = params.pageNumber ?? params.PageNumber ?? 1;
+    query.PageSize = params.pageSize ?? params.PageSize ?? 100;
+
+    const res = await axiosInstance.get(PRODUCT_ENDPOINTS.PRODUCT_OPTIONS, { params: query });
+    const data = res?.data || {};
+    return {
+      items: Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [],
+      totalCount: data.totalCount ?? 0,
+      pageNumber: data.pageNumber ?? 1,
+      pageSize: data.pageSize ?? 100,
+      totalPages: data.totalPages ?? 1,
+    };
   } catch (err) {
     throw normalizeApiError(err);
   }
@@ -534,6 +555,56 @@ export async function uploadAttachment(productId, formData) {
       },
     });
     return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Look up the list price for a product configuration + options.
+ * GET /api/product-prices/lookup
+ * Aligned with ProductPriceList.md § 2.8.
+ */
+export async function lookupProductPrice(params = {}) {
+  try {
+    const query = {};
+    if (params.productId) query.productId = Number(params.productId);
+    if (params.productVariantId) query.productVariantId = Number(params.productVariantId);
+    if (params.standardId) query.standardId = Number(params.standardId);
+    if (params.gradeId) query.gradeId = Number(params.gradeId);
+    if (params.currencyId) query.currencyId = Number(params.currencyId);
+    if (Array.isArray(params.productOptionIds) && params.productOptionIds.length > 0) {
+      query.productOptionIds = params.productOptionIds;
+    }
+
+    const res = await axiosInstance.get(PRODUCT_ENDPOINTS.PRODUCT_PRICES_LOOKUP, {
+      params: query,
+      paramsSerializer: {
+        indexes: null,
+      },
+    });
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Paged list of product prices with filters.
+ * GET /api/product-prices
+ * Aligned with ProductPriceList.md § 2.2.
+ */
+export async function listProductPrices(params = {}) {
+  try {
+    const res = await axiosInstance.get(PRODUCT_ENDPOINTS.PRODUCT_PRICES, { params });
+    const data = res?.data || {};
+    return {
+      items: Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [],
+      totalCount: data.totalCount ?? 0,
+      pageNumber: data.pageNumber ?? 1,
+      pageSize: data.pageSize ?? 20,
+      totalPages: data.totalPages ?? 1,
+    };
   } catch (err) {
     throw normalizeApiError(err);
   }

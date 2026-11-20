@@ -18,6 +18,7 @@ export const APPROVAL_ENDPOINTS = {
   CANCEL: (id) => `/api/approval-requests/${id}/cancel`,
   // Settings & Types
   SETTINGS: '/api/approval-settings',
+  SETTINGS_LOOKUPS: '/api/approval-settings/lookups',
   SETTINGS_MODULES: '/api/approval-settings/modules',
   SETTINGS_BY_MODULE: (moduleCode) => `/api/approval-settings/by-module/${moduleCode}`,
   SETTINGS_BY_ID: (id) => `/api/approval-settings/${id}`,
