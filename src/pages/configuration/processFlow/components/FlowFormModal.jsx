@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import {
   Modal,
   FormGrid,
   Input,
+  SearchableSelect,
   StatusSwitch,
   SaveButton,
   CancelButton,
 } from '../../../../components/ui';
-import { MODULE_CODE_REGEX, FLOW_LIMITS } from '../../../../constants/processFlow';
+import { FLOW_LIMITS } from '../../../../constants/processFlow';
 import { IconProcessFlow } from '../../../../constants/icons';
-import { processFlowService } from '../../../../services';
+import { processFlowService, documentSeriesService } from '../../../../services';
 
 /**
  * FlowFormModal — Create or edit a Process Flow.
@@ -29,11 +30,30 @@ export default function FlowFormModal({ isOpen, onClose, flow, onSuccess }) {
     name: '',
     isActive: true,
   });
+  const [modules, setModules] = useState([]);
+  const [isModulesLoading, setIsModulesLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Fetch active system modules when the modal opens
   useEffect(() => {
+    let isMounted = true;
+    async function fetchModules() {
+      try {
+        setIsModulesLoading(true);
+        const data = await documentSeriesService.listModules({ isActive: true });
+        if (isMounted && Array.isArray(data)) {
+          setModules(data);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch modules for process flow:', err);
+      } finally {
+        if (isMounted) setIsModulesLoading(false);
+      }
+    }
+
     if (isOpen) {
+      fetchModules();
       if (flow) {
         setFormData({
           moduleCode: flow.moduleCode || '',
@@ -49,20 +69,34 @@ export default function FlowFormModal({ isOpen, onClose, flow, onSuccess }) {
       }
       setErrors({});
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [isOpen, flow]);
 
+  const moduleOptions = useMemo(() => {
+    return modules.map((m) => ({
+      value: m.moduleCode,
+      label: m.moduleName ? `${m.moduleName} (${m.moduleCode})` : m.moduleCode,
+    }));
+  }, [modules]);
+
   const handleChange = (field, value) => {
-    let finalVal = value;
-    if (field === 'moduleCode') {
-      // Auto-uppercase and sanitize to allowed chars
-      finalVal = String(value || '')
-        .toUpperCase()
-        .replace(/[^A-Z0-9_]/g, '')
-        .slice(0, FLOW_LIMITS.MAX_MODULE_CODE_LENGTH);
-    }
-    setFormData((prev) => ({ ...prev, [field]: finalVal }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const handleModuleChange = (value) => {
+    handleChange('moduleCode', value);
+    // Auto-suggest flow name if not already filled
+    if (!formData.name?.trim()) {
+      const selected = modules.find((m) => m.moduleCode === value);
+      if (selected?.moduleName) {
+        handleChange('name', `${selected.moduleName} Process Flow`);
+      }
     }
   };
 
@@ -71,11 +105,7 @@ export default function FlowFormModal({ isOpen, onClose, flow, onSuccess }) {
 
     if (!isEditing) {
       if (!formData.moduleCode?.trim()) {
-        nextErrors.moduleCode = 'Module code is required';
-      } else if (!MODULE_CODE_REGEX.test(formData.moduleCode)) {
-        nextErrors.moduleCode = 'Only uppercase letters (A-Z), numbers, and underscores allowed';
-      } else if (formData.moduleCode.length > FLOW_LIMITS.MAX_MODULE_CODE_LENGTH) {
-        nextErrors.moduleCode = `Max length is ${FLOW_LIMITS.MAX_MODULE_CODE_LENGTH} characters`;
+        nextErrors.moduleCode = 'Please select a module';
       }
     }
 
@@ -120,7 +150,7 @@ export default function FlowFormModal({ isOpen, onClose, flow, onSuccess }) {
       } else if (err?.status === 409 || err?.message?.toLowerCase().includes('modulecode')) {
         setErrors((prev) => ({
           ...prev,
-          moduleCode: err.message || 'Module code already exists',
+          moduleCode: err.message || 'A process flow for this module code already exists',
         }));
       } else {
         toast.error(err?.message || 'Failed to save flow');
@@ -140,23 +170,32 @@ export default function FlowFormModal({ isOpen, onClose, flow, onSuccess }) {
     >
       <form onSubmit={handleSubmit} noValidate>
         <FormGrid columns={1} gap="md">
-          <Input
-            label="Module Code"
-            required={!isEditing}
-            value={formData.moduleCode}
-            onChange={(e) => handleChange('moduleCode', e.target.value)}
-            error={errors.moduleCode}
-            disabled={isEditing || isSubmitting}
-            placeholder="e.g. SALES, VENDOR, INQUIRY"
-            helperText={
-              isEditing
-                ? 'Module code is unique and immutable once created.'
-                : 'Uppercase letters, numbers, underscores only (e.g. PO_APPROVAL).'
-            }
-            maxLength={FLOW_LIMITS.MAX_MODULE_CODE_LENGTH}
-          />
+          {isEditing ? (
+            <Input
+              id="flow-module-code"
+              label="Module Code"
+              value={formData.moduleCode}
+              disabled
+              helperText="Module code is unique and immutable once created."
+            />
+          ) : (
+            <SearchableSelect
+              id="flow-module-code"
+              label="Module Code"
+              required
+              value={formData.moduleCode}
+              onChange={(e) => handleModuleChange(e.target.value)}
+              options={moduleOptions}
+              error={errors.moduleCode}
+              disabled={isSubmitting || isModulesLoading}
+              placeholder={isModulesLoading ? 'Loading modules...' : 'Select a module...'}
+              searchPlaceholder="Search module by name or code..."
+              hint="Select the system module this process flow will control."
+            />
+          )}
 
           <Input
+            id="flow-name"
             label="Flow Name"
             required
             value={formData.name}

@@ -52,7 +52,7 @@ import useColumnResize from '../../hooks/useColumnResize';
 export default function QuotationViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getQuotationById, fetchQuotationDetail, submitForApproval, deleteNegotiationStage } = useQuotationsContext();
+  const { getQuotationById, fetchQuotationDetail, fetchLookups, submitForApproval, deleteNegotiationStage, lookups } = useQuotationsContext();
 
   const quotation = getQuotationById(id);
 
@@ -61,6 +61,10 @@ export default function QuotationViewPage() {
       fetchQuotationDetail(id);
     }
   }, [id, fetchQuotationDetail]);
+
+  useEffect(() => {
+    fetchLookups?.();
+  }, []);
 
   // Modals state
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -97,12 +101,38 @@ export default function QuotationViewPage() {
     return TAX_TREATMENTS.find((t) => t.value === activeTaxTreatment)?.label || activeTaxTreatment;
   }, [activeTaxTreatment]);
 
+  const activeTaxes = useMemo(() => {
+    const rawTaxes = activeRevision?.taxes || quotation?.taxes || [];
+    if (Array.isArray(rawTaxes) && rawTaxes.length > 0) {
+      return rawTaxes.map((t) => {
+        const id = t.taxConfigDetailId || t.id || t;
+        const matched = lookups?.taxes?.find((lt) => String(lt.taxConfigDetailId || lt.id) === String(id));
+        return {
+          id,
+          taxConfigDetailId: id,
+          taxName: matched?.taxName || t.taxName || t.name || 'GST',
+          taxPercent: Number(matched?.taxPercent ?? t.taxPercent ?? t.rate ?? 0),
+        };
+      });
+    }
+    return [];
+  }, [activeRevision?.taxes, quotation?.taxes, lookups?.taxes]);
+
   const activeTotalsBreakdown = useMemo(() => {
-    return calculateQuotationTotals(activeRevision?.items || [], activeTaxTreatment);
-  }, [activeRevision?.items, activeTaxTreatment]);
+    return calculateQuotationTotals(
+      activeRevision?.items || [],
+      activeTaxTreatment,
+      activeTaxes,
+      activeRevision?.otherCharges || quotation?.otherCharges || 0
+    );
+  }, [activeRevision?.items, activeTaxTreatment, activeTaxes, activeRevision?.otherCharges, quotation?.otherCharges]);
 
   const itemsWithDescription = useMemo(() => {
     return (activeRevision?.items || []).filter((it) => Boolean(it.description?.trim()));
+  }, [activeRevision?.items]);
+
+  const totalItemQuantity = useMemo(() => {
+    return (activeRevision?.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
   }, [activeRevision?.items]);
 
   const allDescriptionsExpanded = useMemo(() => {
@@ -617,6 +647,8 @@ export default function QuotationViewPage() {
                     const lineAmount =
                       (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
                       (Number(item.otherCharges) || 0);
+                    const lineTax = (lineAmount * (Number(item.taxPercent) || 0)) / 100;
+                    const lineTotalWithTax = lineAmount + lineTax;
                     const itemKey = item.id || `row-${idx}`;
                     const hasDescription = Boolean(item.description?.trim());
                     const isDescExpanded = hasDescription && expandedDescIds.has(itemKey);
@@ -683,8 +715,15 @@ export default function QuotationViewPage() {
                         <Td className="text-center font-mono text-xs text-text-muted align-top">
                           {item.taxPercent}%
                         </Td>
-                        <Td className="text-right font-mono font-bold text-xs text-heading align-top">
-                          {formatCurrency(lineAmount, quotation.currency)}
+                        <Td className="text-right font-mono text-xs text-heading align-top">
+                          <div className="font-bold text-heading">
+                            {formatCurrency(lineTotalWithTax, quotation.currency)}
+                          </div>
+                          {lineTax > 0 && (
+                            <div className="text-3xs text-text-muted font-normal font-sans">
+                              Excl: {formatCurrency(lineAmount, quotation.currency)}
+                            </div>
+                          )}
                         </Td>
                       </tr>
                     );
@@ -698,63 +737,82 @@ export default function QuotationViewPage() {
               <div className="space-y-2 text-xs">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-2xs font-bold text-text-muted uppercase tracking-wider">
-                    Tax Regime:
+                    Applicable Taxes:
                   </span>
-                  <Badge variant="neutral" size="sm">
-                    {activeTaxTreatmentLabel}
-                  </Badge>
+                  {activeTotalsBreakdown.taxesBreakdown && activeTotalsBreakdown.taxesBreakdown.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {activeTotalsBreakdown.taxesBreakdown.map((tx, idx) => (
+                        <Badge key={tx.id || idx} variant="neutral" size="sm">
+                          {tx.name} ({tx.percent}%)
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <Badge variant="neutral" size="sm">
+                      {activeTaxTreatmentLabel}
+                    </Badge>
+                  )}
                 </div>
-                <div className="flex items-center gap-4 flex-wrap text-2xs text-text-muted">
+                <div className="flex items-center gap-2 text-2xs text-text-muted">
                   <span>
-                    Items:{' '}
-                    <strong className="font-mono text-heading">
-                      {(activeRevision?.items || []).length}
-                    </strong>
+                    <strong className="font-mono text-heading">{(activeRevision?.items || []).length}</strong> {(activeRevision?.items || []).length === 1 ? 'Product' : 'Products'}
                   </span>
-                  {activeTaxTreatment === 'INTRA_STATE' && (
-                    <>
-                      <span>
-                        CGST:{' '}
-                        <strong className="font-mono text-heading">
-                          {formatCurrency(activeTotalsBreakdown.cgst, quotation.currency)}
-                        </strong>
-                      </span>
-                      <span>
-                        SGST:{' '}
-                        <strong className="font-mono text-heading">
-                          {formatCurrency(activeTotalsBreakdown.sgst, quotation.currency)}
-                        </strong>
-                      </span>
-                    </>
-                  )}
-                  {activeTaxTreatment === 'INTER_STATE' && (
-                    <span>
-                      IGST:{' '}
-                      <strong className="font-mono text-heading">
-                        {formatCurrency(activeTotalsBreakdown.igst, quotation.currency)}
-                      </strong>
-                    </span>
-                  )}
+                  <span>•</span>
+                  <span>
+                    <strong className="font-mono text-heading">{totalItemQuantity}</strong> {totalItemQuantity === 1 ? 'Unit total' : 'Units total'}
+                  </span>
                 </div>
               </div>
 
               <div className="w-full md:w-80 space-y-2 text-xs">
                 <div className="flex justify-between text-text-muted">
-                  <span>Subtotal:</span>
+                  <span>Taxable Subtotal:</span>
                   <span className="font-mono font-semibold text-heading">
-                    {formatCurrency(activeRevision?.subtotal || 0, quotation.currency)}
+                    {formatCurrency(activeTotalsBreakdown.subtotal || activeRevision?.subtotal || 0, quotation.currency)}
                   </span>
                 </div>
-                <div className="flex justify-between text-text-muted">
-                  <span>Tax Amount:</span>
+
+                {Number(activeTotalsBreakdown.otherCharges || activeRevision?.otherCharges) > 0 && (
+                  <div className="flex justify-between text-text-muted">
+                    <span>Other Charges:</span>
+                    <span className="font-mono font-semibold text-heading">
+                      {formatCurrency(activeTotalsBreakdown.otherCharges || activeRevision?.otherCharges, quotation.currency)}
+                    </span>
+                  </div>
+                )}
+
+                {Number(activeTotalsBreakdown.lineTaxAmount) > 0 && !activeTotalsBreakdown.isLineTaxesBreakdown && (
+                  <div className="flex justify-between text-text-muted text-2xs py-1 px-2.5 bg-surface/50 rounded border border-border/50">
+                    <span>Product Line Taxes:</span>
+                    <span className="font-mono font-medium text-heading">
+                      {formatCurrency(activeTotalsBreakdown.lineTaxAmount, quotation.currency)}
+                    </span>
+                  </div>
+                )}
+
+                {activeTotalsBreakdown.taxesBreakdown && activeTotalsBreakdown.taxesBreakdown.length > 0 && (
+                  <div className="space-y-1.5 py-1.5 px-2.5 bg-surface/60 rounded-lg border border-border/60">
+                    {activeTotalsBreakdown.taxesBreakdown.map((tx, idx) => (
+                      <div key={tx.id || idx} className="flex justify-between items-center text-text-muted text-2xs">
+                        <span>{tx.name} ({tx.percent}%):</span>
+                        <span className="font-mono font-medium text-heading">
+                          {formatCurrency(tx.amount, quotation.currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex justify-between text-text-muted pt-1">
+                  <span>Total Tax:</span>
                   <span className="font-mono font-semibold text-heading">
-                    {formatCurrency(activeRevision?.totalTax || 0, quotation.currency)}
+                    {formatCurrency(activeTotalsBreakdown.taxAmount ?? activeRevision?.taxAmount ?? activeTotalsBreakdown.totalTax ?? 0, quotation.currency)}
                   </span>
                 </div>
                 <div className="pt-2 border-t border-border flex justify-between font-bold text-sm text-heading">
-                  <span>Total Amount:</span>
-                  <span className="font-mono text-primary text-base">
-                    {formatCurrency(activeRevision?.grandTotal || 0, quotation.currency)}
+                  <span>Grand Total:</span>
+                  <span className="font-mono text-primary text-base sm:text-lg">
+                    {formatCurrency(activeTotalsBreakdown.grandTotal ?? activeRevision?.grandTotal ?? 0, quotation.currency)}
                   </span>
                 </div>
               </div>
