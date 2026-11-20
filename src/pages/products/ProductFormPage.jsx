@@ -1249,41 +1249,23 @@ export default function ProductFormPage() {
           </div>
         </CollapsibleCard>
 
-        {/* ── Sections 2 & 3: Standards & Options (2-Column Desktop Grid) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* ── Section 3: Applicable Standards ── */}
-          <CollapsibleCard
-            title="Manufacturing & Calibration Standards"
-            subtitle="IS, DIN, BS, and GGG metrology specifications"
-            icon={<IconStandards size={18} />}
-            defaultOpen={true}
-          >
-            <ProductStandardsEditor
-              standards={standards}
-              onChange={setStandards}
-              availableStandards={lookups?.standards || []}
-            />
-          </CollapsibleCard>
+        {/* ── Section 2: Manufacturing & Calibration Standards (Full Width) ── */}
+        <CollapsibleCard
+          title="Manufacturing & Calibration Standards"
+          subtitle="IS, DIN, BS, and GGG metrology specifications"
+          icon={<IconStandards size={18} />}
+          defaultOpen={true}
+        >
+          <ProductStandardsEditor
+            standards={standards}
+            onChange={setStandards}
+            availableStandards={lookups?.standards || []}
+          />
+        </CollapsibleCard>
 
-          {/* ── Section 4: Product Options & Accessories ── */}
-          <CollapsibleCard
-            title="Product Options & Accessories"
-            subtitle="Optional fixtures, covers, and attachment configurations"
-            icon={<IconLayers size={18} />}
-            defaultOpen={true}
-          >
-            <ProductOptionsEditor
-              options={options}
-              onChange={setOptions}
-            />
-          </CollapsibleCard>
-        </div>
-
-        {/* ── Sections 5 & 6: Variants & Attachments (2-Column Desktop Grid) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* ── Section 5: Product Variants & Specifications ── */}
-          <CollapsibleCard
-            title="Product Variants & Dimensions"
+        {/* ── Section 3: Product Variants & Dimensions (Full Width) ── */}
+        <CollapsibleCard
+          title="Product Variants & Dimensions"
             subtitle="Physical sizes, grades, and dimensional figures"
             icon={<IconLayers size={18} />}
             defaultOpen={true}
@@ -1416,7 +1398,22 @@ export default function ProductFormPage() {
             </div>
           </CollapsibleCard>
 
-          {/* ── Section 6: Technical Documents & Attachments ── */}
+        {/* ── Sections 4 & 5: Options & Attachments (2-Column Desktop Grid) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* ── Section 4: Product Options & Accessories ── */}
+          <CollapsibleCard
+            title="Product Options & Accessories"
+            subtitle="Optional fixtures, covers, and attachment configurations"
+            icon={<IconLayers size={18} />}
+            defaultOpen={true}
+          >
+            <ProductOptionsEditor
+              options={options}
+              onChange={setOptions}
+            />
+          </CollapsibleCard>
+
+          {/* ── Section 5: Technical Documents & Attachments ── */}
           <CollapsibleCard
             title="Technical Documents & Attachments"
             subtitle="CAD drawings, calibration certificates, and datasheets"
