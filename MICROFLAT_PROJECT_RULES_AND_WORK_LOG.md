@@ -92,6 +92,7 @@ Then:
 | **WL-014** | 2026-11-18 | Quotations Core & Task 61 | Quotations | Implemented quotation service, model, endpoints, context, and wired Task 61 PO Recording modal. | Built multipart form-data upload for PO recording and hybrid live/mock state. | Completed & verified build (0 errors). |
 | **WL-015** | 2026-11-19 | Task 54 Standard to Grade Mapping | Standards & Specs | Implemented Phase 1 (Endpoints, Models, Service, Mock), Phase 2 (Context gradeMapping cache & methods), and Phase 3 (StandardsPage table column, modal checklist with drag/arrow sequence ordering, and view card). | Allows Admin to associate precision grades to standards and specify displayOrder sequence for downstream dropdowns (Task 53). Strictly preserved Task 54 boundaries (no flatness formula, no backend/DB changes, no touch to GradesPage/GradesContext). | Completed & verified build (0 errors). |
 | **WL-016** | 2026-11-20 | Task 53 Product Master Specs & Flatness | Products / Accuracy Specs | Implemented Phase 1 (flatnessFormula engine tested with 15/15 Excel benchmarks), Phase 2 (service query params StandardId/GradeId & resolve endpoint), Phase 3 (ProductVariantsTab Scope selector, Standard+Grade dropdowns, "⚡ Calculate Flatness" auto-fill, RBAC 403 protection, and inline table grouped badges). | Aligns accuracy specifications with Standard + Grade backend architecture (`ProductVariantsController.cs:103`), eliminates manual math errors with automated engineering formula calculation. | Completed & verified build (0 errors). |
+| **WL-017** | 2026-11-20 | Task 58 Product Master Standard to Grade Map | Products / Standards | Integrated Standard → Grade mapping into Product Master (`ProductStandardsEditor.jsx`, `ProductFormPage.jsx`, `ProductViewPage.jsx`, and `ProductVariantsTab.jsx`). Displayed mapped precision grades, supported product-level grade scope (Inherit All vs Custom toggle chips), prevented duplicate standards, single primary promotion, Overview grade badges, and Standards tab summary cards. | Connects Task 54's global standard-grade mapping directly into Product Master workflow. Enforces that products and downstream variants/accuracy specs are strictly governed by their allowed precision grades. | Completed & verified build (0 errors). |
 
 ---
 
@@ -330,6 +331,37 @@ Then:
        - **RBAC & 403 Protection**: If product is Approved and user is non-Admin, modal is read-only with an informative warning banner.
      - **Inline Variant Table**:
        - Enhanced expanded specs table to display each configured figure grouped with its Standard & Grade badge (e.g. `[IS-7327 / Gr-0]` vs `[Common]`).
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
+
+---
+
+### Work Log Entry: WL-017
+- **Date**: 2026-11-20
+- **Module**: Products (`ProductStandardsEditor.jsx`, `ProductFormPage.jsx`, `ProductViewPage.jsx`, `ProductVariantsTab.jsx`, `StandardsContext.jsx`)
+- **Task**: Task 58 — Product Master Changes (Standard to Grade Mapping)
+- **Summary of Implemented Changes**:
+  1. **StandardsContext Route Expansion (`StandardsContext.jsx`)**:
+     - Included `/products` within `isRelevantRoute` to guarantee `standardsList` and global `gradeMapping` are fetched and cached in memory across all product routes.
+  2. **ProductStandardsEditor Redesign (`ProductStandardsEditor.jsx`)**:
+     - **Standard → Grade Mapping Integration**: Consumes `gradeMapping` from `StandardsContext`. Dynamically resolves all precision grades mapped to each standard (e.g. `Gr-00`, `Gr-0`, `Gr-1`, `Gr-2`, `Gr-3`).
+     - **Product-Level Grade Applicability**:
+       - By default, products inherit all mapped precision grades from the standard (`Inherit All`).
+       - In Edit Mode, engineers can interactively click individual grade pills to restrict applicable grades for specific products (`Custom Scope`), or click "Reset to All".
+       - In Read-Only Mode, renders clean font-mono grade badges with scope indicators (`Inherit All (N)` vs `Custom (M of N)`).
+       - Shows guidance banner if a standard has no precision grades mapped in master.
+     - **Duplicate Standard Prevention**: Filters the available standards dropdown in each row to exclude standards already selected in other rows.
+     - **Primary Standard Management**: Single primary standard enforced with radio button in edit mode, auto-selection on first standard, and auto-promotion to the first remaining standard upon removal.
+     - **Metrology Engineering Policy Banner**: Clean card communicating that tolerance calculations and variants are strictly derived from linked standards.
+  3. **Product Detail View Enhancements (`ProductViewPage.jsx`)**:
+     - **Overview Card**: Enhanced the "Primary Standard" metric to render the primary standard code alongside its mapped precision grade badges (`[Gr-00] [Gr-0] [Gr-1] ...`).
+     - **Standards Tab Summary Cards**: Added 3 high-density metric cards at the top of the Standards tab:
+       1. *Linked Standards* count.
+       2. *Primary Standard* code with metrology icon.
+       3. *Applicable Precision Grades* count with visual grade badge pills.
+     - **Quick Edit & Persistence**: Enabled quick edit of standards & grades in Standards tab, preserving custom product grade scopes via localStorage cache.
+  4. **Product Form & Variant Downstream Wiring (`ProductFormPage.jsx` & `ProductVariantsTab.jsx`)**:
+     - `ProductFormPage.jsx`: Hydrates and persists product standard grade configurations on create and edit.
+     - `ProductVariantsTab.jsx`: Updated `availableGradesForStandard` and `gradeOptions` to strictly respect product-level grade applicability when creating variants and configuring accuracy specifications.
 - **Verification**: `npm run build` passed cleanly with **0 errors**.
 
 ---

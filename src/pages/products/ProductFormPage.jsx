@@ -335,11 +335,27 @@ export default function ProductFormPage() {
           requiresCalibration: Boolean(data.requiresCalibration),
         });
 
-        const stds = (data.standards || []).map((s) => ({
+        let stds = (data.standards || []).map((s) => ({
           standardId: Number(s.standardId || s.id),
           standardCode: s.standardCode || '',
           isPrimary: Boolean(s.isPrimary),
+          applicableGradeIds: s.applicableGradeIds || null,
         }));
+        try {
+          const cached = localStorage.getItem(`product_standards_grades_${id}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            stds = stds.map((s) => {
+              const sid = Number(s.standardId);
+              const found = parsed.find((p) => Number(p.standardId || p.id) === sid);
+              return found && found.applicableGradeIds !== undefined
+                ? { ...s, applicableGradeIds: found.applicableGradeIds }
+                : s;
+            });
+          }
+        } catch (e) {
+          console.warn('Could not read cached product grade preferences:', e);
+        }
         setStandards(stds);
 
         const opts = (data.options || []).map((o) => ({
@@ -459,6 +475,11 @@ export default function ProductFormPage() {
           productId,
           standards.filter((s) => s.standardId)
         );
+        try {
+          localStorage.setItem(`product_standards_grades_${productId}`, JSON.stringify(standards));
+        } catch (e) {
+          console.warn('Could not cache product grade preferences:', e);
+        }
 
         // 4. Update options
         await productService.setOptions(
@@ -549,6 +570,11 @@ export default function ProductFormPage() {
               productId,
               standards.filter((s) => s.standardId)
             );
+            try {
+              localStorage.setItem(`product_standards_grades_${productId}`, JSON.stringify(standards));
+            } catch (e) {
+              console.warn('Could not cache product grade preferences:', e);
+            }
           } catch (stdErr) {
             console.warn('Could not save standards on create:', stdErr);
           }

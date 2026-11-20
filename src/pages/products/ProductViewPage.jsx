@@ -35,6 +35,7 @@ import {
 } from '../../constants/icons';
 import { productService } from '../../services';
 import { useProductsContext } from '../../context/ProductsContext';
+import { useStandardsContext } from '../../context/StandardsContext';
 import { ApprovalStatus } from '../../constants/approvalStatus';
 import ProductVariantsTab from './components/ProductVariantsTab';
 import ProductStandardsEditor from './components/ProductStandardsEditor';
@@ -45,6 +46,7 @@ export default function ProductViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { lookups, refreshProducts, loadSummary } = useProductsContext();
+  const { gradeMapping = [] } = useStandardsContext?.() || {};
 
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,8 +71,33 @@ export default function ProductViewPage() {
     try {
       const data = await productService.getProductById(id);
       if (data) {
-        setProduct(data);
-        setCurrentStandards(data.standards || []);
+        let loadedStandards = (data.standards || []).map((s) => ({
+          ...s,
+          standardId: Number(s.standardId || s.id),
+          standardCode: s.standardCode || '',
+          isPrimary: Boolean(s.isPrimary),
+          applicableGradeIds: s.applicableGradeIds || null,
+        }));
+
+        // Hydrate product-specific grade applicability preferences if cached
+        try {
+          const cached = localStorage.getItem(`product_standards_grades_${id}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            loadedStandards = loadedStandards.map((s) => {
+              const sid = Number(s.standardId);
+              const found = parsed.find((p) => Number(p.standardId || p.id) === sid);
+              return found && found.applicableGradeIds !== undefined
+                ? { ...s, applicableGradeIds: found.applicableGradeIds }
+                : s;
+            });
+          }
+        } catch (e) {
+          console.warn('Could not read cached product grade preferences:', e);
+        }
+
+        setProduct({ ...data, standards: loadedStandards });
+        setCurrentStandards(loadedStandards);
         setCurrentOptions(data.options || []);
       }
     } catch (err) {
@@ -158,15 +185,67 @@ export default function ProductViewPage() {
         product.id,
         currentStandards.filter((s) => s.standardId || s.id)
       );
-      toast.success('Standards updated successfully');
+      try {
+        localStorage.setItem(`product_standards_grades_${product.id}`, JSON.stringify(currentStandards));
+      } catch (e) {
+        console.warn('Could not cache product grade preferences:', e);
+      }
+      toast.success('Standards & precision grade mapping updated successfully');
       setIsEditingStandards(false);
       loadProduct();
+      refreshProducts?.();
     } catch (err) {
       toast.error(err?.message || 'Failed to update standards');
     } finally {
       setIsSavingStandards(false);
     }
   };
+
+  // Primary Standard calculation & mapped precision grades
+  const primaryStandard = useMemo(() => {
+    return (
+      (currentStandards || []).find((s) => s.isPrimary) ||
+      (product?.standards || []).find((s) => s.isPrimary) ||
+      null
+    );
+  }, [currentStandards, product?.standards]);
+
+  const primaryStandardGrades = useMemo(() => {
+    const stdCode = product?.primaryStandardCode || primaryStandard?.standardCode;
+    const stdId = primaryStandard?.standardId || primaryStandard?.id;
+    const match = (gradeMapping || []).find(
+      (m) =>
+        (stdId && Number(m.standardId) === Number(stdId)) ||
+        (stdCode && m.standardCode === stdCode)
+    );
+    let grades = (match?.grades || []).filter((g) => g.isGradeActive !== false);
+    if (primaryStandard?.applicableGradeIds && Array.isArray(primaryStandard.applicableGradeIds)) {
+      const allowedSet = new Set(primaryStandard.applicableGradeIds.map(Number));
+      grades = grades.filter((g) => allowedSet.has(Number(g.gradeId)));
+    }
+    return grades;
+  }, [product?.primaryStandardCode, primaryStandard, gradeMapping]);
+
+  // Total unique allowed precision grades across all linked standards for this product
+  const totalCoveredGrades = useMemo(() => {
+    const gradeMap = new Map();
+    (currentStandards || []).forEach((s) => {
+      const sid = Number(s.standardId || s.id);
+      const match = (gradeMapping || []).find((m) => Number(m.standardId) === sid);
+      let gList = (match?.grades || []).filter((g) => g.isGradeActive !== false);
+      if (s.applicableGradeIds && Array.isArray(s.applicableGradeIds)) {
+        const allowedSet = new Set(s.applicableGradeIds.map(Number));
+        gList = gList.filter((g) => allowedSet.has(Number(g.gradeId)));
+      }
+      gList.forEach((g) => {
+        const key = g.gradeCode || `Grade #${g.gradeId}`;
+        if (!gradeMap.has(key)) {
+          gradeMap.set(key, g);
+        }
+      });
+    });
+    return Array.from(gradeMap.values());
+  }, [currentStandards, gradeMapping]);
 
   // Save updated options
   const handleSaveOptions = async () => {
@@ -318,11 +397,23 @@ export default function ProductViewPage() {
           <DetailField label="Material" value={product.materialName} />
           <DetailField label="Unit of Measurement" value={product.uomName} />
           <DetailField label="Finish Type" value={product.finishType} />
-          <DetailField
-            label="Primary Standard"
-            value={product.primaryStandardCode || '—'}
-            mono={Boolean(product.primaryStandardCode)}
-          />
+          <div className="space-y-1">
+            <DetailField
+              label="Primary Standard"
+              value={product.primaryStandardCode || '—'}
+              mono={Boolean(product.primaryStandardCode)}
+            />
+            {primaryStandardGrades.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                <span className="text-3xs text-muted-foreground uppercase font-semibold">Grades:</span>
+                {primaryStandardGrades.map((g) => (
+                  <Badge key={g.gradeId} variant="neutral" size="xs" className="font-mono text-3xs">
+                    {g.gradeCode}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
           <DetailField label="Variant Count" value={product.variantCount} />
           <DetailField
             label="Standard Product"
@@ -387,10 +478,48 @@ export default function ProductViewPage() {
           {/* 2. Standards Tab */}
           {activeTab === 'standards' && (
             <div className="space-y-4">
+              {/* Summary Metrics */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-lg border border-border bg-surface/50">
+                  <span className="text-3xs font-semibold text-text-muted uppercase tracking-wider block">
+                    Linked Standards
+                  </span>
+                  <div className="text-xl font-bold text-heading mt-1">
+                    {currentStandards.length}
+                  </div>
+                  <p className="text-3xs text-text-muted mt-0.5">Manufacturing & calibration benchmarks</p>
+                </div>
+                <div className="p-3.5 rounded-lg border border-border bg-surface/50">
+                  <span className="text-3xs font-semibold text-text-muted uppercase tracking-wider block">
+                    Primary Standard
+                  </span>
+                  <div className="text-sm font-semibold font-mono text-primary mt-1 flex items-center gap-1.5">
+                    <IconStandards size={14} />
+                    <span>{primaryStandard?.standardCode || product.primaryStandardCode || '—'}</span>
+                  </div>
+                  <p className="text-3xs text-text-muted mt-0.5">Default for quotation auto-fill & specs</p>
+                </div>
+                <div className="p-3.5 rounded-lg border border-border bg-surface/50">
+                  <span className="text-3xs font-semibold text-text-muted uppercase tracking-wider block">
+                    Applicable Precision Grades
+                  </span>
+                  <div className="text-sm font-semibold text-heading mt-1 flex items-center gap-1.5">
+                    <span>{totalCoveredGrades.length} Grades Available</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                    {totalCoveredGrades.map((g) => (
+                      <Badge key={g.gradeId || g.gradeCode} variant="neutral" size="xs" className="font-mono text-3xs font-semibold">
+                        {g.gradeCode}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between pb-2 border-b border-border">
                 <div>
                   <h4 className="text-xs text-muted-foreground">
-                    Link manufacturing standards (IS, DIN, BS, GGG) to this product.
+                    Link manufacturing standards (IS, DIN, BS, GGG) and configure precision grade scope for this product.
                   </h4>
                 </div>
                 {!isEditingStandards ? (
@@ -399,7 +528,7 @@ export default function ProductViewPage() {
                     size="xs"
                     onClick={() => setIsEditingStandards(true)}
                   >
-                    Edit Standards
+                    Edit Standards & Grades
                   </Button>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -426,6 +555,7 @@ export default function ProductViewPage() {
                 onChange={setCurrentStandards}
                 availableStandards={lookups?.standards || []}
                 readOnly={!isEditingStandards}
+                gradeMapping={gradeMapping}
               />
             </div>
           )}

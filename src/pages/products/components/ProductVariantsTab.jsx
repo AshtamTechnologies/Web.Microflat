@@ -156,21 +156,37 @@ export default function ProductVariantsTab({
     return list;
   }, [standards, gradeMapping]);
 
-  // Dynamically filtered grades for the selected standard (strictly adhering to backend rule)
+  // Dynamically filtered grades for the selected standard (strictly adhering to backend rule and product grade scope)
   const availableGradesForStandard = useMemo(() => {
     if (!selectedStandardId) return [];
     const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === Number(selectedStandardId));
-    if (mapping && Array.isArray(mapping.grades) && mapping.grades.length > 0) {
-      return mapping.grades
-        .filter((g) => g.isGradeActive !== false)
-        .map((g) => ({
-          value: Number(g.gradeId),
-          label: g.gradeCode || `Grade #${g.gradeId}`,
-        }));
+    const productStd = (standards || []).find(
+      (s) => Number(s.standardId || s.id) === Number(selectedStandardId)
+    );
+    let allowedGrades =
+      mapping && Array.isArray(mapping.grades) && mapping.grades.length > 0
+        ? mapping.grades.filter((g) => g.isGradeActive !== false)
+        : [];
+
+    // If product specifies custom applicable grades for this standard, filter by them
+    if (
+      productStd?.applicableGradeIds &&
+      Array.isArray(productStd.applicableGradeIds) &&
+      productStd.applicableGradeIds.length > 0
+    ) {
+      const allowedSet = new Set(productStd.applicableGradeIds.map(Number));
+      allowedGrades = allowedGrades.filter((g) => allowedSet.has(Number(g.gradeId)));
+    }
+
+    if (allowedGrades.length > 0) {
+      return allowedGrades.map((g) => ({
+        value: Number(g.gradeId),
+        label: g.gradeCode || `Grade #${g.gradeId}`,
+      }));
     }
     // Fallback if mapping not loaded
     return (grades || []).map((g) => ({ value: Number(g.id), label: g.gradeCode }));
-  }, [selectedStandardId, gradeMapping, grades]);
+  }, [selectedStandardId, gradeMapping, standards, grades]);
 
   // Helper to extract spec figures for the active scope from loaded variant specs
   const syncSpecsForScope = useCallback((allSpecs, scope, stdId, grdId) => {
@@ -238,10 +254,35 @@ export default function ProductVariantsTab({
     loadVariants();
   }, [loadVariants]);
 
-  const gradeOptions = grades.map((g) => ({
-    value: Number(g.id),
-    label: g.gradeCode,
-  }));
+  // Precision grades allowed across all linked standards for this product
+  const productAllowedGradeIds = useMemo(() => {
+    if (!standards || standards.length === 0) return null;
+    const gradeIdSet = new Set();
+    standards.forEach((s) => {
+      const sId = Number(s.standardId || s.id);
+      const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === sId);
+      let allowed = (mapping?.grades || []).filter((g) => g.isGradeActive !== false);
+      if (s.applicableGradeIds && Array.isArray(s.applicableGradeIds) && s.applicableGradeIds.length > 0) {
+        const customSet = new Set(s.applicableGradeIds.map(Number));
+        allowed = allowed.filter((g) => customSet.has(Number(g.gradeId)));
+      }
+      allowed.forEach((g) => gradeIdSet.add(Number(g.gradeId)));
+    });
+    return gradeIdSet.size > 0 ? gradeIdSet : null;
+  }, [standards, gradeMapping]);
+
+  const gradeOptions = useMemo(() => {
+    if (productAllowedGradeIds) {
+      const filtered = grades.filter((g) => productAllowedGradeIds.has(Number(g.id)));
+      if (filtered.length > 0) {
+        return filtered.map((g) => ({ value: Number(g.id), label: g.gradeCode }));
+      }
+    }
+    return grades.map((g) => ({
+      value: Number(g.id),
+      label: g.gradeCode,
+    }));
+  }, [grades, productAllowedGradeIds]);
 
   const handleOpenAddModal = () => {
     setEditingVariant(null);
