@@ -42,7 +42,9 @@ import {
   TableActions,
   Drawer,
   Checkbox,
+  Modal,
 } from '../../components/ui';
+import { productService } from '../../services';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useClientsContext } from '../../context/ClientsContext';
@@ -130,7 +132,10 @@ export default function QuotationFormPage() {
     paymentTermId: null,
     deliveryTerms: [],
     termsAndConditions: '',
+    otherCharges: 0,
+    otherChargesDescription: '',
     taxTreatment: 'INTRA_STATE',
+    selectedTaxIds: [],
     pricingNotes: '',
     items: [],
   });
@@ -165,11 +170,21 @@ export default function QuotationFormPage() {
   const [drawerVariant, setDrawerVariant] = useState('');
   const [drawerQty, setDrawerQty] = useState('1');
   const [drawerRate, setDrawerRate] = useState('');
-  const [drawerTax, setDrawerTax] = useState(18);
+  const [drawerTax, setDrawerTax] = useState(10);
+  const [drawerTaxConfigDetailId, setDrawerTaxConfigDetailId] = useState('');
   const [drawerOtherCharges, setDrawerOtherCharges] = useState('0');
   const [drawerOptions, setDrawerOptions] = useState(['Rexine Cover (Standard)']);
   const [drawerDescription, setDrawerDescription] = useState('');
   const [isDescriptionEdited, setIsDescriptionEdited] = useState(false);
+
+  // Dynamic Product Master & Price Lookup State
+  const [catalogCategories, setCatalogCategories] = useState([]);
+  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [productVariantsMap, setProductVariantsMap] = useState({});
+  const [productOptionsMap, setProductOptionsMap] = useState({});
+  const [productDetailsMap, setProductDetailsMap] = useState({});
+  const [isLoadingPriceLookup, setIsLoadingPriceLookup] = useState(false);
+  const [priceCandidatesModal, setPriceCandidatesModal] = useState(null);
 
   // Available unquoted inquiries list for the Inquiry dropdown
   const availableInquiries = useMemo(() => {
@@ -241,10 +256,16 @@ export default function QuotationFormPage() {
         (c.clientId || c.id) === (prefill?.clientId || prefill?.client?.id || matchedInq?.clientId)
     );
 
-    // Prefer prefill address, then inqClient address, then matchedInq address
+    // Prefer prefill active address, then inqClient active address, then matchedInq address
+    const activePrefillAddrs = (prefill?.client?.addresses || []).filter((a) => a.isActive !== false);
+    const activeClientAddrs = (inqClient?.addresses || []).filter((a) => a.isActive !== false);
     const prefillAddrObj =
+      activePrefillAddrs.find((a) => a.id === prefill.clientAddressId) ||
       prefill?.client?.addresses?.find((a) => a.id === prefill.clientAddressId) ||
-      prefill?.client?.addresses?.[0];
+      activePrefillAddrs[0] ||
+      activeClientAddrs[0] ||
+      prefill?.client?.addresses?.[0] ||
+      inqClient?.addresses?.[0];
     const defaultAddrId =
       prefill?.clientAddressId ||
       prefillAddrObj?.id ||
@@ -259,10 +280,16 @@ export default function QuotationFormPage() {
       ? `${matchedInq.AddressLine1}, ${matchedInq.City || ''}`
       : 'Plot 12, GIDC, Ahmedabad';
 
-    // Prefer prefill contact, then inqClient contact, then matchedInq contact
+    // Prefer prefill active contact, then inqClient active contact, then matchedInq contact
+    const activePrefillContacts = (prefill?.client?.contacts || []).filter((c) => c.isActive !== false);
+    const activeClientContacts = (inqClient?.contacts || []).filter((c) => c.isActive !== false);
     const prefillContactObj =
+      activePrefillContacts.find((c) => c.id === prefill.clientContactId) ||
       prefill?.client?.contacts?.find((c) => c.id === prefill.clientContactId) ||
-      prefill?.client?.contacts?.[0];
+      activePrefillContacts[0] ||
+      activeClientContacts[0] ||
+      prefill?.client?.contacts?.[0] ||
+      inqClient?.contacts?.[0];
     const defaultContactId =
       prefill?.clientContactId ||
       prefillContactObj?.id ||
@@ -294,22 +321,27 @@ export default function QuotationFormPage() {
 
     if (Array.isArray(rawItems) && rawItems.length > 0) {
       mappedItems = rawItems.map((it, idx) => {
-        const catProd = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === it.productId);
-        const catVar = catProd?.variants?.find((v) => v.id === it.variantId);
+        const catProd =
+          mergedCatalogProducts.find((p) => String(p.id) === String(it.productId) || String(p.productId) === String(it.productId)) ||
+          INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === it.productId);
+        const catVar = catProd?.variants?.find((v) => String(v.id) === String(it.variantId) || String(v.productVariantId) === String(it.productVariantId));
         const fallbackDesc = catProd ? buildCatalogProductDescription(catProd, catVar) : '';
         return {
           id: it.id || `it-${Date.now()}-${idx}`,
           quotationLineItemId: it.id || null,
-          categoryId: it.categoryId || 'cat-sp',
-          productId: it.productId || 'prod-gsp',
-          productName: it.productName || it.itemName || it.description || 'Precision Plate',
-          variantId: it.variantId || '',
-          variantName: it.variantName || 'Standard Size',
-          itemCode: it.itemCode || it.productCode || 'ITM-01',
+          categoryId: it.categoryId || catProd?.categoryId || 'cat-sp',
+          productId: it.productId || catProd?.productId || catProd?.id || 'prod-gsp',
+          productName: it.productName || catProd?.productName || it.itemName || 'Precision Plate',
+          variantId: it.variantId || it.productVariantId || '',
+          variantName: it.variantName || catVar?.variantName || 'Standard Size',
+          itemCode: it.itemCode || it.productCode || catVar?.variantCode || 'ITM-01',
           technicalDetails: it.technicalDetails || it.specification || '',
           description: it.description || it.specification || fallbackDesc || '',
           quantity: Number(it.quantity) || 1,
-          rate: Number(it.rate) || (matchedInq?.items ? 35000 : 0),
+          rate: Number(it.rate) || 0,
+          rateSource: it.rateSource || 'None',
+          priceCandidates: Array.isArray(it.priceCandidates) ? it.priceCandidates : null,
+          optionExtras: Number(it.optionExtras) || 0,
           otherCharges: Number(it.otherCharges || it.lineCharges) || 0,
           taxConfigDetailId: it.taxConfigDetailId || null,
           taxPercent: Number(it.taxPercent) || 18,
@@ -385,6 +417,27 @@ export default function QuotationFormPage() {
   useEffect(() => {
     ensureClientsLoaded?.();
     fetchLookups?.();
+
+    // Dynamically load products catalog & categories from backend
+    async function loadDynamicCatalog() {
+      try {
+        const lookupsRes = await productService.getProductLookups().catch(() => null);
+        if (Array.isArray(lookupsRes?.categories) && lookupsRes.categories.length > 0) {
+          setCatalogCategories(lookupsRes.categories);
+        }
+        const prodRes = await productService.listProducts({
+          approvalStatus: 'Approved',
+          isActive: true,
+          pageSize: 100,
+        }).catch(() => null);
+        if (Array.isArray(prodRes?.items) && prodRes.items.length > 0) {
+          setCatalogProducts(prodRes.items);
+        }
+      } catch (err) {
+        console.warn('Could not load dynamic products catalog:', err);
+      }
+    }
+    loadDynamicCatalog();
     if (isRevisionMode && targetQuotation) {
       const latestRev =
         targetQuotation.revisions?.[targetQuotation.currentRevision] ||
@@ -413,6 +466,9 @@ export default function QuotationFormPage() {
           : (targetQuotation.deliveryTerms ? [targetQuotation.deliveryTerms] : []),
         termsAndConditions: targetQuotation.termsAndConditions || '',
         taxTreatment: targetQuotation.taxTreatment || 'INTRA_STATE',
+        selectedTaxIds: (targetQuotation.taxes || latestRev?.taxes || [])
+          .map((t) => Number(t.taxConfigDetailId || t.id || t))
+          .filter(Boolean),
         pricingNotes: targetQuotation.pricingNotes || targetQuotation.remarks || '',
         items: latestRev?.items?.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })) || [],
       });
@@ -447,43 +503,159 @@ export default function QuotationFormPage() {
     }
   }, [isRevisionMode, targetQuotation, getNextQuotationNo, inquiryIdParam]);
 
-  // Catalog Options
-  const categoryOptions = useMemo(() => {
-    return INQUIRY_CATALOG_CATEGORIES.map((cat) => ({
-      value: cat.value,
-      label: cat.label,
-    }));
-  }, []);
-
-  const productOptions = useMemo(() => {
-    if (!drawerCategory) {
-      return INQUIRY_CATALOG_PRODUCTS.map((p) => ({
-        value: p.id,
-        label: p.productName,
+  // Merged dynamic & fallback catalog products
+  const mergedCatalogProducts = useMemo(() => {
+    if (Array.isArray(catalogProducts) && catalogProducts.length > 0) {
+      return catalogProducts.map((p) => ({
+        ...p,
+        id: String(p.id || p.productId),
+        productId: p.id || p.productId,
+        categoryId: String(p.categoryId || ''),
+        categoryName: p.categoryName || '',
+        productName: p.productName || p.name || 'Product',
+        productCode: p.productCode || p.code || 'PRD',
+        description: p.description || '',
+        standardInfo: p.standardInfo || p.standardCode || '',
+        materialName: p.materialName || '',
+        finishType: p.finishType || '',
+        variants: Array.isArray(p.variants) ? p.variants : [],
+        options: Array.isArray(p.options) ? p.options : [],
       }));
     }
-    return INQUIRY_CATALOG_PRODUCTS.filter((p) => p.categoryId === drawerCategory).map((p) => ({
-      value: p.id,
-      label: p.productName,
+    return INQUIRY_CATALOG_PRODUCTS.map((p) => ({
+      ...p,
+      productId: p.id,
     }));
-  }, [drawerCategory]);
+  }, [catalogProducts]);
+
+  // Catalog Options (Dynamic categories from Product Master API)
+  const categoryOptions = useMemo(() => {
+    if (Array.isArray(catalogCategories) && catalogCategories.length > 0) {
+      return catalogCategories.map((cat) => ({
+        value: String(cat.id || cat.categoryId || cat.value),
+        label: cat.categoryName || cat.name || cat.label,
+      }));
+    }
+    return INQUIRY_CATALOG_CATEGORIES.map((cat) => ({
+      value: String(cat.value || cat.id),
+      label: cat.label || cat.name,
+    }));
+  }, [catalogCategories]);
+
+  // Dynamic Product Options (filtered by Category)
+  const productOptions = useMemo(() => {
+    const list = drawerCategory
+      ? mergedCatalogProducts.filter((p) => String(p.categoryId) === String(drawerCategory))
+      : mergedCatalogProducts;
+
+    return list.map((p) => ({
+      value: String(p.id),
+      label: `${p.productCode} · ${p.productName}`,
+    }));
+  }, [drawerCategory, mergedCatalogProducts]);
 
   const activeProductObj = useMemo(() => {
-    return INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === drawerProduct) || null;
-  }, [drawerProduct]);
+    const base = mergedCatalogProducts.find((p) => String(p.id) === String(drawerProduct)) || null;
+    const details = productDetailsMap[drawerProduct];
+    if (!base && !details) return null;
+    return {
+      ...(base || {}),
+      ...(details || {}),
+    };
+  }, [drawerProduct, mergedCatalogProducts, productDetailsMap]);
 
+  // Dynamically load product variants, options, and full details from Product APIs when product changes
+  useEffect(() => {
+    if (!drawerProduct) return;
+    const prodIdNum = Number(drawerProduct);
+    if (isNaN(prodIdNum)) return;
+
+    let isMounted = true;
+    async function fetchDynamicDetails() {
+      try {
+        const [varRes, detailRes, optRes] = await Promise.all([
+          productService.listProductVariants(prodIdNum, { pageSize: 100 }).catch(() => null),
+          productService.getProductById(prodIdNum).catch(() => null),
+          productService.listProductOptions({ productId: prodIdNum, pageSize: 100 }).catch(() => null),
+        ]);
+
+        if (isMounted) {
+          if (Array.isArray(varRes?.items)) {
+            setProductVariantsMap((prev) => ({ ...prev, [drawerProduct]: varRes.items }));
+          }
+          if (detailRes) {
+            setProductDetailsMap((prev) => ({ ...prev, [drawerProduct]: detailRes }));
+            if (!isDescriptionEdited && detailRes.description) {
+              setDrawerDescription(detailRes.description);
+            }
+          }
+          // Prioritize dynamic options from GET /api/product-options, fallback to detailRes.options
+          const optionsList = (Array.isArray(optRes?.items) && optRes.items.length > 0)
+            ? optRes.items
+            : (Array.isArray(detailRes?.options) && detailRes.options.length > 0)
+            ? detailRes.options
+            : [];
+          if (optionsList.length > 0) {
+            setProductOptionsMap((prev) => ({ ...prev, [drawerProduct]: optionsList }));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load dynamic variants/options for product:', drawerProduct, err);
+      }
+    }
+
+    if (!productVariantsMap[drawerProduct] || !productDetailsMap[drawerProduct]) {
+      fetchDynamicDetails();
+    }
+
+    return () => { isMounted = false; };
+  }, [drawerProduct, productVariantsMap, productDetailsMap, isDescriptionEdited]);
+
+  // Dynamic Variant Options
   const variantOptions = useMemo(() => {
+    const dynamicVars = productVariantsMap[drawerProduct];
+    if (Array.isArray(dynamicVars) && dynamicVars.length > 0) {
+      return dynamicVars.map((v) => ({
+        value: String(v.id || v.productVariantId),
+        label: `${v.variantName || v.name || v.variantCode || 'Variant'} (${v.variantCode || v.itemCode || 'ITM'})`,
+        variantObj: v,
+      }));
+    }
     if (!activeProductObj) return [];
     return (activeProductObj.variants || []).map((v) => ({
-      value: v.id,
+      value: String(v.id),
       label: `${v.variantName} (${v.itemCode})`,
+      variantObj: v,
     }));
-  }, [activeProductObj]);
+  }, [drawerProduct, productVariantsMap, activeProductObj]);
 
   const activeVariantObj = useMemo(() => {
+    const dynamicVars = productVariantsMap[drawerProduct];
+    if (Array.isArray(dynamicVars) && dynamicVars.length > 0) {
+      return dynamicVars.find((v) => String(v.id || v.productVariantId) === String(drawerVariant)) || null;
+    }
     if (!activeProductObj) return null;
-    return (activeProductObj.variants || []).find((v) => v.id === drawerVariant) || null;
-  }, [activeProductObj, drawerVariant]);
+    return (activeProductObj.variants || []).find((v) => String(v.id) === String(drawerVariant)) || null;
+  }, [drawerProduct, productVariantsMap, activeProductObj, drawerVariant]);
+
+  // Dynamic Product Options & Accessories with pricing from backend
+  const availableDrawerOptions = useMemo(() => {
+    const dynamicOpts = productOptionsMap[drawerProduct];
+    if (Array.isArray(dynamicOpts) && dynamicOpts.length > 0) {
+      return dynamicOpts.map((opt) => ({
+        id: opt.id || opt.productOptionId,
+        name: opt.optionName || opt.name,
+        isStandard: Boolean(opt.isStandard),
+        unitPrice: Number(opt.unitPrice || 0),
+      }));
+    }
+    return CATALOG_OPTIONS.map((name) => ({
+      id: null,
+      name,
+      isStandard: name.includes('Standard'),
+      unitPrice: 0,
+    }));
+  }, [drawerProduct, productOptionsMap]);
 
   // Dynamic Currencies from lookups
   const currencyOptions = useMemo(() => {
@@ -507,27 +679,62 @@ export default function QuotationFormPage() {
     ];
   }, [lookups?.currencies]);
 
-  // Tax Slab Options (Dynamic from lookups.taxes, with fallback to TAX_SLABS)
-  const taxSlabOptions = useMemo(() => {
+  // Dynamic Tax Lookup normalized list
+  const taxLookupList = useMemo(() => {
     if (Array.isArray(lookups?.taxes) && lookups.taxes.length > 0) {
-      return lookups.taxes.map((t) => {
-        const rate = Number(t.rate ?? t.taxRate ?? 0);
-        const name = t.taxName || t.name || 'GST';
-        return {
-          value: String(rate),
-          label: `${rate}% (${name})`,
-          rate,
-          id: t.id || t.taxConfigDetailId || null,
-        };
-      });
+      return lookups.taxes.map((t) => ({
+        id: t.taxConfigDetailId || t.id,
+        taxConfigDetailId: t.taxConfigDetailId || t.id,
+        taxName: t.taxName || t.name || 'GST',
+        taxPercent: Number(t.taxPercent ?? t.rate ?? 0),
+        effectiveDate: t.effectiveDate,
+      }));
     }
-    return TAX_SLABS.map((s) => ({
-      value: String(s.value),
-      label: s.label,
-      rate: s.value,
-      id: null,
-    }));
+    return [
+      { id: 38, taxConfigDetailId: 38, taxName: 'CGST', taxPercent: 10 },
+      { id: 37, taxConfigDetailId: 37, taxName: 'SGST', taxPercent: 10 },
+      { id: 39, taxConfigDetailId: 39, taxName: 'IGST', taxPercent: 20 },
+    ];
   }, [lookups?.taxes]);
+
+  // Multi-Select options for Applicable Taxes in Commercial Treatment card (Option 2)
+  const applicableTaxSelectOptions = useMemo(() => {
+    return taxLookupList.map((t) => ({
+      value: t.taxConfigDetailId,
+      label: `${t.taxName} (${t.taxPercent}%)`,
+      chipLabel: `${t.taxName} ${t.taxPercent}%`,
+    }));
+  }, [taxLookupList]);
+
+  // Single-Select options for product line item in Drawer (user only selects 1 tax per product)
+  const singleProductTaxOptions = useMemo(() => {
+    return [
+      { value: '0', label: 'None / 0% Tax (Exempt)', taxPercent: 0, taxConfigDetailId: null, taxName: 'Exempt' },
+      ...taxLookupList.map((t) => ({
+        value: String(t.taxConfigDetailId),
+        label: `${t.taxName} (${t.taxPercent}%)`,
+        taxPercent: t.taxPercent,
+        taxConfigDetailId: t.taxConfigDetailId,
+        taxName: t.taxName,
+      })),
+    ];
+  }, [taxLookupList]);
+
+  // Selected tax objects for Quotation level calculations
+  const selectedTaxObjects = useMemo(() => {
+    const ids = new Set((formData.selectedTaxIds || []).map(Number));
+    return taxLookupList.filter((t) => ids.has(Number(t.taxConfigDetailId)));
+  }, [formData.selectedTaxIds, taxLookupList]);
+
+  // Backward-compatible taxSlabOptions for any legacy references
+  const taxSlabOptions = useMemo(() => {
+    return singleProductTaxOptions.map((t) => ({
+      value: String(t.taxPercent),
+      label: t.label,
+      rate: t.taxPercent,
+      id: t.taxConfigDetailId,
+    }));
+  }, [singleProductTaxOptions]);
 
   // Tax Treatment Options
   const taxTreatmentOptions = useMemo(() => {
@@ -537,16 +744,21 @@ export default function QuotationFormPage() {
     }));
   }, []);
 
-  // Client Selection Options (for Direct Quotations without Inquiry)
+  // Client Selection Options (filtered for active clients only)
   const clientSelectOptions = useMemo(() => {
+    const activeClients = clients.filter(
+      (c) =>
+        (c.isActive !== false && c.accountStatus !== 'Inactive') ||
+        (formData.clientId && (c.clientId === formData.clientId || c.id === formData.clientId))
+    );
     return [
       { value: '', label: '-- Select Client Company --' },
-      ...clients.map((c) => ({
+      ...activeClients.map((c) => ({
         value: c.clientId || c.id,
         label: `${c.companyName || 'Unnamed Client'}${c.clientCode ? ` (${c.clientCode})` : ''}`,
       })),
     ];
-  }, [clients]);
+  }, [clients, formData.clientId]);
 
   const handleSelectClient = (selectedClientId) => {
     if (!selectedClientId) {
@@ -555,7 +767,9 @@ export default function QuotationFormPage() {
         clientId: '',
         clientName: '',
         clientAddress: '',
+        clientAddressId: null,
         contactPerson: '',
+        clientContactId: null,
         contactEmail: '',
         contactPhone: '',
       }));
@@ -571,28 +785,36 @@ export default function QuotationFormPage() {
 
     if (!client) return;
 
-    const defaultAddr = client.addresses?.[0]?.addressLine1
-      ? `${client.addresses[0].addressLine1}, ${client.addresses[0].city || ''} ${client.addresses[0].pincode || ''}`.trim()
+    // Filter active addresses and contacts
+    const activeAddresses = (client.addresses || []).filter((a) => a.isActive !== false);
+    const activeContacts = (client.contacts || []).filter((c) => c.isActive !== false);
+
+    const firstAddr = activeAddresses[0] || client.addresses?.[0];
+    const defaultAddr = firstAddr?.addressLine1
+      ? `${firstAddr.addressLine1}, ${firstAddr.city || ''} ${firstAddr.pincode || ''}`.trim()
       : client.address || 'Plot 12, GIDC, Ahmedabad';
 
-    const defaultContact = client.contacts?.[0]?.firstName
-      ? `${client.contacts[0].firstName} ${client.contacts[0].lastName || ''}`.trim()
+    const firstContact = activeContacts[0] || client.contacts?.[0];
+    const defaultContact = firstContact?.firstName
+      ? `${firstContact.firstName} ${firstContact.lastName || ''}`.trim()
       : client.contactPerson || '';
 
     setFormData((prev) => ({
       ...prev,
       clientId: client.clientId || client.id,
       clientName: client.companyName || '',
+      clientAddressId: firstAddr?.id || firstAddr?.addressId || null,
       clientAddress: defaultAddr,
+      clientContactId: firstContact?.id || firstContact?.clientContactId || null,
       contactPerson: defaultContact,
-      contactEmail: client.contacts?.[0]?.email || client.email || '',
-      contactPhone: client.contacts?.[0]?.mobile1 || client.phone || '',
+      contactEmail: firstContact?.email || client.email || '',
+      contactPhone: firstContact?.mobile1 || firstContact?.phoneNo || client.phone || '',
     }));
 
     toast.success(`Client ${client.companyName} selected`);
   };
 
-  // Client Address & Contact Dropdown Options
+  // Client Address & Contact Dropdown Options (filtered for active records)
   const matchedClient = useMemo(() => {
     return clients.find(
       (c) =>
@@ -602,14 +824,20 @@ export default function QuotationFormPage() {
   }, [clients, formData.clientId, formData.clientName]);
 
   const clientAddressOptions = useMemo(() => {
-    if (!matchedClient || !matchedClient.addresses || matchedClient.addresses.length === 0) {
+    const addresses = (matchedClient?.addresses || []).filter(
+      (addr) =>
+        addr.isActive !== false ||
+        (formData.clientAddressId && (addr.id === formData.clientAddressId || addr.addressId === formData.clientAddressId))
+    );
+
+    if (addresses.length === 0) {
       return [{
         value: formData.clientAddress || 'Head Office',
         label: formData.clientAddress || 'Head Office',
         id: formData.clientAddressId || null,
       }];
     }
-    return matchedClient.addresses.map((addr) => ({
+    return addresses.map((addr) => ({
       value: `${addr.addressType || 'Office'} – ${addr.addressLine1}, ${addr.city} ${addr.pincode || ''}`,
       label: `${addr.addressType || 'Office'} – ${addr.addressLine1}, ${addr.city}`,
       id: addr.id || addr.addressId || null,
@@ -617,7 +845,13 @@ export default function QuotationFormPage() {
   }, [matchedClient, formData.clientAddress, formData.clientAddressId]);
 
   const clientContactOptions = useMemo(() => {
-    if (!matchedClient || !matchedClient.contacts || matchedClient.contacts.length === 0) {
+    const contacts = (matchedClient?.contacts || []).filter(
+      (c) =>
+        c.isActive !== false ||
+        (formData.clientContactId && (c.id === formData.clientContactId || c.clientContactId === formData.clientContactId))
+    );
+
+    if (contacts.length === 0) {
       return [{
         value: formData.contactPerson || 'Contact Person',
         label: formData.contactPerson || 'Contact Person',
@@ -626,19 +860,24 @@ export default function QuotationFormPage() {
         phone: formData.contactPhone || '',
       }];
     }
-    return matchedClient.contacts.map((c) => ({
+    return contacts.map((c) => ({
       value: `${c.firstName || ''} ${c.lastName || ''}`.trim(),
-      label: `${c.firstName || ''} ${c.lastName || ''} · ${c.email || c.mobile1 || ''}`.trim(),
+      label: `${c.firstName || ''} ${c.lastName || ''} · ${c.email || c.mobile1 || c.phoneNo || ''}`.trim(),
       id: c.id || c.clientContactId || null,
       email: c.email || '',
-      phone: c.mobile1 || c.phone || '',
+      phone: c.mobile1 || c.phoneNo || c.phone || '',
     }));
   }, [matchedClient, formData.contactPerson, formData.clientContactId, formData.contactEmail, formData.contactPhone]);
 
-  // Real-time Totals Calculation
+  // Real-time Totals Calculation with dynamic multiple taxes & header otherCharges
   const totals = useMemo(() => {
-    return calculateQuotationTotals(formData.items, formData.taxTreatment);
-  }, [formData.items, formData.taxTreatment]);
+    return calculateQuotationTotals(
+      formData.items,
+      formData.taxTreatment,
+      selectedTaxObjects,
+      formData.otherCharges
+    );
+  }, [formData.items, formData.taxTreatment, selectedTaxObjects, formData.otherCharges]);
 
   // Expand / Collapse Product Description Helpers
   const getItemDescKey = useCallback((item, idx) => item.id || `row-${idx}`, []);
@@ -676,7 +915,7 @@ export default function QuotationFormPage() {
     }
   };
 
-  // Open Drawer for Add Product
+  // Open Drawer for Add Product (User only selects one tax per product)
   const handleOpenAddDrawer = () => {
     setEditingIndex(null);
     setDrawerCategory('');
@@ -684,7 +923,9 @@ export default function QuotationFormPage() {
     setDrawerVariant('');
     setDrawerQty('1');
     setDrawerRate('');
-    setDrawerTax(18);
+    const defaultTax = singleProductTaxOptions[1] || singleProductTaxOptions[0];
+    setDrawerTax(defaultTax?.taxPercent ?? 10);
+    setDrawerTaxConfigDetailId(defaultTax?.taxConfigDetailId ? String(defaultTax.taxConfigDetailId) : (defaultTax?.value || ''));
     setDrawerOtherCharges('0');
     setDrawerOptions(['Rexine Cover (Standard)']);
     setDrawerDescription('');
@@ -700,7 +941,8 @@ export default function QuotationFormPage() {
     setDrawerVariant(item.variantId || '');
     setDrawerQty(String(item.quantity || 1));
     setDrawerRate(String(item.rate || 0));
-    setDrawerTax(item.taxPercent !== undefined ? Number(item.taxPercent) : 18);
+    setDrawerTax(item.taxPercent !== undefined ? Number(item.taxPercent) : 10);
+    setDrawerTaxConfigDetailId(item.taxConfigDetailId ? String(item.taxConfigDetailId) : (item.taxPercent === 0 ? '0' : ''));
     setDrawerOtherCharges(String(item.otherCharges || 0));
     setDrawerOptions(Array.isArray(item.options) ? item.options : ['Rexine Cover (Standard)']);
     const existingDesc = item.description ?? item.technicalDetails ?? '';
@@ -713,25 +955,41 @@ export default function QuotationFormPage() {
   const handleDrawerProductChange = (prodId) => {
     setDrawerProduct(prodId);
     setDrawerVariant('');
-    const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === prodId) || null;
-    if (prod && !drawerCategory) {
-      setDrawerCategory(prod.categoryId || '');
+    const prod =
+      mergedCatalogProducts.find((p) => String(p.id) === String(prodId)) ||
+      INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === prodId) || null;
+    if (prod && !drawerCategory && prod.categoryId) {
+      setDrawerCategory(String(prod.categoryId));
     }
+    const details = productDetailsMap[prodId];
+    const fullDesc = details?.description || prod?.description || (prod ? buildCatalogProductDescription(prod, null) : '');
     if (!isDescriptionEdited) {
-      setDrawerDescription(buildCatalogProductDescription(prod, null));
+      setDrawerDescription(fullDesc);
     }
   };
 
   const handleDrawerVariantChange = (varId) => {
     setDrawerVariant(varId);
-    const variant = activeProductObj?.variants?.find((v) => v.id === varId) || null;
+    const variant = variantOptions.find((v) => String(v.value) === String(varId))?.variantObj || null;
     if (!isDescriptionEdited && activeProductObj) {
-      setDrawerDescription(buildCatalogProductDescription(activeProductObj, variant));
+      const baseDesc = activeProductObj.description || activeProductObj.productName || '';
+      const variantSpecs = [
+        variant?.variantName || variant?.size ? `Size: ${variant?.variantName || variant?.size}` : null,
+        variant?.gradeCode || variant?.grade ? `Grade: ${variant?.gradeCode || variant?.grade}` : null,
+      ].filter(Boolean).join(' · ');
+      setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
     }
   };
 
   const handleResetDrawerDescription = () => {
-    setDrawerDescription(buildCatalogProductDescription(activeProductObj, activeVariantObj));
+    if (activeProductObj) {
+      const baseDesc = activeProductObj.description || activeProductObj.productName || '';
+      const variantSpecs = [
+        activeVariantObj?.variantName || activeVariantObj?.size ? `Size: ${activeVariantObj?.variantName || activeVariantObj?.size}` : null,
+        activeVariantObj?.gradeCode || activeVariantObj?.grade ? `Grade: ${activeVariantObj?.gradeCode || activeVariantObj?.grade}` : null,
+      ].filter(Boolean).join(' · ');
+      setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
+    }
     setIsDescriptionEdited(false);
   };
 
@@ -742,31 +1000,107 @@ export default function QuotationFormPage() {
     );
   };
 
-  // Save Product from Drawer
+  // "Use list price" Action calling GET /api/product-prices/lookup (ProductPriceList.md § 2.8 & § 3.5)
+  const handleLookupListPrice = async () => {
+    if (!drawerProduct) {
+      toast.error('Please select a product first.');
+      return;
+    }
+
+    setIsLoadingPriceLookup(true);
+    try {
+      const resolvedCurrencyId = formData.currencyId || currencyOptions.find((c) => c.value === formData.currency)?.id || 1;
+      const selectedOptIds = availableDrawerOptions
+        .filter((opt) => drawerOptions.includes(opt.name))
+        .map((opt) => opt.id)
+        .filter(Boolean);
+
+      const res = await productService.lookupProductPrice({
+        productId: activeProductObj?.productId || drawerProduct,
+        productVariantId: activeVariantObj?.productVariantId || activeVariantObj?.id || drawerVariant || undefined,
+        currencyId: resolvedCurrencyId,
+        productOptionIds: selectedOptIds.length > 0 ? selectedOptIds : undefined,
+      });
+
+      if (res?.suggestedRate !== undefined && res.suggestedRate !== null) {
+        setDrawerRate(String(res.suggestedRate));
+        const extraNote = res.optionExtras ? ` (Includes ${formatCurrency(res.optionExtras, formData.currency)} option extras)` : '';
+        toast.success(`List price applied: ${formatCurrency(res.suggestedRate, formData.currency)}${extraNote}`);
+      } else if (Array.isArray(res?.candidates) && res.candidates.length > 0) {
+        setPriceCandidatesModal({
+          candidates: res.candidates,
+          optionExtras: res.optionExtras || 0,
+          targetItemIndex: null, // Drawer
+        });
+      } else {
+        toast.error('No active list price found for this configuration in the selected currency.');
+      }
+    } catch (err) {
+      console.warn('Price lookup failed:', err);
+      toast.error(err?.message || 'Price lookup failed.');
+    } finally {
+      setIsLoadingPriceLookup(false);
+    }
+  };
+
+  const handleSelectCandidatePrice = (cand, optionExtras = 0, targetIndex = null) => {
+    const finalRate = (Number(cand.unitPrice) || 0) + (Number(optionExtras) || 0);
+    if (targetIndex === null) {
+      setDrawerRate(String(finalRate));
+      toast.success(`Applied ${cand.standardCode || ''} ${cand.gradeCode || ''}: ${formatCurrency(finalRate, formData.currency)}`);
+    } else {
+      setFormData((prev) => {
+        const next = [...prev.items];
+        if (next[targetIndex]) {
+          next[targetIndex] = {
+            ...next[targetIndex],
+            rate: finalRate,
+            rateSource: 'ListPrice',
+            priceCandidates: null,
+          };
+        }
+        return { ...prev, items: next };
+      });
+      toast.success(`List price applied to line #${targetIndex + 1}: ${formatCurrency(finalRate, formData.currency)}`);
+    }
+    setPriceCandidatesModal(null);
+  };
+
+  // Save Product from Drawer (Ensuring single tax per product)
   const handleSaveProductFromDrawer = () => {
     if (!drawerProduct) {
       toast.error('Please select a product first.');
       return;
     }
 
+    const parsedRate = Number(drawerRate);
+    if (!drawerRate || isNaN(parsedRate) || parsedRate <= 0) {
+      toast.error('Unit Rate is compulsory and must be greater than 0.');
+      return;
+    }
+
     const defaultDesc = buildCatalogProductDescription(activeProductObj, activeVariantObj);
-    const matchedTaxObj = taxSlabOptions.find((o) => String(o.rate) === String(drawerTax) || o.value === String(drawerTax));
-    const taxConfigDetailId = matchedTaxObj?.id || null;
+    const matchedTaxObj = singleProductTaxOptions.find(
+      (o) => String(o.value) === String(drawerTaxConfigDetailId) || (o.taxConfigDetailId && String(o.taxConfigDetailId) === String(drawerTaxConfigDetailId))
+    );
+    const taxConfigDetailId = matchedTaxObj?.taxConfigDetailId || (drawerTaxConfigDetailId && drawerTaxConfigDetailId !== '0' ? Number(drawerTaxConfigDetailId) : null);
+    const taxPercent = matchedTaxObj ? matchedTaxObj.taxPercent : (Number(drawerTax) || 0);
 
     const payload = {
       categoryId: drawerCategory || activeProductObj?.categoryId || 'cat-sp',
-      productId: activeProductObj?.id || 'prod-custom',
+      productId: activeProductObj?.productId || activeProductObj?.id || 'prod-custom',
       productName: activeProductObj?.productName || 'Custom Product',
-      variantId: activeVariantObj?.id || '',
-      variantName: activeVariantObj?.variantName || 'Standard Variant',
-      itemCode: activeVariantObj?.itemCode || activeProductObj?.itemCodePrefix || 'ITM-01',
+      variantId: activeVariantObj?.id || activeVariantObj?.productVariantId || '',
+      variantName: activeVariantObj?.variantName || activeVariantObj?.name || 'Standard Variant',
+      itemCode: activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'ITM-01',
       technicalDetails: activeVariantObj?.technicalDetails || activeProductObj?.standardInfo || '',
       description: drawerDescription.trim() || defaultDesc,
       quantity: Math.max(1, Number(drawerQty) || 1),
       rate: Number(drawerRate) || 0,
       otherCharges: Number(drawerOtherCharges) || 0,
-      taxPercent: Number(drawerTax) || 18,
+      taxPercent,
       taxConfigDetailId,
+      taxName: matchedTaxObj?.taxName || (taxPercent > 0 ? 'GST' : 'Exempt'),
       options: drawerOptions,
     };
 
@@ -889,15 +1223,11 @@ export default function QuotationFormPage() {
       const resolvedContactId = formData.clientContactId || clientContactOptions[0]?.id || null;
       const resolvedCurrencyId = formData.currencyId || currencyOptions.find((c) => c.value === formData.currency)?.id || 1;
 
-      // Extract unique taxConfigDetailIds
-      const activeTaxConfigIds = [
-        ...new Set(
-          formData.items
-            .map((it) => it.taxConfigDetailId)
-            .filter(Boolean)
-        ),
-      ];
-      const taxesPayload = activeTaxConfigIds.map((tid) => ({ taxConfigDetailId: tid }));
+      // Send only quotation tax grid taxes per QuotationTaxGrid.md (line items send their own taxConfigDetailId)
+      const taxesPayload = (formData.selectedTaxIds || [])
+        .map(Number)
+        .filter((tid) => Boolean(tid) && tid > 0)
+        .map((tid) => ({ taxConfigDetailId: tid }));
 
       if (isRevisionMode) {
         const payload = {
@@ -1262,6 +1592,8 @@ export default function QuotationFormPage() {
                     const lineAmount =
                       (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
                       (Number(item.otherCharges) || 0);
+                    const lineTax = (lineAmount * (Number(item.taxPercent) || 0)) / 100;
+                    const lineTotalWithTax = lineAmount + lineTax;
                     const itemKey = getItemDescKey(item, idx);
                     const hasDescription = Boolean(item.description?.trim());
                     const isDescExpanded = hasDescription && expandedDescIds.has(itemKey);
@@ -1318,31 +1650,56 @@ export default function QuotationFormPage() {
                           )}
                         </Td>
 
-                        <Td className="text-center font-mono font-semibold text-xs text-heading">
+                        <Td className="text-center font-mono font-semibold text-xs text-heading align-top">
                           {item.quantity}
                         </Td>
 
-                        <Td className="text-right font-mono text-xs text-heading">
-                          {formatCurrency(item.rate, formData.currency)}
+                        <Td className="text-right font-mono text-xs text-heading align-top">
+                          <div>{formatCurrency(item.rate, formData.currency)}</div>
+                          {item.rateSource === 'Ambiguous' && Array.isArray(item.priceCandidates) && item.priceCandidates.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setPriceCandidatesModal({
+                                candidates: item.priceCandidates,
+                                optionExtras: item.optionExtras || 0,
+                                targetItemIndex: idx,
+                              })}
+                              className="inline-block mt-0.5 text-3xs font-semibold text-primary hover:underline cursor-pointer"
+                            >
+                              Pick list price ({item.priceCandidates.length})
+                            </button>
+                          )}
+                          {item.rateSource === 'ListPrice' && (
+                            <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-3xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                              List price
+                            </span>
+                          )}
                         </Td>
 
-                        <Td className="text-right font-mono text-xs text-text-muted">
+                        <Td className="text-right font-mono text-xs text-text-muted align-top">
                           {Number(item.otherCharges) > 0
                             ? formatCurrency(item.otherCharges, formData.currency)
                             : '—'}
                         </Td>
 
-                        <Td className="text-center">
+                        <Td className="text-center align-top">
                           <Badge variant="neutral" size="sm">
-                            {item.taxPercent}% GST
+                            {item.taxName ? `${item.taxName} (${item.taxPercent}%)` : `${item.taxPercent}%`}
                           </Badge>
                         </Td>
 
-                        <Td className="text-right font-mono font-bold text-xs text-heading">
-                          {formatCurrency(lineAmount, formData.currency)}
+                        <Td className="text-right font-mono text-xs text-heading align-top">
+                          <div className="font-bold text-heading">
+                            {formatCurrency(lineTotalWithTax, formData.currency)}
+                          </div>
+                          {lineTax > 0 && (
+                            <div className="text-3xs text-text-muted font-normal font-sans">
+                              Excl: {formatCurrency(lineAmount, formData.currency)}
+                            </div>
+                          )}
                         </Td>
 
-                        <Td className="text-right whitespace-nowrap">
+                        <Td className="text-right whitespace-nowrap align-top">
                           <TableActions
                             onEdit={() => handleStartEditItem(item, idx)}
                             onDelete={() => handleRemoveItem(idx)}
@@ -1369,33 +1726,31 @@ export default function QuotationFormPage() {
                   <span>Commercial Treatment & Pricing Notes</span>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
-                    Applicable Tax Regime
-                  </label>
-                  <SearchableSelect
-                    options={taxTreatmentOptions}
-                    value={formData.taxTreatment}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, taxTreatment: e.target.value }))}
+                <div>
+                  <SearchableMultiSelect
+                    label="Applicable Taxes"
+                    options={applicableTaxSelectOptions}
+                    value={formData.selectedTaxIds || []}
+                    placeholder="Select applicable taxes (e.g. CGST, SGST)..."
+                    maxDisplayTags={4}
+                    onChange={(e) => {
+                      const val = Array.isArray(e) ? e : e?.target?.value || [];
+                      setFormData((prev) => ({
+                        ...prev,
+                        selectedTaxIds: val.map((v) => Number(v?.taxConfigDetailId ?? v?.value ?? v)),
+                      }));
+                    }}
                   />
-                  <p className="text-3xs text-text-muted">
-                    Determines Output Tax split: Intra-State (CGST + SGST), Inter-State (IGST), or Export / Exempt (0%).
-                  </p>
                 </div>
 
-                <div className="space-y-1.5 pt-1">
-                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider block">
-                    Quotation Pricing Notes & Commercial Remarks
-                  </label>
+                <div>
                   <Textarea
+                    label="Quotation Pricing Notes & Commercial Remarks"
                     rows={2}
                     placeholder="e.g. Unit rates include standard export packing; prices valid for 30 days from document date; freight extra at actuals..."
                     value={formData.pricingNotes || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, pricingNotes: e.target.value }))}
                   />
-                  <p className="text-3xs text-text-muted">
-                    Commercial notes to be communicated with line items on official client quotations.
-                  </p>
                 </div>
               </div>
 
@@ -1417,41 +1772,50 @@ export default function QuotationFormPage() {
                   </span>
                 </div>
 
-                {formData.taxTreatment === 'INTRA_STATE' && (
+                {Number(totals.otherCharges) > 0 && (
+                  <div className="flex justify-between items-center text-text-muted">
+                    <span>Other Charges:</span>
+                    <span className="font-mono font-semibold text-heading">
+                      {formatCurrency(totals.otherCharges, formData.currency)}
+                    </span>
+                  </div>
+                )}
+
+                {Number(totals.lineTaxAmount) > 0 && !totals.isLineTaxesBreakdown && (
+                  <div className="flex justify-between items-center text-text-muted text-2xs py-1 px-2.5 bg-surface/50 rounded border border-border/50">
+                    <span>Product Line Taxes:</span>
+                    <span className="font-mono font-medium text-heading">
+                      {formatCurrency(totals.lineTaxAmount, formData.currency)}
+                    </span>
+                  </div>
+                )}
+
+                {totals.taxesBreakdown && totals.taxesBreakdown.length > 0 ? (
                   <div className="space-y-1.5 py-1.5 px-2.5 bg-surface/60 rounded-lg border border-border/60">
-                    <div className="flex justify-between items-center text-text-muted text-2xs">
-                      <span>CGST (Output - 50%):</span>
-                      <span className="font-mono font-medium">{formatCurrency(totals.cgst, formData.currency)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-text-muted text-2xs">
-                      <span>SGST (Output - 50%):</span>
-                      <span className="font-mono font-medium">{formatCurrency(totals.sgst, formData.currency)}</span>
-                    </div>
+                    {totals.taxesBreakdown.map((tx, idx) => (
+                      <div key={tx.id || idx} className="flex justify-between items-center text-text-muted text-2xs">
+                        <span>{tx.name} ({tx.percent}%):</span>
+                        <span className="font-mono font-medium text-heading">
+                          {formatCurrency(tx.amount, formData.currency)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                )}
-
-                {formData.taxTreatment === 'INTER_STATE' && (
-                  <div className="py-1.5 px-2.5 bg-surface/60 rounded-lg border border-border/60">
-                    <div className="flex justify-between items-center text-text-muted text-2xs">
-                      <span>IGST (Output):</span>
-                      <span className="font-mono font-medium">{formatCurrency(totals.igst, formData.currency)}</span>
+                ) : (
+                  !totals.lineTaxAmount && (
+                    <div className="py-1.5 px-2.5 bg-surface/60 rounded-lg border border-border/60 text-2xs text-text-muted flex justify-between items-center">
+                      <span>Tax:</span>
+                      <span className="font-mono text-heading">
+                        {formatCurrency(0, formData.currency)}
+                      </span>
                     </div>
-                  </div>
-                )}
-
-                {(formData.taxTreatment === 'EXPORT_LUT' || formData.taxTreatment === 'EXEMPT') && (
-                  <div className="py-1.5 px-2.5 bg-surface/60 rounded-lg border border-border/60">
-                    <div className="flex justify-between items-center text-text-muted text-2xs">
-                      <span>Exempt Tax (0%):</span>
-                      <span className="font-mono font-medium">₹0.00</span>
-                    </div>
-                  </div>
+                  )
                 )}
 
                 <div className="flex justify-between items-center text-text-muted pt-1">
                   <span>Total Tax:</span>
                   <span className="font-mono font-semibold text-heading">
-                    {formatCurrency(totals.totalTax, formData.currency)}
+                    {formatCurrency(totals.taxAmount ?? totals.totalTax, formData.currency)}
                   </span>
                 </div>
 
@@ -1691,7 +2055,7 @@ export default function QuotationFormPage() {
             <Input
               label="Item Code"
               disabled
-              value={activeVariantObj?.itemCode || activeProductObj?.itemCodePrefix || 'Auto-generated'}
+              value={activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'Auto-generated'}
               hint="Automatically assigned from catalog variant"
             />
           </div>
@@ -1707,15 +2071,32 @@ export default function QuotationFormPage() {
               onChange={(e) => setDrawerQty(e.target.value)}
             />
 
-            <Input
-              label={`Unit Rate (${formData.currency})`}
-              type="number"
-              step="0.01"
-              required
-              placeholder="0.00"
-              value={drawerRate}
-              onChange={(e) => setDrawerRate(e.target.value)}
-            />
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="mf-label text-xs font-semibold text-heading">
+                  Unit Rate ({formData.currency}) <span className="mf-required" aria-hidden="true">*</span>
+                </label>
+                {/* Use list price button - commented out per request, can be re-enabled later */}
+                {/* <button
+                  type="button"
+                  onClick={handleLookupListPrice}
+                  disabled={!drawerProduct || isLoadingPriceLookup}
+                  className="text-3xs font-semibold text-primary hover:text-primary-hover disabled:text-text-muted hover:underline flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Query list price from backend product price list (ProductPriceList.md § 3.5)"
+                >
+                  {isLoadingPriceLookup ? 'Looking up...' : 'Use list price'}
+                </button> */}
+              </div>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                placeholder="0.00"
+                value={drawerRate}
+                onChange={(e) => setDrawerRate(e.target.value)}
+              />
+            </div>
 
             <Input
               label={`Other Charges (${formData.currency})`}
@@ -1727,10 +2108,16 @@ export default function QuotationFormPage() {
             />
 
             <SearchableSelect
-              label="Tax % Slabs"
-              options={taxSlabOptions}
-              value={String(drawerTax)}
-              onChange={(e) => setDrawerTax(Number(e.target.value))}
+              label="Product Tax"
+              options={singleProductTaxOptions}
+              value={String(drawerTaxConfigDetailId || (drawerTax === 0 ? '0' : ''))}
+              placeholder="-- Select Tax --"
+              onChange={(e) => {
+                const val = e.target.value;
+                const matched = singleProductTaxOptions.find((o) => String(o.value) === String(val));
+                setDrawerTaxConfigDetailId(matched?.taxConfigDetailId ? String(matched.taxConfigDetailId) : (val === '0' ? '0' : ''));
+                setDrawerTax(matched ? matched.taxPercent : 0);
+              }}
             />
           </div>
 
@@ -1746,27 +2133,27 @@ export default function QuotationFormPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                 <div>
                   <div className="text-3xs text-text-muted">Material</div>
-                  <div className="font-semibold text-heading truncate">Indian Black Granite</div>
+                  <div className="font-semibold text-heading truncate">{activeProductObj?.materialName || activeProductObj?.material || '—'}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Finish</div>
-                  <div className="font-semibold text-heading truncate">Hand Lapped</div>
+                  <div className="font-semibold text-heading truncate">{activeProductObj?.finishType || activeProductObj?.finish || '—'}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Standard</div>
-                  <div className="font-semibold text-heading truncate">IS-7327-2003</div>
+                  <div className="font-semibold text-heading truncate">{activeProductObj?.primaryStandardCode || (activeProductObj?.standards?.[0]?.standardCode || activeProductObj?.standards?.[0]?.name) || activeVariantObj?.standardCode || '—'}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Grade</div>
-                  <div className="font-semibold text-heading truncate">{activeVariantObj.grade || 'Gr-0'}</div>
+                  <div className="font-semibold text-heading truncate">{activeVariantObj?.gradeCode || activeVariantObj?.grade || lookups?.grades?.find((g) => g.id === activeVariantObj?.gradeId)?.gradeCode || '—'}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Flatness</div>
-                  <div className="font-semibold text-heading truncate">{activeVariantObj.flatness || '—'}</div>
+                  <div className="font-semibold text-heading truncate">{activeVariantObj?.flatness || '—'}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Dimensions</div>
-                  <div className="font-semibold text-heading truncate">{activeVariantObj.size || 'Standard'}</div>
+                  <div className="font-semibold text-heading truncate">{activeVariantObj?.variantName || activeVariantObj?.size || activeVariantObj?.variantCode || 'Standard'}</div>
                 </div>
               </div>
             </div>
@@ -1810,23 +2197,33 @@ export default function QuotationFormPage() {
               <span className="text-3xs text-text-muted">Select all applicable accessories / machining</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl border border-border bg-surface/30">
-              {CATALOG_OPTIONS.map((opt) => {
-                const isChecked = drawerOptions.includes(opt);
+              {availableDrawerOptions.map((opt) => {
+                const optName = opt.name || opt;
+                const isChecked = drawerOptions.includes(optName);
+                const hasPrice = Number(opt.unitPrice) > 0;
                 return (
                   <label
-                    key={opt}
-                    className={`flex items-center gap-2 p-2 rounded-lg border transition-all cursor-pointer text-xs select-none ${
+                    key={optName}
+                    className={`flex items-center justify-between gap-2 p-2 rounded-lg border transition-all cursor-pointer text-xs select-none ${
                       isChecked
                         ? 'border-primary/50 bg-primary/5 text-heading font-medium'
                         : 'border-border/60 hover:bg-surface/80 text-text-muted'
                     }`}
                   >
-                    <Checkbox
-                      checked={isChecked}
-                      onChange={() => handleToggleOption(opt)}
-                      aria-label={opt}
-                    />
-                    <span className="truncate">{opt}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Checkbox
+                        checked={isChecked}
+                        onChange={() => handleToggleOption(optName)}
+                        aria-label={optName}
+                      />
+                      <span className="truncate">{optName}</span>
+                    </div>
+                    {/* Option price badge - commented out per request, can be re-enabled later */}
+                    {/* {hasPrice && (
+                      <span className="text-3xs font-mono font-semibold text-primary shrink-0">
+                        +{formatCurrency(opt.unitPrice, formData.currency)}
+                      </span>
+                    )} */}
                   </label>
                 );
               })}
@@ -1834,6 +2231,59 @@ export default function QuotationFormPage() {
           </div>
         </div>
       </Drawer>
+
+      {/* ── PRICE CANDIDATES MODAL (ProductPriceList.md § 3.4 & § 3.5) ── */}
+      {priceCandidatesModal && (
+        <Modal
+          isOpen={Boolean(priceCandidatesModal)}
+          onClose={() => setPriceCandidatesModal(null)}
+          title="Pick List Price"
+          size="md"
+        >
+          <div className="space-y-3">
+            <p className="text-xs text-text-muted">
+              Multiple configuration prices match this specification. Select the desired standard and grade:
+            </p>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {priceCandidatesModal.candidates.map((cand, cIdx) => {
+                const unitPrice = Number(cand.unitPrice) || 0;
+                const extras = Number(priceCandidatesModal.optionExtras) || 0;
+                const total = unitPrice + extras;
+                return (
+                  <div
+                    key={cand.id || cIdx}
+                    onClick={() =>
+                      handleSelectCandidatePrice(
+                        cand,
+                        priceCandidatesModal.optionExtras,
+                        priceCandidatesModal.targetItemIndex
+                      )
+                    }
+                    className="p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-semibold text-xs text-heading">
+                        {cand.standardCode || 'Standard'} · {cand.gradeCode || 'Grade'}
+                      </div>
+                      <div className="text-2xs text-text-muted mt-0.5">
+                        Base: {formatCurrency(unitPrice, formData.currency)}
+                        {extras > 0 && ` + Extras: ${formatCurrency(extras, formData.currency)}`}
+                        {cand.deliveryWeeks ? ` · ${cand.deliveryWeeks} wks delivery` : ''}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-bold text-sm text-primary">
+                        {formatCurrency(total, formData.currency)}
+                      </div>
+                      <span className="text-3xs text-primary font-medium hover:underline">Select</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* ── STICKY BOTTOM ACTIONS BAR ── */}
       <FormActionsBar

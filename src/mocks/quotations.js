@@ -85,54 +85,190 @@ export const DELIVERY_TERMS_OPTIONS = [
   { value: 'Transit Insurance at Buyer Cost', label: 'Transit Insurance at Buyer Cost' },
 ];
 
-export function calculateQuotationTotals(items = [], taxTreatment = 'INTRA_STATE') {
+export function calculateQuotationTotals(items = [], taxTreatment = 'INTRA_STATE', selectedTaxes = [], otherCharges = 0) {
   let subtotal = 0;
-  let totalTax = 0;
+  let lineTaxAmount = 0;
 
   const calculatedItems = (items || []).map((item) => {
     const qty = Number(item.quantity) || 0;
     const rate = Number(item.rate) || 0;
-    const otherCharges = Number(item.otherCharges) || 0;
-    const lineAmount = (qty * rate) + otherCharges;
-    const taxRate = Number(item.taxPercent !== undefined ? item.taxPercent : 18);
+    const itemOtherCharges = Number(item.otherCharges) || 0;
+    const lineAmount = (qty * rate) + itemOtherCharges;
+    const taxRate = Number(item.taxPercent !== undefined ? item.taxPercent : 0);
     const lineTax = (lineAmount * taxRate) / 100;
 
     subtotal += lineAmount;
-    totalTax += lineTax;
+    lineTaxAmount += lineTax;
 
     return {
       ...item,
       quantity: qty,
       rate,
-      otherCharges,
+      otherCharges: itemOtherCharges,
       taxPercent: taxRate,
       lineAmount,
       lineTax,
     };
   });
 
+  const headerOtherCharges = Number(otherCharges) || 0;
+  const taxableAmount = subtotal + headerOtherCharges;
+
+  let totalTax = 0;
   let cgst = 0;
   let sgst = 0;
   let igst = 0;
+  const taxesBreakdown = [];
+  let isLineTaxesBreakdown = false;
 
-  if (taxTreatment === 'INTRA_STATE') {
-    cgst = totalTax / 2;
-    sgst = totalTax / 2;
-  } else if (taxTreatment === 'INTER_STATE') {
-    igst = totalTax;
-  } else if (taxTreatment === 'EXPORT_LUT' || taxTreatment === 'EXEMPT') {
+  if (Array.isArray(selectedTaxes) && selectedTaxes.length > 0) {
+    selectedTaxes.forEach((tx, idx) => {
+      const rate = Number(tx.taxPercent ?? tx.rate ?? 0);
+      const name = tx.taxName || tx.name || 'Tax';
+      const id = tx.taxConfigDetailId || tx.id || name;
+      const amount = Math.round(((taxableAmount * rate) / 100) * 100) / 100;
+      totalTax += amount;
+
+      taxesBreakdown.push({
+        id,
+        sequenceNo: idx + 1,
+        name,
+        percent: rate,
+        taxableAmount,
+        amount,
+      });
+
+      const upper = name.toUpperCase();
+      if (upper.includes('CGST')) cgst += amount;
+      else if (upper.includes('SGST')) sgst += amount;
+      else if (upper.includes('IGST')) igst += amount;
+    });
+  } else if (lineTaxAmount > 0) {
+    // When no quotation-level tax grid is selected, break down the product line taxes according to taxTreatment
+    isLineTaxesBreakdown = true;
+
+    // Check if items already have specific tax names (e.g. CGST, SGST, IGST)
+    const hasExplicitGstName = calculatedItems.some((it) => {
+      const upper = String(it.taxName || '').toUpperCase();
+      return upper.includes('CGST') || upper.includes('SGST') || upper.includes('IGST');
+    });
+
+    if (hasExplicitGstName) {
+      // Group by explicit tax name and percent
+      const taxNameMap = new Map();
+      calculatedItems.forEach((it) => {
+        if (it.lineTax > 0) {
+          const key = `${it.taxName || 'GST'}__${it.taxPercent}`;
+          const existing = taxNameMap.get(key) || { name: it.taxName || 'GST', percent: it.taxPercent, amount: 0, taxable: 0 };
+          existing.amount += it.lineTax;
+          existing.taxable += it.lineAmount;
+          taxNameMap.set(key, existing);
+        }
+      });
+
+      taxNameMap.forEach((val, key) => {
+        const roundedAmt = Math.round(val.amount * 100) / 100;
+        totalTax += roundedAmt;
+        const upper = val.name.toUpperCase();
+        if (upper.includes('CGST')) cgst += roundedAmt;
+        else if (upper.includes('SGST')) sgst += roundedAmt;
+        else if (upper.includes('IGST')) igst += roundedAmt;
+
+        taxesBreakdown.push({
+          id: `line-tax-${key}`,
+          sequenceNo: taxesBreakdown.length + 1,
+          name: val.name,
+          percent: val.percent,
+          taxableAmount: val.taxable,
+          amount: roundedAmt,
+        });
+      });
+    } else if (taxTreatment === 'INTER_STATE') {
+      // Inter-state: All line tax maps to IGST
+      const ratesMap = new Map();
+      calculatedItems.forEach((it) => {
+        if (it.lineTax > 0) {
+          const r = it.taxPercent;
+          const existing = ratesMap.get(r) || { amount: 0, taxable: 0 };
+          existing.amount += it.lineTax;
+          existing.taxable += it.lineAmount;
+          ratesMap.set(r, existing);
+        }
+      });
+
+      ratesMap.forEach((val, rate) => {
+        const roundedAmt = Math.round(val.amount * 100) / 100;
+        igst += roundedAmt;
+        totalTax += roundedAmt;
+
+        taxesBreakdown.push({
+          id: `line-igst-${rate}`,
+          sequenceNo: taxesBreakdown.length + 1,
+          name: 'IGST',
+          percent: rate,
+          taxableAmount: val.taxable,
+          amount: roundedAmt,
+        });
+      });
+    } else {
+      // Intra-state (default): Split line tax into CGST (half) + SGST (half)
+      const ratesMap = new Map();
+      calculatedItems.forEach((it) => {
+        if (it.lineTax > 0) {
+          const r = it.taxPercent;
+          const existing = ratesMap.get(r) || { amount: 0, taxable: 0 };
+          existing.amount += it.lineTax;
+          existing.taxable += it.lineAmount;
+          ratesMap.set(r, existing);
+        }
+      });
+
+      ratesMap.forEach((val, rate) => {
+        const halfRate = rate / 2;
+        const halfAmt = Math.round((val.amount / 2) * 100) / 100;
+        cgst += halfAmt;
+        sgst += halfAmt;
+        totalTax += (halfAmt * 2);
+
+        taxesBreakdown.push({
+          id: `line-cgst-${halfRate}`,
+          sequenceNo: taxesBreakdown.length + 1,
+          name: 'CGST',
+          percent: halfRate,
+          taxableAmount: val.taxable,
+          amount: halfAmt,
+        });
+        taxesBreakdown.push({
+          id: `line-sgst-${halfRate}`,
+          sequenceNo: taxesBreakdown.length + 1,
+          name: 'SGST',
+          percent: halfRate,
+          taxableAmount: val.taxable,
+          amount: halfAmt,
+        });
+      });
+    }
+  } else {
+    // When no applicable taxes are selected and no line tax exists
     totalTax = 0;
   }
 
-  const grandTotal = subtotal + totalTax;
+  const taxAmount = isLineTaxesBreakdown ? totalTax : (lineTaxAmount + totalTax);
+  const grandTotal = taxableAmount + taxAmount;
 
   return {
     calculatedItems,
     subtotal,
+    otherCharges: headerOtherCharges,
+    taxableAmount,
+    lineTaxAmount,
+    isLineTaxesBreakdown,
     totalTax,
+    taxAmount,
     cgst,
     sgst,
     igst,
+    taxesBreakdown,
     grandTotal,
   };
 }

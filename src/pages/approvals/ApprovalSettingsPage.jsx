@@ -1,75 +1,137 @@
 /**
  * src/pages/approvals/ApprovalSettingsPage.jsx
- * Admin Configuration for Module-Level Approval Rules & Approver Roles.
+ * Admin Configuration for Module-Level Approval Rules & Approver Roles / Users.
  *
- * Implements Frontend-API-Guide 1.md (Section 5.5 Setup - Admin):
+ * Implements Global Approval Guide (Section 1 Setup - Admin & Migration AddApproverTypeUser):
+ *   - GET    /api/approval-settings/lookups (Dropdowns: approverTypes, roles, users)
  *   - GET    /api/approval-settings/modules?isModuleActive=true (Grid overview)
- *   - POST   /api/approval-settings (Create module rule)
- *   - PUT    /api/approval-settings/{id} (Update rule / approver role)
- *   - DELETE /api/approval-settings/{id} (Disable approval for module)
- *   - GET    /api/roles (via rolesService.getRoles for approver role dropdown)
+ *   - POST   /api/approval-settings (Create module rule with approverType Role=1 | User=2)
+ *   - PUT    /api/approval-settings/{id} (Update rule / approver type & target)
+ *   - DELETE /api/approval-settings/{id} (Reset approval rule -> module no longer needs approval)
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  createColumnHelper,
+} from '@tanstack/react-table';
+import toast from 'react-hot-toast';
+
+import {
   IconApproval,
-  IconCheck,
-  IconClose,
   IconRefresh,
   IconShieldCheck,
-  IconClock,
+  IconUser,
+  IconUsers,
   IconEdit,
-  IconBuilding,
+  IconDelete,
   IconAdd,
+  IconClock,
+  IconView,
 } from '../../constants/icons';
-import toast from 'react-hot-toast';
 
 import {
   Button,
   Modal,
+  ConfirmModal,
   Badge,
   PageHeader,
   Card,
   TableToolbar,
+  DataTable,
+  TableActions,
   SearchableSelect,
   SaveButton,
   CancelButton,
+  DetailField,
 } from '../../components/ui';
+
 import { approvalsService, roleService } from '../../services';
 import { useAuthContext } from '../../context/AuthContext';
 import { formatDate } from '../../utils/dateUtils';
+import { ApproverType } from '../../constants/approvalStatus';
+
+const columnHelper = createColumnHelper();
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Statuses' },
+  { value: 'REQUIRED', label: 'Approval Required' },
+  { value: 'NOT_REQUIRED', label: 'Not Required' },
+];
+
+const APPROVER_TYPE_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Approver Types' },
+  { value: 'ROLE', label: 'Role Based' },
+  { value: 'USER', label: 'User Based' },
+];
 
 export default function ApprovalSettingsPage() {
   const { user } = useAuthContext();
   const [modules, setModules] = useState([]);
-  const [roles, setRoles] = useState([]);
+  const [lookups, setLookups] = useState({
+    approverTypes: [
+      { id: ApproverType.Role, name: 'Role' },
+      { id: ApproverType.User, name: 'User' },
+    ],
+    roles: [],
+    users: [],
+  });
+
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [search, setSearch] = useState('');
 
-  // Configure Modal State
+  // Filters & Search
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState('ALL');
+
+  // TanStack table state
+  const [sorting, setSorting] = useState([{ id: 'moduleName', desc: false }]);
+  const [columnSizing, setColumnSizing] = useState({});
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+
+  // Configure Modal State (PUT or initial POST for row)
   const [selectedModule, setSelectedModule] = useState(null);
   const [isApprovalRequired, setIsApprovalRequired] = useState(false);
+  const [approverType, setApproverType] = useState(ApproverType.Role);
   const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // View Modal State (GET /api/approval-settings/by-module/{moduleCode})
+  const [viewingModule, setViewingModule] = useState(null);
+  const [isFetchingDetail, setIsFetchingDetail] = useState(false);
 
   // Add Modal State (explicit POST /api/approval-settings)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addModuleId, setAddModuleId] = useState('');
   const [addIsApprovalRequired, setAddIsApprovalRequired] = useState(true);
+  const [addApproverType, setAddApproverType] = useState(ApproverType.Role);
   const [addRoleId, setAddRoleId] = useState('');
+  const [addUserId, setAddUserId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+
+  // Delete / Reset Confirmation Modal State
+  const [deletingSetting, setDeletingSetting] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // RBAC: Admin check
   const userRole = (user?.role || user?.roleName || user?.roles?.[0]?.name || '').toLowerCase();
   const isAdmin = userRole.includes('admin') || userRole.includes('super');
 
-  /* ── 1. Fetch System Roles & Module Settings ── */
+  /* ── 1. Fetch Lookups & Modules ── */
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [modulesRes, rolesRes] = await Promise.allSettled([
+      const [modulesRes, lookupsRes, rolesFallbackRes] = await Promise.allSettled([
         approvalsService.getApprovalSettingsModules({ isModuleActive: true }),
+        approvalsService.getApprovalSettingsLookups(),
         roleService.getRoles({ isActive: true }),
       ]);
 
@@ -79,13 +141,37 @@ export default function ApprovalSettingsPage() {
         setModules([]);
       }
 
-      if (rolesRes.status === 'fulfilled' && Array.isArray(rolesRes.value)) {
-        setRoles(rolesRes.value);
-      } else {
-        setRoles([]);
+      let fetchedRoles = [];
+      let fetchedUsers = [];
+      let fetchedTypes = [
+        { id: ApproverType.Role, name: 'Role' },
+        { id: ApproverType.User, name: 'User' },
+      ];
+
+      if (lookupsRes.status === 'fulfilled' && lookupsRes.value) {
+        if (Array.isArray(lookupsRes.value.roles) && lookupsRes.value.roles.length > 0) {
+          fetchedRoles = lookupsRes.value.roles;
+        }
+        if (Array.isArray(lookupsRes.value.users)) {
+          fetchedUsers = lookupsRes.value.users;
+        }
+        if (Array.isArray(lookupsRes.value.approverTypes) && lookupsRes.value.approverTypes.length > 0) {
+          fetchedTypes = lookupsRes.value.approverTypes;
+        }
       }
+
+      // Fallback roles if lookups didn't return them
+      if (fetchedRoles.length === 0 && rolesFallbackRes.status === 'fulfilled' && Array.isArray(rolesFallbackRes.value)) {
+        fetchedRoles = rolesFallbackRes.value;
+      }
+
+      setLookups({
+        approverTypes: fetchedTypes,
+        roles: fetchedRoles,
+        users: fetchedUsers,
+      });
     } catch (err) {
-      console.error('Failed to load approval settings:', err);
+      console.error('Failed to load approval settings data:', err);
       toast.error('Failed to load module approval settings.');
     } finally {
       setIsLoading(false);
@@ -102,45 +188,85 @@ export default function ApprovalSettingsPage() {
     setIsRefreshing(false);
   };
 
-  /* ── 2. Open Modal to Configure Module Rule ── */
+  /* ── 2. View Modal Handlers ── */
+  async function handleOpenView(mod) {
+    setViewingModule(mod);
+    setIsFetchingDetail(true);
+
+    try {
+      const code = mod.moduleCode;
+      if (code) {
+        const fresh = await approvalsService.getApprovalSettingByModule(code);
+        if (fresh) {
+          setViewingModule((prev) => ({
+            ...prev,
+            ...fresh,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch module approval setting detail:', err);
+    } finally {
+      setIsFetchingDetail(false);
+    }
+  }
+
+  function handleCloseView() {
+    setViewingModule(null);
+    setIsFetchingDetail(false);
+  }
+
+  /* ── 3. Configure Modal Handlers ── */
   function handleOpenConfig(mod) {
     setSelectedModule(mod);
-    setIsApprovalRequired(Boolean(mod.isApprovalRequired));
+    const req = Boolean(mod.isApprovalRequired);
+    setIsApprovalRequired(req);
+
+    const type = mod.approverType === ApproverType.User || mod.approverType === 2
+      ? ApproverType.User
+      : ApproverType.Role;
+    setApproverType(type);
+
     setSelectedRoleId(mod.approverRoleId ? String(mod.approverRoleId) : '');
+    setSelectedUserId(mod.approverUserId ? String(mod.approverUserId) : '');
   }
 
   function handleCloseConfig() {
     if (isSaving) return;
     setSelectedModule(null);
     setIsApprovalRequired(false);
+    setApproverType(ApproverType.Role);
     setSelectedRoleId('');
+    setSelectedUserId('');
   }
 
-  /* ── 3. Save Module Configuration ── */
   async function handleSaveConfig() {
     if (!selectedModule) return;
 
-    if (isApprovalRequired && !selectedRoleId) {
-      toast.error('Please select an active Approver Role when approval is required.');
-      return;
+    if (isApprovalRequired) {
+      if (approverType === ApproverType.Role && !selectedRoleId) {
+        toast.error('Please select an active Approver Role when role-based approval is required.');
+        return;
+      }
+      if (approverType === ApproverType.User && !selectedUserId) {
+        toast.error('Please select an active Approver User when user-based approval is required.');
+        return;
+      }
     }
 
     try {
       setIsSaving(true);
       const payload = {
         isApprovalRequired,
-        approverRoleId: isApprovalRequired ? Number(selectedRoleId) : undefined,
+        approverType,
+        approverRoleId: isApprovalRequired && approverType === ApproverType.Role ? Number(selectedRoleId) : null,
+        approverUserId: isApprovalRequired && approverType === ApproverType.User ? Number(selectedUserId) : null,
       };
 
       if (selectedModule.approvalSettingId) {
-        // Update existing setting
-        await approvalsService.updateApprovalSetting(
-          selectedModule.approvalSettingId,
-          payload
-        );
+        await approvalsService.updateApprovalSetting(selectedModule.approvalSettingId, payload);
         toast.success(`Approval rules for ${selectedModule.moduleName} updated successfully.`);
       } else {
-        // Create new setting for module
         await approvalsService.createApprovalSetting({
           moduleId: selectedModule.moduleId,
           ...payload,
@@ -158,14 +284,15 @@ export default function ApprovalSettingsPage() {
     }
   }
 
-  /* ── 4. Add Setting Handlers (POST /api/approval-settings) ── */
+  /* ── 3. Add Modal Handlers ── */
   function handleOpenAdd() {
     setIsAddModalOpen(true);
-    // Suggest first module that has no approval setting configured yet
     const unconfigured = modules.find((m) => !m.isApprovalRequired && !m.approvalSettingId);
     setAddModuleId(unconfigured ? String(unconfigured.moduleId) : (modules[0]?.moduleId ? String(modules[0].moduleId) : ''));
     setAddIsApprovalRequired(true);
+    setAddApproverType(ApproverType.Role);
     setAddRoleId('');
+    setAddUserId('');
   }
 
   function handleCloseAdd() {
@@ -173,7 +300,9 @@ export default function ApprovalSettingsPage() {
     setIsAddModalOpen(false);
     setAddModuleId('');
     setAddIsApprovalRequired(true);
+    setAddApproverType(ApproverType.Role);
     setAddRoleId('');
+    setAddUserId('');
   }
 
   async function handleConfirmAdd() {
@@ -182,9 +311,15 @@ export default function ApprovalSettingsPage() {
       return;
     }
 
-    if (addIsApprovalRequired && !addRoleId) {
-      toast.error('Please select an active Approver Role when approval is required.');
-      return;
+    if (addIsApprovalRequired) {
+      if (addApproverType === ApproverType.Role && !addRoleId) {
+        toast.error('Please select an active Approver Role when role-based approval is required.');
+        return;
+      }
+      if (addApproverType === ApproverType.User && !addUserId) {
+        toast.error('Please select an active Approver User when user-based approval is required.');
+        return;
+      }
     }
 
     try {
@@ -192,7 +327,9 @@ export default function ApprovalSettingsPage() {
       const payload = {
         moduleId: Number(addModuleId),
         isApprovalRequired: addIsApprovalRequired,
-        approverRoleId: addIsApprovalRequired ? Number(addRoleId) : undefined,
+        approverType: addApproverType,
+        approverRoleId: addIsApprovalRequired && addApproverType === ApproverType.Role ? Number(addRoleId) : null,
+        approverUserId: addIsApprovalRequired && addApproverType === ApproverType.User ? Number(addUserId) : null,
       };
 
       await approvalsService.createApprovalSetting(payload);
@@ -208,7 +345,34 @@ export default function ApprovalSettingsPage() {
     }
   }
 
-  /* ── 5. Options & Filtered Modules ── */
+  /* ── 4. Delete / Reset Setting Handlers ── */
+  function handleOpenDelete(mod) {
+    setDeletingSetting(mod);
+  }
+
+  function handleCloseDelete() {
+    if (isDeleting) return;
+    setDeletingSetting(null);
+  }
+
+  async function handleConfirmDelete() {
+    if (!deletingSetting?.approvalSettingId) return;
+
+    try {
+      setIsDeleting(true);
+      await approvalsService.deleteApprovalSetting(deletingSetting.approvalSettingId);
+      toast.success(`Approval requirement removed for ${deletingSetting.moduleName || 'module'}.`);
+      handleCloseDelete();
+      loadData();
+    } catch (err) {
+      console.error('Failed to delete approval setting:', err);
+      toast.error(err?.detail || err?.message || 'Failed to remove approval setting.');
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  /* ── 5. Options Memoization ── */
   const moduleOptions = useMemo(() => {
     return modules.map((m) => ({
       value: String(m.moduleId),
@@ -217,29 +381,287 @@ export default function ApprovalSettingsPage() {
   }, [modules]);
 
   const roleOptions = useMemo(() => {
-    return roles.map((role) => ({
-      value: String(role.id || role.roleId),
-      label: role.roleName || role.name,
+    return (lookups.roles || []).map((role) => ({
+      value: String(role.roleId || role.id),
+      label: role.roleName || role.name || `Role #${role.roleId || role.id}`,
     }));
-  }, [roles]);
+  }, [lookups.roles]);
 
+  const userOptions = useMemo(() => {
+    return (lookups.users || []).map((u) => ({
+      value: String(u.userId || u.id),
+      label: `${u.name || u.userName || 'User'}${u.email ? ` (${u.email})` : ''}`,
+    }));
+  }, [lookups.users]);
+
+  /* ── 6. Filtered Data ── */
   const filteredModules = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return modules;
-    return modules.filter(
-      (m) =>
+    return modules.filter((m) => {
+      // Search match
+      const matchesSearch =
+        !q ||
         m.moduleName?.toLowerCase().includes(q) ||
         m.moduleCode?.toLowerCase().includes(q) ||
-        m.approverRoleName?.toLowerCase().includes(q)
+        m.approverRoleName?.toLowerCase().includes(q) ||
+        m.approverUserName?.toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+
+      // Status match
+      if (statusFilter === 'REQUIRED' && !m.isApprovalRequired) return false;
+      if (statusFilter === 'NOT_REQUIRED' && m.isApprovalRequired) return false;
+
+      // Approver Type match
+      if (typeFilter === 'ROLE' && (m.approverType === ApproverType.User || m.approverType === 2)) return false;
+      if (typeFilter === 'USER' && (m.approverType !== ApproverType.User && m.approverType !== 2)) return false;
+
+      return true;
+    });
+  }, [modules, search, statusFilter, typeFilter]);
+
+  const hasActiveFilters = Boolean(search.trim() || statusFilter !== 'ALL' || typeFilter !== 'ALL');
+
+  function handleResetFilters() {
+    setSearch('');
+    setStatusFilter('ALL');
+    setTypeFilter('ALL');
+  }
+
+  /* ── 7. Column Definitions (TanStack) ── */
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('moduleName', {
+        id: 'moduleName',
+        header: 'MODULE NAME',
+        size: 210,
+        cell: ({ row }) => (
+          <div className="space-y-0.5">
+            <span className="font-semibold text-heading text-sm block">
+              {row.original.moduleName || row.original.moduleCode}
+            </span>
+            <span className="text-2xs text-text-muted font-mono sm:hidden">
+              {row.original.moduleCode}
+            </span>
+          </div>
+        ),
+      }),
+
+      columnHelper.accessor('moduleCode', {
+        id: 'moduleCode',
+        header: 'MODULE CODE',
+        size: 140,
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-text-muted bg-surface-subtle border border-border px-2 py-0.5 rounded">
+            {row.original.moduleCode}
+          </span>
+        ),
+      }),
+
+      columnHelper.accessor('isApprovalRequired', {
+        id: 'isApprovalRequired',
+        header: 'APPROVAL WORKFLOW',
+        size: 160,
+        cell: ({ row }) => {
+          const req = Boolean(row.original.isApprovalRequired);
+          return req ? (
+            <Badge variant="approved">Required</Badge>
+          ) : (
+            <Badge variant="neutral">Not Required</Badge>
+          );
+        },
+      }),
+
+      columnHelper.accessor('approver', {
+        id: 'approver',
+        header: 'DESIGNATED APPROVER',
+        size: 230,
+        cell: ({ row }) => {
+          const req = Boolean(row.original.isApprovalRequired);
+          if (!req) {
+            return <span className="text-text-muted">—</span>;
+          }
+
+          const isUserType = row.original.approverType === ApproverType.User || row.original.approverType === 2;
+
+          if (isUserType) {
+            return (
+              <span className="font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1.5">
+                <IconUser size={13} className="shrink-0" />
+                <span className="truncate max-w-[170px]" title={row.original.approverUserName || 'User'}>
+                  User: {row.original.approverUserName || 'Assigned User'}
+                </span>
+              </span>
+            );
+          }
+
+          return (
+            <span className="font-medium text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1.5">
+              <IconShieldCheck size={13} className="shrink-0" />
+              <span className="truncate max-w-[170px]" title={row.original.approverRoleName || 'Admin'}>
+                Role: {row.original.approverRoleName || 'Admin'}
+              </span>
+            </span>
+          );
+        },
+      }),
+
+      columnHelper.accessor('pendingRequestCount', {
+        id: 'pendingRequestCount',
+        header: 'PENDING IN QUEUE',
+        size: 150,
+        cell: ({ row }) => {
+          const count = row.original.pendingRequestCount || 0;
+          return (
+            <div className="w-full text-center">
+              <span
+                className={`font-mono font-semibold px-2 py-0.5 rounded-full text-xs inline-block ${
+                  count > 0
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                    : 'text-text-muted'
+                }`}
+              >
+                {count}
+              </span>
+            </div>
+          );
+        },
+      }),
+
+      columnHelper.accessor('lastUpdatedOn', {
+        id: 'lastUpdatedOn',
+        header: 'LAST UPDATED',
+        size: 160,
+        cell: ({ row }) => {
+          if (!row.original.lastUpdatedOn) {
+            return <span className="text-text-muted text-xs">Default</span>;
+          }
+          return (
+            <div className="text-2xs text-text-muted">
+              <span className="block text-heading font-medium">
+                {row.original.lastUpdatedByName || 'System'}
+              </span>
+              <span>{formatDate(row.original.lastUpdatedOn)}</span>
+            </div>
+          );
+        },
+      }),
+
+      columnHelper.display({
+        id: 'actions',
+        header: 'ACTIONS',
+        size: 110,
+        cell: ({ row }) => {
+          // const canDelete = Boolean(row.original.approvalSettingId && row.original.isApprovalRequired);
+          return (
+            <TableActions
+              onView={() => handleOpenView(row.original)}
+              viewTitle="View module approval setting"
+              onEdit={isAdmin ? () => handleOpenConfig(row.original) : undefined}
+              /* onDelete={isAdmin && canDelete ? () => handleOpenDelete(row.original) : undefined} */
+              editTitle="Configure approval rule"
+              /* deleteTitle="Reset approval requirement" */
+              editDisabled={!isAdmin}
+            />
+          );
+        },
+      }),
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [modules, isAdmin]
+  );
+
+  /* ── 8. TanStack Table Instance ── */
+  const table = useReactTable({
+    data: filteredModules,
+    columns,
+    state: {
+      sorting,
+      columnSizing,
+      pagination,
+    },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onSortingChange: setSorting,
+    onColumnSizingChange: setColumnSizing,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
+  /* ── 9. Mobile Card Renderer ── */
+  const renderMobileCard = (row) => {
+    const mod = row.original;
+    const req = Boolean(mod.isApprovalRequired);
+    const isUserType = mod.approverType === ApproverType.User || mod.approverType === 2;
+    const canDelete = Boolean(mod.approvalSettingId && mod.isApprovalRequired);
+
+    return (
+      <Card key={mod.moduleId || mod.moduleCode} className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h4 className="font-semibold text-heading text-sm">{mod.moduleName || mod.moduleCode}</h4>
+            <span className="font-mono text-2xs text-text-muted bg-surface-subtle border border-border px-1.5 py-0.5 rounded">
+              {mod.moduleCode}
+            </span>
+          </div>
+          {req ? (
+            <Badge variant="approved">Required</Badge>
+          ) : (
+            <Badge variant="neutral">Not Required</Badge>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border">
+          <div>
+            <span className="text-2xs text-text-muted block">Designated Approver</span>
+            {req ? (
+              isUserType ? (
+                <span className="text-emerald-700 dark:text-emerald-300 font-medium inline-flex items-center gap-1 mt-0.5">
+                  <IconUser size={12} />
+                  {mod.approverUserName || 'User'}
+                </span>
+              ) : (
+                <span className="text-primary font-medium inline-flex items-center gap-1 mt-0.5">
+                  <IconShieldCheck size={12} />
+                  {mod.approverRoleName || 'Admin'}
+                </span>
+              )
+            ) : (
+              <span className="text-text-muted">—</span>
+            )}
+          </div>
+          <div>
+            <span className="text-2xs text-text-muted block">Pending In Queue</span>
+            <span className="font-mono font-medium text-heading mt-0.5 inline-block">
+              {mod.pendingRequestCount || 0}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-2 border-t border-border text-2xs text-text-muted">
+          <span>{mod.lastUpdatedOn ? `Updated: ${formatDate(mod.lastUpdatedOn)}` : 'Default'}</span>
+          <TableActions
+            onView={() => handleOpenView(mod)}
+            viewTitle="View module approval setting"
+            onEdit={isAdmin ? () => handleOpenConfig(mod) : undefined}
+            /* onDelete={isAdmin && canDelete ? () => handleOpenDelete(mod) : undefined} */
+            editTitle="Configure approval rule"
+            /* deleteTitle="Reset approval requirement" */
+            editDisabled={!isAdmin}
+          />
+        </div>
+      </Card>
     );
-  }, [modules, search]);
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6 w-full pb-8 sm:pb-12">
       {/* ── Page Header ── */}
       <PageHeader
         title="Approval Settings"
-        subtitle="Configure module-level approval workflows, toggle approval requirements, and assign approver roles."
+        subtitle="Configure module-level approval workflows, toggle approval requirements, and assign approver roles or specific users."
         icon={<IconApproval className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" aria-hidden="true" />}
         actions={
           <div className="flex items-center gap-2">
@@ -276,143 +698,69 @@ export default function ApprovalSettingsPage() {
             Enterprise Workflow Architecture
           </p>
           <p className="text-text-muted leading-relaxed">
-            When <strong>Approval is Required</strong> for a module, new submissions enter the Global Approval Queue and trigger notifications for all active users holding the designated Approver Role. Modules where approval is disabled bypass the approval queue and are automatically saved in an approved state.
+            When <strong>Approval is Required</strong>, new submissions enter the Global Approval Queue and trigger notifications for either all active users with the designated <strong>Role</strong> or specifically assigned <strong>User</strong>. Modules where approval is disabled bypass the approval queue and are automatically saved in an approved state.
           </p>
         </div>
       </div>
 
-      {/* ── Table & Search Toolbar ── */}
-      <div className="bg-surface rounded-xl border border-border shadow-2xs overflow-hidden">
-        <div className="p-4 border-b border-border">
-          <TableToolbar
-            searchValue={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Search module name or assigned role..."
-            hasActiveFilters={Boolean(search.trim())}
-            onReset={() => setSearch('')}
+      {/* ── Standard Table Toolbar ── */}
+      <TableToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search module name, code, or approver..."
+        hasActiveFilters={hasActiveFilters}
+        onReset={handleResetFilters}
+      >
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="approval-status-filter"
+            placeholder="All Statuses"
+            searchPlaceholder="Search statuses..."
+            options={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
           />
         </div>
-
-        {/* Modules Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-surface-subtle/80 text-text-muted font-semibold border-b border-border select-none">
-                <th className="py-3 px-4">Module Name</th>
-                <th className="py-3 px-4">Module Code</th>
-                <th className="py-3 px-4">Approval Required</th>
-                <th className="py-3 px-4">Approver Role</th>
-                <th className="py-3 px-4 text-center">Pending In Queue</th>
-                <th className="py-3 px-4">Last Updated</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-text-muted">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <IconRefresh size={20} className="animate-spin text-primary" />
-                      <span>Loading module configurations...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : filteredModules.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-text-muted">
-                    No modules found matching your search.
-                  </td>
-                </tr>
-              ) : (
-                filteredModules.map((mod) => {
-                  const isRequired = Boolean(mod.isApprovalRequired);
-                  return (
-                    <tr
-                      key={mod.moduleId || mod.moduleCode}
-                      className="hover:bg-surface-subtle/40 transition-colors"
-                    >
-                      {/* Module Name */}
-                      <td className="py-3.5 px-4 font-semibold text-heading text-sm">
-                        {mod.moduleName || mod.moduleCode}
-                      </td>
-
-                      {/* Module Code */}
-                      <td className="py-3.5 px-4 font-mono text-xs text-text-muted">
-                        <span className="bg-surface-subtle border border-border px-2 py-0.5 rounded">
-                          {mod.moduleCode}
-                        </span>
-                      </td>
-
-                      {/* Approval Status */}
-                      <td className="py-3.5 px-4">
-                        {isRequired ? (
-                          <Badge variant="approved">Required</Badge>
-                        ) : (
-                          <Badge variant="neutral">Not Required</Badge>
-                        )}
-                      </td>
-
-                      {/* Approver Role */}
-                      <td className="py-3.5 px-4">
-                        {isRequired ? (
-                          <span className="font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1">
-                            <IconShieldCheck size={12} />
-                            {mod.approverRoleName || 'Admin'}
-                          </span>
-                        ) : (
-                          <span className="text-text-muted">—</span>
-                        )}
-                      </td>
-
-                      {/* Pending In Queue */}
-                      <td className="py-3.5 px-4 text-center">
-                        <span
-                          className={`font-mono font-semibold px-2 py-0.5 rounded-full text-xs ${
-                            mod.pendingRequestCount > 0
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
-                              : 'text-text-muted'
-                          }`}
-                        >
-                          {mod.pendingRequestCount || 0}
-                        </span>
-                      </td>
-
-                      {/* Last Updated */}
-                      <td className="py-3.5 px-4 text-text-muted text-2xs">
-                        {mod.lastUpdatedOn ? (
-                          <div>
-                            <span className="block text-heading font-medium">
-                              {mod.lastUpdatedByName || 'System'}
-                            </span>
-                            <span>{formatDate(mod.lastUpdatedOn)}</span>
-                          </div>
-                        ) : (
-                          'Default'
-                        )}
-                      </td>
-
-                      {/* Action */}
-                      <td className="py-3.5 px-4 text-right">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="!px-3 !py-1 text-xs inline-flex items-center gap-1.5"
-                          onClick={() => handleOpenConfig(mod)}
-                          disabled={!isAdmin}
-                          title={isAdmin ? 'Configure approval setting' : 'Admin access required'}
-                        >
-                          <IconEdit size={12} />
-                          <span>Configure</span>
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="approver-type-filter"
+            placeholder="All Approver Types"
+            searchPlaceholder="Search types..."
+            options={APPROVER_TYPE_FILTER_OPTIONS}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          />
         </div>
-      </div>
+      </TableToolbar>
+
+      {/* ── Standard DataTable ── */}
+      <DataTable
+        table={table}
+        columns={columns}
+        isLoading={isLoading}
+        totalCount={filteredModules.length}
+        entityName="modules"
+        renderMobileCard={renderMobileCard}
+        emptyTitle="No module approval settings found"
+        emptyDescription={
+          hasActiveFilters
+            ? 'No modules match your current filter criteria. Try resetting filters.'
+            : 'No configurable modules found.'
+        }
+        emptyAction={
+          hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleResetFilters}
+              className="text-xs text-primary"
+            >
+              Clear Filters
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* ── MODAL: CONFIGURE MODULE APPROVAL RULE ── */}
       <Modal
@@ -471,7 +819,7 @@ export default function ApprovalSettingsPage() {
                   />
                 </div>
                 <span className="text-2xs text-text-muted">
-                  Submissions require explicit role review and decision.
+                  Submissions require explicit review and decision.
                 </span>
               </label>
 
@@ -499,21 +847,86 @@ export default function ApprovalSettingsPage() {
             </div>
           </div>
 
-          {/* Approver Role Dropdown (conditional on isApprovalRequired) */}
+          {/* Approver Type Selection (conditional on isApprovalRequired) */}
           {isApprovalRequired && (
-            <div className="space-y-1.5 animate-fadeIn">
-              <SearchableSelect
-                label="Designated Approver Role"
-                id="approverRoleId"
-                name="approverRoleId"
-                required
-                value={selectedRoleId}
-                onChange={(e) => setSelectedRoleId(e.target.value)}
-                options={roleOptions}
-                placeholder="-- Select Approver Role --"
-                searchPlaceholder="Search roles..."
-                hint="Only users holding this active role (or Super Admin) can approve submissions for this module."
-              />
+            <div className="space-y-3 pt-2 border-t border-border animate-fadeIn">
+              <label className="block text-xs font-semibold text-heading">
+                Approver Type
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label
+                  className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                    approverType === ApproverType.Role
+                      ? 'border-primary bg-primary/5 text-primary font-medium'
+                      : 'border-border bg-surface hover:bg-surface-subtle text-text-muted'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <IconShieldCheck size={16} />
+                    <span className="text-xs">Role Based</span>
+                  </div>
+                  <input
+                    type="radio"
+                    name="configApproverTypeRadio"
+                    checked={approverType === ApproverType.Role}
+                    onChange={() => setApproverType(ApproverType.Role)}
+                    className="text-primary focus:ring-primary cursor-pointer"
+                  />
+                </label>
+
+                <label
+                  className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                    approverType === ApproverType.User
+                      ? 'border-primary bg-primary/5 text-primary font-medium'
+                      : 'border-border bg-surface hover:bg-surface-subtle text-text-muted'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <IconUser size={16} />
+                    <span className="text-xs">Specific User</span>
+                  </div>
+                  <input
+                    type="radio"
+                    name="configApproverTypeRadio"
+                    checked={approverType === ApproverType.User}
+                    onChange={() => setApproverType(ApproverType.User)}
+                    className="text-primary focus:ring-primary cursor-pointer"
+                  />
+                </label>
+              </div>
+
+              {/* Conditional Approver Select */}
+              {approverType === ApproverType.Role ? (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <SearchableSelect
+                    label="Designated Approver Role"
+                    id="approverRoleId"
+                    name="approverRoleId"
+                    required
+                    value={selectedRoleId}
+                    onChange={(e) => setSelectedRoleId(e.target.value)}
+                    options={roleOptions}
+                    placeholder="-- Select Approver Role --"
+                    searchPlaceholder="Search roles..."
+                    hint="Every active user holding this role (except the submitter) receives the approval task."
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <SearchableSelect
+                    label="Designated Approver User"
+                    id="approverUserId"
+                    name="approverUserId"
+                    required
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    options={userOptions}
+                    placeholder="-- Select Approver User --"
+                    searchPlaceholder="Search users by name or email..."
+                    hint="Only this specific user (and their designated delegates) receives the approval task."
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -576,7 +989,7 @@ export default function ApprovalSettingsPage() {
                   />
                 </div>
                 <span className="text-2xs text-text-muted">
-                  Submissions require explicit role review and decision.
+                  Submissions require explicit review and decision.
                 </span>
               </label>
 
@@ -604,25 +1017,251 @@ export default function ApprovalSettingsPage() {
             </div>
           </div>
 
-          {/* Approver Role Dropdown (conditional on addIsApprovalRequired) */}
+          {/* Approver Type & Target (conditional on addIsApprovalRequired) */}
           {addIsApprovalRequired && (
-            <div className="space-y-1.5 animate-fadeIn">
-              <SearchableSelect
-                label="Designated Approver Role"
-                id="add-role-select"
-                name="addRoleId"
-                required
-                value={addRoleId}
-                onChange={(e) => setAddRoleId(e.target.value)}
-                options={roleOptions}
-                placeholder="-- Select Approver Role --"
-                searchPlaceholder="Search roles..."
-                hint="Only users holding this active role (or Super Admin) can approve submissions for this module."
-              />
+            <div className="space-y-3 pt-2 border-t border-border animate-fadeIn">
+              <label className="block text-xs font-semibold text-heading">
+                Approver Type
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label
+                  className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                    addApproverType === ApproverType.Role
+                      ? 'border-primary bg-primary/5 text-primary font-medium'
+                      : 'border-border bg-surface hover:bg-surface-subtle text-text-muted'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <IconShieldCheck size={16} />
+                    <span className="text-xs">Role Based</span>
+                  </div>
+                  <input
+                    type="radio"
+                    name="addApproverTypeRadio"
+                    checked={addApproverType === ApproverType.Role}
+                    onChange={() => setAddApproverType(ApproverType.Role)}
+                    className="text-primary focus:ring-primary cursor-pointer"
+                  />
+                </label>
+
+                <label
+                  className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                    addApproverType === ApproverType.User
+                      ? 'border-primary bg-primary/5 text-primary font-medium'
+                      : 'border-border bg-surface hover:bg-surface-subtle text-text-muted'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <IconUser size={16} />
+                    <span className="text-xs">Specific User</span>
+                  </div>
+                  <input
+                    type="radio"
+                    name="addApproverTypeRadio"
+                    checked={addApproverType === ApproverType.User}
+                    onChange={() => setAddApproverType(ApproverType.User)}
+                    className="text-primary focus:ring-primary cursor-pointer"
+                  />
+                </label>
+              </div>
+
+              {/* Conditional Approver Select */}
+              {addApproverType === ApproverType.Role ? (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <SearchableSelect
+                    label="Designated Approver Role"
+                    id="add-role-select"
+                    name="addRoleId"
+                    required
+                    value={addRoleId}
+                    onChange={(e) => setAddRoleId(e.target.value)}
+                    options={roleOptions}
+                    placeholder="-- Select Approver Role --"
+                    searchPlaceholder="Search roles..."
+                    hint="Every active user holding this role (except the submitter) receives the approval task."
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <SearchableSelect
+                    label="Designated Approver User"
+                    id="add-user-select"
+                    name="addUserId"
+                    required
+                    value={addUserId}
+                    onChange={(e) => setAddUserId(e.target.value)}
+                    options={userOptions}
+                    placeholder="-- Select Approver User --"
+                    searchPlaceholder="Search users by name or email..."
+                    hint="Only this specific user (and their designated delegates) receives the approval task."
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
       </Modal>
+
+      {/* ── MODAL: VIEW MODULE APPROVAL SETTING (GET /api/approval-settings/by-module/{moduleCode}) ── */}
+      <Modal
+        isOpen={Boolean(viewingModule)}
+        onClose={handleCloseView}
+        title="Module Approval Setting"
+        size="md"
+        footer={
+          <div className="flex items-center justify-end gap-3 w-full">
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const target = viewingModule;
+                  handleCloseView();
+                  handleOpenConfig(target);
+                }}
+                className="text-xs"
+              >
+                <IconEdit size={14} className="mr-1.5" />
+                Configure
+              </Button>
+            )}
+            <Button variant="primary" size="sm" onClick={handleCloseView} className="text-xs">
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {viewingModule && (
+          <div className="space-y-4 text-sm">
+            {/* ── Top Target Module Header Card ── */}
+            <div className="p-3.5 bg-surface-subtle border border-border rounded-xl flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-2xs uppercase tracking-wider font-semibold text-text-muted block">
+                  Target Module
+                </span>
+                <h4 className="font-bold text-heading text-base truncate">
+                  {viewingModule.moduleName || viewingModule.moduleCode}
+                </h4>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="font-mono text-xs text-text-muted bg-surface px-2.5 py-1 rounded-md border border-border">
+                  {viewingModule.moduleCode}
+                </span>
+                <Badge variant={viewingModule.isModuleActive !== false ? 'approved' : 'neutral'}>
+                  {viewingModule.isModuleActive !== false ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+            </div>
+
+            {/* ── Key-Value Grid using DetailField ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-surface border border-border rounded-xl">
+              {/* Workflow Requirement */}
+              <DetailField label="Approval Workflow">
+                {viewingModule.isApprovalRequired ? (
+                  <Badge variant="approved">Required</Badge>
+                ) : (
+                  <Badge variant="neutral">Not Required</Badge>
+                )}
+              </DetailField>
+
+              {/* Approver Type */}
+              <DetailField label="Approver Type">
+                {!viewingModule.isApprovalRequired ? (
+                  <span className="text-text-muted">—</span>
+                ) : viewingModule.approverType === ApproverType.User || viewingModule.approverType === 2 ? (
+                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5">
+                    <IconUser size={13} /> Specific User
+                  </span>
+                ) : (
+                  <span className="text-xs font-semibold text-primary inline-flex items-center gap-1.5">
+                    <IconShieldCheck size={13} /> Role Based
+                  </span>
+                )}
+              </DetailField>
+
+              {/* Designated Approver Target */}
+              <DetailField
+                label={viewingModule.approverType === ApproverType.User || viewingModule.approverType === 2 ? 'Assigned Approver User' : 'Assigned Approver Role'}
+                className="sm:col-span-2"
+              >
+                {!viewingModule.isApprovalRequired ? (
+                  <span className="text-text-muted">No approval required</span>
+                ) : viewingModule.approverType === ApproverType.User || viewingModule.approverType === 2 ? (
+                  <div className="p-2.5 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <IconUser size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="font-semibold text-heading text-xs truncate">
+                        {viewingModule.approverUserName || `User #${viewingModule.approverUserId}`}
+                      </span>
+                    </div>
+                    {viewingModule.approverUserId && (
+                      <span className="font-mono text-2xs text-text-muted bg-surface px-2 py-0.5 rounded border border-border shrink-0 ml-2">
+                        User #{viewingModule.approverUserId}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <IconShieldCheck size={16} className="text-primary shrink-0" />
+                      <span className="font-semibold text-heading text-xs truncate">
+                        {viewingModule.approverRoleName || 'Admin'}
+                      </span>
+                    </div>
+                    {viewingModule.approverRoleId && (
+                      <span className="font-mono text-2xs text-text-muted bg-surface px-2 py-0.5 rounded border border-border shrink-0 ml-2">
+                        Role #{viewingModule.approverRoleId}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </DetailField>
+
+              {/* Setting ID & System State */}
+              <DetailField label="Setting ID" mono>
+                {viewingModule.approvalSettingId ? `#${viewingModule.approvalSettingId}` : 'Default / Not Saved'}
+              </DetailField>
+
+              <DetailField label="Module System ID" mono>
+                #{viewingModule.moduleId}
+              </DetailField>
+            </div>
+
+            {/* Dynamic Submissions Policy Notice */}
+            <div className="p-3 bg-surface-subtle/70 border border-border rounded-lg text-2xs text-text-muted leading-relaxed">
+              {viewingModule.isApprovalRequired ? (
+                viewingModule.approverType === ApproverType.User || viewingModule.approverType === 2 ? (
+                  <span>
+                    All new submissions in <strong>{viewingModule.moduleName || viewingModule.moduleCode}</strong> will be routed directly to{' '}
+                    <strong>{viewingModule.approverUserName || 'the assigned user'}</strong> and their active delegates.
+                  </span>
+                ) : (
+                  <span>
+                    All new submissions in <strong>{viewingModule.moduleName || viewingModule.moduleCode}</strong> will be broadcast to all active members of the{' '}
+                    <strong>{viewingModule.approverRoleName || 'assigned role'}</strong>.
+                  </span>
+                )
+              ) : (
+                <span>
+                  New submissions in this module are automatically saved in an approved state and bypass the approval queue.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── CONFIRM MODAL: RESET / DELETE APPROVAL SETTING ── */}
+      <ConfirmModal
+        isOpen={Boolean(deletingSetting)}
+        onClose={handleCloseDelete}
+        onConfirm={handleConfirmDelete}
+        title="Reset Approval Requirement"
+        confirmText="Remove Approval"
+        variant="danger"
+        loading={isDeleting}
+        message={`Are you sure you want to remove the approval requirement for "${deletingSetting?.moduleName || 'this module'}"? New submissions will immediately bypass approval.`}
+      />
     </div>
   );
 }

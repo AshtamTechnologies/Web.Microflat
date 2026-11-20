@@ -115,11 +115,29 @@ export async function cancelRequest(id, data = {}) {
 }
 
 let inMemorySettings = [
-  { approvalSettingId: 1, moduleId: 1, moduleCode: 'VENDOR', moduleName: 'Vendors', isApprovalRequired: true, approverRoleId: 2, approverRoleName: 'Admin', pendingRequestCount: 1, lastUpdatedByName: 'System', lastUpdatedOn: '2026-11-01' },
-  { approvalSettingId: 2, moduleId: 2, moduleCode: 'PURCHASE_REQUISITION', moduleName: 'Purchase Requisitions', isApprovalRequired: true, approverRoleId: 2, approverRoleName: 'Admin', pendingRequestCount: 0, lastUpdatedByName: 'Admin', lastUpdatedOn: '2026-11-05' },
-  { approvalSettingId: 3, moduleId: 3, moduleCode: 'QUOTATION', moduleName: 'Quotations', isApprovalRequired: false, approverRoleId: null, approverRoleName: null, pendingRequestCount: 0, lastUpdatedByName: 'Admin', lastUpdatedOn: '2026-11-10' },
-  { approvalSettingId: 4, moduleId: 4, moduleCode: 'PRODUCT', moduleName: 'Products', isApprovalRequired: false, approverRoleId: null, approverRoleName: null, pendingRequestCount: 0, lastUpdatedByName: 'Admin', lastUpdatedOn: '2026-11-10' },
+  { approvalSettingId: 1, moduleId: 1, moduleCode: 'VENDOR', moduleName: 'Vendors', isApprovalRequired: true, approverType: 1, approverRoleId: 2, approverRoleName: 'Admin', approverUserId: null, approverUserName: null, pendingRequestCount: 1, lastUpdatedByName: 'System', lastUpdatedOn: '2026-11-01' },
+  { approvalSettingId: 2, moduleId: 2, moduleCode: 'PURCHASE_REQUISITION', moduleName: 'Purchase Requisitions', isApprovalRequired: true, approverType: 1, approverRoleId: 2, approverRoleName: 'Admin', approverUserId: null, approverUserName: null, pendingRequestCount: 0, lastUpdatedByName: 'Admin', lastUpdatedOn: '2026-11-05' },
+  { approvalSettingId: 3, moduleId: 3, moduleCode: 'QUOTATION', moduleName: 'Quotations', isApprovalRequired: false, approverType: 1, approverRoleId: null, approverRoleName: null, approverUserId: null, approverUserName: null, pendingRequestCount: 0, lastUpdatedByName: 'Admin', lastUpdatedOn: '2026-11-10' },
+  { approvalSettingId: 4, moduleId: 4, moduleCode: 'PRODUCT', moduleName: 'Products', isApprovalRequired: false, approverType: 1, approverRoleId: null, approverRoleName: null, approverUserId: null, approverUserName: null, pendingRequestCount: 0, lastUpdatedByName: 'Admin', lastUpdatedOn: '2026-11-10' },
 ];
+
+export async function getApprovalSettingsLookups() {
+  return {
+    approverTypes: [
+      { id: 1, name: 'Role' },
+      { id: 2, name: 'User' },
+    ],
+    roles: [
+      { roleId: 2, roleName: 'Admin' },
+      { roleId: 3, roleName: 'Manager' },
+      { roleId: 4, roleName: 'Purchase Approver' },
+    ],
+    users: [
+      { userId: 7, name: 'Ravi Shah', email: 'ravi@x.com' },
+      { userId: 8, name: 'Asha Patel', email: 'asha@x.com' },
+    ],
+  };
+}
 
 export async function getApprovalSettingsModules() {
   return inMemorySettings;
@@ -130,7 +148,21 @@ export async function getApprovalSettings() {
 }
 
 export async function getApprovalSettingByModule(code) {
-  return inMemorySettings.find((s) => s.moduleCode === code) || null;
+  const found = inMemorySettings.find((s) => s.moduleCode === code);
+  if (!found) return null;
+  return {
+    moduleId: found.moduleId,
+    moduleCode: found.moduleCode,
+    moduleName: found.moduleName,
+    isModuleActive: true,
+    approvalSettingId: found.approvalSettingId,
+    isApprovalRequired: found.isApprovalRequired,
+    approverType: found.approverType || 1,
+    approverRoleId: found.approverRoleId || null,
+    approverRoleName: found.approverRoleName || null,
+    approverUserId: found.approverUserId || null,
+    approverUserName: found.approverUserName || null,
+  };
 }
 
 export async function getApprovalSetting(id) {

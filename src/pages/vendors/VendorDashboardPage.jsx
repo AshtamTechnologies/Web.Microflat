@@ -2,24 +2,23 @@
  * VendorDashboardPage — Executive overview of vendor onboarding, approval pipeline, and geographic distribution.
  *
  * Route: /vendors/dashboard
- * Features:
- *   - Live KPI Metrics derived from VendorsContext (Total, Active, Pending Approval, Inactive).
+ * Static Executive Dashboard with:
+ *   - Static KPI Metrics (Total, Active, Pending Approval, Inactive).
  *   - Visual Recharts:
  *       1. Approval Pipeline (Donut chart with Approved / Pending / Rejected Breakdown).
  *       2. Vendors by Top States (Horizontal bar chart).
- *   - Quick Approvals Workflow panel: 1-click Approve / modal Reject with comment audit.
- *   - Recently Added Vendors stream with direct detail view navigation.
+ *   - Interactive Pending Approvals panel.
+ *   - Recently Added Vendors stream.
  *   - Responsive layout adapting from 4-across desktop to stacked mobile.
  */
 
-import { useMemo, useState } from 'react';
-import {  IconAdd,
+import { useState } from 'react';
+import {
+  IconAdd,
   IconBuilding2,
   IconCalendar,
-  IconCheck,
   IconChevronRight,
   IconClock,
-  IconClose,
   IconError,
   IconLocation,
   IconSparkles,
@@ -53,11 +52,135 @@ import {
   Textarea,
   IconButton,
 } from '../../components/ui';
-import { useVendorsContext } from '../../context/VendorsContext';
 import { chartColors } from '../../config/chartColors';
-import { getStateName } from '../../mocks/vendors';
-import { ApprovalStatus, normalizeApprovalStatus, getApprovalStatusLabel, getApprovalBadgeVariant } from '../../constants/approvalStatus';
-import { formatDate, getTodayISO } from '../../utils/dateUtils';
+import { formatDate } from '../../utils/dateUtils';
+
+/* ── Static Dashboard Datasets ────────────────────────────────────────────── */
+const STATIC_KPIS = {
+  total: 48,
+  active: 42,
+  activePct: 88,
+  pending: 4,
+  pendingPct: 8,
+  inactive: 2,
+};
+
+const STATIC_APPROVAL_CHART_DATA = [
+  {
+    name: 'Approved',
+    value: 42,
+    percentage: 88,
+    color: chartColors.success,
+  },
+  {
+    name: 'Pending',
+    value: 4,
+    percentage: 8,
+    color: chartColors.warning,
+  },
+  {
+    name: 'Rejected',
+    value: 2,
+    percentage: 4,
+    color: chartColors.danger,
+  },
+];
+
+const STATIC_STATE_CHART_DATA = [
+  { state: 'Gujarat', count: 18 },
+  { state: 'Maharashtra', count: 12 },
+  { state: 'Karnataka', count: 8 },
+  { state: 'Tamil Nadu', count: 5 },
+  { state: 'Delhi NCR', count: 3 },
+  { state: 'Rajasthan', count: 2 },
+];
+
+const INITIAL_PENDING_APPROVALS = [
+  {
+    id: 1049,
+    vendorName: 'Apex Precision Tools Ltd.',
+    vendorCode: 'VND-1049',
+    city: 'Pune, Maharashtra',
+    effectiveDate: '2026-11-18',
+    createdOn: '2026-11-18',
+    category: 'CNC Machining',
+  },
+  {
+    id: 1050,
+    vendorName: 'Surat Steel & Forgings',
+    vendorCode: 'VND-1050',
+    city: 'Surat, Gujarat',
+    effectiveDate: '2026-11-17',
+    createdOn: '2026-11-17',
+    category: 'Raw Material',
+  },
+  {
+    id: 1051,
+    vendorName: 'Zenith Hydraulics & Valves',
+    vendorCode: 'VND-1051',
+    city: 'Bengaluru, Karnataka',
+    effectiveDate: '2026-11-15',
+    createdOn: '2026-11-15',
+    category: 'Hydraulic Parts',
+  },
+  {
+    id: 1052,
+    vendorName: 'Krupa Electro-Platers',
+    vendorCode: 'VND-1052',
+    city: 'Ahmedabad, Gujarat',
+    effectiveDate: '2026-11-14',
+    createdOn: '2026-11-14',
+    category: 'Surface Treatment',
+  },
+];
+
+const STATIC_RECENTLY_ADDED_VENDORS = [
+  {
+    id: 1048,
+    vendorName: 'Precision Castings Pvt Ltd',
+    vendorCode: 'VND-1048',
+    city: 'Rajkot, Gujarat',
+    effectiveDate: '2026-11-12',
+    createdOn: '2026-11-12',
+    isActive: true,
+  },
+  {
+    id: 1047,
+    vendorName: 'Bharat Fasteners & Hardware',
+    vendorCode: 'VND-1047',
+    city: 'Mumbai, Maharashtra',
+    effectiveDate: '2026-11-10',
+    createdOn: '2026-11-10',
+    isActive: true,
+  },
+  {
+    id: 1046,
+    vendorName: 'Mechatronics Automations',
+    vendorCode: 'VND-1046',
+    city: 'Vadodara, Gujarat',
+    effectiveDate: '2026-11-08',
+    createdOn: '2026-11-08',
+    isActive: true,
+  },
+  {
+    id: 1045,
+    vendorName: 'Sterling Polymer Solutions',
+    vendorCode: 'VND-1045',
+    city: 'Chennai, Tamil Nadu',
+    effectiveDate: '2026-11-05',
+    createdOn: '2026-11-05',
+    isActive: true,
+  },
+  {
+    id: 1044,
+    vendorName: 'Acu-Tech Calibration Labs',
+    vendorCode: 'VND-1044',
+    city: 'Bengaluru, Karnataka',
+    effectiveDate: '2026-11-02',
+    createdOn: '2026-11-02',
+    isActive: false,
+  },
+];
 
 /* ── Custom Pie Tooltip ─────────────────────────────────────────────────────── */
 function CustomPieTooltip({ active, payload }) {
@@ -152,142 +275,26 @@ function MetricCard({ label, value, subtext, icon: Icon, iconColor, iconBg, tren
 
 export default function VendorDashboardPage() {
   const navigate = useNavigate();
-  const { allVendors, updateVendor } = useVendorsContext();
+
+  // Interactive pending approvals list
+  const [pendingApprovals, setPendingApprovals] = useState(INITIAL_PENDING_APPROVALS);
 
   // Modal state for rejection workflow
   const [rejectingVendor, setRejectingVendor] = useState(null);
   const [rejectComments, setRejectComments] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  /* ── 1. KPI Computations ───────────────────────────────────────────────────── */
-  const kpis = useMemo(() => {
-    const total = allVendors.length;
-    const active = allVendors.filter((v) => v.isActive).length;
-    const pending = allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Pending).length;
-    const inactive = allVendors.filter((v) => !v.isActive).length;
-
-    const activePct = total > 0 ? Math.round((active / total) * 100) : 0;
-    const pendingPct = total > 0 ? Math.round((pending / total) * 100) : 0;
-
-    return {
-      total,
-      active,
-      activePct,
-      pending,
-      pendingPct,
-      inactive,
-    };
-  }, [allVendors]);
-
-  /* ── 2. Approval Status Breakdown (Pie/Donut Data) ────────────────────────── */
-  const approvalChartData = useMemo(() => {
-    const total = allVendors.length || 1;
-    const approvedCount = allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Approved).length;
-    const pendingCount = allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Pending).length;
-    const rejectedCount = allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Rejected).length;
-
-    return [
-      {
-        name: 'Approved',
-        value: approvedCount,
-        percentage: Math.round((approvedCount / total) * 100),
-        color: chartColors.success,
-      },
-      {
-        name: 'Pending',
-        value: pendingCount,
-        percentage: Math.round((pendingCount / total) * 100),
-        color: chartColors.warning,
-      },
-      {
-        name: 'Rejected',
-        value: rejectedCount,
-        percentage: Math.round((rejectedCount / total) * 100),
-        color: chartColors.danger,
-      },
-    ];
-  }, [allVendors]);
-
-  /* ── 3. Vendors by State Breakdown (Top 6 Bar Chart Data) ─────────────────── */
-  const stateChartData = useMemo(() => {
-    const countsByState = {};
-
-    allVendors.forEach((v) => {
-      let stateName = v.stateId ? getStateName(v.countryId, v.stateId) : 'Unknown';
-      if (!stateName || stateName === '—') {
-        stateName = v.city || 'Other';
-      }
-      countsByState[stateName] = (countsByState[stateName] || 0) + 1;
-    });
-
-    const entries = Object.entries(countsByState).map(([state, count]) => ({
-      state,
-      count,
-    }));
-
-    // Sort descending by count and take top 6
-    entries.sort((a, b) => b.count - a.count);
-    return entries.slice(0, 6);
-  }, [allVendors]);
-
-  /* ── 4. Pending Approvals List (Up to 5) ──────────────────────────────────── */
-  const pendingApprovals = useMemo(() => {
-    return allVendors.filter((v) => normalizeApprovalStatus(v.approvalStatus) === ApprovalStatus.Pending).slice(0, 5);
-  }, [allVendors]);
-
-  /* ── 5. Recently Added Vendors List (Up to 5) ────────────────────────────── */
-  const recentlyAddedVendors = useMemo(() => {
-    const sorted = [...allVendors].sort((a, b) => {
-      const dateA = new Date(a.createdOn || a.effectiveDate || 0).getTime();
-      const dateB = new Date(b.createdOn || b.effectiveDate || 0).getTime();
-      if (dateA !== dateB) return dateB - dateA;
-      // Fallback by ID
-      const numA = parseInt(a.id?.replace(/\D/g, '') || '0', 10);
-      const numB = parseInt(b.id?.replace(/\D/g, '') || '0', 10);
-      return numB - numA;
-    });
-    return sorted.slice(0, 5);
-  }, [allVendors]);
-
-  /* ── Approve Handler ──────────────────────────────────────────────────────── */
-  async function handleApprove(vendor) {
-    try {
-      await updateVendor(vendor.id, {
-        approvalStatus: ApprovalStatus.Approved,
-        approvedBy: 'Ian Chesnut',
-        approvedOn: getTodayISO(),
-      });
-      toast.success('Vendor approved');
-    } catch {
-      // Handled via toast
-    }
-  }
-
-  /* ── Open Reject Modal ────────────────────────────────────────────────────── */
-  function handleOpenRejectModal(vendor) {
-    setRejectingVendor(vendor);
-    setRejectComments('');
-  }
-
   /* ── Confirm Reject Handler ──────────────────────────────────────────────── */
-  async function handleConfirmReject() {
+  function handleConfirmReject() {
     if (!rejectingVendor) return;
     setActionLoading(true);
-    try {
-      await updateVendor(rejectingVendor.id, {
-        approvalStatus: ApprovalStatus.Rejected,
-        approvedBy: 'Ian Chesnut',
-        approvedByComments: rejectComments.trim() || 'Vendor compliance audit was not cleared.',
-        approvedOn: getTodayISO(),
-      });
-      toast.success('Vendor rejected');
+    setTimeout(() => {
+      setPendingApprovals((prev) => prev.filter((v) => v.id !== rejectingVendor.id));
+      toast.success(`Vendor ${rejectingVendor.vendorName} rejected`);
       setRejectingVendor(null);
       setRejectComments('');
-    } catch {
-      // Handled
-    } finally {
       setActionLoading(false);
-    }
+    }, 300);
   }
 
   return (
@@ -297,6 +304,7 @@ export default function VendorDashboardPage() {
         title="Vendor Dashboard"
         subtitle="Overview of vendor onboarding and approvals"
         icon={<IconVendor className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" aria-hidden="true" />}
+        showProcessFlow={false}
         actions={
           <Link to="/vendors/new" className="w-full sm:w-auto">
             <Button variant="primary" size="md" className="w-full sm:w-auto shadow-xs justify-center">
@@ -312,7 +320,7 @@ export default function VendorDashboardPage() {
         {/* Total Vendors */}
         <MetricCard
           label="Total Vendors"
-          value={kpis.total}
+          value={STATIC_KPIS.total}
           subtext="Registered in directory"
           icon={IconBuilding2}
           iconBg="bg-primary/10"
@@ -324,8 +332,8 @@ export default function VendorDashboardPage() {
         {/* Active Vendors */}
         <MetricCard
           label="Active"
-          value={kpis.active}
-          subtext={`${kpis.activePct}% of total suppliers`}
+          value={STATIC_KPIS.active}
+          subtext={`${STATIC_KPIS.activePct}% of total suppliers`}
           icon={IconSuccess}
           iconBg="bg-success/10"
           iconColor="text-success"
@@ -336,8 +344,8 @@ export default function VendorDashboardPage() {
         {/* Pending Approval */}
         <MetricCard
           label="Pending Approval"
-          value={kpis.pending}
-          subtext={kpis.pending > 0 ? 'Requires QA verification' : 'All reviews cleared'}
+          value={pendingApprovals.length}
+          subtext={pendingApprovals.length > 0 ? 'Requires QA verification' : 'All reviews cleared'}
           icon={IconClock}
           iconBg="bg-warning/10"
           iconColor="text-warning"
@@ -348,7 +356,7 @@ export default function VendorDashboardPage() {
         {/* Inactive Vendors */}
         <MetricCard
           label="Inactive"
-          value={kpis.inactive}
+          value={STATIC_KPIS.inactive}
           subtext="Temporarily suspended"
           icon={IconXCircle}
           iconBg="bg-danger/10"
@@ -368,7 +376,7 @@ export default function VendorDashboardPage() {
               <p className="text-xs text-text-muted truncate">Breakdown by current review state</p>
             </div>
             <span className="text-xs font-mono text-text-muted bg-surface px-2 py-0.5 rounded border border-border shrink-0">
-              {allVendors.length} Total
+              {STATIC_KPIS.total} Total
             </span>
           </div>
 
@@ -378,13 +386,13 @@ export default function VendorDashboardPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={approvalChartData}
+                    data={STATIC_APPROVAL_CHART_DATA}
                     innerRadius={50}
                     outerRadius={80}
                     paddingAngle={3}
                     dataKey="value"
                   >
-                    {approvalChartData.map((entry, index) => (
+                    {STATIC_APPROVAL_CHART_DATA.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} stroke={chartColors.bg} strokeWidth={2} />
                     ))}
                   </Pie>
@@ -394,7 +402,7 @@ export default function VendorDashboardPage() {
               {/* Donut Center Label */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-xl sm:text-2xl font-bold font-mono text-heading leading-none">
-                  {allVendors.length}
+                  {STATIC_KPIS.total}
                 </span>
                 <span className="text-2xs sm:text-2xs text-text-muted mt-0.5">Vendors</span>
               </div>
@@ -402,7 +410,7 @@ export default function VendorDashboardPage() {
 
             {/* Custom Legend */}
             <div className="sm:col-span-5 flex flex-col justify-center space-y-2.5 sm:space-y-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/50 pl-0 sm:pl-2">
-              {approvalChartData.map((item) => (
+              {STATIC_APPROVAL_CHART_DATA.map((item) => (
                 <div key={item.name} className="flex items-center justify-between text-xs py-0.5">
                   <div className="flex items-center gap-2">
                     <span
@@ -432,43 +440,37 @@ export default function VendorDashboardPage() {
           </div>
 
           <div className="h-[210px] sm:h-[240px] w-full pt-1">
-            {stateChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={stateChartData}
-                  layout="vertical"
-                  margin={{ top: 5, right: 15, left: -5, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartColors.gray200} horizontal={false} />
-                  <XAxis
-                    type="number"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fontSize: 10, fill: chartColors.gray500, fontFamily: 'var(--font-mono)' }}
-                    allowDecimals={false}
-                  />
-                  <YAxis
-                    dataKey="state"
-                    type="category"
-                    tickLine={false}
-                    axisLine={false}
-                    width={85}
-                    tick={{ fontSize: 11, fill: chartColors.heading, fontWeight: 500 }}
-                  />
-                  <RechartsTooltip content={<CustomBarTooltip />} />
-                  <Bar
-                    dataKey="count"
-                    fill={chartColors.brand500}
-                    radius={[0, 6, 6, 0]}
-                    barSize={16}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-text-muted">
-                No state records available
-              </div>
-            )}
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={STATIC_STATE_CHART_DATA}
+                layout="vertical"
+                margin={{ top: 5, right: 15, left: -5, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.gray200} horizontal={false} />
+                <XAxis
+                  type="number"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 10, fill: chartColors.gray500, fontFamily: 'var(--font-mono)' }}
+                  allowDecimals={false}
+                />
+                <YAxis
+                  dataKey="state"
+                  type="category"
+                  tickLine={false}
+                  axisLine={false}
+                  width={85}
+                  tick={{ fontSize: 11, fill: chartColors.heading, fontWeight: 500 }}
+                />
+                <RechartsTooltip content={<CustomBarTooltip />} />
+                <Bar
+                  dataKey="count"
+                  fill={chartColors.brand500}
+                  radius={[0, 6, 6, 0]}
+                  barSize={16}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </Card>
       </div>
@@ -484,7 +486,7 @@ export default function VendorDashboardPage() {
                 <h2 className="text-sm font-semibold text-heading truncate">Pending Approvals</h2>
               </div>
               <Badge variant={pendingApprovals.length > 0 ? 'warning' : 'neutral'} className="shrink-0">
-                {kpis.pending} Awaiting
+                {pendingApprovals.length} Awaiting
               </Badge>
             </div>
 
@@ -553,7 +555,7 @@ export default function VendorDashboardPage() {
           {/* Bottom link */}
           <div className="pt-3 sm:pt-4 border-t border-border mt-3 sm:mt-4 flex items-center justify-end">
             <Link
-              to={`/vendors?status=ALL&approval=${ApprovalStatus.Pending}`}
+              to="/vendors?status=ALL&approval=Pending"
               className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 group/link"
             >
               <span>View all in directory</span>
@@ -573,49 +575,43 @@ export default function VendorDashboardPage() {
               <span className="text-xs text-text-muted font-normal shrink-0">Latest Onboarding</span>
             </div>
 
-            {recentlyAddedVendors.length === 0 ? (
-              <div className="py-10 sm:py-12 text-center text-text-muted">
-                <p className="text-xs font-medium">No vendors registered yet.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border -mx-3 sm:-mx-5">
-                {recentlyAddedVendors.map((vendor) => (
-                  <div
-                    key={vendor.id}
-                    onClick={() =>
-                      navigate(`/vendors/${vendor.id}/effective-dates`, {
-                        state: { from: '/vendors/dashboard', backLabel: 'Vendor Dashboard', readOnly: true },
-                      })
-                    }
-                    className="px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between gap-2.5 sm:gap-3 hover:bg-surface/60 transition-colors cursor-pointer group"
-                  >
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
-                        <span className="text-xs sm:text-sm font-semibold text-heading group-hover:text-primary transition-colors truncate">
-                          {vendor.vendorName}
-                        </span>
-                        <span className="font-mono text-2xs px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded font-medium shrink-0">
-                          {vendor.vendorCode}
-                        </span>
-                      </div>
-                      <p className="text-2xs text-text-muted flex items-center gap-1.5 flex-wrap">
-                        <IconLocation size={11} className="shrink-0" />
-                        <span className="truncate">{vendor.city || 'Unknown Location'}</span>
-                        <span>•</span>
-                        <span className="font-mono text-text-muted">{formatDate(vendor.effectiveDate || vendor.createdOn)}</span>
-                      </p>
+            <div className="divide-y divide-border -mx-3 sm:-mx-5">
+              {STATIC_RECENTLY_ADDED_VENDORS.map((vendor) => (
+                <div
+                  key={vendor.id}
+                  onClick={() =>
+                    navigate(`/vendors/${vendor.id}/effective-dates`, {
+                      state: { from: '/vendors/dashboard', backLabel: 'Vendor Dashboard', readOnly: true },
+                    })
+                  }
+                  className="px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between gap-2.5 sm:gap-3 hover:bg-surface/60 transition-colors cursor-pointer group"
+                >
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
+                      <span className="text-xs sm:text-sm font-semibold text-heading group-hover:text-primary transition-colors truncate">
+                        {vendor.vendorName}
+                      </span>
+                      <span className="font-mono text-2xs px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded font-medium shrink-0">
+                        {vendor.vendorCode}
+                      </span>
                     </div>
-
-                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                      <Badge variant={vendor.isActive ? 'active' : 'inactive'} className="text-2xs sm:text-xs">
-                        {vendor.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                      <IconChevronRight size={14} className="text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-transform" />
-                    </div>
+                    <p className="text-2xs text-text-muted flex items-center gap-1.5 flex-wrap">
+                      <IconLocation size={11} className="shrink-0" />
+                      <span className="truncate">{vendor.city || 'Unknown Location'}</span>
+                      <span>•</span>
+                      <span className="font-mono text-text-muted">{formatDate(vendor.effectiveDate || vendor.createdOn)}</span>
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
+
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <Badge variant={vendor.isActive ? 'active' : 'inactive'} className="text-2xs sm:text-xs">
+                      {vendor.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                    <IconChevronRight size={14} className="text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Bottom link */}
@@ -648,14 +644,14 @@ export default function VendorDashboardPage() {
             </div>
 
             <Textarea
-                id="rejectionComments"
-                label="Rejection Reason / QA Audit Comments"
-                required
-                rows={3}
-                value={rejectComments}
-                onChange={(e) => setRejectComments(e.target.value)}
-                placeholder="Specify reasons for rejection (e.g., GST registration mismatch, surface tolerance failed quality inspection)..."
-              />
+              id="rejectionComments"
+              label="Rejection Reason / QA Audit Comments"
+              required
+              rows={3}
+              value={rejectComments}
+              onChange={(e) => setRejectComments(e.target.value)}
+              placeholder="Specify reasons for rejection (e.g., GST registration mismatch, surface tolerance failed quality inspection)..."
+            />
 
             <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-2 border-t border-border">
               <CancelButton

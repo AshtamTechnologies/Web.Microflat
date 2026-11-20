@@ -72,11 +72,12 @@ function isSameDayDate(dateVal) {
 }
 
 function isTaskToday(item) {
-  if (item?.isToday) return true;
+  if (item?.isToday === true) return true;
   return isSameDayDate(item?.dueDate || item?.showFromDate);
 }
 
 function isTaskOverdue(item) {
+  if (item?.isOverdue === true || item?.status === 'Overdue') return true;
   if (item?.status !== 'Pending') return false;
   if (isTaskToday(item)) return false; // Today's tasks are never overdue
   const dateVal = item?.dueDate || item?.showFromDate;
@@ -89,9 +90,12 @@ function isTaskOverdue(item) {
 }
 
 function getTaskTier(item) {
-  if (item?.status !== 'Pending') return 3; // Tier 3: Completed / Cancelled
-  if (isTaskOverdue(item)) return 0;        // Tier 0: Overdue pending tasks (show 1st)
-  if (isTaskToday(item)) return 1;          // Tier 1: Today's pending tasks (show 2nd)
+  // Tier 3: Completed / Cancelled / Done
+  if (item?.status === 'Completed' || item?.status === 'Cancelled' || item?.status === 'Done') {
+    return 3;
+  }
+  if (isTaskOverdue(item)) return 0;        // Tier 0: Overdue tasks (show 1st)
+  if (isTaskToday(item)) return 1;          // Tier 1: Today's tasks (show 2nd)
   return 2;                                 // Tier 2: Future scheduled pending tasks (show 3rd)
 }
 
@@ -451,7 +455,7 @@ export default function MyQueuePage() {
                 <span>{formatDateTime(due)}</span>
               </div>
               <div className="flex items-center gap-1">
-                {isToday && item.status === 'Pending' && (
+                {isToday && (item.status === 'Pending' || item.status === 'Overdue') && !isOverdue && (
                   <span className="inline-block text-3xs text-primary font-semibold px-1 rounded bg-primary/10 border border-primary/20">
                     Today
                   </span>
@@ -496,7 +500,8 @@ export default function MyQueuePage() {
         size: 160,
         cell: (info) => {
           const item = info.row.original;
-          const canMarkDone = item.canMarkDone !== false && item.status === 'Pending' && !item.itemType?.includes('Approval');
+          const isPendingOrOverdue = item.status === 'Pending' || item.status === 'Overdue';
+          const canMarkDone = item.canMarkDone !== false && isPendingOrOverdue && !item.itemType?.includes('Approval');
           const isApproval = item.itemType?.includes('Approval');
 
           return (
@@ -515,7 +520,7 @@ export default function MyQueuePage() {
                 </Button>
               )}
 
-              {isApproval && item.status === 'Pending' && (
+              {isApproval && isPendingOrOverdue && (
                 <Button
                   size="xs"
                   variant="primary"
@@ -701,7 +706,7 @@ export default function MyQueuePage() {
             >
               {item.itemType}
             </Badge>
-            {isTaskToday(item) && item.status === 'Pending' && (
+            {isTaskToday(item) && (item.status === 'Pending' || item.status === 'Overdue') && !isTaskOverdue(item) && (
               <span className="inline-block text-3xs text-primary font-semibold px-1 rounded bg-primary/10 border border-primary/20">
                 Today
               </span>
@@ -764,7 +769,7 @@ export default function MyQueuePage() {
 
         {/* Card Actions Footer */}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-          {item.canMarkDone !== false && item.status === 'Pending' && !item.itemType?.includes('Approval') && (
+          {item.canMarkDone !== false && (item.status === 'Pending' || item.status === 'Overdue') && !item.itemType?.includes('Approval') && (
             <Button
               size="xs"
               variant="primary"
@@ -778,7 +783,7 @@ export default function MyQueuePage() {
             </Button>
           )}
 
-          {item.itemType?.includes('Approval') && item.status === 'Pending' && (
+          {item.itemType?.includes('Approval') && (item.status === 'Pending' || item.status === 'Overdue') && (
             <Button
               size="xs"
               variant="primary"
