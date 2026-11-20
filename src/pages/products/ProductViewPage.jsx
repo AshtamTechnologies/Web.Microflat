@@ -376,6 +376,8 @@ export default function ProductViewPage() {
           {activeTab === 'variants' && (
             <ProductVariantsTab
               productId={product.id}
+              product={product}
+              standards={currentStandards || product?.standards || []}
               grades={lookups?.grades || []}
               specParameters={lookups?.specParameters || []}
               onVariantAdded={loadProduct}

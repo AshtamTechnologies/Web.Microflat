@@ -91,6 +91,7 @@ Then:
 | **WL-013** | 2026-11-18 | Commercial Terms Select | UI Components | Created unified `CommercialTermsSelect.jsx` with mobile-friendly info dialog and code-primary labels. | Reusable across Sales Orders, Quotations, and Clients. | Completed & verified build (0 errors). |
 | **WL-014** | 2026-11-18 | Quotations Core & Task 61 | Quotations | Implemented quotation service, model, endpoints, context, and wired Task 61 PO Recording modal. | Built multipart form-data upload for PO recording and hybrid live/mock state. | Completed & verified build (0 errors). |
 | **WL-015** | 2026-11-19 | Task 54 Standard to Grade Mapping | Standards & Specs | Implemented Phase 1 (Endpoints, Models, Service, Mock), Phase 2 (Context gradeMapping cache & methods), and Phase 3 (StandardsPage table column, modal checklist with drag/arrow sequence ordering, and view card). | Allows Admin to associate precision grades to standards and specify displayOrder sequence for downstream dropdowns (Task 53). Strictly preserved Task 54 boundaries (no flatness formula, no backend/DB changes, no touch to GradesPage/GradesContext). | Completed & verified build (0 errors). |
+| **WL-016** | 2026-11-20 | Task 53 Product Master Specs & Flatness | Products / Accuracy Specs | Implemented Phase 1 (flatnessFormula engine tested with 15/15 Excel benchmarks), Phase 2 (service query params StandardId/GradeId & resolve endpoint), Phase 3 (ProductVariantsTab Scope selector, Standard+Grade dropdowns, "⚡ Calculate Flatness" auto-fill, RBAC 403 protection, and inline table grouped badges). | Aligns accuracy specifications with Standard + Grade backend architecture (`ProductVariantsController.cs:103`), eliminates manual math errors with automated engineering formula calculation. | Completed & verified build (0 errors). |
 
 ---
 
@@ -303,6 +304,32 @@ Then:
      - 0 backend or database changes.
      - Flatness formulas strictly excluded from Task 54 (reserved for Task 53 product master variant specs).
      - `GradesPage.jsx` and `GradesContext.jsx` were not modified.
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
+
+---
+
+### Work Log Entry: WL-016
+- **Date**: 2026-11-20
+- **Module**: Products & Precision Metrology Accuracy Specs (`ProductVariantsTab.jsx`, `productService.js`, `productEndpoints.js`, `flatnessFormula.js`, `ProductViewPage.jsx`)
+- **Task**: Task 53 — Changes to Product master - Standard, Grade & Flatness Formulas
+- **Summary of Implemented Changes**:
+  1. **Phase 1 — Formula Calculation Engine (`src/utils/flatnessFormula.js`)**:
+     - Built `calculateFlatnessTolerance({ standardCode, gradeCode, lengthMm, widthMm })` and `calculateNominalDiagonal(lengthMm, widthMm)` ($\lceil\sqrt{L^2 + W^2} / 100\rceil \times 100$ mm).
+     - Verified with 15 automated test cases against `Flatness for various sizes.xlsx` across IS 7327 (Gr 0..3), BS 817 (Gr 0..2), DIN 876 (Gr 00..3), and GGG-P-463C / ASME B89.3.7 (Gr AA..B).
+     - Standardized storage unit as micrometers ($\mu\text{m}$) across all standards with formula breakdown text.
+  2. **Phase 2 — Service Layer**:
+     - `productEndpoints.js`: Added `VARIANT_SPECS_RESOLVE: (id) => '/api/product-variants/' + id + '/specs/resolve'`.
+     - `productService.js`: Updated `setVariantSpecs(variantId, specsList, options)` to enforce the backend rule: "Send both standardId and gradeId, or neither" and pass `{ StandardId, GradeId }` query parameters (`PUT /api/product-variants/{id}/specs?StandardId=&GradeId=`). Added `getResolvedVariantSpecs(variantId, options)`.
+  3. **Phase 3 — UI Layer (`ProductVariantsTab.jsx` & `ProductViewPage.jsx`)**:
+     - **Accuracy Specs Modal**:
+       - Added **Specification Scope Selector**: allows toggling between "Standard + Grade" figures and "Common Figures".
+       - In Standard + Grade mode: provides Manufacturing Standard dropdown and dynamically populates Allowed Precision Grade dropdown strictly from Task 54's `gradeMapping`.
+        - **Formula Auto-Populate & Locking**: Selecting `Flatness (µm)` under Standard + Grade automatically computes the exact tolerance from dimensions (L x W) and standard formula (e.g., 4.6 µm for 500x500 Gr-0 under IS 7327). The input is locked (`readOnly` / `disabled`) with a `Locked` badge to prevent invalid arbitrary inputs, and dynamically updates when changing Standard or Grade.
+        - **Clean Tolerance UI**: For Flatness parameters, +/- tolerances and text values show non-editable "—" dashes, reflecting that Flatness is a single total allowable indicator limit.
+        - **Modal Layout**: Widened modal to `size="2xl"` (1024px) with expanded Parameter column to eliminate horizontal scrollbars and cramping. Clean formula derivation step banner rendered below the table.
+       - **RBAC & 403 Protection**: If product is Approved and user is non-Admin, modal is read-only with an informative warning banner.
+     - **Inline Variant Table**:
+       - Enhanced expanded specs table to display each configured figure grouped with its Standard & Grade badge (e.g. `[IS-7327 / Gr-0]` vs `[Common]`).
 - **Verification**: `npm run build` passed cleanly with **0 errors**.
 
 ---

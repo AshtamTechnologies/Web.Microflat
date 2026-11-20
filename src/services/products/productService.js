@@ -381,11 +381,29 @@ export async function getVariantById(id) {
 
 /**
  * Replaces accuracy specs of a variant.
- * PUT /api/product-variants/{id}/specs
- * List of { specParameterId, valueDecimal, valueText, tolerancePlus, toleranceMinus }
+ * PUT /api/product-variants/{id}/specs?StandardId=&GradeId=
+ *
+ * Rules:
+ *   - Send both standardId and gradeId, or neither (empty = common figures).
+ *   - Replaces only that set and leaves other sets alone.
+ *
+ * @param {number|string} variantId
+ * @param {Array<{ specParameterId: number, valueDecimal?: number, valueText?: string, tolerancePlus?: number, toleranceMinus?: number }>} specsList
+ * @param {{ standardId?: number|string, gradeId?: number|string }} [options]
  */
-export async function setVariantSpecs(variantId, specsList) {
+export async function setVariantSpecs(variantId, specsList, options = {}) {
   try {
+    const queryParams = {};
+    const hasStd = options.standardId !== undefined && options.standardId !== null && options.standardId !== '';
+    const hasGrd = options.gradeId !== undefined && options.gradeId !== null && options.gradeId !== '';
+
+    if (hasStd && hasGrd) {
+      queryParams.StandardId = Number(options.standardId);
+      queryParams.GradeId = Number(options.gradeId);
+    } else if (hasStd || hasGrd) {
+      throw new Error('Both Standard and Grade must be selected together, or neither for common figures.');
+    }
+
     const payload = (specsList || []).map((s) => ({
       specParameterId: Number(s.specParameterId),
       valueDecimal:
@@ -402,8 +420,36 @@ export async function setVariantSpecs(variantId, specsList) {
           ? Number(s.toleranceMinus)
           : null,
     }));
-    const res = await axiosInstance.put(PRODUCT_ENDPOINTS.VARIANT_SPECS(variantId), payload);
+
+    const res = await axiosInstance.put(PRODUCT_ENDPOINTS.VARIANT_SPECS(variantId), payload, {
+      params: queryParams,
+    });
     return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Returns the variant's figures for ?standardId=&gradeId= (for Enquiry / Quotation auto-fill).
+ * GET /api/product-variants/{id}/specs/resolve?StandardId=&GradeId=
+ *
+ * Per parameter: returns the figure of that pair if one exists, otherwise the common figure.
+ *
+ * @param {number|string} variantId
+ * @param {{ standardId?: number|string, gradeId?: number|string }} [options]
+ * @returns {Promise<Array>}
+ */
+export async function getResolvedVariantSpecs(variantId, options = {}) {
+  try {
+    const queryParams = {};
+    if (options.standardId) queryParams.StandardId = Number(options.standardId);
+    if (options.gradeId) queryParams.GradeId = Number(options.gradeId);
+
+    const res = await axiosInstance.get(PRODUCT_ENDPOINTS.VARIANT_SPECS_RESOLVE(variantId), {
+      params: queryParams,
+    });
+    return Array.isArray(res?.data) ? res.data : [];
   } catch (err) {
     throw normalizeApiError(err);
   }

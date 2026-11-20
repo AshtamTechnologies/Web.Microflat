@@ -21,4 +21,5 @@ export const PRODUCT_ENDPOINTS = {
   VARIANT_BY_ID: (id) => `/api/product-variants/${id}`,
   VARIANT_STATUS: (id) => `/api/product-variants/${id}/status`,
   VARIANT_SPECS: (id) => `/api/product-variants/${id}/specs`,
+  VARIANT_SPECS_RESOLVE: (id) => `/api/product-variants/${id}/specs/resolve`,
 };
