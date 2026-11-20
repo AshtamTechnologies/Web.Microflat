@@ -450,6 +450,12 @@ export async function getResolvedVariantSpecs(variantId, options = {}) {
       params: queryParams,
     });
     return Array.isArray(res?.data) ? res.data : [];
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
  * Paged list of product options, filtered by product, option name, and standard flag.
  * GET /api/product-options?ProductId={productId}
  */
