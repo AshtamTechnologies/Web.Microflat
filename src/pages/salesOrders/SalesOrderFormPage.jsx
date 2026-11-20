@@ -59,6 +59,7 @@ import {
 import { formatDate } from '../../utils/dateUtils';
 import { triggerPdfDownload } from '../../utils/fileHelpers';
 import useColumnResize from '../../hooks/useColumnResize';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 
 function formatReadableFileSize(bytes = 0) {
   if (!bytes || bytes <= 0) return '—';
@@ -69,9 +70,12 @@ function formatReadableFileSize(bytes = 0) {
 }
 
 function toTermsArray(val, fallback = []) {
-  if (Array.isArray(val)) return val;
+  if (Array.isArray(val)) {
+    return val.filter((item) => typeof item !== 'string' || !isHtmlMarkup(item));
+  }
   if (typeof val === 'string' && val.trim()) {
-    return val.split(',').map((s) => s.trim()).filter(Boolean);
+    if (isHtmlMarkup(val)) return fallback;
+    return val.split(',').map((s) => s.trim()).filter((s) => s && !isHtmlMarkup(s));
   }
   return fallback;
 }

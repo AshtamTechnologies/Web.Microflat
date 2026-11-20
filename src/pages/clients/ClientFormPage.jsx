@@ -28,6 +28,7 @@ import {
   IconCalendar,
   IconClient,
   IconFileText,
+  IconInfo,
   IconLocation,
   IconUsers,
 } from '../../constants/icons';
@@ -56,6 +57,7 @@ import { useClientsContext } from '../../context/ClientsContext';
 import {
   getTodayIsoDate,
 } from '../../utils/effectiveDateUtils';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 import AddressesEditor from './components/AddressesEditor';
 import ContactsEditor from './components/ContactsEditor';
 
@@ -77,6 +79,37 @@ const INITIAL_FORM = {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function normalizeDeliveryTermsForInput(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => (typeof item === 'object' && item !== null ? (item.termCode || item.code || item.name || item.id) : item))
+      .filter((item) => (typeof item === 'string' ? !isHtmlMarkup(item) : Boolean(item)));
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    if (isHtmlMarkup(trimmed)) {
+      return [];
+    }
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item) => typeof item !== 'string' || !isHtmlMarkup(item));
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (trimmed.includes(',')) {
+      return trimmed.split(',').map((s) => s.trim()).filter((s) => s && !isHtmlMarkup(s));
+    }
+    return [trimmed];
+  }
+  return [];
+}
+
 export default function ClientFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -90,6 +123,7 @@ export default function ClientFormPage() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sameAsCompany, setSameAsCompany] = useState(false);
+  const [legacyDeliveryTermsNotice, setLegacyDeliveryTermsNotice] = useState(null);
 
   // Dynamic Contact Type options from Lookups
   const contactTypeOptions = useMemo(() => {
@@ -128,6 +162,13 @@ export default function ClientFormPage() {
             (detail.clientName && detail.clientName === detail.billingName)
           );
 
+          const rawDt = detail.deliveryTerms || existing.deliveryTerms || '';
+          const isLegacyHtmlDt = isHtmlMarkup(rawDt);
+          const legacyNoticeText = isLegacyHtmlDt
+            ? rawDt.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+            : null;
+          setLegacyDeliveryTermsNotice(legacyNoticeText);
+
           const loadedData = {
             clientDetailId: detail.clientDetailId || detail.id,
             effectiveDate: detail.effectiveDate || existing.effectiveDate || getTodayIsoDate(),
@@ -139,7 +180,7 @@ export default function ClientFormPage() {
             gstNo: detail.gstNo || existing.gstNo || '',
             isActive: detail.isActive !== false,
             paymentTerms: loadedPaymentTerms,
-            deliveryTerms: detail.deliveryTerms || existing.deliveryTerms || '',
+            deliveryTerms: normalizeDeliveryTermsForInput(rawDt),
             comments: detail.internalComments || detail.comments || existing.comments || '',
             addresses: Array.isArray(detail.addresses) ? [...detail.addresses] : [],
             contacts: Array.isArray(detail.contacts) ? [...detail.contacts] : [],
@@ -559,16 +600,24 @@ export default function ClientFormPage() {
                   hint="Multiple terms can be selected from Configuration"
                 />
 
-                <DeliveryTermsSelect
-                  id="deliveryTerms"
-                  name="deliveryTerms"
-                  value={Array.isArray(form.deliveryTerms) ? form.deliveryTerms : (form.deliveryTerms ? [form.deliveryTerms] : [])}
-                  onChange={(e) => {
-                    const val = Array.isArray(e) ? e : e?.target?.value || [];
-                    handleFieldChange('deliveryTerms', val);
-                  }}
-                  hint="Multiple terms can be selected from Configuration"
-                />
+                <div className="space-y-1">
+                  <DeliveryTermsSelect
+                    id="deliveryTerms"
+                    name="deliveryTerms"
+                    value={Array.isArray(form.deliveryTerms) ? form.deliveryTerms : (form.deliveryTerms ? [form.deliveryTerms] : [])}
+                    onChange={(e) => {
+                      const val = Array.isArray(e) ? e : e?.target?.value || [];
+                      handleFieldChange('deliveryTerms', val);
+                    }}
+                    hint="Multiple terms can be selected from Configuration"
+                  />
+                  {legacyDeliveryTermsNotice && (
+                    <p className="text-2xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                      <IconInfo size={12} className="shrink-0" />
+                      <span>Previous revision note: &ldquo;{legacyDeliveryTermsNotice}&rdquo;. Select standard delivery terms above to update.</span>
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Internal Comments */}

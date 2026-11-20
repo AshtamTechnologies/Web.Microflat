@@ -27,6 +27,7 @@ import {
   TableActions,
   DataTable,
   SearchableSelect,
+  FormattedHtmlBlock,
 } from '../../components/ui';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
 import { formatDate } from '../../utils/dateUtils';
@@ -368,21 +369,10 @@ export default function PaymentTermsPage() {
         minSize: 220,
         cell: ({ row }) => {
           const desc = row.original.description || '';
-          const isHtml = /<[a-z][\s\S]*>/i.test(desc);
-          if (isHtml) {
-            return (
-              <div
-                className="text-xs text-text max-h-24 overflow-y-auto pr-1 prose prose-xs max-w-none leading-relaxed [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4 [&_p]:my-0.5"
-                dangerouslySetInnerHTML={{
-                  __html: desc,
-                }}
-              />
-            );
-          }
           return (
-            <p className="text-xs text-text whitespace-pre-line line-clamp-3 leading-relaxed" title={desc}>
-              {desc || <span className="text-text-muted italic">No terms specified</span>}
-            </p>
+            <div className="max-h-24 overflow-y-auto pr-1">
+              <FormattedHtmlBlock content={desc} emptyText="No terms specified" />
+            </div>
           );
         },
       }),
@@ -862,18 +852,11 @@ export default function PaymentTermsPage() {
                 <span className="view-field-label mf-detail-label">
                   Terms & Conditions
                 </span>
-                <div className="text-xs text-heading leading-relaxed prose prose-xs max-w-none pt-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_ul]:list-disc [&_ul]:pl-4">
-                  {/<[a-z][\s\S]*>/i.test(viewingTerm.description || '') ? (
-                    <div
-                      dangerouslySetInnerHTML={{
-                        __html: viewingTerm.description,
-                      }}
-                    />
-                  ) : (
-                    <p className="whitespace-pre-line">
-                      {viewingTerm.description || 'No detailed conditions specified.'}
-                    </p>
-                  )}
+                <div className="text-xs text-heading leading-relaxed pt-1">
+                  <FormattedHtmlBlock
+                    content={viewingTerm.description}
+                    emptyText="No detailed conditions specified."
+                  />
                 </div>
               </div>
 

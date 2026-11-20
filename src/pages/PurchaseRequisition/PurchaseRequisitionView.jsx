@@ -40,8 +40,10 @@ import {
   Modal,
   PageHeader,
   Textarea,
+  FormattedHtmlBlock,
 } from '../../components/ui';
 import { usePurchaseRequisitionContext } from '../../context/PurchaseRequisitionContext';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 import {
   formatPRDate,
   formatPRDateTime,
@@ -378,13 +380,25 @@ export default function PurchaseRequisitionView() {
               <div className="sm:col-span-2 md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/50">
                 <DetailField label="Payment Terms">
                   {pr.paymentTerms && (Array.isArray(pr.paymentTerms) ? pr.paymentTerms.length > 0 : Boolean(pr.paymentTerms)) ? (
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {(Array.isArray(pr.paymentTerms) ? pr.paymentTerms : [pr.paymentTerms]).map((t, idx) => (
-                        <Badge key={idx} variant="role" className="font-mono text-2xs px-2 py-0.5">
-                          {typeof t === 'object' ? (t.termCode || t.name || t) : t}
-                        </Badge>
-                      ))}
-                    </div>
+                    isHtmlMarkup(pr.paymentTerms) ? (
+                      <FormattedHtmlBlock content={pr.paymentTerms} className="mt-1" />
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {(Array.isArray(pr.paymentTerms)
+                          ? pr.paymentTerms
+                          : typeof pr.paymentTerms === 'string'
+                          ? pr.paymentTerms.split(',').map((s) => s.trim()).filter(Boolean)
+                          : [pr.paymentTerms]
+                        ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => {
+                          const label = typeof t === 'object' ? (t.termCode || t.name || t.termName || JSON.stringify(t)) : String(t);
+                          return (
+                            <Badge key={idx} variant="role" className="font-mono text-2xs px-2 py-0.5">
+                              {label}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )
                   ) : (
                     <span className="text-xs text-text-muted italic">—</span>
                   )}
@@ -392,13 +406,25 @@ export default function PurchaseRequisitionView() {
 
                 <DetailField label="Delivery Terms">
                   {pr.deliveryTerms && (Array.isArray(pr.deliveryTerms) ? pr.deliveryTerms.length > 0 : Boolean(pr.deliveryTerms)) ? (
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {(Array.isArray(pr.deliveryTerms) ? pr.deliveryTerms : [pr.deliveryTerms]).map((t, idx) => (
-                        <Badge key={idx} variant="neutral" className="font-mono text-2xs px-2 py-0.5">
-                          {typeof t === 'object' ? (t.termCode || t.name || t) : t}
-                        </Badge>
-                      ))}
-                    </div>
+                    isHtmlMarkup(pr.deliveryTerms) ? (
+                      <FormattedHtmlBlock content={pr.deliveryTerms} className="mt-1" />
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {(Array.isArray(pr.deliveryTerms)
+                          ? pr.deliveryTerms
+                          : typeof pr.deliveryTerms === 'string'
+                          ? pr.deliveryTerms.split(',').map((s) => s.trim()).filter(Boolean)
+                          : [pr.deliveryTerms]
+                        ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => {
+                          const label = typeof t === 'object' ? (t.termCode || t.name || t.termName || JSON.stringify(t)) : String(t);
+                          return (
+                            <Badge key={idx} variant="neutral" className="font-mono text-2xs px-2 py-0.5">
+                              {label}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )
                   ) : (
                     <span className="text-xs text-text-muted italic">—</span>
                   )}

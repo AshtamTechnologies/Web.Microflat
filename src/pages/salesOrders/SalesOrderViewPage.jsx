@@ -31,6 +31,7 @@ import {
   Th,
   Td,
   EmptyState,
+  FormattedHtmlBlock,
 } from '../../components/ui';
 import { useSalesOrdersContext } from '../../context/SalesOrdersContext';
 import {
@@ -39,6 +40,7 @@ import {
   TAX_TREATMENTS,
 } from '../../mocks/salesOrders';
 import { formatDate } from '../../utils/dateUtils';
+import { isHtmlMarkup } from '../../utils/htmlUtils';
 import useColumnResize from '../../hooks/useColumnResize';
 import ChangeOrderStatusModal from './components/ChangeOrderStatusModal';
 import UploadOrderDocumentModal from './components/UploadOrderDocumentModal';
@@ -564,46 +566,48 @@ export default function SalesOrderViewPage() {
           <Card title="Commercial & Delivery Terms">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <DetailField label="Payment Terms">
-                {Array.isArray(order.paymentTerms) && order.paymentTerms.length > 0 ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {order.paymentTerms.map((t, idx) => (
-                      <Badge key={idx} variant="neutral" size="xs">
-                        {t}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : typeof order.paymentTerms === 'string' && order.paymentTerms.includes(',') ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {order.paymentTerms.split(',').map((t, idx) => (
-                      <Badge key={idx} variant="neutral" size="xs">
-                        {t.trim()}
-                      </Badge>
-                    ))}
-                  </div>
+                {order.paymentTerms && (Array.isArray(order.paymentTerms) ? order.paymentTerms.length > 0 : Boolean(order.paymentTerms)) ? (
+                  isHtmlMarkup(order.paymentTerms) ? (
+                    <FormattedHtmlBlock content={order.paymentTerms} className="mt-1" />
+                  ) : (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(Array.isArray(order.paymentTerms)
+                        ? order.paymentTerms
+                        : typeof order.paymentTerms === 'string'
+                        ? (order.paymentTerms.includes(',') ? order.paymentTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.paymentTerms.trim()])
+                        : [order.paymentTerms]
+                      ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
+                        <Badge key={idx} variant="neutral" size="xs">
+                          {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )
                 ) : (
-                  <span>{order.paymentTerms || '—'}</span>
+                  <span>—</span>
                 )}
               </DetailField>
 
               <DetailField label="Delivery Terms">
-                {Array.isArray(order.deliveryTerms) && order.deliveryTerms.length > 0 ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {order.deliveryTerms.map((t, idx) => (
-                      <Badge key={idx} variant="neutral" size="xs">
-                        {t}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : typeof order.deliveryTerms === 'string' && order.deliveryTerms.includes(',') ? (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {order.deliveryTerms.split(',').map((t, idx) => (
-                      <Badge key={idx} variant="neutral" size="xs">
-                        {t.trim()}
-                      </Badge>
-                    ))}
-                  </div>
+                {order.deliveryTerms && (Array.isArray(order.deliveryTerms) ? order.deliveryTerms.length > 0 : Boolean(order.deliveryTerms)) ? (
+                  isHtmlMarkup(order.deliveryTerms) ? (
+                    <FormattedHtmlBlock content={order.deliveryTerms} className="mt-1" />
+                  ) : (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(Array.isArray(order.deliveryTerms)
+                        ? order.deliveryTerms
+                        : typeof order.deliveryTerms === 'string'
+                        ? (order.deliveryTerms.includes(',') ? order.deliveryTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.deliveryTerms.trim()])
+                        : [order.deliveryTerms]
+                      ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
+                        <Badge key={idx} variant="neutral" size="xs">
+                          {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )
                 ) : (
-                  <span>{order.deliveryTerms || '—'}</span>
+                  <span>—</span>
                 )}
               </DetailField>
 
