@@ -806,7 +806,7 @@ export default function ProductVariantsTab({
         </div>
       ) : (
         <TableContainer
-          className="border border-border rounded-lg max-h-80 overflow-y-auto bg-card"
+          className="border border-border rounded-lg max-h-[580px] overflow-y-auto bg-card"
           tableClassName="w-full text-xs table-auto"
         >
           <thead className="sticky top-0 bg-surface z-10">
@@ -1225,22 +1225,20 @@ export default function ProductVariantsTab({
                 <button
                   type="button"
                   onClick={() => handleScopeChange('STANDARD_GRADE')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                    specsScope === 'STANDARD_GRADE'
-                      ? 'bg-primary text-white shadow-xs'
-                      : 'text-text-muted hover:text-heading'
-                  }`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'STANDARD_GRADE'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-text-muted hover:text-heading'
+                    }`}
                 >
                   Standard + Grade
                 </button>
                 <button
                   type="button"
                   onClick={() => handleScopeChange('COMMON')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                    specsScope === 'COMMON'
-                      ? 'bg-primary text-white shadow-xs'
-                      : 'text-text-muted hover:text-heading'
-                  }`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'COMMON'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-text-muted hover:text-heading'
+                    }`}
                 >
                   Common Figures
                 </button>

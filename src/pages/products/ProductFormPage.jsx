@@ -831,8 +831,8 @@ export default function ProductFormPage() {
         const loadedVariants = Array.isArray(variantsRes?.items)
           ? variantsRes.items
           : Array.isArray(variantsRes)
-          ? variantsRes
-          : [];
+            ? variantsRes
+            : [];
         setVariants(loadedVariants);
         setDeletedVariantIds([]);
       } catch (err) {
@@ -1266,57 +1266,61 @@ export default function ProductFormPage() {
         {/* ── Section 3: Product Variants & Dimensions (Full Width) ── */}
         <CollapsibleCard
           title="Product Variants & Dimensions"
-            subtitle="Physical sizes, grades, and dimensional figures"
-            icon={<IconLayers size={18} />}
-            defaultOpen={true}
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-heading">
-                    Product Variants & Sizes
-                  </h4>
-                  <p className="text-2xs text-text-muted">
-                    {isEditMode
-                      ? 'Configure dimensions, grades, and active statuses. Changes are saved upon updating product.'
-                      : 'You can define product sizes now or add them later after registration.'}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleOpenAddVariant}
-                  className="flex items-center gap-1.5"
-                >
-                  <IconAdd size={14} />
-                  <span>Add Variant</span>
-                </Button>
+          subtitle="Physical sizes, grades, and dimensional figures"
+          icon={<IconLayers size={18} />}
+          defaultOpen={true}
+        >
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-semibold text-heading">
+                  Product Variants & Sizes
+                </h4>
+                <p className="text-2xs text-text-muted">
+                  {isEditMode
+                    ? 'Configure dimensions, grades, and active statuses. Changes are saved upon updating product.'
+                    : 'You can define product sizes now or add them later after registration.'}
+                </p>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleOpenAddVariant}
+                className="flex items-center gap-1.5"
+              >
+                <IconAdd size={14} />
+                <span>Add Variant</span>
+              </Button>
+            </div>
 
-              {variants.length === 0 ? (
-                <div className="p-4 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
-                  No variants added yet. Click &quot;Add Variant&quot; above to configure dimensions and grades.
-                </div>
-              ) : (
-                <TableContainer
-                  className="border border-border rounded-lg max-h-80 overflow-y-auto"
-                  tableClassName="w-full text-xs table-auto"
-                >
-                  <thead className="sticky top-0 bg-surface z-10">
-                    <tr className="bg-surface border-b border-border">
-                      <Th>Variant Code</Th>
-                      <Th>Grade</Th>
-                      <Th className="text-right">Length (mm)</Th>
-                      <Th className="text-right">Width (mm)</Th>
-                      <Th className="text-right">Height (mm)</Th>
-                      <Th className="text-right">Diameter (mm)</Th>
-                      <Th className="text-center">Status</Th>
-                      <Th className="w-32 text-center">Actions</Th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {variants.map((v, idx) => (
+            {variants.length === 0 ? (
+              <div className="p-4 text-center rounded-lg border border-dashed border-border bg-surface/30 text-text-muted text-xs">
+                No variants added yet. Click &quot;Add Variant&quot; above to configure dimensions and grades.
+              </div>
+            ) : (
+              <TableContainer
+                className="border border-border rounded-lg max-h-[580px] overflow-y-auto"
+                tableClassName="w-full text-xs table-auto"
+              >
+                <thead className="sticky top-0 bg-surface z-10">
+                  <tr className="bg-surface border-b border-border">
+                    <Th>Variant Code</Th>
+                    <Th>Grade</Th>
+                    <Th className="text-right">Length (mm)</Th>
+                    <Th className="text-right">Width (mm)</Th>
+                    <Th className="text-right">Height (mm)</Th>
+                    <Th className="text-right">Diameter (mm)</Th>
+                    <Th className="text-center">Accuracy Specs</Th>
+                    <Th className="w-24 text-center">Status</Th>
+                    <Th className="w-40 text-center">Actions</Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {variants.map((v, idx) => {
+                    const specCount = v.specs !== undefined ? v.specs.length : (v.specCount || 0);
+
+                    return (
                       <tr key={v.id || v._tempId || idx} className="hover:bg-surface/30">
                         <td className="p-2.5 font-mono font-medium text-heading">
                           <div className="flex items-center gap-1.5">
@@ -1340,26 +1344,40 @@ export default function ProductFormPage() {
                         <td className="p-2.5 text-right font-mono">{v.heightMm ?? '—'}</td>
                         <td className="p-2.5 text-right font-mono">{v.diameterMm ?? '—'}</td>
                         <td className="p-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSpecsModal(idx)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all shadow-xs border ${specCount > 0
+                              ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 hover:border-primary/50'
+                              : 'bg-muted/30 text-text-muted border-dashed border-border hover:bg-primary/5 hover:text-primary hover:border-primary/40'
+                              }`}
+                            title="Click to configure accuracy specifications"
+                          >
+                            <IconStandards size={13} className={specCount > 0 ? 'text-primary' : 'text-text-muted'} />
+                            <span>
+                              {specCount > 0
+                                ? `${specCount} ${specCount === 1 ? 'Spec' : 'Specs'}`
+                                : '+ Add Specs'}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="p-2.5 text-center">
                           <Badge variant={v.isActive ? 'success' : 'neutral'} size="xs">
                             {v.isActive ? 'Active' : 'Inactive'}
                           </Badge>
                         </td>
                         <td className="p-2.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex items-center justify-center gap-1.5">
                             <Button
                               type="button"
-                              variant="ghost"
+                              variant="outline"
                               size="xs"
                               onClick={() => handleOpenSpecsModal(idx)}
-                              className="text-text-muted hover:text-primary flex items-center gap-1 px-1.5 py-1 border border-border/70 rounded hover:bg-surface/70"
-                              title="Configure accuracy specifications"
+                              className="text-xs flex items-center gap-1 text-primary border-primary/30 hover:bg-primary/10 font-medium"
+                              title="Configure Accuracy Specifications"
                             >
-                              <IconSpecParameters size={13} className="text-primary shrink-0" />
-                              <span className="text-2xs font-mono">
-                                {(v.specs !== undefined ? v.specs.length : (v.specCount || 0)) > 0
-                                  ? `${v.specs !== undefined ? v.specs.length : v.specCount} Specs`
-                                  : 'Add Specs'}
-                              </span>
+                              <IconStandards size={12} className="text-primary" />
+                              <span>Specs</span>
                             </Button>
                             <Button
                               type="button"
@@ -1391,12 +1409,13 @@ export default function ProductFormPage() {
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </TableContainer>
-              )}
-            </div>
-          </CollapsibleCard>
+                    );
+                  })}
+                </tbody>
+              </TableContainer>
+            )}
+          </div>
+        </CollapsibleCard>
 
         {/* ── Sections 4 & 5: Options & Attachments (2-Column Desktop Grid) ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -1459,7 +1478,7 @@ export default function ProductFormPage() {
                 </div>
               ) : (
                 <TableContainer
-                  className="border border-border rounded-lg max-h-80 overflow-y-auto"
+                  className="border border-border rounded-lg max-h-[580px] overflow-y-auto"
                   tableClassName="w-full text-xs table-auto"
                 >
                   <thead className="sticky top-0 bg-surface z-10">
@@ -1843,22 +1862,20 @@ export default function ProductFormPage() {
                 <button
                   type="button"
                   onClick={() => handleScopeChange('STANDARD_GRADE')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                    specsScope === 'STANDARD_GRADE'
-                      ? 'bg-primary text-white shadow-xs'
-                      : 'text-text-muted hover:text-heading'
-                  }`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'STANDARD_GRADE'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-text-muted hover:text-heading'
+                    }`}
                 >
                   Standard + Grade
                 </button>
                 <button
                   type="button"
                   onClick={() => handleScopeChange('COMMON')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                    specsScope === 'COMMON'
-                      ? 'bg-primary text-white shadow-xs'
-                      : 'text-text-muted hover:text-heading'
-                  }`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'COMMON'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-text-muted hover:text-heading'
+                    }`}
                 >
                   Common Figures
                 </button>
@@ -2277,13 +2294,12 @@ export default function ProductFormPage() {
         isOpen={Boolean(itemToDelete)}
         onClose={() => setItemToDelete(null)}
         onConfirm={handleConfirmDelete}
-        title={`Remove ${
-          itemToDelete?.type === 'variant'
-            ? 'Variant'
-            : itemToDelete?.type === 'attachment'
+        title={`Remove ${itemToDelete?.type === 'variant'
+          ? 'Variant'
+          : itemToDelete?.type === 'attachment'
             ? 'Attachment'
             : 'Specification Parameter'
-        }`}
+          }`}
         message={`Are you sure you want to remove "${itemToDelete?.name}"? This action cannot be undone.`}
         confirmText="Remove"
         variant="danger"

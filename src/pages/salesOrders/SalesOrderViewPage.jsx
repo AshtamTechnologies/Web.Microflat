@@ -176,12 +176,18 @@ export default function SalesOrderViewPage() {
     ? order.nextStatuses.length > 0
     : Boolean(order.nextStatuses?.length);
 
+  const isDirect = Boolean(order.orderSource === true || order.isDirectOrder || !order.quotationId);
+  const sourceLabel = order.orderSourceName || (isDirect ? 'Direct' : 'Quotation');
+
   return (
     <div className="w-full space-y-6 pb-20">
       <PageHeader
         title={
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-mono text-heading">{order.orderConfirmationNo}</span>
+            <Badge variant={isDirect ? 'warning' : 'info'} size="md">
+              {sourceLabel}
+            </Badge>
             <Badge variant={getOrderStatusBadgeVariant(order.status)} size="md">
               {order.status}
             </Badge>
@@ -195,22 +201,24 @@ export default function SalesOrderViewPage() {
         subtitle={
           <div className="text-xs text-text-muted mt-0.5 flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-heading">{order.clientName}</span>
-            <span>·</span>
-            {order.quotationId ? (
-              <span>
-                Quotation:{' '}
-                <Link
-                  to={`/quotations/${order.quotationId}`}
-                  className="font-mono text-primary hover:underline"
-                >
-                  {order.quotationNo}
-                </Link>
-              </span>
-            ) : (
-              <Badge variant="neutral" size="xs">
-                Direct Order (Without Quotation)
-              </Badge>
-            )}
+            {order.quotationNo ? (
+              <>
+                <span>·</span>
+                <span>
+                  Quotation:{' '}
+                  {order.quotationId ? (
+                    <Link
+                      to={`/quotations/${order.quotationId}`}
+                      className="font-mono text-primary hover:underline"
+                    >
+                      {order.quotationNo}
+                    </Link>
+                  ) : (
+                    <span className="font-mono text-heading">{order.quotationNo}</span>
+                  )}
+                </span>
+              </>
+            ) : null}
             {order.inquiryNo && (
               <>
                 <span>·</span>
@@ -340,16 +348,22 @@ export default function SalesOrderViewPage() {
                   }
                 />
                 <DetailField label="Source Quotation">
-                  {order.quotationId ? (
-                    <Link
-                      to={`/quotations/${order.quotationId}`}
-                      className="view-field-value mf-detail-value font-mono text-primary hover:underline"
-                    >
-                      {order.quotationNo} (Rev {order.quotationRevisionNo ?? 0})
-                    </Link>
+                  {order.quotationNo ? (
+                    order.quotationId ? (
+                      <Link
+                        to={`/quotations/${order.quotationId}`}
+                        className="view-field-value mf-detail-value font-mono text-primary hover:underline"
+                      >
+                        {order.quotationNo} {order.quotationRevisionNo !== null && order.quotationRevisionNo !== undefined ? `(Rev ${order.quotationRevisionNo})` : ''}
+                      </Link>
+                    ) : (
+                      <span className="view-field-value mf-detail-value font-mono text-heading">
+                        {order.quotationNo}
+                      </span>
+                    )
                   ) : (
                     <span className="view-field-value mf-detail-value font-mono text-text-muted">
-                      Direct Order (None)
+                      — (Direct Order)
                     </span>
                   )}
                 </DetailField>
@@ -373,7 +387,12 @@ export default function SalesOrderViewPage() {
 
             <Card title="Client Details">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <DetailField label="Client Company" value={order.clientName} />
+                <DetailField label="Client Company" value={order.clientName || '—'} />
+                <DetailField
+                  label="Billing Currency"
+                  mono
+                  value={`${order.currency || 'INR'}${order.currencyCode && order.currencyCode !== order.currency ? ` (${order.currencyCode})` : ''}`}
+                />
                 <DetailField
                   label="Contact Person"
                   value={order.contactPerson || '—'}
@@ -389,6 +408,13 @@ export default function SalesOrderViewPage() {
                   isEmail={Boolean(order.contactEmail)}
                   value={order.contactEmail || '—'}
                 />
+                {order.gstNo && (
+                  <DetailField
+                    label="GST No"
+                    mono
+                    value={order.gstNo}
+                  />
+                )}
                 <DetailField
                   label="Billing / Shipping Address"
                   className="sm:col-span-2"
@@ -400,7 +426,11 @@ export default function SalesOrderViewPage() {
 
           <Card
             title="Ordered Line Items"
-            subtitle="Items linked to quotation revision lines with applied taxes"
+            subtitle={
+              isDirect
+                ? 'Product line items with quantities, rates, and applied taxes'
+                : 'Items linked to quotation revision lines with applied taxes'
+            }
             bodyClassName="p-0"
           >
             <div className="overflow-x-auto">

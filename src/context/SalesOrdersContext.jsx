@@ -22,20 +22,8 @@ import { triggerPdfDownload } from '../utils/fileHelpers';
 
 const SalesOrdersContext = createContext(null);
 const STORAGE_KEY = 'microflat_sales_orders_data';
-const DIRECT_ORDERS_KEY = 'microflat_sales_orders_direct_data';
 
 export function SalesOrdersProvider({ children }) {
-  // Local direct orders store (preserved across backend refreshes)
-  const [directOrders, setDirectOrders] = useState(() => {
-    try {
-      const saved = localStorage.getItem(DIRECT_ORDERS_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error('Failed to load direct sales orders from localStorage:', e);
-      return [];
-    }
-  });
-
   const [salesOrders, setSalesOrders] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -55,19 +43,12 @@ export function SalesOrdersProvider({ children }) {
     deliveryTerms: [],
     documentTypes: [],
     taxes: [],
+    currencies: [],
+    orderSources: [],
   });
   const [nextNumberPreview, setNextNumberPreview] = useState('');
 
-  // Keep direct orders saved in localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(DIRECT_ORDERS_KEY, JSON.stringify(directOrders));
-    } catch (e) {
-      console.error('Failed to save direct sales orders:', e);
-    }
-  }, [directOrders]);
-
-  // Keep all sales orders persisted in localStorage
+  // Keep all sales orders persisted in localStorage for offline/mock mode
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(salesOrders));
@@ -88,14 +69,7 @@ export function SalesOrdersProvider({ children }) {
       setIsLoading(true);
       const res = await orderConfirmationService.listOrderConfirmations(params);
       const apiItems = Array.isArray(res?.items) ? res.items : [];
-
-      // Merge backend items with local direct orders
-      setSalesOrders((prev) => {
-        const localDirect = directOrders.length > 0 ? directOrders : prev.filter((o) => o.isDirectOrder);
-        const apiIds = new Set(apiItems.map((i) => String(i.id)));
-        const nonDuplicateDirect = localDirect.filter((d) => !apiIds.has(String(d.id)));
-        return [...nonDuplicateDirect, ...apiItems];
-      });
+      setSalesOrders(apiItems);
       return apiItems;
     } catch (err) {
       console.warn('Could not refresh sales orders from API:', err?.message || err);
@@ -103,7 +77,7 @@ export function SalesOrdersProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  }, [directOrders, salesOrders]);
+  }, [salesOrders]);
 
   /**
    * Load lookups and initial order list on mount when connected to backend API
@@ -125,13 +99,7 @@ export function SalesOrdersProvider({ children }) {
         }
 
         if (listRes.status === 'fulfilled' && listRes.value?.items) {
-          const apiItems = listRes.value.items;
-          setSalesOrders((prev) => {
-            const localDirect = prev.filter((o) => o.isDirectOrder);
-            const apiIds = new Set(apiItems.map((i) => String(i.id)));
-            const nonDuplicateDirect = localDirect.filter((d) => !apiIds.has(String(d.id)));
-            return [...nonDuplicateDirect, ...apiItems];
-          });
+          setSalesOrders(listRes.value.items);
         }
       } catch (err) {
         console.warn('API initialization for sales orders encountered an error:', err);
@@ -165,9 +133,8 @@ export function SalesOrdersProvider({ children }) {
   const fetchSalesOrderById = useCallback(
     async (id) => {
       if (!id) return null;
-      // If mock or direct order, return local order
       const local = getSalesOrderById(id);
-      if (isMockApi || (local && local.isDirectOrder)) {
+      if (isMockApi) {
         return local;
       }
 
@@ -254,25 +221,27 @@ export function SalesOrdersProvider({ children }) {
 
   /**
    * Creates a new sales order.
-   * - If quotationId is present and not mock, calls backend POST /api/order-confirmations.
-   * - If direct order (Task 60) or mock, stores locally.
+   * - When connected to backend API (!isMockApi):
+   *     All orders (Quotation & Direct) call POST /api/order-confirmations.
+   * - In mock mode (isMockApi):
+   *     Stores locally in salesOrders state.
    */
   const createSalesOrder = useCallback(
     async (payload) => {
       const orderDate =
         payload.orderConfirmationDate || new Date().toISOString().split('T')[0];
       const status = payload.status === 'Confirmed' ? 'Confirmed' : 'Draft';
-      const isDirect = Boolean(payload.isDirectOrder || !payload.quotationId);
+      const isDirect = Boolean(payload.orderSource === true || payload.isDirectOrder || !payload.quotationId);
 
-      // ── Scenario A: Against Confirmed Quotation via Backend API ──
-      if (!isMockApi && !isDirect && payload.quotationId) {
+      // ── Scenario A: Call Backend API (Quotation or Direct) ──
+      if (!isMockApi) {
         try {
           setIsLoading(true);
           const createdApiOrder = await orderConfirmationService.createOrderConfirmation(payload);
 
           // If user requested initial status as 'Confirmed', move status
           let finalOrder = createdApiOrder;
-          if (status === 'Confirmed') {
+          if (status === 'Confirmed' && createdApiOrder?.id) {
             try {
               finalOrder = await orderConfirmationService.updateOrderConfirmationStatus(
                 createdApiOrder.id,
@@ -293,14 +262,15 @@ export function SalesOrdersProvider({ children }) {
           return finalOrder;
         } catch (apiErr) {
           console.error('Failed to create sales order via backend API:', apiErr);
-          toast.error(apiErr?.message || 'Failed to create sales order on backend. Falling back to local state.');
-          // Fall through to local fallback creation
+          const errMsg = apiErr?.detail || apiErr?.message || 'Failed to create sales order on backend.';
+          toast.error(errMsg);
+          throw apiErr;
         } finally {
           setIsLoading(false);
         }
       }
 
-      // ── Scenario B: Direct Order or Mock API ──
+      // ── Scenario B: Mock API Only ──
       const orderConfirmationNo =
         payload.orderConfirmationNo ||
         `OC-${new Date(orderDate).getFullYear() || new Date().getFullYear()}-${String(
@@ -317,12 +287,14 @@ export function SalesOrdersProvider({ children }) {
         id: orderConfirmationNo,
         orderConfirmationNo,
         orderConfirmationDate: orderDate,
+        orderSource: isDirect,
+        orderSourceName: isDirect ? 'Direct' : 'Quotation',
         isDirectOrder: isDirect,
-        quotationId: isDirect ? '' : payload.quotationId || '',
-        quotationNo: isDirect ? '' : payload.quotationNo || '',
-        quotationRevisionNo: isDirect ? 0 : payload.quotationRevisionNo ?? 0,
-        inquiryId: payload.inquiryId || '',
-        inquiryNo: payload.inquiryNo || '',
+        quotationId: isDirect ? null : payload.quotationId || null,
+        quotationNo: isDirect ? null : payload.quotationNo || null,
+        quotationRevisionNo: isDirect ? null : payload.quotationRevisionNo ?? 0,
+        inquiryId: payload.inquiryId || null,
+        inquiryNo: payload.inquiryNo || null,
         clientId: payload.clientId || '',
         clientName: payload.clientName || '',
         clientAddress: payload.clientAddress || '',
@@ -357,9 +329,6 @@ export function SalesOrdersProvider({ children }) {
         emailLogs: [],
       };
 
-      if (isDirect) {
-        setDirectOrders((prev) => [newOrder, ...prev]);
-      }
       setSalesOrders((prev) => [newOrder, ...prev]);
 
       toast.success(
@@ -408,7 +377,9 @@ export function SalesOrdersProvider({ children }) {
           return updatedApiOrder;
         } catch (apiErr) {
           console.error('Failed to update sales order via API:', apiErr);
-          toast.error(apiErr?.message || 'Failed to update sales order on backend.');
+          const errMsg = apiErr?.detail || apiErr?.message || 'Failed to update sales order on backend.';
+          toast.error(errMsg);
+          throw apiErr;
         } finally {
           setIsLoading(false);
         }
@@ -489,11 +460,6 @@ export function SalesOrdersProvider({ children }) {
       );
 
       if (updatedOrder) {
-        if (updatedOrder.isDirectOrder) {
-          setDirectOrders((prev) =>
-            prev.map((d) => (String(d.id) === String(updatedOrder.id) ? updatedOrder : d))
-          );
-        }
         toast.success(
           updatedOrder.status === 'Confirmed'
             ? `Sales Order ${updatedOrder.orderConfirmationNo} confirmed`

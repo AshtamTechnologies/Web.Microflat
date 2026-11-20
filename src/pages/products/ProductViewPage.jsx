@@ -4,7 +4,7 @@
  * Route: /products/:id
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -17,7 +17,7 @@ import {
   StatusBadge,
   StatusSwitch,
   PageHeader,
-  ScrollableTabs,
+  ScrollableTabs,  
   Modal,
   Textarea,
   ConfirmModal,

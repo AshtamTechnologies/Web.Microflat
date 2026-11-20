@@ -29,3 +29,5 @@ microflat-quotation-ui-reference.html
 *.md
 !MICROFLAT_PROJECT_RULES_AND_WORK_LOG.md
 !DOCUMENT_PREVIEW_ANALYSIS_AND_SOLUTIONS.md
+
+*test-screenshots
