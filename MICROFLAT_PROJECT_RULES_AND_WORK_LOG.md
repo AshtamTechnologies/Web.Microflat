@@ -366,6 +366,38 @@ Then:
 
 ---
 
+### Work Log Entry: WL-018
+- **Date**: 2026-11-20
+- **Module**: Products (`ProductFormPage.jsx`)
+- **Task**: Align Product Edit Specs Modal with Product View Specs Modal (Task 53 Alignment)
+- **Summary of Implemented Changes**:
+  1. **Modal Sizing & Layout (`ProductFormPage.jsx`)**:
+     - Upgraded the accuracy specifications modal size to `size="2xl"` (1024px) for full horizontal width with zero cramped horizontal scrolling.
+     - Widened the Parameter column (`w-64 min-w-56`), Decimal Value column (`w-56 min-w-48`), tolerances (`w-24`), and Text Value (`w-44`).
+  2. **Specification Scope Selector**:
+     - Implemented the pill selector toggle between **Standard + Grade** figures and **Common Figures**.
+     - In **Standard + Grade** mode, provided Manufacturing Standard and Allowed Precision Grade dropdowns.
+     - Wired `gradeMapping` from `useStandardsContext()` and linked product standards to dynamically filter grades based on standard selection and product-specific applicable grade scopes.
+  3. **Flatness Formula Auto-Calculation & Input Locking**:
+     - Integrated `calculateFlatnessTolerance` from `src/utils/flatnessFormula.js`.
+     - When `Flatness (µm)` is selected under Standard + Grade mode:
+       - Automatically computes the exact tolerance from the variant's dimensions ($L \times W$) and selected standard & grade.
+       - Locks the decimal value input (`disabled` and `readOnly`) with a `[Locked]` badge with `<IconLock />`.
+       - Dynamically recalculates the value if standard or grade selection changes.
+       - Renders a clean formula derivation breakdown banner below the table (e.g. `FORMULA IS 7327 Gr 0: 0.003 × 700 + 2.5 = 4.6 µm`).
+  4. **Single Total Allowable Limit for Flatness**:
+     - For `Flatness (µm)`, displays non-editable `—` dashes for `+ Tol`, `- Tol`, and `Or Text Value`, adhering to metrology principles that flatness is a single total allowable indicator limit.
+  5. **Parameter Uniqueness Enforcement**:
+     - Enforces backend rule: *"Each spec parameter can be listed only once"*.
+     - Filters out already-selected parameters from dropdown options for subsequent rows so users cannot select duplicates.
+     - Disables `+ Add Spec` button when all available parameters have been added.
+  6. **Persistence & Deferred Staging**:
+     - Directly saves via `productService.setVariantSpecs(v.id, variantSpecs, options)` for existing variants, refreshing detail cache and local variant state.
+     - Preserves `specsOptions` for draft variants created on the fly so query parameters (`StandardId`, `GradeId`) are properly dispatched upon form submission.
+- **Verification**: `npm run build` passed cleanly with **0 errors**.
+
+---
+
 ## 6. Important Reminder
 
 The work log is a continuity aid. Before relying on a historical entry, verify the current code and actual project state. **When in doubt, do not modify backend/database resources; stop, document the issue, and ask the user.**
