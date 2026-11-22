@@ -126,6 +126,12 @@ function buildPrefillFromQuotation(quotation) {
     deliveryTerms: toTermsArray(quotation.deliveryTerms, []),
     currency: latestRev?.currency || quotation.currency || 'INR',
     taxTreatment: latestRev?.taxTreatment || quotation.taxTreatment || 'INTRA_STATE',
+    selectedTaxIds: Array.isArray(latestRev?.taxes || quotation.taxes)
+      ? (latestRev?.taxes || quotation.taxes).map((t) => Number(t.taxConfigDetailId || t.id)).filter(Boolean)
+      : Array.isArray(quotation.selectedTaxIds)
+      ? quotation.selectedTaxIds
+      : [],
+    taxes: latestRev?.taxes || quotation.taxes || [],
     termsAndConditions: quotation.termsAndConditions || '',
     lineItems: (latestRev?.items || []).map((item, idx) => ({
       ...item,
@@ -239,7 +245,7 @@ export default function SalesOrderFormPage() {
         ? 'DIRECT'
         : 'QUOTATION';
     }
-    return initialQuotationId ? 'QUOTATION' : 'QUOTATION';
+    return initialQuotationId ? 'QUOTATION' : 'DIRECT';
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -269,6 +275,10 @@ export default function SalesOrderFormPage() {
         currencyId: existingOrder.currencyId || null,
         currency: existingOrder.currencyCode || existingOrder.currency || 'INR',
         taxTreatment: existingOrder.taxTreatment || 'INTRA_STATE',
+        selectedTaxIds: Array.isArray(existingOrder.taxes)
+          ? existingOrder.taxes.map((t) => Number(t.taxConfigDetailId || t.id)).filter(Boolean)
+          : [],
+        taxes: existingOrder.taxes || [],
         otherCharges: existingOrder.otherCharges || 0,
         otherChargesDescription: existingOrder.otherChargesDescription || '',
         termsAndConditions: existingOrder.termsAndConditions || '',
@@ -313,6 +323,8 @@ export default function SalesOrderFormPage() {
       currencyId: lookups?.defaultCurrencyId || 1,
       currency: prefill?.currency || 'INR',
       taxTreatment: prefill?.taxTreatment || 'INTRA_STATE',
+      selectedTaxIds: prefill?.selectedTaxIds || [38, 37],
+      taxes: prefill?.taxes || [{ taxConfigDetailId: 38 }, { taxConfigDetailId: 37 }],
       otherCharges: 0,
       otherChargesDescription: '',
       termsAndConditions: prefill?.termsAndConditions || '',
@@ -324,13 +336,20 @@ export default function SalesOrderFormPage() {
 
   // Preselect default currency from lookups if creating a direct order
   useEffect(() => {
-    if (orderMode === 'DIRECT' && !formData.currencyId && lookups?.defaultCurrencyId) {
-      const defaultCur = lookups.currencies?.find((c) => c.currencyId === lookups.defaultCurrencyId);
-      setFormData((prev) => ({
-        ...prev,
-        currencyId: lookups.defaultCurrencyId,
-        currency: defaultCur?.currencyCode || prev.currency,
-      }));
+    if (orderMode === 'DIRECT') {
+      const currenciesList = Array.isArray(lookups?.currencies) && lookups.currencies.length > 0 ? lookups.currencies : null;
+      const defId = lookups?.defaultCurrencyId || 1;
+      const found = currenciesList?.find((c) => (c.currencyId ?? c.id) === defId) || currenciesList?.[0];
+      const resolvedId = found ? (found.currencyId ?? found.id) : 1;
+      const resolvedCode = found ? (found.currencyCode ?? found.code) : 'INR';
+
+      if (!formData.currencyId) {
+        setFormData((prev) => ({
+          ...prev,
+          currencyId: resolvedId,
+          currency: resolvedCode,
+        }));
+      }
     }
   }, [orderMode, formData.currencyId, lookups]);
 
@@ -547,11 +566,19 @@ export default function SalesOrderFormPage() {
 
   const currencyOptions = useMemo(() => {
     if (Array.isArray(lookups?.currencies) && lookups.currencies.length > 0) {
-      return lookups.currencies.map((c) => ({
-        value: String(c.currencyId),
-        label: `${c.currencyCode || c.code}${c.currencyName ? ` — ${c.currencyName}` : ''}${c.symbol ? ` (${c.symbol})` : ''}`,
-        code: c.currencyCode || c.code,
-      }));
+      return lookups.currencies
+        .filter((c) => c.isActive !== false)
+        .map((c) => {
+          const val = c.id ?? c.currencyId ?? c.value;
+          const code = c.currencyCode || c.code || 'INR';
+          const name = c.currencyName ? ` — ${c.currencyName}` : '';
+          const sym = c.currencySymbol || c.symbol ? ` (${c.currencySymbol || c.symbol})` : '';
+          return {
+            value: String(val),
+            label: `${code}${name}${sym}`,
+            code,
+          };
+        });
     }
     return [
       { value: '1', label: 'INR (₹)', code: 'INR' },
@@ -560,12 +587,89 @@ export default function SalesOrderFormPage() {
     ];
   }, [lookups?.currencies]);
 
+  // Dynamic tax slabs from lookups.taxes (with fallback to TAX_SLABS)
+  const taxOptions = useMemo(() => {
+    if (Array.isArray(lookups?.taxes) && lookups.taxes.length > 0) {
+      return lookups.taxes.map((t) => {
+        const detailId = t.taxConfigDetailId ?? t.id;
+        const pct = Number(t.taxPercent ?? t.taxRate ?? t.percent ?? 0);
+        const name = t.taxName || '';
+        return {
+          value: String(detailId ?? pct),
+          detailId: detailId ? Number(detailId) : null,
+          percent: pct,
+          label: `${pct}%${name && !name.includes(`${pct}%`) ? ` — ${name}` : ''}`,
+        };
+      });
+    }
+    return TAX_SLABS.map((t) => ({
+      value: String(t.value),
+      detailId: null,
+      percent: t.value,
+      label: `${t.value}%`,
+    }));
+  }, [lookups?.taxes]);
+
+  // Multi-Select options for Taxes in Section 2 (Commercial Terms) matching Quotation
+  const applicableTaxSelectOptions = useMemo(() => {
+    if (Array.isArray(lookups?.taxes) && lookups.taxes.length > 0) {
+      return lookups.taxes.map((t) => {
+        const detailId = t.taxConfigDetailId ?? t.id;
+        const pct = Number(t.taxPercent ?? t.taxRate ?? t.percent ?? 0);
+        const name = t.taxName || 'GST';
+        return {
+          value: detailId,
+          label: `${name} (${pct}%)`,
+          chipLabel: `${name} ${pct}%`,
+          taxPercent: pct,
+          taxName: name,
+          taxConfigDetailId: detailId,
+        };
+      });
+    }
+    return [
+      { value: 38, label: 'CGST (9%)', chipLabel: 'CGST 9%', taxPercent: 9, taxName: 'CGST', taxConfigDetailId: 38 },
+      { value: 37, label: 'SGST (9%)', chipLabel: 'SGST 9%', taxPercent: 9, taxName: 'SGST', taxConfigDetailId: 37 },
+      { value: 39, label: 'IGST (18%)', chipLabel: 'IGST 18%', taxPercent: 18, taxName: 'IGST', taxConfigDetailId: 39 },
+    ];
+  }, [lookups?.taxes]);
+
+  const selectedTaxObjects = useMemo(() => {
+    const ids = new Set((formData.selectedTaxIds || []).map(Number));
+    return applicableTaxSelectOptions.filter((t) => ids.has(Number(t.taxConfigDetailId || t.value)));
+  }, [formData.selectedTaxIds, applicableTaxSelectOptions]);
+
   function handleCurrencyChange(currencyId) {
     const opt = currencyOptions.find((c) => String(c.value) === String(currencyId));
     setFormData((prev) => ({
       ...prev,
-      currencyId: Number(currencyId),
+      currencyId: Number(currencyId) || (currencyId ? String(currencyId) : null),
       currency: opt?.code || prev.currency,
+    }));
+  }
+
+  function handleLineItemTaxChange(idx, rawValue) {
+    const valStr = typeof rawValue === 'object' && rawValue !== null ? rawValue.target?.value : rawValue;
+    const found = taxOptions.find(
+      (o) =>
+        String(o.value) === String(valStr) ||
+        (o.detailId !== null && String(o.detailId) === String(valStr)) ||
+        String(o.percent) === String(valStr)
+    );
+    const percent = found ? found.percent : Number(valStr) || 18;
+    const detailId = found?.detailId || null;
+
+    setFormData((prev) => ({
+      ...prev,
+      lineItems: prev.lineItems.map((item, i) =>
+        i === idx
+          ? {
+              ...item,
+              taxPercent: percent,
+              taxConfigDetailId: detailId,
+            }
+          : item
+      ),
     }));
   }
 
@@ -582,9 +686,10 @@ export default function SalesOrderFormPage() {
       calculateSalesOrderTotals(
         formData.lineItems,
         formData.taxTreatment,
-        formData.otherCharges
+        formData.otherCharges,
+        selectedTaxObjects
       ),
-    [formData.lineItems, formData.taxTreatment, formData.otherCharges]
+    [formData.lineItems, formData.taxTreatment, formData.otherCharges, selectedTaxObjects]
   );
 
   const MIN_LINE_COL_WIDTHS = useMemo(
@@ -671,16 +776,19 @@ export default function SalesOrderFormPage() {
   }
 
   function handleAddLineItem() {
+    const defTax = taxOptions.find((t) => t.percent === 18) || taxOptions[0];
     const newItem = {
       id: `oc-it-${Date.now()}-${formData.lineItems.length}`,
-      productName: 'Granite Surface Plate',
-      itemCode: 'GSP-DIR',
-      variantName: 'Grade 0 · 630 x 400 x 100 mm',
-      technicalDetails: 'Standard precision metrology granite surface plate',
+      productId: null,
+      productName: '',
+      itemCode: '',
+      variantName: '',
+      technicalDetails: '',
       quantity: 1,
-      rate: 15000,
+      rate: 0,
       otherCharges: 0,
-      taxPercent: 18,
+      taxPercent: defTax ? defTax.percent : 18,
+      taxConfigDetailId: defTax?.detailId || null,
     };
     setFormData((prev) => ({
       ...prev,
@@ -691,10 +799,6 @@ export default function SalesOrderFormPage() {
   }
 
   function handleRemoveLineItem(idx) {
-    if (formData.lineItems.length <= 1) {
-      toast.error('Sales order must have at least one line item.');
-      return;
-    }
     setFormData((prev) => ({
       ...prev,
       lineItems: prev.lineItems.filter((_, i) => i !== idx),
@@ -709,6 +813,28 @@ export default function SalesOrderFormPage() {
         i === idx ? { ...item, [field]: value } : item
       ),
     }));
+  }
+
+  function handleProductPickerChange(idx, rawValue) {
+    const selectedProductId =
+      typeof rawValue === 'object' && rawValue !== null ? rawValue.target?.value : rawValue;
+    const matched = productsList.find((p) => String(p.id) === String(selectedProductId));
+    setFormData((prev) => ({
+      ...prev,
+      lineItems: prev.lineItems.map((item, i) => {
+        if (i !== idx) return item;
+        const baseRate =
+          Number(matched?.basePrice ?? matched?.rate ?? matched?.price ?? item.rate) || item.rate || 0;
+        return {
+          ...item,
+          productId: matched?.id ? Number(matched.id) : Number(selectedProductId) || selectedProductId,
+          productName: matched?.productName || item.productName,
+          itemCode: matched?.productCode || matched?.code || item.itemCode,
+          rate: baseRate > 0 ? baseRate : item.rate,
+        };
+      }),
+    }));
+    setErrors((prev) => ({ ...prev, lineItems: undefined }));
   }
 
   function handleDownloadDocument(doc) {
@@ -811,6 +937,9 @@ export default function SalesOrderFormPage() {
       clientAddressId: formData.clientAddressId ? Number(formData.clientAddressId) : null,
       clientContactId: formData.clientContactId ? Number(formData.clientContactId) : null,
       currencyId: formData.currencyId ? Number(formData.currencyId) : null,
+      taxes: Array.isArray(formData.selectedTaxIds) && formData.selectedTaxIds.length > 0
+        ? formData.selectedTaxIds.map((id) => ({ taxConfigDetailId: Number(id) }))
+        : (formData.taxes || []),
       paymentTerms: Array.isArray(formData.paymentTerms)
         ? formData.paymentTerms.join(', ')
         : (formData.paymentTerms || ''),
@@ -955,9 +1084,6 @@ export default function SalesOrderFormPage() {
                 onClick={() => {
                   setOrderMode('DIRECT');
                   setErrors({});
-                  if (formData.lineItems.length === 0) {
-                    handleAddLineItem();
-                  }
                 }}
                 className={`flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all ${
                   orderMode === 'DIRECT'
@@ -1146,13 +1272,25 @@ export default function SalesOrderFormPage() {
               }}
             />
 
-            <SearchableSelect
-              label="Tax Treatment"
-              options={TAX_TREATMENTS}
-              value={formData.taxTreatment}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, taxTreatment: e.target.value }))
-              }
+            <SearchableMultiSelect
+              label="Tax"
+              options={applicableTaxSelectOptions}
+              value={formData.selectedTaxIds || []}
+              placeholder="Select applicable taxes (e.g. CGST, SGST)..."
+              maxDisplayTags={2}
+              onChange={(e) => {
+                const val = Array.isArray(e) ? e : e?.target?.value || [];
+                const ids = val.map((v) => Number(v?.taxConfigDetailId ?? v?.value ?? v)).filter(Boolean);
+                const hasIgst = applicableTaxSelectOptions.some(
+                  (opt) => ids.includes(Number(opt.value)) && opt.taxName?.toUpperCase().includes('IGST')
+                );
+                setFormData((prev) => ({
+                  ...prev,
+                  selectedTaxIds: ids,
+                  taxes: ids.map((id) => ({ taxConfigDetailId: id })),
+                  taxTreatment: hasIgst ? 'INTER_STATE' : 'INTRA_STATE',
+                }));
+              }}
             />
           </FormGrid>
 
@@ -1284,7 +1422,7 @@ export default function SalesOrderFormPage() {
                         {idx + 1}
                       </Td>
                       <Td className="text-xs">
-                        {orderMode === 'DIRECT' ? (
+                        {orderMode === 'DIRECT' || !item.productName ? (
                           <div className="space-y-1.5 py-1">
                             {productOptions.length > 0 ? (
                               <SearchableSelect
@@ -1376,17 +1514,23 @@ export default function SalesOrderFormPage() {
                         />
                       </Td>
                       <Td>
-                        <SearchableSelect
-                          size="sm"
-                          options={TAX_SLABS.map((t) => ({
-                            value: String(t.value),
-                            label: `${t.value}%`,
-                          }))}
-                          value={String(item.taxPercent ?? 18)}
-                          onChange={(e) =>
-                            handleLineItemChange(idx, 'taxPercent', Number(e.target.value))
-                          }
-                        />
+                        {(() => {
+                          const matched = taxOptions.find(
+                            (o) =>
+                              (item.taxConfigDetailId && String(o.detailId) === String(item.taxConfigDetailId)) ||
+                              String(o.value) === String(item.taxConfigDetailId) ||
+                              String(o.percent) === String(item.taxPercent)
+                          );
+                          const taxVal = matched ? String(matched.value) : String(item.taxPercent ?? 18);
+                          return (
+                            <SearchableSelect
+                              size="sm"
+                              options={taxOptions}
+                              value={taxVal}
+                              onChange={(e) => handleLineItemTaxChange(idx, e.target.value)}
+                            />
+                          );
+                        })()}
                       </Td>
                       <Td className="text-right font-mono font-semibold text-xs text-heading">
                         {formatCurrency(lineAmount, formData.currency)}
@@ -1395,8 +1539,7 @@ export default function SalesOrderFormPage() {
                         <button
                           type="button"
                           onClick={() => handleRemoveLineItem(idx)}
-                          disabled={formData.lineItems.length <= 1}
-                          className="p-1.5 text-text-muted hover:text-red-500 disabled:opacity-30 disabled:hover:text-text-muted rounded hover:bg-surface transition-colors"
+                          className="p-1.5 text-text-muted hover:text-red-500 rounded hover:bg-surface transition-colors"
                           title="Remove line item"
                         >
                           <IconTrash size={14} />
@@ -1456,7 +1599,16 @@ export default function SalesOrderFormPage() {
                 </span>
               </div>
             )}
-            {formData.taxTreatment === 'INTRA_STATE' ? (
+            {totals.taxesBreakdown && totals.taxesBreakdown.length > 0 ? (
+              totals.taxesBreakdown.map((tx, idx) => (
+                <div key={tx.id || idx} className="flex justify-between text-text-muted">
+                  <span>{tx.name} ({tx.percent}%):</span>
+                  <span className="font-mono text-heading">
+                    {formatCurrency(tx.amount, formData.currency)}
+                  </span>
+                </div>
+              ))
+            ) : formData.taxTreatment === 'INTRA_STATE' ? (
               <>
                 <div className="flex justify-between text-text-muted">
                   <span>CGST</span>

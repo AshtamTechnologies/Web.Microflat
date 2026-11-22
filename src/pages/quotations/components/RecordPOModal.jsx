@@ -149,10 +149,15 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
             <div className="font-bold text-heading font-mono text-sm">{quotation?.quotationNo}</div>
             <div className="text-text-muted">{quotation?.clientName}</div>
           </div>
-          <div className="text-right">
-            <span className="text-2xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-              Rev {quotation?.currentRevision ?? 0}
+          <div className="text-right space-y-1">
+            <span className="text-2xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+              Rev {quotation?.currentRevision ?? (quotation?.revisions?.length ? quotation.revisions.length - 1 : 0)} (Latest Agreed)
             </span>
+            {Number(quotation?.grandTotal || quotation?.totalAmount || 0) > 0 && (
+              <div className="font-mono font-bold text-xs text-heading">
+                {quotation?.currency || 'INR'} {Number(quotation?.grandTotal || quotation?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -210,10 +215,10 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
           onChange={(e) => setRemarks(e.target.value)}
         />
 
-        <div className="p-2.5 bg-primary/5 rounded-lg border border-primary/20 flex items-start gap-2 text-2xs text-primary dark:text-primary-light">
-          <IconInfo size={14} className="shrink-0 mt-0.5" />
+        <div className="p-2.5 bg-emerald-500/5 rounded-lg border border-emerald-500/20 flex items-start gap-2 text-2xs text-emerald-800 dark:text-emerald-300">
+          <IconInfo size={14} className="shrink-0 mt-0.5 text-emerald-600" />
           <span>
-            Recording this PO confirms the quotation and links the PO details to the Sales Order creation workflow.
+            Recording this PO will confirm <strong>Revision {quotation?.currentRevision ?? 0}</strong> as the final contract version, lock the commercial negotiation timeline, and automatically link to the Sales Order workflow.
           </span>
         </div>
 

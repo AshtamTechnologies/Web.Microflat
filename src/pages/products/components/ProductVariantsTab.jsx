@@ -1364,19 +1364,25 @@ export default function ProductVariantsTab({
                             {paramName} {spec.unitSymbol ? `(${spec.unitSymbol})` : ''}
                           </span>
                         ) : (
-                          <SearchableSelect
-                            value={spec.specParameterId ? Number(spec.specParameterId) : ''}
-                            onChange={(val) => {
-                              const rawId =
-                                val && typeof val === 'object' && 'target' in val
-                                  ? val.target.value
-                                  : val;
-                              handleChangeSpecParam(sIdx, rawId);
-                            }}
-                            options={rowParamOptions}
-                            placeholder="Select Parameter"
-                            size="sm"
-                          />
+                          <div>
+                            <SearchableSelect
+                              value={spec.specParameterId ? Number(spec.specParameterId) : ''}
+                              onChange={(val) => {
+                                const rawId =
+                                  val && typeof val === 'object' && 'target' in val
+                                    ? val.target.value
+                                    : val;
+                                handleChangeSpecParam(sIdx, rawId);
+                              }}
+                              options={rowParamOptions}
+                              placeholder="Select Parameter"
+                              size="sm"
+                              disabled={isSavingSpecs}
+                            />
+                            <p className="text-[10px] text-muted-foreground mt-1 leading-tight">
+                              Each parameter can only be added once per {specsScope === 'STANDARD_GRADE' ? 'Standard + Grade set' : 'specification set'}.
+                            </p>
+                          </div>
                         )}
                       </td>
                       <td className="p-2">
