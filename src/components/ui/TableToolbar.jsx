@@ -19,6 +19,7 @@ import Button from './Button';
 export default function TableToolbar({
   searchValue,
   onSearchChange,
+  onSearchSubmit,
   searchPlaceholder = 'Search...',
   hasActiveFilters = false,
   onReset,
@@ -40,6 +41,12 @@ export default function TableToolbar({
               placeholder={searchPlaceholder}
               value={searchValue || ''}
               onChange={(e) => onSearchChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && onSearchSubmit) {
+                  e.preventDefault();
+                  onSearchSubmit(searchValue);
+                }
+              }}
               leftIcon={<IconSearch aria-hidden="true" />}
               className="w-full text-xs"
             />

@@ -42,6 +42,7 @@ export function useVendors() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [approvalFilter, setApprovalFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [groupFilter, setGroupFilter] = useState('ALL');
   const [hasPendingChangeFilter, setHasPendingChangeFilter] = useState('ALL');
   const [hasDefaultedFieldsFilter, setHasDefaultedFieldsFilter] = useState('ALL');
   const [pageNumber, setPageNumber] = useState(1);
@@ -49,13 +50,20 @@ export function useVendors() {
   const [totalCount, setTotalCount] = useState(isMockApi ? mockVendors.length : 0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(!isMockApi);
+  const abortControllerRef = useRef(null);
 
-  /* ── Debounce search input (300ms) ── */
+  /* ── Debounce search input (450ms for optimal database performance) ── */
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(search);
-    }, 300);
+    }, 450);
     return () => clearTimeout(handler);
+  }, [search]);
+
+  /* ── Trigger immediate search on Enter or form submit ── */
+  const triggerImmediateSearch = useCallback((val) => {
+    const query = val !== undefined ? val : search;
+    setDebouncedSearch(query);
   }, [search]);
 
   /* ── Reset page to 1 when filters or search change ── */
@@ -66,37 +74,56 @@ export function useVendors() {
       return;
     }
     setPageNumber(1);
-  }, [debouncedSearch, approvalFilter, statusFilter, categoryFilter, hasPendingChangeFilter, hasDefaultedFieldsFilter]);
+  }, [debouncedSearch, approvalFilter, statusFilter, categoryFilter, groupFilter, hasPendingChangeFilter, hasDefaultedFieldsFilter]);
 
-  /* ── Load Vendors from real API with fallback ── */
-  const loadVendors = useCallback(async () => {
+  /* ── Load Vendors from real API with request cancellation & fallback ── */
+  const loadVendors = useCallback(async (signal) => {
     setIsLoading(true);
     try {
-      const res = await vendorService.listVendors({
-        search: debouncedSearch,
-        approvalStatus: approvalFilter,
-        isActive: statusFilter,
-        vendorCategory: categoryFilter,
-        hasPendingChange: hasPendingChangeFilter !== 'ALL' ? hasPendingChangeFilter === 'TRUE' : undefined,
-        hasDefaultedFields: hasDefaultedFieldsFilter !== 'ALL' ? hasDefaultedFieldsFilter === 'TRUE' : undefined,
-        pageNumber,
-        pageSize,
-      });
+      const res = await vendorService.listVendors(
+        {
+          search: debouncedSearch,
+          approvalStatus: approvalFilter,
+          isActive: statusFilter,
+          vendorCategory: categoryFilter,
+          group: groupFilter !== 'ALL' ? groupFilter : undefined,
+          hasPendingChange: hasPendingChangeFilter !== 'ALL' ? hasPendingChangeFilter === 'TRUE' : undefined,
+          hasDefaultedFields: hasDefaultedFieldsFilter !== 'ALL' ? hasDefaultedFieldsFilter === 'TRUE' : undefined,
+          pageNumber,
+          pageSize,
+        },
+        { signal }
+      );
       if (res && Array.isArray(res.items)) {
         setVendors(res.items);
         setTotalCount(res.totalCount ?? res.items.length);
         setTotalPages(res.totalPages || (pageSize > 0 ? Math.ceil((res.totalCount ?? res.items.length) / pageSize) : 1));
       }
     } catch (err) {
+      if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+        return; // Silently ignore cancelled requests
+      }
       console.warn('Could not fetch vendors from API, keeping existing state:', err);
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
-  }, [debouncedSearch, approvalFilter, statusFilter, categoryFilter, hasPendingChangeFilter, hasDefaultedFieldsFilter, pageNumber, pageSize]);
+  }, [debouncedSearch, approvalFilter, statusFilter, categoryFilter, groupFilter, hasPendingChangeFilter, hasDefaultedFieldsFilter, pageNumber, pageSize]);
 
   useEffect(() => {
     if (!shouldFetch) return;
-    loadVendors();
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    loadVendors(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
   }, [shouldFetch, loadVendors]);
 
   /* ── Augmented vendors list with activeVersion spread ── */
@@ -106,9 +133,10 @@ export function useVendors() {
       return {
         ...v,
         vendorCategory: v.vendorCategory || activeVersion?.vendorCategory || '',
-        tallyGroup: v.tallyGroup || '',
-        tallyLedgerName: v.tallyLedgerName || '',
-        tallySubGroup: v.tallySubGroup || '',
+        group: v.group || v.tallyGroup || '',
+        tallyGroup: v.group || v.tallyGroup || '',
+        tallyLedgerName: v.ledgerName || v.tallyLedgerName || '',
+        tallySubGroup: v.subGroup || v.tallySubGroup || '',
         hasDefaultedFields: Boolean(v.hasDefaultedFields),
         ...(activeVersion
           ? {
@@ -192,6 +220,13 @@ export function useVendors() {
         }
       }
 
+      if (groupFilter !== 'ALL') {
+        const grp = v.group || v.tallyGroup || '';
+        if (grp.toLowerCase() !== groupFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
       if (hasPendingChangeFilter !== 'ALL') {
         const expected = hasPendingChangeFilter === 'TRUE';
         if (Boolean(v.hasPendingChange) !== expected) {
@@ -208,7 +243,7 @@ export function useVendors() {
 
       return true;
     });
-  }, [augmentedVendors, debouncedSearch, statusFilter, approvalFilter, categoryFilter, hasPendingChangeFilter, hasDefaultedFieldsFilter]);
+  }, [augmentedVendors, debouncedSearch, statusFilter, approvalFilter, categoryFilter, groupFilter, hasPendingChangeFilter, hasDefaultedFieldsFilter]);
 
   /* ── Reset all filters ── */
   const resetFilters = useCallback(() => {
@@ -217,6 +252,7 @@ export function useVendors() {
     setStatusFilter('ALL');
     setApprovalFilter('ALL');
     setCategoryFilter('ALL');
+    setGroupFilter('ALL');
     setHasPendingChangeFilter('ALL');
     setHasDefaultedFieldsFilter('ALL');
     setPageNumber(1);
@@ -338,11 +374,20 @@ export function useVendors() {
     const now = formatAuditTimestamp();
     const todayIso = new Date().toISOString().slice(0, 10);
     try {
-      // If vendor name or category was changed, call PUT /api/vendors/{id}
-      if (formData.vendorName || formData.vendorCategory) {
+      // If vendor header fields changed, call PUT /api/vendors/{id}
+      if (
+        formData.vendorName !== undefined ||
+        formData.vendorCategory !== undefined ||
+        formData.ledgerName !== undefined ||
+        formData.group !== undefined ||
+        formData.subGroup !== undefined
+      ) {
         await vendorService.updateVendorName(id, {
           vendorName: formData.vendorName,
           vendorCategory: formData.vendorCategory,
+          ledgerName: formData.ledgerName,
+          group: formData.group,
+          subGroup: formData.subGroup,
         });
       }
 
@@ -486,12 +531,16 @@ export function useVendors() {
     allVendors: augmentedVendors,
     search,
     setSearch,
+    debouncedSearch,
+    triggerImmediateSearch,
     statusFilter,
     setStatusFilter,
     approvalFilter,
     setApprovalFilter,
     categoryFilter,
     setCategoryFilter,
+    groupFilter,
+    setGroupFilter,
     hasPendingChangeFilter,
     setHasPendingChangeFilter,
     hasDefaultedFieldsFilter,

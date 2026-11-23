@@ -84,10 +84,10 @@ const PENDING_CHANGE_OPTIONS = [
   { value: 'FALSE', label: 'No Pending Revision' },
 ];
 
-const DEFAULTED_FIELDS_OPTIONS = [
-  { value: 'ALL', label: 'All Records' },
-  { value: 'TRUE', label: 'Needs Data Review' },
-  { value: 'FALSE', label: 'Complete Records' },
+export const GROUP_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Groups' },
+  { value: 'Sundry Creditors', label: 'Sundry Creditors' },
+  { value: 'Sundry Debtors', label: 'Sundry Debtors' },
 ];
 
 export default function VendorsPage() {
@@ -98,12 +98,16 @@ export default function VendorsPage() {
     allVendors,
     search,
     setSearch,
+    debouncedSearch,
+    triggerImmediateSearch,
     statusFilter,
     setStatusFilter,
     approvalFilter,
     setApprovalFilter,
     categoryFilter,
     setCategoryFilter,
+    groupFilter,
+    setGroupFilter,
     hasPendingChangeFilter,
     setHasPendingChangeFilter,
     hasDefaultedFieldsFilter,
@@ -125,6 +129,7 @@ export default function VendorsPage() {
     statusFilter !== 'ALL' ||
     approvalFilter !== 'ALL' ||
     categoryFilter !== 'ALL' ||
+    (groupFilter && groupFilter !== 'ALL') ||
     hasPendingChangeFilter !== 'ALL' ||
     hasDefaultedFieldsFilter !== 'ALL'
   );
@@ -147,6 +152,7 @@ export default function VendorsPage() {
     const hasStatus = searchParams.has('status');
     const hasApproval = searchParams.has('approval') || searchParams.has('approvalStatus');
     const hasCategory = searchParams.has('category') || searchParams.has('vendorCategory');
+    const hasGroup = searchParams.has('group') || searchParams.has('tallyGroup');
     const hasPending = searchParams.has('pendingChange') || searchParams.has('hasPendingChange');
     const hasDefaulted = searchParams.has('defaultedFields') || searchParams.has('hasDefaultedFields');
     const hasSearch = searchParams.has('search');
@@ -188,6 +194,15 @@ export default function VendorsPage() {
       }
     }
 
+    if (hasGroup) {
+      const rawG = searchParams.get('group') || searchParams.get('tallyGroup') || '';
+      if (rawG.toUpperCase() === 'ALL') {
+        setGroupFilter('ALL');
+      } else {
+        setGroupFilter(rawG);
+      }
+    }
+
     if (hasPending) {
       const rawP = (searchParams.get('pendingChange') || searchParams.get('hasPendingChange') || '').toUpperCase();
       setHasPendingChangeFilter(rawP === 'TRUE' ? 'TRUE' : rawP === 'FALSE' ? 'FALSE' : 'ALL');
@@ -206,6 +221,7 @@ export default function VendorsPage() {
     setStatusFilter,
     setApprovalFilter,
     setCategoryFilter,
+    setGroupFilter,
     setHasPendingChangeFilter,
     setHasDefaultedFieldsFilter,
     setSearch,
@@ -217,14 +233,15 @@ export default function VendorsPage() {
     refreshVendors?.();
   }, [refreshVendors]);
 
-  // Reset pagination to page 1 when search or filters change
+  // Reset pagination to page 1 only when debounced search or filters change (avoids re-renders during active typing)
   useEffect(() => {
     setPageNumber(1);
   }, [
-    search,
+    debouncedSearch,
     statusFilter,
     approvalFilter,
     categoryFilter,
+    groupFilter,
     hasPendingChangeFilter,
     hasDefaultedFieldsFilter,
     setPageNumber,
@@ -278,16 +295,11 @@ export default function VendorsPage() {
                     Revision Pending
                   </span>
                 )}
-                {row.hasDefaultedFields && (
-                  <span className="inline-flex items-center text-3xs font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                    Needs Data Review
-                  </span>
-                )}
               </div>
               <span className="text-text-muted text-xs leading-normal truncate">
                 {row.contactPersonName} {row.email ? `• ${row.email}` : ''}
                 {row.panNo ? ` • PAN: ${row.panNo}` : ''}
-                {row.tallyGroup ? ` • ${row.tallyGroup}` : ''}
+                {row.group || row.tallyGroup ? ` • ${row.group || row.tallyGroup}` : ''}
               </span>
             </div>
           );
@@ -425,7 +437,8 @@ export default function VendorsPage() {
       <TableToolbar
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name, code, contact, city..."
+        onSearchSubmit={triggerImmediateSearch}
+        searchPlaceholder="Search by name, code, contact, city... (press Enter to search)"
         hasActiveFilters={hasActiveFilters}
         onReset={resetFilters}
         resetLabel="Reset Filters"
@@ -438,6 +451,17 @@ export default function VendorsPage() {
             options={APPROVAL_FILTER_OPTIONS}
             value={approvalFilter}
             onChange={(e) => setApprovalFilter(e.target.value)}
+          />
+        </div>
+
+        <div className="w-full sm:w-44">
+          <SearchableSelect
+            id="filter-group"
+            placeholder="All Groups"
+            searchPlaceholder="Search groups..."
+            options={GROUP_FILTER_OPTIONS}
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
           />
         </div>
 
@@ -526,11 +550,6 @@ export default function VendorsPage() {
                     {vendor.hasPendingChange && (
                       <span className="inline-flex items-center text-3xs font-semibold px-1.5 py-0.5 rounded bg-warning/15 text-warning-heading border border-warning/30">
                         Revision Pending
-                      </span>
-                    )}
-                    {vendor.hasDefaultedFields && (
-                      <span className="inline-flex items-center text-3xs font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                        Needs Data Review
                       </span>
                     )}
                   </div>
