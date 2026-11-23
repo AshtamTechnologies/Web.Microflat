@@ -1,12 +1,18 @@
 /**
- * useInquiries.js — Core state management and CRUD operations for the Inquiry Module.
+ * useInquiries.js — Core state management and API operations for the Inquiry Module.
+ * Integrates with inquiryService (real REST API or mock service) with offline fallback.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { mockInquiries, STATUS_OPTIONS } from '../../mocks/inquiries';
+import { inquiryService, isMockApi } from '../../services';
+import { mockInquiries, STATUS_OPTIONS, PRIORITY_OPTIONS } from '../../mocks/inquiries';
 import { mockUsers } from '../../mocks/users';
 import { formatDateTime, getTodayISO } from '../../utils/dateUtils';
+import {
+  inquiryListItemFromApi,
+  inquiryDetailFromApi,
+} from '../../models/inquiries/inquiryModel';
 
 let nextSeqNumber = mockInquiries.length + 101 + 1;
 let nextIdNumber = mockInquiries.length + 1;
@@ -17,67 +23,211 @@ function formatAuditTimestamp(date = new Date()) {
 
 function resolveUserName(userId, usersList = mockUsers) {
   if (!userId) return 'Unassigned';
-  const found = usersList.find((u) => u.id === userId);
+  const found = usersList.find((u) => String(u.id) === String(userId));
   return found ? `${found.firstName} ${found.lastName}` : 'Unassigned';
 }
 
 export function useInquiries(usersList = mockUsers) {
-  const [inquiries, setInquiries] = useState(mockInquiries);
+  const [inquiries, setInquiries] = useState(() => mockInquiries.map(inquiryListItemFromApi));
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
+  const [regionFilter, setRegionFilter] = useState('ALL');
+  const [assignedToFilter, setAssignedToFilter] = useState('ALL');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
-  /* ── Filtered inquiries list ── */
-  const filteredInquiries = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(mockInquiries.length);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(!isMockApi);
+  const [error, setError] = useState(null);
 
-    return inquiries.filter((inq) => {
-      // 1. Text Search
-      if (q) {
-        const matchesQuery =
-          inq.InquiryNo?.toLowerCase().includes(q) ||
-          inq.CustomerName?.toLowerCase().includes(q) ||
-          inq.ContactPerson?.toLowerCase().includes(q) ||
-          inq.Subject?.toLowerCase().includes(q) ||
-          inq.Email?.toLowerCase().includes(q) ||
-          inq.Phone?.includes(q);
-        if (!matchesQuery) return false;
+  // Lookups: Sources and Priority Levels
+  const [sources, setSources] = useState([]);
+  const [priorityLevels, setPriorityLevels] = useState([]);
+
+  /* ── 300ms Search Debounce ── */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  /* ── Load Reference Lookups (Sources & Priority Levels) ── */
+  useEffect(() => {
+    let isMounted = true;
+    async function loadLookups() {
+      try {
+        const [sourcesRes, prioritiesRes] = await Promise.allSettled([
+          inquiryService.getSources(),
+          inquiryService.getPriorityLevels(),
+        ]);
+        if (isMounted) {
+          if (sourcesRes.status === 'fulfilled' && Array.isArray(sourcesRes.value)) {
+            setSources(sourcesRes.value);
+          }
+          if (prioritiesRes.status === 'fulfilled' && Array.isArray(prioritiesRes.value)) {
+            setPriorityLevels(prioritiesRes.value);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load inquiry lookups:', err);
       }
+    }
+    loadLookups();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-      // 2. Status Filter
-      if (statusFilter !== 'ALL') {
-        if (inq.StatusId !== statusFilter) {
-          return false;
+  /* ── Fetch Inquiries from Service ── */
+  const fetchInquiries = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const params = {
+        search: debouncedSearch.trim() || undefined,
+        status: statusFilter !== 'ALL' ? statusFilter : undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
+        pageNumber,
+        pageSize,
+      };
+
+      if (priorityFilter !== 'ALL') {
+        const pLevel = priorityLevels.find(
+          (p) => String(p.id) === String(priorityFilter) || p.priorityName?.toLowerCase() === priorityFilter.toLowerCase()
+        );
+        if (pLevel) {
+          params.priorityLevelId = pLevel.id;
         }
       }
 
-      // 3. Priority Filter
+      if (regionFilter !== 'ALL') {
+        params.regionId = regionFilter;
+      }
+
+      if (assignedToFilter !== 'ALL') {
+        params.assignedToUserId = assignedToFilter;
+      }
+
+      const res = await inquiryService.listInquiries(params);
+      if (res && Array.isArray(res.items)) {
+        setInquiries(res.items);
+        setTotalCount(res.totalCount ?? res.items.length);
+        setTotalPages(res.totalPages ?? Math.max(1, Math.ceil((res.totalCount ?? res.items.length) / pageSize)));
+      } else if (Array.isArray(res)) {
+        setInquiries(res);
+        setTotalCount(res.length);
+        setTotalPages(1);
+      }
+    } catch (err) {
+      console.warn('inquiryService.listInquiries failed, using local/mock state:', err);
+      setError(err?.message || 'Failed to fetch inquiries');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    debouncedSearch,
+    statusFilter,
+    priorityFilter,
+    regionFilter,
+    assignedToFilter,
+    fromDate,
+    toDate,
+    pageNumber,
+    pageSize,
+    priorityLevels,
+  ]);
+
+  /* Trigger fetch when query parameters change */
+  useEffect(() => {
+    fetchInquiries();
+  }, [fetchInquiries]);
+
+  /* ── Filtered inquiries list (client-side fallback / local filtering) ── */
+  const filteredInquiries = useMemo(() => {
+    // If backend already filtered, return inquiries directly; else apply client filter
+    const q = debouncedSearch.trim().toLowerCase();
+
+    return inquiries.filter((inq) => {
+      if (q) {
+        const matchesQuery =
+          inq.InquiryNo?.toLowerCase().includes(q) ||
+          inq.inquiryNo?.toLowerCase().includes(q) ||
+          inq.CustomerName?.toLowerCase().includes(q) ||
+          inq.companyName?.toLowerCase().includes(q) ||
+          inq.ContactPerson?.toLowerCase().includes(q) ||
+          inq.contactPersonName?.toLowerCase().includes(q) ||
+          inq.Subject?.toLowerCase().includes(q) ||
+          inq.Email?.toLowerCase().includes(q) ||
+          inq.email?.toLowerCase().includes(q) ||
+          inq.Phone?.includes(q) ||
+          inq.mobileNo?.includes(q);
+        if (!matchesQuery) return false;
+      }
+
+      if (statusFilter !== 'ALL') {
+        const inqStatus = inq.StatusId || inq.status;
+        if (inqStatus !== statusFilter) return false;
+      }
+
       if (priorityFilter !== 'ALL') {
-        if (inq.Priority !== priorityFilter) {
+        const inqPriority = inq.Priority || inq.priorityName;
+        if (inqPriority !== priorityFilter && String(inq.priorityLevelId) !== String(priorityFilter)) {
           return false;
         }
       }
 
       return true;
     });
-  }, [inquiries, search, statusFilter, priorityFilter]);
+  }, [inquiries, debouncedSearch, statusFilter, priorityFilter]);
 
   /* ── Reset Filters ── */
   const resetFilters = useCallback(() => {
     setSearch('');
+    setDebouncedSearch('');
     setStatusFilter('ALL');
     setPriorityFilter('ALL');
+    setRegionFilter('ALL');
+    setAssignedToFilter('ALL');
+    setFromDate('');
+    setToDate('');
+    setPageNumber(1);
   }, []);
 
-  /* ── Get single inquiry by ID ── */
-  const getInquiryById = useCallback((id) => {
-    if (!id) return null;
-    return inquiries.find(
-      (inq) => inq.id === id || inq.InquiryId === id || inq.InquiryNo === id
-    );
-  }, [inquiries]);
+  /* ── Get single inquiry by ID (from memory or cached) ── */
+  const getInquiryById = useCallback(
+    (id) => {
+      if (!id) return null;
+      return inquiries.find(
+        (inq) =>
+          String(inq.id) === String(id) ||
+          String(inq.InquiryId) === String(id) ||
+          inq.InquiryNo === id ||
+          inq.inquiryNo === id
+      );
+    },
+    [inquiries]
+  );
 
-  /* ── Get next auto-generated Inquiry No ── */
+  /* ── Fetch full detail of an inquiry by ID from API ── */
+  const fetchInquiryById = useCallback(async (id) => {
+    if (!id) return null;
+    try {
+      const data = await inquiryService.getInquiryById(id);
+      return data;
+    } catch (err) {
+      console.warn(`fetchInquiryById(${id}) failed:`, err);
+      return null;
+    }
+  }, []);
+
+  /* ── Get next auto-generated Inquiry No (helper) ── */
   const getNextInquiryNo = useCallback(() => {
     const padded = String(nextSeqNumber).padStart(6, '0');
     return `INQ-2026-${padded}`;
@@ -86,288 +236,200 @@ export function useInquiries(usersList = mockUsers) {
   /* ── Create Inquiry ── */
   const addInquiry = useCallback(
     async (formData) => {
-      await new Promise((r) => setTimeout(r, 700));
+      try {
+        const created = await inquiryService.createInquiry(formData);
+        toast.success(`Inquiry ${created.inquiryNo || created.InquiryNo || ''} created successfully.`);
+        // Refresh list
+        await fetchInquiries();
+        return { ok: true, inquiry: created };
+      } catch (err) {
+        console.error('Failed to create inquiry:', err);
+        const errMsg = err?.message || 'Failed to create inquiry.';
+        toast.error(errMsg);
 
-      const now = formatAuditTimestamp();
-      const generatedNo = formData.InquiryNo?.trim() || getNextInquiryNo();
-      nextSeqNumber += 1;
+        // Fallback to local creation for smooth dev/offline experience
+        const now = formatAuditTimestamp();
+        const generatedNo = formData.InquiryNo?.trim() || getNextInquiryNo();
+        nextSeqNumber += 1;
 
-      const assignedUserId = formData.AssignedTo || null;
-      const assignedUserName = resolveUserName(assignedUserId, usersList);
-      const defaultStatus = formData.StatusId || STATUS_OPTIONS[0].id;
+        const assignedUserId = formData.AssignedTo || formData.assignedToUserId || null;
+        const assignedUserName = resolveUserName(assignedUserId, usersList);
+        const defaultStatus = formData.StatusId || formData.status || STATUS_OPTIONS[0].id;
 
-      const initialActivity = [
-        {
-          id: `act_${Date.now()}_created`,
-          type: 'created',
-          timestamp: now,
-          changedBy: 'Ian Chesnut',
-          toValue: assignedUserId ? assignedUserName : 'Unassigned',
-          remarks: assignedUserId
-            ? `Inquiry logged and assigned to ${assignedUserName}.`
-            : 'Inquiry registered into ERP system.',
-        },
-      ];
+        const genId = `inq-${nextIdNumber++}`;
+        const newInquiry = {
+          id: genId,
+          InquiryId: genId,
+          InquiryNo: generatedNo,
+          inquiryNo: generatedNo,
+          InquiryDate: formData.InquiryDate || formData.inquiryDate || getTodayISO(),
+          CustomerName: formData.CustomerName?.trim() || formData.companyName?.trim() || '',
+          companyName: formData.CustomerName?.trim() || formData.companyName?.trim() || '',
+          ContactPerson: formData.ContactPerson?.trim() || formData.contactPersonName?.trim() || '',
+          Email: formData.Email?.trim() || formData.email?.trim() || '',
+          Phone: formData.Phone?.trim() || formData.mobileNo?.trim() || '',
+          Priority: formData.Priority || 'Medium',
+          StatusId: defaultStatus,
+          status: defaultStatus,
+          AssignedTo: assignedUserId,
+          assignedToName: assignedUserName,
+          items: Array.isArray(formData.items) ? formData.items : [],
+          CreatedOn: now,
+          activity: [],
+        };
 
-      if (formData.initialComment?.trim()) {
-        initialActivity.unshift({
-          id: `act_${Date.now()}_initial_comment`,
-          type: 'comment',
-          title: 'Initial Handover Note',
-          timestamp: now,
-          changedBy: 'Ian Chesnut',
-          remarks: formData.initialComment.trim(),
-        });
+        setInquiries((prev) => [newInquiry, ...prev]);
+        return { ok: true, inquiry: newInquiry };
       }
-
-      const genId = `inq-${nextIdNumber++}`;
-      const newInquiry = {
-        id: genId,
-        InquiryId: genId,
-        InquiryNo: generatedNo,
-        InquiryDate: formData.InquiryDate || getTodayISO(),
-        CustomerName: formData.CustomerName?.trim() || '',
-        ContactPerson: formData.ContactPerson?.trim() || '',
-        Email: formData.Email?.trim() || '',
-        Phone: formData.Phone?.trim() || '',
-        AlternativePhone: formData.AlternativePhone?.trim() || '',
-        AddressLine1: formData.AddressLine1?.trim() || '',
-        AddressLine2: formData.AddressLine2?.trim() || '',
-        City: formData.City?.trim() || '',
-        State: formData.State?.trim() || '',
-        Country: formData.Country?.trim() || '',
-        RegionId: formData.RegionId || '',
-        CategoryId: formData.CategoryId || (formData.items?.[0]?.categoryId || ''),
-        Subject: formData.Subject?.trim() || (formData.items?.[0]?.itemName || formData.items?.[0]?.itemCode || formData.CustomerName || 'Inquiry'),
-        Description: formData.Description?.trim() || '',
-        Source: formData.Source || 'Website',
-        DistributorName: formData.Source === 'Distributor' ? (formData.DistributorName?.trim() || '') : '',
-        Priority: formData.Priority || 'Medium',
-        Quantity: formData.Quantity ? Number(formData.Quantity) : (Array.isArray(formData.items) && formData.items.length > 0 ? formData.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0) : 0),
-        UOM: formData.UOM || 'PCS',
-        EstimatedValue: formData.EstimatedValue ? Number(formData.EstimatedValue) : 0,
-        RequiredByDate: formData.RequiredByDate || '',
-        items: Array.isArray(formData.items) ? formData.items : [],
-        StatusId: defaultStatus,
-        AssignedTo: assignedUserId,
-        CreatedBy: 'Ian Chesnut',
-        CreatedOn: now,
-        ModifiedBy: 'Ian Chesnut',
-        ModifiedOn: now,
-        activity: initialActivity,
-      };
-
-      setInquiries((prev) => [newInquiry, ...prev]);
-      toast.success('Inquiry created successfully.');
-      return { ok: true, inquiry: newInquiry };
     },
-    [getNextInquiryNo, usersList]
+    [fetchInquiries, getNextInquiryNo, usersList]
   );
 
   /* ── Update Inquiry ── */
   const updateInquiry = useCallback(
     async (id, formData) => {
-      await new Promise((r) => setTimeout(r, 700));
+      try {
+        const updated = await inquiryService.updateInquiry(id, formData);
+        toast.success('Inquiry updated successfully.');
+        await fetchInquiries();
+        return { ok: true, inquiry: updated };
+      } catch (err) {
+        console.error('Failed to update inquiry:', err);
+        const errMsg = err?.message || 'Failed to update inquiry.';
+        toast.error(errMsg);
 
-      const now = formatAuditTimestamp();
-      let updatedRecord = null;
-
-      setInquiries((prev) =>
-        prev.map((inq) => {
-          if (inq.id !== id && inq.InquiryId !== id) return inq;
-
-          updatedRecord = {
-            ...inq,
-            ...formData,
-            Quantity: formData.Quantity !== undefined ? Number(formData.Quantity) : inq.Quantity,
-            EstimatedValue: formData.EstimatedValue !== undefined ? Number(formData.EstimatedValue) : inq.EstimatedValue,
-            ModifiedBy: 'Ian Chesnut',
-            ModifiedOn: now,
-          };
-          return updatedRecord;
-        })
-      );
-
-      toast.success('Inquiry updated successfully.');
-      return { ok: true, inquiry: updatedRecord };
+        // Fallback local update
+        let updatedRecord = null;
+        setInquiries((prev) =>
+          prev.map((inq) => {
+            if (String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)) return inq;
+            updatedRecord = {
+              ...inq,
+              ...formData,
+              ModifiedOn: formatAuditTimestamp(),
+            };
+            return updatedRecord;
+          })
+        );
+        return { ok: true, inquiry: updatedRecord };
+      }
     },
-    []
+    [fetchInquiries]
   );
 
   /* ── Reassign Inquiry ── */
   const reassignInquiry = useCallback(
-    (id, newUserId, remarks = '') => {
-      const target = inquiries.find((inq) => inq.id === id || inq.InquiryId === id);
-      if (!target) return { ok: false };
-
-      const now = formatAuditTimestamp();
-      const prevUserId = target.AssignedTo;
-      const prevUserName = resolveUserName(prevUserId, usersList);
+    async (id, newUserId, remarks = '') => {
       const newUserName = resolveUserName(newUserId, usersList);
-      const isReassignment = Boolean(prevUserId && prevUserId !== newUserId);
-
-      const activityEntry = {
-        id: `act_${Date.now()}_assign`,
-        type: 'assignment',
-        timestamp: now,
-        changedBy: 'Ian Chesnut',
-        fromValue: prevUserName,
-        toValue: newUserName,
-        remarks: remarks?.trim() || (isReassignment ? `Reassigned from ${prevUserName} to ${newUserName}` : `Assigned to ${newUserName}`),
-      };
-
-      setInquiries((prev) =>
-        prev.map((inq) => {
-          if (inq.id !== id && inq.InquiryId !== id) return inq;
-          return {
-            ...inq,
-            AssignedTo: newUserId,
-            ModifiedBy: 'Ian Chesnut',
-            ModifiedOn: now,
-            activity: [activityEntry, ...(inq.activity || [])],
-          };
-        })
-      );
-
-      if (isReassignment) {
-        toast.success(`Inquiry reassigned to ${newUserName}`);
-      } else {
+      try {
+        await inquiryService.assignInquiry(id, {
+          assignedToUserId: newUserId,
+          remarks: remarks?.trim() || null,
+        });
         toast.success(`Inquiry assigned to ${newUserName}`);
+        await fetchInquiries();
+        return { ok: true };
+      } catch (err) {
+        console.error('Failed to assign inquiry:', err);
+        // Fallback local update
+        setInquiries((prev) =>
+          prev.map((inq) => {
+            if (String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)) return inq;
+            return {
+              ...inq,
+              AssignedTo: newUserId,
+              assignedToUserId: newUserId,
+              assignedToName: newUserName,
+            };
+          })
+        );
+        toast.success(`Inquiry assigned to ${newUserName} (local)`);
+        return { ok: true };
       }
-
-      return { ok: true };
     },
-    [inquiries, usersList]
+    [fetchInquiries, usersList]
   );
 
   /* ── Change Inquiry Status ── */
   const changeInquiryStatus = useCallback(
-    (id, newStatusId, remarks = '', targetItemId = null, position = 'top') => {
-      const target = inquiries.find((inq) => inq.id === id || inq.InquiryId === id);
-      if (!target) return { ok: false };
-
-      const now = formatAuditTimestamp();
-      const prevStatus = target.StatusId || 'New';
-      const statusChanged = prevStatus !== newStatusId;
-
-      // No-op if status didn't change and no card reordering was requested
-      if (!statusChanged && !targetItemId) return { ok: true };
-
-      const activityEntry = statusChanged
-        ? {
-            id: `act_${Date.now()}_status`,
-            type: 'status',
-            timestamp: now,
-            changedBy: 'Ian Chesnut',
-            fromValue: prevStatus,
-            toValue: newStatusId,
-            remarks: remarks?.trim() || `Status updated to ${newStatusId}`,
-          }
-        : null;
-
-      setInquiries((prev) => {
-        const remaining = prev.filter((inq) => inq.id !== id && inq.InquiryId !== id);
-        const updatedRecord = {
-          ...target,
-          StatusId: newStatusId,
-          ModifiedBy: 'Ian Chesnut',
-          ModifiedOn: now,
-          ...(activityEntry ? { activity: [activityEntry, ...(target.activity || [])] } : {}),
-        };
-
-        // If dropped before or after a specific card in that column
-        if (targetItemId && targetItemId !== id) {
-          const targetIdx = remaining.findIndex(
-            (inq) => inq.id === targetItemId || inq.InquiryId === targetItemId
-          );
-          if (targetIdx !== -1) {
-            const insertIdx = position === 'before' ? targetIdx : targetIdx + 1;
-            const next = [...remaining];
-            next.splice(insertIdx, 0, updatedRecord);
-            return next;
-          }
-        }
-
-        // If dropped anywhere in the stage column (defaults to top of stage)
-        if (position === 'top' || position === 'start') {
-          const firstIdxInStage = remaining.findIndex(
-            (inq) => inq.StatusId === newStatusId
-          );
-
-          if (firstIdxInStage !== -1) {
-            const next = [...remaining];
-            next.splice(firstIdxInStage, 0, updatedRecord);
-            return next;
-          }
-          return [updatedRecord, ...remaining];
-        }
-
-        // Otherwise (if dropped at bottom/end)
-        const lastIdxInStage = remaining
-          .map((inq) => inq.StatusId)
-          .lastIndexOf(newStatusId);
-
-        if (lastIdxInStage !== -1) {
-          const next = [...remaining];
-          next.splice(lastIdxInStage + 1, 0, updatedRecord);
-          return next;
-        }
-
-        return [updatedRecord, ...remaining];
-      });
-
-      if (statusChanged) {
+    async (id, newStatusId, remarks = '', targetItemId = null, position = 'top') => {
+      try {
+        await inquiryService.changeInquiryStatus(id, {
+          status: newStatusId,
+          comment: remarks?.trim() || null,
+        });
         toast.success(`Inquiry status updated to ${newStatusId}`);
+        await fetchInquiries();
+        return { ok: true };
+      } catch (err) {
+        console.error('Failed to change inquiry status:', err);
+        // Fallback local update
+        setInquiries((prev) =>
+          prev.map((inq) => {
+            if (String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)) return inq;
+            return {
+              ...inq,
+              StatusId: newStatusId,
+              status: newStatusId,
+            };
+          })
+        );
+        toast.success(`Inquiry status updated to ${newStatusId} (local)`);
+        return { ok: true };
       }
-      return { ok: true };
     },
-    [inquiries]
+    [fetchInquiries]
   );
 
   /* ── Add Comment / Note to Inquiry ── */
   const addInquiryComment = useCallback(
-    (id, commentText, author = 'Ian Chesnut') => {
-      const target = inquiries.find((inq) => inq.id === id || inq.InquiryId === id);
-      if (!target || !commentText?.trim()) return { ok: false };
-
-      const now = formatAuditTimestamp();
-      const activityEntry = {
-        id: `act_${Date.now()}_comment`,
-        type: 'comment',
-        title: 'Comment Added',
-        timestamp: now,
-        changedBy: author,
-        remarks: commentText.trim(),
-      };
-
-      setInquiries((prev) =>
-        prev.map((inq) => {
-          if (inq.id !== id && inq.InquiryId !== id) return inq;
-          return {
-            ...inq,
-            ModifiedBy: author,
-            ModifiedOn: now,
-            activity: [activityEntry, ...(inq.activity || [])],
-          };
-        })
-      );
-
-      toast.success('Comment added successfully.');
-      return { ok: true, activity: activityEntry };
-    },
-    [inquiries]
-  );
-
-  /* ── Delete Inquiry ── */
-  const deleteInquiry = useCallback(
-    (id) => {
-      const target = inquiries.find((inq) => inq.id === id || inq.InquiryId === id);
-      setInquiries((prev) => prev.filter((inq) => inq.id !== id && inq.InquiryId !== id));
-      if (target) {
-        toast.success(`Inquiry ${target.InquiryNo} deleted.`);
+    async (id, commentText, author = 'Ian Chesnut') => {
+      if (!commentText?.trim()) return { ok: false };
+      try {
+        const activities = await inquiryService.addInquiryComment(id, commentText);
+        toast.success('Comment added successfully.');
+        return { ok: true, activities };
+      } catch (err) {
+        console.error('Failed to add inquiry comment:', err);
+        const now = formatAuditTimestamp();
+        const fallbackEntry = {
+          id: `act_${Date.now()}_comment`,
+          type: 'comment',
+          title: 'Comment Added',
+          timestamp: now,
+          changedBy: author,
+          remarks: commentText.trim(),
+        };
+        setInquiries((prev) =>
+          prev.map((inq) => {
+            if (String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)) return inq;
+            return {
+              ...inq,
+              activity: [fallbackEntry, ...(inq.activity || [])],
+            };
+          })
+        );
+        toast.success('Comment added (local).');
+        return { ok: true, activity: fallbackEntry };
       }
     },
-    [inquiries]
+    []
+  );
+
+  /* ── Delete / Deactivate Inquiry ── */
+  const deleteInquiry = useCallback(
+    async (id) => {
+      try {
+        await inquiryService.toggleInquiryActive(id, false);
+        toast.success('Inquiry deactivated successfully.');
+        await fetchInquiries();
+      } catch (err) {
+        console.warn('Deactivate endpoint failed, removing from view:', err);
+        setInquiries((prev) => prev.filter((inq) => String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)));
+        toast.success('Inquiry removed from list.');
+      }
+    },
+    [fetchInquiries]
   );
 
   return {
@@ -379,8 +441,28 @@ export function useInquiries(usersList = mockUsers) {
     setStatusFilter,
     priorityFilter,
     setPriorityFilter,
+    regionFilter,
+    setRegionFilter,
+    assignedToFilter,
+    setAssignedToFilter,
+    fromDate,
+    setFromDate,
+    toDate,
+    setToDate,
+    pageNumber,
+    setPageNumber,
+    pageSize,
+    setPageSize,
+    totalCount,
+    totalPages,
+    isLoading,
+    error,
+    sources,
+    priorityLevels,
     resetFilters,
+    fetchInquiries,
     getInquiryById,
+    fetchInquiryById,
     getNextInquiryNo,
     addInquiry,
     updateInquiry,

@@ -172,7 +172,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `0.0015 × Ld + 1.25 µm`,
-          detailText: `IS 7327 Gr-00: 0.0015 × ${nominalDiagonal} + 1.25 = ${rounded} µm (Ld = ${nominalDiagonal} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (IS 7327, Grade Gr-00)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -185,7 +185,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `0.003 × Ld + 2.5 µm`,
-          detailText: `IS 7327 Gr-0: 0.003 × ${nominalDiagonal} + 2.5 = ${rounded} µm (Ld = ${nominalDiagonal} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (IS 7327, Grade Gr-0)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -198,7 +198,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `0.006 × Ld + 5.0 µm`,
-          detailText: `IS 7327 Gr-1: 0.006 × ${nominalDiagonal} + 5.0 = ${rounded} µm (Ld = ${nominalDiagonal} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (IS 7327, Grade Gr-1)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -211,7 +211,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `0.012 × Ld + 10.0 µm`,
-          detailText: `IS 7327 Gr-2: 0.012 × ${nominalDiagonal} + 10.0 = ${rounded} µm (Ld = ${nominalDiagonal} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (IS 7327, Grade Gr-2)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -224,7 +224,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `0.024 × Ld + 20.0 µm`,
-          detailText: `IS 7327 Gr-3: 0.024 × ${nominalDiagonal} + 20.0 = ${rounded} µm (Ld = ${nominalDiagonal} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (IS 7327, Grade Gr-3)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -248,7 +248,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `0.0025 × Ld + 2.5 µm`,
-          detailText: `BS 817 Gr-0: 0.0025 × ${nominalDiagonal} + 2.5 = ${rounded} µm (Ld = ${nominalDiagonal} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (BS 817, Grade Gr-0)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -262,7 +262,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `2 × (0.0025 × Ld + 2.5) µm`,
-          detailText: `BS 817 Gr-1: 2 × Gr-0 = ${rounded} µm (Ld = ${nominalDiagonal} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (BS 817, Grade Gr-1)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -276,7 +276,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `4 × (0.0025 × Ld + 2.5) µm`,
-          detailText: `BS 817 Gr-2: 2 × Gr-1 = ${rounded} µm (Ld = ${nominalDiagonal} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (BS 817, Grade Gr-2)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -300,7 +300,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `2 + L / 500 µm`,
-          detailText: `DIN 876 Gr-00: 2 + ${longerSide} / 500 = ${rounded} µm (L = ${longerSide} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (DIN 876, Grade Gr-00)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -313,7 +313,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `4 + L / 250 µm`,
-          detailText: `DIN 876 Gr-0: 4 + ${longerSide} / 250 = ${rounded} µm (L = ${longerSide} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (DIN 876, Grade Gr-0)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -326,7 +326,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `10 + L / 100 µm`,
-          detailText: `DIN 876 Gr-1: 10 + ${longerSide} / 100 = ${rounded} µm (L = ${longerSide} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (DIN 876, Grade Gr-1)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -339,7 +339,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `20 + L / 50 µm`,
-          detailText: `DIN 876 Gr-2: 20 + ${longerSide} / 50 = ${rounded} µm (L = ${longerSide} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (DIN 876, Grade Gr-2)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -352,7 +352,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: rounded,
           unit: 'µm',
           formulaText: `40 + L / 25 µm`,
-          detailText: `DIN 876 Gr-3: 40 + ${longerSide} / 25 = ${rounded} µm (L = ${longerSide} mm)`,
+          detailText: `Calculated Flatness: ${rounded} µm (DIN 876, Grade Gr-3)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -381,7 +381,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: um,
           unit: 'µm',
           formulaText: `40 + D² / 25 µin (converted to µm)`,
-          detailText: `GGG-P-463C Gr-AA: ${uin} µin ≈ ${um} µm (Diagonal = ${diagIn} in)`,
+          detailText: `Calculated Flatness: ${um} µm (GGG-P-463C, Grade Gr-AA)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -394,7 +394,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: um,
           unit: 'µm',
           formulaText: `2 × (40 + D² / 25) µin (converted to µm)`,
-          detailText: `GGG-P-463C Gr-A: ${uin} µin ≈ ${um} µm (Diagonal = ${diagIn} in)`,
+          detailText: `Calculated Flatness: ${um} µm (GGG-P-463C, Grade Gr-A)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };
@@ -407,7 +407,7 @@ export function calculateFlatnessTolerance({
           valueMicrons: um,
           unit: 'µm',
           formulaText: `4 × (40 + D² / 25) µin (converted to µm)`,
-          detailText: `GGG-P-463C Gr-B: ${uin} µin ≈ ${um} µm (Diagonal = ${diagIn} in)`,
+          detailText: `Calculated Flatness: ${um} µm (GGG-P-463C, Grade Gr-B)`,
           standardNormalized: standardKey,
           gradeNormalized: gradeKey,
         };

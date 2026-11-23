@@ -26,23 +26,24 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
     }
   }, [isOpen, inquiry]);
 
-  const statusOptions = STATUS_OPTIONS.map((s) => ({
-    value: s.id,
-    label: s.name,
-  }));
+  const statusOptions = (
+    Array.isArray(inquiry?.nextStatuses) && inquiry.nextStatuses.length > 0
+      ? inquiry.nextStatuses.map((s) => ({ value: s, label: s }))
+      : STATUS_OPTIONS.map((s) => ({ value: s.id, label: s.name }))
+  );
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     if (e) e.preventDefault();
     if (!selectedStatusId) return;
 
     setSubmitting(true);
     try {
-      const res = changeInquiryStatus(
+      const res = await changeInquiryStatus(
         inquiry.id || inquiry.InquiryId,
         selectedStatusId,
         remarks
       );
-      if (res.ok) {
+      if (res?.ok) {
         onClose();
       }
     } finally {

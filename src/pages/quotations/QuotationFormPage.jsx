@@ -44,7 +44,7 @@ import {
   Checkbox,
   Modal,
 } from '../../components/ui';
-import { productService } from '../../services';
+import { productService, clientService } from '../../services';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useClientsContext } from '../../context/ClientsContext';
@@ -127,7 +127,7 @@ export default function QuotationFormPage() {
     contactEmail: '',
     contactPhone: '',
     currency: 'INR',
-    currencyId: 1,
+    currencyId: 2,
     validUntil: '',
     paymentTerms: [],
     paymentTermId: null,
@@ -171,12 +171,17 @@ export default function QuotationFormPage() {
   const [drawerVariant, setDrawerVariant] = useState('');
   const [drawerQty, setDrawerQty] = useState('1');
   const [drawerRate, setDrawerRate] = useState('');
+  const [drawerRateSource, setDrawerRateSource] = useState('Manual');
   const [drawerTax, setDrawerTax] = useState(10);
   const [drawerTaxConfigDetailId, setDrawerTaxConfigDetailId] = useState('');
   const [drawerOtherCharges, setDrawerOtherCharges] = useState('0');
   const [drawerOptions, setDrawerOptions] = useState(['Rexine Cover (Standard)']);
   const [drawerDescription, setDrawerDescription] = useState('');
   const [isDescriptionEdited, setIsDescriptionEdited] = useState(false);
+
+  // Dynamic Client Addresses & Contacts State
+  const [dynamicClientAddresses, setDynamicClientAddresses] = useState([]);
+  const [dynamicClientContacts, setDynamicClientContacts] = useState([]);
 
   // Dynamic Product Master & Price Lookup State
   const [catalogCategories, setCatalogCategories] = useState([]);
@@ -257,45 +262,53 @@ export default function QuotationFormPage() {
         (c.clientId || c.id) === (prefill?.clientId || prefill?.client?.id || matchedInq?.clientId)
     );
 
-    // Prefer prefill active address, then inqClient active address, then matchedInq address
-    const activePrefillAddrs = (prefill?.client?.addresses || []).filter((a) => a.isActive !== false);
-    const activeClientAddrs = (inqClient?.addresses || []).filter((a) => a.isActive !== false);
+    const resolvedClientId = prefill?.clientId || prefill?.client?.id || inqClient?.clientId || inqClient?.id;
+
+    // Load full client details from GET /api/clients/{id} to get dynamic addresses and contacts
+    let clientDetailRes = null;
+    if (resolvedClientId) {
+      try {
+        clientDetailRes = await clientService.getClientById(resolvedClientId);
+      } catch (err) {
+        console.warn('Failed to load full client detail for inquiry client:', err);
+      }
+    }
+
+    const availableAddrs = clientDetailRes?.currentDetail?.addresses || prefill?.client?.addresses || inqClient?.addresses || [];
+    const availableContacts = clientDetailRes?.currentDetail?.contacts || prefill?.client?.contacts || inqClient?.contacts || [];
+
+    setDynamicClientAddresses(availableAddrs);
+    setDynamicClientContacts(availableContacts);
+
+    const activePrefillAddrs = availableAddrs.filter((a) => a.isActive !== false);
     const prefillAddrObj =
-      activePrefillAddrs.find((a) => a.id === prefill.clientAddressId) ||
-      prefill?.client?.addresses?.find((a) => a.id === prefill.clientAddressId) ||
+      activePrefillAddrs.find((a) => (a.clientAddressId || a.id) === prefill?.clientAddressId) ||
       activePrefillAddrs[0] ||
-      activeClientAddrs[0] ||
-      prefill?.client?.addresses?.[0] ||
-      inqClient?.addresses?.[0];
+      availableAddrs[0];
     const defaultAddrId =
-      prefill?.clientAddressId ||
+      prefillAddrObj?.clientAddressId ||
       prefillAddrObj?.id ||
-      inqClient?.addresses?.[0]?.id ||
-      inqClient?.addresses?.[0]?.addressId ||
+      prefill?.clientAddressId ||
       null;
     const defaultAddr = prefillAddrObj
-      ? `${prefillAddrObj.addressLine1 || prefillAddrObj.address || ''}${prefillAddrObj.city ? `, ${prefillAddrObj.city}` : ''}`
+      ? `${prefillAddrObj.addressType ? `${prefillAddrObj.addressType} – ` : ''}${prefillAddrObj.addressLine1 || prefillAddrObj.address || ''}${prefillAddrObj.city ? `, ${prefillAddrObj.city}` : ''}${prefillAddrObj.pincode ? ` ${prefillAddrObj.pincode}` : ''}`.trim()
       : inqClient?.addresses?.[0]?.addressLine1
       ? `${inqClient.addresses[0].addressLine1}, ${inqClient.addresses[0].city || ''}`
       : matchedInq?.AddressLine1
       ? `${matchedInq.AddressLine1}, ${matchedInq.City || ''}`
-      : 'Plot 12, GIDC, Ahmedabad';
+      : '';
 
     // Prefer prefill active contact, then inqClient active contact, then matchedInq contact
-    const activePrefillContacts = (prefill?.client?.contacts || []).filter((c) => c.isActive !== false);
-    const activeClientContacts = (inqClient?.contacts || []).filter((c) => c.isActive !== false);
+    const activePrefillContacts = availableContacts.filter((c) => c.isActive !== false);
     const prefillContactObj =
-      activePrefillContacts.find((c) => c.id === prefill.clientContactId) ||
-      prefill?.client?.contacts?.find((c) => c.id === prefill.clientContactId) ||
+      activePrefillContacts.find((c) => (c.clientContactId || c.id) === prefill?.clientContactId) ||
+      activePrefillContacts.find((c) => c.isPrimary) ||
       activePrefillContacts[0] ||
-      activeClientContacts[0] ||
-      prefill?.client?.contacts?.[0] ||
-      inqClient?.contacts?.[0];
+      availableContacts[0];
     const defaultContactId =
-      prefill?.clientContactId ||
+      prefillContactObj?.clientContactId ||
       prefillContactObj?.id ||
-      inqClient?.contacts?.[0]?.id ||
-      inqClient?.contacts?.[0]?.clientContactId ||
+      prefill?.clientContactId ||
       null;
     const defaultContact = prefillContactObj
       ? `${prefillContactObj.firstName || ''} ${prefillContactObj.lastName || ''}`.trim() || prefillContactObj.name || ''
@@ -304,10 +317,10 @@ export default function QuotationFormPage() {
       : matchedInq?.ContactPerson || '';
 
     const defaultContactEmail = prefillContactObj?.email || matchedInq?.Email || inqClient?.email || '';
-    const defaultContactPhone = prefillContactObj?.phone || matchedInq?.Phone || inqClient?.phone || '';
+    const defaultContactPhone = prefillContactObj?.mobile1 || prefillContactObj?.phoneNo || prefillContactObj?.phone || matchedInq?.Phone || inqClient?.phone || '';
 
     // Currency from prefill or lookups
-    const prefillCurrencyId = prefill?.currencyId || lookups?.defaultCurrencyId || 1;
+    const prefillCurrencyId = prefill?.currencyId || lookups?.defaultCurrencyId || (lookups?.currencies?.find((c) => (c.code || c.currencyCode) === 'INR')?.id || 2);
     const matchedCurrency = lookups?.currencies?.find((c) => c.id === prefillCurrencyId);
     const resolvedCurrency = matchedCurrency?.code || matchedCurrency?.currencyCode || 'INR';
 
@@ -458,6 +471,7 @@ export default function QuotationFormPage() {
         contactEmail: targetQuotation.contactEmail,
         contactPhone: targetQuotation.contactPhone,
         currency: targetQuotation.currency || 'INR',
+        currencyId: targetQuotation.currencyId || 2,
         validUntil: targetQuotation.validUntil || '',
         paymentTerms: (Array.isArray(targetQuotation.paymentTerms)
           ? targetQuotation.paymentTerms
@@ -673,8 +687,8 @@ export default function QuotationFormPage() {
       });
     }
     return [
-      { value: 'INR', label: 'INR (₹ - Indian Rupee)', id: 1 },
-      { value: 'USD', label: 'USD ($ - US Dollar)', id: 2 },
+      { value: 'INR', label: 'INR (₹ - Indian Rupee)', id: 2 },
+      { value: 'USD', label: 'USD ($ - US Dollar)', id: 1 },
       { value: 'EUR', label: 'EUR (€ - Euro)', id: 3 },
       { value: 'GBP', label: 'GBP (£ - British Pound)', id: 4 },
     ];
@@ -761,7 +775,7 @@ export default function QuotationFormPage() {
     ];
   }, [clients, formData.clientId]);
 
-  const handleSelectClient = (selectedClientId) => {
+  const handleSelectClient = async (selectedClientId) => {
     if (!selectedClientId) {
       setFormData((prev) => ({
         ...prev,
@@ -774,6 +788,8 @@ export default function QuotationFormPage() {
         contactEmail: '',
         contactPhone: '',
       }));
+      setDynamicClientAddresses([]);
+      setDynamicClientContacts([]);
       return;
     }
 
@@ -784,38 +800,72 @@ export default function QuotationFormPage() {
         c.companyName === selectedClientId
     );
 
-    if (!client) return;
+    const clientIdNum = client?.clientId || client?.id || selectedClientId;
 
-    // Filter active addresses and contacts
-    const activeAddresses = (client.addresses || []).filter((a) => a.isActive !== false);
-    const activeContacts = (client.contacts || []).filter((c) => c.isActive !== false);
+    // Fetch full client details from GET /api/clients/{id} to get dynamic addresses and contacts
+    let detail = null;
+    try {
+      detail = await clientService.getClientById(clientIdNum);
+    } catch (err) {
+      console.warn('Failed to fetch client detail:', err);
+    }
 
-    const firstAddr = activeAddresses[0] || client.addresses?.[0];
-    const defaultAddr = firstAddr?.addressLine1
-      ? `${firstAddr.addressLine1}, ${firstAddr.city || ''} ${firstAddr.pincode || ''}`.trim()
-      : client.address || 'Plot 12, GIDC, Ahmedabad';
+    const rawAddresses = detail?.currentDetail?.addresses || client?.addresses || [];
+    const rawContacts = detail?.currentDetail?.contacts || client?.contacts || [];
 
-    const firstContact = activeContacts[0] || client.contacts?.[0];
-    const defaultContact = firstContact?.firstName
-      ? `${firstContact.firstName} ${firstContact.lastName || ''}`.trim()
-      : client.contactPerson || '';
+    setDynamicClientAddresses(rawAddresses);
+    setDynamicClientContacts(rawContacts);
+
+    const activeAddresses = rawAddresses.filter((a) => a.isActive !== false);
+    const activeContacts = rawContacts.filter((c) => c.isActive !== false);
+
+    const firstAddr = activeAddresses[0] || rawAddresses[0];
+    const defaultAddr = firstAddr
+      ? `${firstAddr.addressType ? `${firstAddr.addressType} – ` : ''}${firstAddr.addressLine1 || firstAddr.address || ''}${firstAddr.city ? `, ${firstAddr.city}` : ''}${firstAddr.pincode ? ` ${firstAddr.pincode}` : ''}`.trim()
+      : client?.address || '';
+
+    const firstContact = activeContacts.find((c) => c.isPrimary) || activeContacts[0] || rawContacts[0];
+    const defaultContact = firstContact
+      ? `${firstContact.firstName || ''} ${firstContact.lastName || ''}`.trim()
+      : client?.primaryContactName || client?.contactPerson || '';
 
     setFormData((prev) => ({
       ...prev,
-      clientId: client.clientId || client.id,
-      clientName: client.companyName || '',
-      clientAddressId: firstAddr?.id || firstAddr?.addressId || null,
+      clientId: clientIdNum,
+      clientName: client?.companyName || client?.clientName || detail?.companyName || '',
+      clientAddressId: firstAddr?.clientAddressId || firstAddr?.id || firstAddr?.addressId || null,
       clientAddress: defaultAddr,
-      clientContactId: firstContact?.id || firstContact?.clientContactId || null,
+      clientContactId: firstContact?.clientContactId || firstContact?.id || null,
       contactPerson: defaultContact,
-      contactEmail: firstContact?.email || client.email || '',
-      contactPhone: firstContact?.mobile1 || firstContact?.phoneNo || client.phone || '',
+      contactEmail: firstContact?.email || client?.email || '',
+      contactPhone: firstContact?.mobile1 || firstContact?.phoneNo || client?.phone || '',
     }));
 
-    toast.success(`Client ${client.companyName} selected`);
+    toast.success(`Client ${client?.companyName || client?.clientName || 'selected'} selected`);
   };
 
-  // Client Address & Contact Dropdown Options (filtered for active records)
+  // Load dynamic client addresses and contacts whenever clientId is present
+  useEffect(() => {
+    if (!formData.clientId) return;
+    let isMounted = true;
+    async function loadClientData() {
+      try {
+        const detail = await clientService.getClientById(formData.clientId);
+        if (isMounted && detail?.currentDetail) {
+          const addrs = detail.currentDetail.addresses || [];
+          const cnts = detail.currentDetail.contacts || [];
+          if (addrs.length > 0) setDynamicClientAddresses(addrs);
+          if (cnts.length > 0) setDynamicClientContacts(cnts);
+        }
+      } catch (err) {
+        console.warn('Failed to load client details for quotation form:', err);
+      }
+    }
+    loadClientData();
+    return () => { isMounted = false; };
+  }, [formData.clientId]);
+
+  // Client Address & Contact Dropdown Options (dynamic from client details API)
   const matchedClient = useMemo(() => {
     return clients.find(
       (c) =>
@@ -825,50 +875,97 @@ export default function QuotationFormPage() {
   }, [clients, formData.clientId, formData.clientName]);
 
   const clientAddressOptions = useMemo(() => {
-    const addresses = (matchedClient?.addresses || []).filter(
+    const rawAddrs = dynamicClientAddresses.length > 0
+      ? dynamicClientAddresses
+      : (matchedClient?.addresses || []);
+
+    const addresses = rawAddrs.filter(
       (addr) =>
         addr.isActive !== false ||
-        (formData.clientAddressId && (addr.id === formData.clientAddressId || addr.addressId === formData.clientAddressId))
+        (formData.clientAddressId && (addr.id === formData.clientAddressId || addr.clientAddressId === formData.clientAddressId || addr.addressId === formData.clientAddressId))
     );
 
     if (addresses.length === 0) {
+      if (!formData.clientAddress) return [];
       return [{
-        value: formData.clientAddress || 'Head Office',
-        label: formData.clientAddress || 'Head Office',
+        value: formData.clientAddress,
+        label: formData.clientAddress,
         id: formData.clientAddressId || null,
       }];
     }
-    return addresses.map((addr) => ({
-      value: `${addr.addressType || 'Office'} – ${addr.addressLine1}, ${addr.city} ${addr.pincode || ''}`,
-      label: `${addr.addressType || 'Office'} – ${addr.addressLine1}, ${addr.city}`,
-      id: addr.id || addr.addressId || null,
-    }));
-  }, [matchedClient, formData.clientAddress, formData.clientAddressId]);
+    return addresses.map((addr) => {
+      const typeLabel = addr.addressType || addr.addressLabel || 'Address';
+      const parts = [
+        addr.addressLine1 || addr.address1 || addr.address,
+        addr.addressLine2 || addr.address2,
+        addr.city,
+        addr.pincode || addr.zipCode,
+      ].filter(Boolean);
+      const text = `${typeLabel} – ${parts.join(', ')}`;
+      return {
+        value: text,
+        label: text,
+        id: addr.clientAddressId || addr.id || addr.addressId || null,
+        addressObj: addr,
+      };
+    });
+  }, [dynamicClientAddresses, matchedClient, formData.clientAddress, formData.clientAddressId]);
 
   const clientContactOptions = useMemo(() => {
-    const contacts = (matchedClient?.contacts || []).filter(
+    const rawContacts = dynamicClientContacts.length > 0
+      ? dynamicClientContacts
+      : (matchedClient?.contacts || []);
+
+    const contacts = rawContacts.filter(
       (c) =>
         c.isActive !== false ||
         (formData.clientContactId && (c.id === formData.clientContactId || c.clientContactId === formData.clientContactId))
     );
 
     if (contacts.length === 0) {
+      if (!formData.contactPerson) return [];
       return [{
-        value: formData.contactPerson || 'Contact Person',
-        label: formData.contactPerson || 'Contact Person',
+        value: formData.contactPerson,
+        label: formData.contactPerson,
         id: formData.clientContactId || null,
         email: formData.contactEmail || '',
         phone: formData.contactPhone || '',
       }];
     }
-    return contacts.map((c) => ({
-      value: `${c.firstName || ''} ${c.lastName || ''}`.trim(),
-      label: `${c.firstName || ''} ${c.lastName || ''} · ${c.email || c.mobile1 || c.phoneNo || ''}`.trim(),
-      id: c.id || c.clientContactId || null,
-      email: c.email || '',
-      phone: c.mobile1 || c.phoneNo || c.phone || '',
-    }));
-  }, [matchedClient, formData.contactPerson, formData.clientContactId, formData.contactEmail, formData.contactPhone]);
+    return contacts.map((c) => {
+      const nameParts = [c.firstName, c.lastName].filter(Boolean).join(' ');
+      const fullName = (c.salutation ? `${c.salutation} ` : '') + (nameParts || c.name || 'Contact');
+      const desig = c.designation || c.department ? ` (${[c.designation, c.department].filter(Boolean).join(' - ')})` : '';
+      return {
+        value: fullName,
+        label: `${fullName}${desig}${c.isPrimary ? ' (Primary)' : ''}`,
+        id: c.clientContactId || c.id || null,
+        email: c.email || '',
+        phone: c.mobile1 || c.phoneNo || c.phone || '',
+        contactObj: c,
+      };
+    });
+  }, [dynamicClientContacts, matchedClient, formData.contactPerson, formData.clientContactId, formData.contactEmail, formData.contactPhone]);
+
+  const selectedAddrValue = useMemo(() => {
+    if (clientAddressOptions.some((opt) => opt.value === formData.clientAddress)) {
+      return formData.clientAddress;
+    }
+    const matchedById = clientAddressOptions.find(
+      (opt) => opt.id && formData.clientAddressId && String(opt.id) === String(formData.clientAddressId)
+    );
+    return matchedById ? matchedById.value : (formData.clientAddress || '');
+  }, [clientAddressOptions, formData.clientAddress, formData.clientAddressId]);
+
+  const selectedContactValue = useMemo(() => {
+    if (clientContactOptions.some((opt) => opt.value === formData.contactPerson)) {
+      return formData.contactPerson;
+    }
+    const matchedById = clientContactOptions.find(
+      (opt) => opt.id && formData.clientContactId && String(opt.id) === String(formData.clientContactId)
+    );
+    return matchedById ? matchedById.value : (formData.contactPerson || '');
+  }, [clientContactOptions, formData.contactPerson, formData.clientContactId]);
 
   // Real-time Totals Calculation with dynamic multiple taxes & header otherCharges
   const totals = useMemo(() => {
@@ -924,6 +1021,7 @@ export default function QuotationFormPage() {
     setDrawerVariant('');
     setDrawerQty('1');
     setDrawerRate('');
+    setDrawerRateSource('Manual');
     const defaultTax = singleProductTaxOptions[1] || singleProductTaxOptions[0];
     setDrawerTax(defaultTax?.taxPercent ?? 10);
     setDrawerTaxConfigDetailId(defaultTax?.taxConfigDetailId ? String(defaultTax.taxConfigDetailId) : (defaultTax?.value || ''));
@@ -942,6 +1040,7 @@ export default function QuotationFormPage() {
     setDrawerVariant(item.variantId || '');
     setDrawerQty(String(item.quantity || 1));
     setDrawerRate(String(item.rate || 0));
+    setDrawerRateSource(item.rateSource || 'Manual');
     setDrawerTax(item.taxPercent !== undefined ? Number(item.taxPercent) : 10);
     setDrawerTaxConfigDetailId(item.taxConfigDetailId ? String(item.taxConfigDetailId) : (item.taxPercent === 0 ? '0' : ''));
     setDrawerOtherCharges(String(item.otherCharges || 0));
@@ -1010,7 +1109,9 @@ export default function QuotationFormPage() {
 
     setIsLoadingPriceLookup(true);
     try {
-      const resolvedCurrencyId = formData.currencyId || currencyOptions.find((c) => c.value === formData.currency)?.id || 1;
+      const resolvedCurrencyId = formData.currencyId 
+        || currencyOptions.find((c) => c.value === formData.currency)?.id 
+        || 2;
       const selectedOptIds = availableDrawerOptions
         .filter((opt) => drawerOptions.includes(opt.name))
         .map((opt) => opt.id)
@@ -1019,12 +1120,15 @@ export default function QuotationFormPage() {
       const res = await productService.lookupProductPrice({
         productId: activeProductObj?.productId || drawerProduct,
         productVariantId: activeVariantObj?.productVariantId || activeVariantObj?.id || drawerVariant || undefined,
+        standardId: activeVariantObj?.standardId || activeProductObj?.primaryStandardId || undefined,
+        gradeId: activeVariantObj?.gradeId || undefined,
         currencyId: resolvedCurrencyId,
         productOptionIds: selectedOptIds.length > 0 ? selectedOptIds : undefined,
       });
 
       if (res?.suggestedRate !== undefined && res.suggestedRate !== null) {
         setDrawerRate(String(res.suggestedRate));
+        setDrawerRateSource('ListPrice');
         const extraNote = res.optionExtras ? ` (Includes ${formatCurrency(res.optionExtras, formData.currency)} option extras)` : '';
         toast.success(`List price applied: ${formatCurrency(res.suggestedRate, formData.currency)}${extraNote}`);
       } else if (Array.isArray(res?.candidates) && res.candidates.length > 0) {
@@ -1046,18 +1150,43 @@ export default function QuotationFormPage() {
 
   const handleSelectCandidatePrice = (cand, optionExtras = 0, targetIndex = null) => {
     const finalRate = (Number(cand.unitPrice) || 0) + (Number(optionExtras) || 0);
+    const configTag = [
+      cand.standardCode ? `Standard: ${cand.standardCode}` : null,
+      cand.gradeCode ? `Grade: ${cand.gradeCode}` : null,
+    ].filter(Boolean).join(' · ');
+
     if (targetIndex === null) {
       setDrawerRate(String(finalRate));
+      setDrawerRateSource('ListPrice');
+      if (configTag) {
+        setDrawerDescription((prev) => {
+          if (!prev) return configTag;
+          if (cand.standardCode && prev.includes(cand.standardCode) && cand.gradeCode && prev.includes(cand.gradeCode)) {
+            return prev;
+          }
+          return `${prev.trim()}\n${configTag}`;
+        });
+      }
       toast.success(`Applied ${cand.standardCode || ''} ${cand.gradeCode || ''}: ${formatCurrency(finalRate, formData.currency)}`);
     } else {
       setFormData((prev) => {
         const next = [...prev.items];
         if (next[targetIndex]) {
+          const currentDesc = next[targetIndex].description || '';
+          const updatedDesc = configTag && (!currentDesc.includes(cand.standardCode) || (cand.gradeCode && !currentDesc.includes(cand.gradeCode)))
+            ? (currentDesc ? `${currentDesc.trim()}\n${configTag}` : configTag)
+            : currentDesc;
+
           next[targetIndex] = {
             ...next[targetIndex],
             rate: finalRate,
             rateSource: 'ListPrice',
             priceCandidates: null,
+            standardCode: cand.standardCode || next[targetIndex].standardCode,
+            gradeCode: cand.gradeCode || next[targetIndex].gradeCode,
+            standardId: cand.standardId || next[targetIndex].standardId,
+            gradeId: cand.gradeId || next[targetIndex].gradeId,
+            description: updatedDesc,
           };
         }
         return { ...prev, items: next };
@@ -1098,6 +1227,7 @@ export default function QuotationFormPage() {
       description: drawerDescription.trim() || defaultDesc,
       quantity: Math.max(1, Number(drawerQty) || 1),
       rate: Number(drawerRate) || 0,
+      rateSource: drawerRateSource,
       otherCharges: Number(drawerOtherCharges) || 0,
       taxPercent,
       taxConfigDetailId,
@@ -1392,7 +1522,7 @@ export default function QuotationFormPage() {
                   setFormData((prev) => ({
                     ...prev,
                     currency: val,
-                    currencyId: matched?.id || prev.currencyId || 1,
+                    currencyId: matched?.id || prev.currencyId || 2,
                   }));
                 }}
               />
@@ -1439,7 +1569,8 @@ export default function QuotationFormPage() {
                 label="Billing / Shipping Address"
                 required
                 options={clientAddressOptions}
-                value={formData.clientAddress}
+                value={selectedAddrValue}
+                placeholder="-- Select Address --"
                 onChange={(e) => {
                   const val = e.target.value;
                   const matched = clientAddressOptions.find((opt) => opt.value === val);
@@ -1454,7 +1585,8 @@ export default function QuotationFormPage() {
             <SearchableSelect
               label="Contact Person"
               options={clientContactOptions}
-              value={formData.contactPerson}
+              value={selectedContactValue}
+              placeholder="-- Select Contact Person --"
               onChange={(e) => {
                 const val = e.target.value;
                 const matched = clientContactOptions.find((opt) => opt.value === val);
@@ -2077,8 +2209,7 @@ export default function QuotationFormPage() {
                 <label className="mf-label text-xs font-semibold text-heading">
                   Unit Rate ({formData.currency}) <span className="mf-required" aria-hidden="true">*</span>
                 </label>
-                {/* Use list price button - commented out per request, can be re-enabled later */}
-                {/* <button
+                <button
                   type="button"
                   onClick={handleLookupListPrice}
                   disabled={!drawerProduct || isLoadingPriceLookup}
@@ -2086,7 +2217,7 @@ export default function QuotationFormPage() {
                   title="Query list price from backend product price list (ProductPriceList.md § 3.5)"
                 >
                   {isLoadingPriceLookup ? 'Looking up...' : 'Use list price'}
-                </button> */}
+                </button>
               </div>
               <Input
                 type="number"
@@ -2095,7 +2226,10 @@ export default function QuotationFormPage() {
                 required
                 placeholder="0.00"
                 value={drawerRate}
-                onChange={(e) => setDrawerRate(e.target.value)}
+                onChange={(e) => {
+                  setDrawerRate(e.target.value);
+                  setDrawerRateSource('Manual');
+                }}
               />
             </div>
 
@@ -2219,12 +2353,12 @@ export default function QuotationFormPage() {
                       />
                       <span className="truncate">{optName}</span>
                     </div>
-                    {/* Option price badge - commented out per request, can be re-enabled later */}
-                    {/* {hasPrice && (
+                    {/* Option price badge */}
+                    {hasPrice && (
                       <span className="text-3xs font-mono font-semibold text-primary shrink-0">
                         +{formatCurrency(opt.unitPrice, formData.currency)}
                       </span>
-                    )} */}
+                    )}
                   </label>
                 );
               })}

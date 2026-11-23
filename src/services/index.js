@@ -97,6 +97,9 @@ import * as mockNotificationSetup from './notificationSetup/notificationSetupSer
 import * as realDeals from './deals/dealService';
 import * as mockDeals from './deals/dealService.mock';
 
+import * as realInquiries from './inquiries/inquiryService';
+import * as mockInquiries from './inquiries/inquiryService.mock';
+
 const useMock = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 export const authService = useMock ? mockAuth : realAuth;
@@ -128,6 +131,7 @@ export const quotationService = useMock ? mockQuotations : realQuotations;
 export const deliveryTermService = useMock ? mockDeliveryTerms : realDeliveryTerms;
 export const notificationSetupService = useMock ? mockNotificationSetup : realNotificationSetup;
 export const dealService = useMock ? mockDeals : realDeals;
+export const inquiryService = useMock ? mockInquiries : realInquiries;
 export { delegationService };
 export { geographyService };
 export { meetingsService };

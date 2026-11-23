@@ -78,6 +78,7 @@ import { useProductCategoriesContext } from '../../context/ProductCategoriesCont
 import { useRegions } from '../../context/RegionsContext';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useCountryState } from '../../context/CountryStateContext';
+import { inquiryService } from '../../services';
 import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/treeUtils';
 import { getTodayISO } from '../../utils/dateUtils';
 import {
@@ -331,10 +332,13 @@ export default function InquiryFormPage() {
 
   const {
     getInquiryById,
+    fetchInquiryById,
     getNextInquiryNo,
     addInquiry,
     updateInquiry,
     addInquiryComment,
+    sources = [],
+    priorityLevels = [],
   } = useInquiriesContext();
 
   const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
@@ -368,9 +372,44 @@ export default function InquiryFormPage() {
     }
   }, [userList.length, ensureUsersLoaded]);
 
+  const [fetchedInquiry, setFetchedInquiry] = useState(null);
   const existingInquiry = useMemo(() => {
-    return isEdit ? getInquiryById(id) : null;
-  }, [isEdit, id, getInquiryById]);
+    return isEdit ? (fetchedInquiry || getInquiryById(id)) : null;
+  }, [isEdit, id, fetchedInquiry, getInquiryById]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isEdit && id && !getInquiryById(id) && fetchInquiryById) {
+      fetchInquiryById(id).then((inq) => {
+        if (isMounted && inq) setFetchedInquiry(inq);
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isEdit, id, getInquiryById, fetchInquiryById]);
+
+  const dynamicSourceOptions = useMemo(() => {
+    if (Array.isArray(sources) && sources.length > 0) {
+      return sources.map((s) => ({
+        value: s.sourceName || s.name,
+        label: s.sourceName || s.name,
+        id: s.id,
+      }));
+    }
+    return SOURCE_OPTIONS;
+  }, [sources]);
+
+  const dynamicPriorityOptions = useMemo(() => {
+    if (Array.isArray(priorityLevels) && priorityLevels.length > 0) {
+      return priorityLevels.map((p) => ({
+        value: p.priorityName || p.name,
+        label: p.priorityName || p.name,
+        id: p.id,
+      }));
+    }
+    return PRIORITY_OPTIONS;
+  }, [priorityLevels]);
 
   // Client dropdown options for existing client selection
   const clientOptions = useMemo(() => {
@@ -1632,7 +1671,15 @@ export default function InquiryFormPage() {
 
   function handleChange(e) {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    let extra = {};
+    if (name === 'Source') {
+      const match = dynamicSourceOptions.find((s) => s.value === value);
+      if (match && match.id) extra.inquirySourceId = match.id;
+    } else if (name === 'Priority') {
+      const match = dynamicPriorityOptions.find((p) => p.value === value);
+      if (match && match.id) extra.priorityLevelId = match.id;
+    }
+    setForm((prev) => ({ ...prev, [name]: value, ...extra }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
@@ -2009,7 +2056,7 @@ export default function InquiryFormPage() {
                   id="Source"
                   name="Source"
                   label="Inquiry Source"
-                  options={SOURCE_OPTIONS}
+                  options={dynamicSourceOptions}
                   value={form.Source}
                   onChange={handleChange}
                 />
@@ -2036,7 +2083,7 @@ export default function InquiryFormPage() {
                   id="Priority"
                   name="Priority"
                   label="Priority Level"
-                  options={PRIORITY_OPTIONS}
+                  options={dynamicPriorityOptions}
                   value={form.Priority}
                   onChange={handleChange}
                 />
