@@ -2008,6 +2008,9 @@ export default function ProductFormPage() {
                           size="sm"
                           disabled={isSavingSpecs}
                         />
+                        <p className="text-[10px] text-muted-foreground mt-1 leading-tight">
+                          Each parameter can only be added once per {specsScope === 'STANDARD_GRADE' ? 'Standard + Grade set' : 'specification set'}.
+                        </p>
                       </td>
                       <td className="p-2">
                         {isExactFlatnessParam && specsScope === 'STANDARD_GRADE' ? (
