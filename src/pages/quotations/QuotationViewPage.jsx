@@ -372,8 +372,15 @@ export default function QuotationViewPage() {
           <div className="flex items-start gap-2.5">
             <IconCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
             <div className="space-y-0.5">
-              <div className="font-semibold text-emerald-900 dark:text-emerald-200">
-                Customer PO Received: <span className="font-mono font-bold">{quotation.poDetails?.poNumber || 'Client PO on File'}</span>
+              <div className="flex flex-wrap items-center gap-2 font-semibold text-emerald-900 dark:text-emerald-200">
+                <span>Customer PO Received:</span>
+                <span className="font-mono font-bold text-sm bg-emerald-600/10 text-emerald-900 dark:text-emerald-100 px-2 py-0.5 rounded border border-emerald-500/30">
+                  {quotation.poDetails?.poNumber || 'Client PO on File'}
+                </span>
+                <span className="inline-flex items-center gap-1 text-3xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-600 text-white shadow-2xs">
+                  <IconCheck size={10} />
+                  Linked to Rev {quotation.currentRevision ?? latestRevIndex} (Latest Agreed)
+                </span>
               </div>
               <p className="text-2xs text-emerald-700/80 dark:text-emerald-300/80">
                 Received on <strong>{formatDate(quotation.poDetails?.receivedOn || quotation.confirmedOn || '2026-10-30')}</strong>
@@ -382,6 +389,11 @@ export default function QuotationViewPage() {
                 )}
                 . A Sales Order can now be generated from this quotation.
               </p>
+              {selectedRevIndex !== latestRevIndex && (
+                <div className="mt-1 text-3xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 w-fit">
+                  <span>⚠️ You are viewing historical Rev {selectedRevIndex}. The Customer PO was awarded against Rev {latestRevIndex} (Latest).</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
@@ -932,6 +944,16 @@ export default function QuotationViewPage() {
                       {rev.revisionNo === latestRevIndex && (
                         <Badge variant="role" size="sm" className="ml-1">
                           Latest
+                        </Badge>
+                      )}
+                      {(quotation.poReceived || quotation.status === 'Confirmed') && rev.revisionNo === latestRevIndex && (
+                        <Badge variant="success" size="sm" className="ml-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                          PO Confirmed
+                        </Badge>
+                      )}
+                      {(quotation.poReceived || quotation.status === 'Confirmed') && rev.revisionNo < latestRevIndex && (
+                        <Badge variant="neutral" size="sm" className="ml-1 opacity-70">
+                          Superseded
                         </Badge>
                       )}
                     </Td>

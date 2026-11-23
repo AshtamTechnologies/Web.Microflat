@@ -62,9 +62,10 @@ export function getNextOrderStatuses(status) {
 export function calculateSalesOrderTotals(
   items = [],
   taxTreatment = 'INTRA_STATE',
-  headerOtherCharges = 0
+  headerOtherCharges = 0,
+  selectedTaxes = []
 ) {
-  const base = calculateQuotationTotals(items, taxTreatment);
+  const base = calculateQuotationTotals(items, taxTreatment, selectedTaxes, headerOtherCharges);
   const extraCharges = Number(headerOtherCharges) || 0;
   const isTaxZero = taxTreatment === 'EXPORT_LUT' || taxTreatment === 'EXEMPT';
   const extraTax = isTaxZero ? 0 : (extraCharges * 18) / 100;
