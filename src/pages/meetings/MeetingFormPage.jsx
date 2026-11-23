@@ -36,6 +36,7 @@ import {
 } from '../../constants/icons';
 import { useMeetingForm } from './hooks/useMeetingForm';
 import { useUserOptions } from '../../context/UsersContext';
+import { useInquiriesContext } from '../../context/InquiriesContext';
 import { mockInquiries } from '../../mocks/inquiries';
 import AttendeeManager from './components/AttendeeManager';
 import MeetingAttachmentManager from './components/MeetingAttachmentManager';
@@ -68,6 +69,15 @@ export default function MeetingFormPage() {
   const [searchParams] = useSearchParams();
   const inquiryIdParam = searchParams.get('inquiryId');
   const { options: userOptions } = useUserOptions();
+  let inquiriesList = mockInquiries;
+  try {
+    const inqCtx = useInquiriesContext();
+    if (inqCtx && inqCtx.inquiries && inqCtx.inquiries.length > 0) {
+      inquiriesList = inqCtx.inquiries;
+    }
+  } catch {
+    inquiriesList = mockInquiries;
+  }
 
   const {
     isEdit,
@@ -86,30 +96,30 @@ export default function MeetingFormPage() {
 
   useEffect(() => {
     if (isEdit || !inquiryIdParam || formData.inquiryId) return;
-    const matched = mockInquiries.find(
+    const matched = inquiriesList.find(
       (i) => String(i.id || i.InquiryId) === String(inquiryIdParam)
     );
     setField('inquiryId', String(inquiryIdParam));
-    if (matched?.InquiryNo) {
-      setField('inquiryNumber', matched.InquiryNo);
+    if (matched?.InquiryNo || matched?.inquiryNo) {
+      setField('inquiryNumber', matched.InquiryNo || matched.inquiryNo);
     }
-  }, [isEdit, inquiryIdParam, formData.inquiryId, setField]);
+  }, [isEdit, inquiryIdParam, formData.inquiryId, setField, inquiriesList]);
 
   // Inquiry options for dropdown
   const inquiryOptions = useMemo(() => {
-    return (mockInquiries || []).map((inq) => ({
+    return (inquiriesList || []).map((inq) => ({
       value: String(inq.id || inq.InquiryId),
-      label: `${inq.InquiryNo || inq.number} — ${inq.CustomerName || inq.client || 'Client'}`,
+      label: `${inq.InquiryNo || inq.inquiryNo || inq.number} — ${inq.CustomerName || inq.companyName || inq.client || 'Client'}`,
     }));
-  }, []);
+  }, [inquiriesList]);
 
   // Matched inquiry preview
   const selectedInquiry = useMemo(() => {
     if (!formData.inquiryId) return null;
-    return (mockInquiries || []).find(
+    return (inquiriesList || []).find(
       (i) => String(i.id || i.InquiryId) === String(formData.inquiryId)
     );
-  }, [formData.inquiryId]);
+  }, [formData.inquiryId, inquiriesList]);
 
   const durationText = useMemo(() => {
     return getDurationBadge(formData.startTime, formData.endTime);
@@ -388,7 +398,7 @@ export default function MeetingFormPage() {
                   onChange={(e) => {
                     const val = e?.target?.value !== undefined ? e.target.value : e;
                     setField('inquiryId', val);
-                    const selectedInq = mockInquiries.find(
+                    const selectedInq = inquiriesList.find(
                       (i) => String(i.id || i.InquiryId) === String(val)
                     );
                     if (selectedInq) {

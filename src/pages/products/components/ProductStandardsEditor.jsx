@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import {
   Button,
   SearchableSelect,
@@ -133,15 +134,22 @@ export default function ProductStandardsEditor({
     let nextApplicable;
 
     if (!currentApplicable || !Array.isArray(currentApplicable)) {
-      // Currently inheriting all: uncheck this one grade
+      // Currently inheriting all
+      if (allGradeIds.length <= 1) {
+        toast.error('At least one grade must be selected.');
+        return;
+      }
       nextApplicable = allGradeIds.filter((id) => id !== gradeId);
     } else {
       const exists = currentApplicable.includes(gradeId);
       if (exists) {
-        // Remove grade
+        // At least one grade must remain selected at all times
+        if (currentApplicable.length <= 1) {
+          toast.error('At least one grade must be selected.');
+          return;
+        }
         nextApplicable = currentApplicable.filter((id) => id !== gradeId);
       } else {
-        // Add grade
         nextApplicable = [...currentApplicable, gradeId];
       }
       // If all grades are re-selected, reset back to null (inherit all)
@@ -315,41 +323,11 @@ export default function ProductStandardsEditor({
                         <span>No precision grades mapped to this standard in master setup.</span>
                       </div>
                     ) : (
-                      <div className="space-y-1.5">
-                        {/* Scope Header / Badges */}
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-3xs font-semibold uppercase text-muted-foreground tracking-wider">
-                              Scope:
-                            </span>
-                            {isAllInherited ? (
-                              <Badge variant="neutral" size="xs" className="text-3xs font-medium">
-                                Inherit All ({mappedGrades.length})
-                              </Badge>
-                            ) : (
-                              <Badge variant="primary" size="xs" className="text-3xs font-medium">
-                                Custom ({activeGradeIdSet.size} of {mappedGrades.length})
-                              </Badge>
-                            )}
-                          </div>
-                          {!readOnly && !isAllInherited && (
-                            <button
-                              type="button"
-                              onClick={() => handleResetToAllGrades(index)}
-                              className="text-3xs text-primary hover:underline font-medium cursor-pointer"
-                              title="Reset to all standard grades"
-                            >
-                              Reset to All
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Grade Chips */}
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {mappedGrades.map((grade) => {
-                            const isSelected = activeGradeIdSet.has(Number(grade.gradeId));
-
-                            if (readOnly) {
+                      <div className="space-y-2">
+                        {readOnly ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {mappedGrades.map((grade) => {
+                              const isSelected = activeGradeIdSet.has(Number(grade.gradeId));
                               if (!isSelected) return null;
                               return (
                                 <Badge
@@ -357,47 +335,55 @@ export default function ProductStandardsEditor({
                                   variant="neutral"
                                   size="sm"
                                   className="font-mono text-xs font-semibold px-2 py-0.5"
-                                  title={`Grade ${grade.gradeCode} (Display order: ${grade.displayOrder ?? '—'})`}
+                                  title={`Grade ${grade.gradeCode}`}
                                 >
                                   {grade.gradeCode}
                                 </Badge>
                               );
-                            }
-
-                            // Interactive toggle chips in edit mode
-                            return (
+                            })}
+                          </div>
+                        ) : (
+                          <>
+                            {/* Label Row */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-foreground">Allowed Grades:</span>
                               <button
-                                key={grade.gradeId}
                                 type="button"
-                                onClick={() => handleToggleGrade(index, Number(grade.gradeId), allGradeIds)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-semibold transition-all cursor-pointer border ${
-                                  isSelected
-                                    ? 'bg-primary/10 text-primary border-primary/40 hover:bg-primary/20 shadow-2xs'
-                                    : 'bg-muted/30 text-muted-foreground border-dashed border-border hover:bg-muted/60 opacity-60'
+                                onClick={() => handleResetToAllGrades(index)}
+                                className={`text-xs font-medium transition-colors cursor-pointer ${
+                                  isAllInherited || activeGradeIdSet.size === mappedGrades.length
+                                    ? 'text-muted-foreground'
+                                    : 'text-primary hover:underline'
                                 }`}
-                                title={
-                                  isSelected
-                                    ? `Click to exclude ${grade.gradeCode} for this product`
-                                    : `Click to include ${grade.gradeCode} for this product`
-                                }
+                                title="Select all available grades"
                               >
-                                {isSelected ? (
-                                  <IconCheck size={12} className="text-primary shrink-0" />
-                                ) : (
-                                  <span className="w-3 text-center text-3xs font-sans text-muted-foreground">✕</span>
-                                )}
-                                <span>{grade.gradeCode}</span>
+                                Select All
                               </button>
-                            );
-                          })}
-                        </div>
+                            </div>
 
-                        {!readOnly && (
-                          <p className="text-3xs text-muted-foreground italic pt-0.5">
-                            {isAllInherited
-                              ? 'Inheriting all grades from master mapping. Click any grade to restrict scope.'
-                              : 'Custom scope applied. Variants for this product will be restricted to checked grades.'}
-                          </p>
+                            {/* Checkbox List */}
+                            <div className="flex flex-wrap items-center gap-3 pt-0.5">
+                              {mappedGrades.map((grade) => {
+                                const gradeId = Number(grade.gradeId);
+                                const isSelected = activeGradeIdSet.has(gradeId);
+
+                                return (
+                                  <label
+                                    key={grade.gradeId}
+                                    className="inline-flex items-center gap-1.5 cursor-pointer select-none text-xs font-mono text-foreground"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => handleToggleGrade(index, gradeId, allGradeIds)}
+                                      className="h-4 w-4 rounded border-border text-primary accent-primary cursor-pointer"
+                                    />
+                                    <span>{grade.gradeCode}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </>
                         )}
                       </div>
                     )}
@@ -425,16 +411,7 @@ export default function ProductStandardsEditor({
         </TableContainer>
       )}
 
-      {/* Metrology Policy Banner */}
-      <div className="p-3 rounded-lg border border-border bg-surface/50 flex items-start gap-2.5 text-xs text-muted-foreground">
-        <IconShieldCheck size={16} className="text-primary shrink-0 mt-0.5" />
-        <div className="leading-relaxed">
-          <span className="font-semibold text-foreground">Metrology Standard & Grade Policy:</span> Accuracy
-          specifications and variant accuracy grades are strictly derived from the standards linked above. Downstream
-          tolerance calculations (e.g. flatness per IS 7327 or DIN 876) automatically reference these assigned
-          precision grades.
-        </div>
-      </div>
+
 
       {/* Confirmation Modal for Standard Removal */}
       <ConfirmModal

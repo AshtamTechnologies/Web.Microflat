@@ -29,6 +29,7 @@ import {
   IconStandards,
   IconRefresh,
   IconLock,
+  IconInfo,
 } from '../../../constants/icons';
 import { productService } from '../../../services';
 import { useStandardsContext } from '../../../context/StandardsContext';
@@ -101,7 +102,11 @@ export default function ProductVariantsTab({
   const [specsScope, setSpecsScope] = useState('STANDARD_GRADE'); // 'STANDARD_GRADE' | 'COMMON'
   const [selectedStandardId, setSelectedStandardId] = useState('');
   const [selectedGradeId, setSelectedGradeId] = useState('');
+  const [lastSelectedStandardId, setLastSelectedStandardId] = useState('');
+  const [lastSelectedGradeId, setLastSelectedGradeId] = useState('');
   const [flatnessNotice, setFlatnessNotice] = useState(null);
+  // In-memory drafts per scope key so switching scopes doesn't wipe unsaved input
+  const [draftSpecsMap, setDraftSpecsMap] = useState({});
 
   // Inline Specs Expansion State & Cache
   const [expandedVariantIds, setExpandedVariantIds] = useState(new Set());
@@ -232,17 +237,8 @@ export default function ProductVariantsTab({
       const items = res.items || [];
       setVariantsList(items);
 
-      // Auto-expand and load specs for the first variant so specs are immediately visible
-      if (items.length > 0) {
-        const firstId = items[0].id;
-        setExpandedVariantIds((prev) => new Set(prev).add(firstId));
-        try {
-          const data = await productService.getVariantById(firstId);
-          setSpecsCache((prev) => ({ ...prev, [firstId]: data?.specs || [] }));
-        } catch (e) {
-          console.warn('Could not auto-load specs for first variant:', e);
-        }
-      }
+      // Variants load collapsed by default; user expands on demand
+      // (prevents confusion where first variant looks like a separate form)
     } catch (err) {
       console.warn('Could not load product variants:', err);
     } finally {
@@ -401,37 +397,67 @@ export default function ProductVariantsTab({
     [selectedVariantForSpecs, availableStandards, gradeMapping, grades]
   );
 
+  // Helper to generate cache key for draft specs
+  const getScopeKey = (scope, stdId, grdId) => {
+    return scope === 'COMMON' ? 'COMMON' : `SG_${stdId}_${grdId}`;
+  };
+
   // Open Specs Modal for a specific variant
   const handleOpenSpecsModal = async (variant) => {
     setSelectedVariantForSpecs(variant);
     setFlatnessNotice(null);
+    setDraftSpecsMap({});
     setIsLoadingSpecs(true);
     try {
       const data = await productService.getVariantById(variant.id);
       setVariantDetailData(data);
 
-      // Default scope determination
-      let initScope = 'STANDARD_GRADE';
-      let initStd = availableStandards[0]?.value || '';
+      // Detect scope from saved data instead of hardcoding STANDARD_GRADE
+      const allSavedValues = (data?.specs || []).flatMap((s) =>
+        Array.isArray(s.values) ? s.values : []
+      );
+
+      const hasCommonValues = allSavedValues.some(
+        (v) => v.isCommon === true || (!v.standardId && !v.gradeId)
+      );
+      const hasStandardGradeValues = allSavedValues.some(
+        (v) => v.standardId && v.gradeId
+      );
+
+      let initScope = 'COMMON';
+      let initStd = '';
       let initGrd = '';
 
-      if (initStd) {
-        const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === Number(initStd));
-        if (mapping?.grades?.length > 0) {
-          initGrd = Number(mapping.grades[0].gradeId);
+      if (hasStandardGradeValues && !hasCommonValues) {
+        // Saved under Standard+Grade — restore that exact pair
+        const firstSGVal = allSavedValues.find((v) => v.standardId && v.gradeId);
+        const matchedStd = availableStandards.find(
+          (s) => Number(s.value) === Number(firstSGVal.standardId)
+        );
+        if (matchedStd) {
+          initScope = 'STANDARD_GRADE';
+          initStd = Number(matchedStd.value);
+          const mapping = (gradeMapping || []).find(
+            (m) => Number(m.standardId) === Number(initStd)
+          );
+          const matchedGrade = (mapping?.grades || []).find(
+            (g) => Number(g.gradeId) === Number(firstSGVal.gradeId)
+          );
+          initGrd = matchedGrade ? Number(matchedGrade.gradeId) : Number(firstSGVal.gradeId);
         }
-      }
-
-      // If no valid standard/grade exists, fall back to Common
-      if (!initStd || !initGrd) {
-        initScope = 'COMMON';
+      } else if (!hasCommonValues && !hasStandardGradeValues) {
+        // Nothing saved yet — keep empty so user explicitly chooses standard & grade
+        initScope = 'STANDARD_GRADE';
         initStd = '';
         initGrd = '';
       }
+      // If hasCommonValues → stays COMMON, user sees their data immediately
 
       setSpecsScope(initScope);
       setSelectedStandardId(initStd);
       setSelectedGradeId(initGrd);
+      if (initStd) setLastSelectedStandardId(initStd);
+      if (initGrd) setLastSelectedGradeId(initGrd);
 
       const initialSpecs = syncSpecsForScope(data?.specs, initScope, initStd, initGrd);
 
@@ -470,11 +496,13 @@ export default function ProductVariantsTab({
             return spec;
           });
           setVariantSpecs(withCalc);
+          setDraftSpecsMap({ [getScopeKey(initScope, initStd, initGrd)]: withCalc });
           return;
         }
       }
 
       setVariantSpecs(initialSpecs);
+      setDraftSpecsMap({ [getScopeKey(initScope, initStd, initGrd)]: initialSpecs });
     } catch (err) {
       toast.error(err?.message || 'Failed to load variant specifications');
       setVariantSpecs([]);
@@ -485,28 +513,58 @@ export default function ProductVariantsTab({
 
   // Scope Toggle: Standard + Grade vs Common
   const handleScopeChange = (newScope) => {
+    // 1. Save current active specs to in-memory draft map
+    const currentKey = getScopeKey(specsScope, selectedStandardId, selectedGradeId);
+    const updatedDrafts = { ...draftSpecsMap, [currentKey]: variantSpecs };
+    setDraftSpecsMap(updatedDrafts);
+
     setSpecsScope(newScope);
     setFlatnessNotice(null);
 
     if (newScope === 'COMMON') {
+      // Remember what was chosen in Standard + Grade so returning doesn't reset it
+      if (selectedStandardId) setLastSelectedStandardId(selectedStandardId);
+      if (selectedGradeId) setLastSelectedGradeId(selectedGradeId);
       setSelectedStandardId('');
       setSelectedGradeId('');
-      setVariantSpecs(syncSpecsForScope(variantDetailData?.specs, 'COMMON', '', ''));
-    } else {
-      const firstStd = availableStandards[0]?.value || '';
-      setSelectedStandardId(firstStd);
-      let firstGrd = '';
-      if (firstStd) {
-        const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === Number(firstStd));
-        firstGrd = mapping?.grades?.[0]?.gradeId ? Number(mapping.grades[0].gradeId) : '';
+      const targetKey = 'COMMON';
+      if (updatedDrafts[targetKey]) {
+        setVariantSpecs(updatedDrafts[targetKey]);
+      } else {
+        const synced = syncSpecsForScope(variantDetailData?.specs, 'COMMON', '', '');
+        setVariantSpecs(synced);
+        setDraftSpecsMap((prev) => ({ ...prev, [targetKey]: synced }));
       }
-      setSelectedGradeId(firstGrd);
-      const synced = syncSpecsForScope(variantDetailData?.specs, 'STANDARD_GRADE', firstStd, firstGrd);
-      const calc = computeStandardFlatness(firstStd, firstGrd);
-      if (calc && calc.isSupported && calc.valueMicrons !== null) {
-        setFlatnessNotice(calc.detailText);
-        setVariantSpecs(
-          synced.map((spec) => {
+    } else {
+      // Restore the user's previously selected standard and grade (Option B), or keep empty if none was selected
+      const targetStd = lastSelectedStandardId || selectedStandardId || '';
+      setSelectedStandardId(targetStd);
+
+      let targetGrd = lastSelectedGradeId || selectedGradeId || '';
+      if (!targetGrd && targetStd) {
+        const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === Number(targetStd));
+        targetGrd = mapping?.grades?.[0]?.gradeId ? Number(mapping.grades[0].gradeId) : '';
+      }
+      setSelectedGradeId(targetGrd);
+
+      if (!targetStd || !targetGrd) {
+        setVariantSpecs([]);
+        return;
+      }
+
+      const targetKey = getScopeKey('STANDARD_GRADE', targetStd, targetGrd);
+      if (updatedDrafts[targetKey]) {
+        setVariantSpecs(updatedDrafts[targetKey]);
+        const calc = computeStandardFlatness(targetStd, targetGrd);
+        if (calc && calc.isSupported && calc.valueMicrons !== null) {
+          setFlatnessNotice(calc.detailText);
+        }
+      } else {
+        const synced = syncSpecsForScope(variantDetailData?.specs, 'STANDARD_GRADE', targetStd, targetGrd);
+        const calc = computeStandardFlatness(targetStd, targetGrd);
+        if (calc && calc.isSupported && calc.valueMicrons !== null) {
+          setFlatnessNotice(calc.detailText);
+          const withCalc = synced.map((spec) => {
             const pName =
               spec.parameterName ||
               specParameters.find((p) => Number(p.id) === Number(spec.specParameterId))?.parameterName ||
@@ -521,30 +579,49 @@ export default function ProductVariantsTab({
               };
             }
             return spec;
-          })
-        );
-      } else {
-        setVariantSpecs(synced);
+          });
+          setVariantSpecs(withCalc);
+          setDraftSpecsMap((prev) => ({ ...prev, [targetKey]: withCalc }));
+        } else {
+          setVariantSpecs(synced);
+          setDraftSpecsMap((prev) => ({ ...prev, [targetKey]: synced }));
+        }
       }
     }
   };
 
   const handleStandardChange = (stdId) => {
+    // 1. Save current active specs to in-memory draft map
+    const currentKey = getScopeKey(specsScope, selectedStandardId, selectedGradeId);
+    const updatedDrafts = { ...draftSpecsMap, [currentKey]: variantSpecs };
+    setDraftSpecsMap(updatedDrafts);
+
     const sId = Number(stdId);
     setSelectedStandardId(sId);
+    setLastSelectedStandardId(sId);
     let nextGrade = '';
     const mapping = (gradeMapping || []).find((m) => Number(m.standardId) === sId);
     if (mapping?.grades?.length > 0) {
       nextGrade = Number(mapping.grades[0].gradeId);
     }
     setSelectedGradeId(nextGrade);
+    setLastSelectedGradeId(nextGrade);
 
-    const synced = syncSpecsForScope(variantDetailData?.specs, 'STANDARD_GRADE', sId, nextGrade);
-    const calc = computeStandardFlatness(sId, nextGrade);
-    if (calc && calc.isSupported && calc.valueMicrons !== null) {
-      setFlatnessNotice(calc.detailText);
-      setVariantSpecs(
-        synced.map((spec) => {
+    const targetKey = getScopeKey('STANDARD_GRADE', sId, nextGrade);
+    if (updatedDrafts[targetKey]) {
+      setVariantSpecs(updatedDrafts[targetKey]);
+      const calc = computeStandardFlatness(sId, nextGrade);
+      if (calc && calc.isSupported && calc.valueMicrons !== null) {
+        setFlatnessNotice(calc.detailText);
+      } else {
+        setFlatnessNotice(null);
+      }
+    } else {
+      const synced = syncSpecsForScope(variantDetailData?.specs, 'STANDARD_GRADE', sId, nextGrade);
+      const calc = computeStandardFlatness(sId, nextGrade);
+      if (calc && calc.isSupported && calc.valueMicrons !== null) {
+        setFlatnessNotice(calc.detailText);
+        const withCalc = synced.map((spec) => {
           const pName =
             spec.parameterName ||
             specParameters.find((p) => Number(p.id) === Number(spec.specParameterId))?.parameterName ||
@@ -559,24 +636,42 @@ export default function ProductVariantsTab({
             };
           }
           return spec;
-        })
-      );
-    } else {
-      setFlatnessNotice(null);
-      setVariantSpecs(synced);
+        });
+        setVariantSpecs(withCalc);
+        setDraftSpecsMap((prev) => ({ ...prev, [targetKey]: withCalc }));
+      } else {
+        setFlatnessNotice(null);
+        setVariantSpecs(synced);
+        setDraftSpecsMap((prev) => ({ ...prev, [targetKey]: synced }));
+      }
     }
   };
 
   const handleGradeChange = (grdId) => {
+    // 1. Save current active specs to in-memory draft map
+    const currentKey = getScopeKey(specsScope, selectedStandardId, selectedGradeId);
+    const updatedDrafts = { ...draftSpecsMap, [currentKey]: variantSpecs };
+    setDraftSpecsMap(updatedDrafts);
+
     const gId = Number(grdId);
     setSelectedGradeId(gId);
+    setLastSelectedGradeId(gId);
 
-    const synced = syncSpecsForScope(variantDetailData?.specs, 'STANDARD_GRADE', selectedStandardId, gId);
-    const calc = computeStandardFlatness(selectedStandardId, gId);
-    if (calc && calc.isSupported && calc.valueMicrons !== null) {
-      setFlatnessNotice(calc.detailText);
-      setVariantSpecs(
-        synced.map((spec) => {
+    const targetKey = getScopeKey('STANDARD_GRADE', selectedStandardId, gId);
+    if (updatedDrafts[targetKey]) {
+      setVariantSpecs(updatedDrafts[targetKey]);
+      const calc = computeStandardFlatness(selectedStandardId, gId);
+      if (calc && calc.isSupported && calc.valueMicrons !== null) {
+        setFlatnessNotice(calc.detailText);
+      } else {
+        setFlatnessNotice(null);
+      }
+    } else {
+      const synced = syncSpecsForScope(variantDetailData?.specs, 'STANDARD_GRADE', selectedStandardId, gId);
+      const calc = computeStandardFlatness(selectedStandardId, gId);
+      if (calc && calc.isSupported && calc.valueMicrons !== null) {
+        setFlatnessNotice(calc.detailText);
+        const withCalc = synced.map((spec) => {
           const pName =
             spec.parameterName ||
             specParameters.find((p) => Number(p.id) === Number(spec.specParameterId))?.parameterName ||
@@ -591,11 +686,14 @@ export default function ProductVariantsTab({
             };
           }
           return spec;
-        })
-      );
-    } else {
-      setFlatnessNotice(null);
-      setVariantSpecs(synced);
+        });
+        setVariantSpecs(withCalc);
+        setDraftSpecsMap((prev) => ({ ...prev, [targetKey]: withCalc }));
+      } else {
+        setFlatnessNotice(null);
+        setVariantSpecs(synced);
+        setDraftSpecsMap((prev) => ({ ...prev, [targetKey]: synced }));
+      }
     }
   };
 
@@ -811,16 +909,16 @@ export default function ProductVariantsTab({
         >
           <thead className="sticky top-0 bg-surface z-10">
             <tr className="bg-surface border-b border-border">
-              <Th className="w-8"></Th>
-              <Th>Variant Code</Th>
-              <Th>Grade</Th>
-              <Th className="text-right">Length (mm)</Th>
-              <Th className="text-right">Width (mm)</Th>
-              <Th className="text-right">Height (mm)</Th>
-              <Th className="text-right">Diameter (mm)</Th>
-              <Th className="text-center">Accuracy Specs</Th>
-              <Th className="w-24 text-center">Status</Th>
-              <Th className="w-36 text-center">Actions</Th>
+              <th className="w-8 p-2.5 text-center text-xs font-semibold uppercase tracking-wider text-text-muted"></th>
+              <th className="p-2.5 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Variant Code</th>
+              <th className="p-2.5 text-center text-xs font-semibold uppercase tracking-wider text-text-muted">Grade</th>
+              <th className="p-2.5 text-center text-xs font-semibold uppercase tracking-wider text-text-muted">Length (mm)</th>
+              <th className="p-2.5 text-center text-xs font-semibold uppercase tracking-wider text-text-muted">Width (mm)</th>
+              <th className="p-2.5 text-center text-xs font-semibold uppercase tracking-wider text-text-muted">Height (mm)</th>
+              <th className="p-2.5 text-center text-xs font-semibold uppercase tracking-wider text-text-muted">Diameter (mm)</th>
+              <th className="p-2.5 text-center text-xs font-semibold uppercase tracking-wider text-text-muted">Accuracy Specs</th>
+              <th className="w-24 p-2.5 text-center text-xs font-semibold uppercase tracking-wider text-text-muted">Status</th>
+              <th className="w-36 p-2.5 text-center text-xs font-semibold uppercase tracking-wider text-text-muted">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -852,22 +950,22 @@ export default function ProductVariantsTab({
                         {v.variantCode}
                       </button>
                     </td>
-                    <td className="p-2.5">
+                    <td className="p-2.5 text-center">
                       <Badge variant="neutral">{v.gradeCode || grades.find((g) => g.id === v.gradeId)?.gradeCode || '-'}</Badge>
                     </td>
-                    <td className="p-2.5 text-right font-mono">{v.lengthMm ?? '—'}</td>
-                    <td className="p-2.5 text-right font-mono">{v.widthMm ?? '—'}</td>
-                    <td className="p-2.5 text-right font-mono">{v.heightMm ?? '—'}</td>
-                    <td className="p-2.5 text-right font-mono">{v.diameterMm ?? '—'}</td>
+                    <td className="p-2.5 text-center font-mono">{v.lengthMm ?? '—'}</td>
+                    <td className="p-2.5 text-center font-mono">{v.widthMm ?? '—'}</td>
+                    <td className="p-2.5 text-center font-mono">{v.heightMm ?? '—'}</td>
+                    <td className="p-2.5 text-center font-mono">{v.diameterMm ?? '—'}</td>
                     <td className="p-2.5 text-center">
                       <button
                         type="button"
-                        onClick={() => toggleExpandVariant(v.id)}
+                        onClick={() => v.specCount > 0 ? toggleExpandVariant(v.id) : handleOpenSpecsModal(v)}
                         className="inline-flex items-center gap-1 cursor-pointer"
-                        title="Click to toggle accuracy specifications"
+                        title={v.specCount > 0 ? 'Click to view accuracy specifications' : 'Click to add accuracy specifications'}
                       >
-                        <Badge variant={v.specCount > 0 ? 'accent' : 'neutral'} size="sm">
-                          {v.specCount ?? 0} {v.specCount === 1 ? 'spec' : 'specs'}
+                        <Badge variant={v.specCount > 0 ? 'active' : 'warning'} size="sm">
+                          {v.specCount > 0 ? '✓ Specs Set' : '⚠ Add Specs'}
                         </Badge>
                       </button>
                     </td>
@@ -884,19 +982,17 @@ export default function ProductVariantsTab({
                             variant="outline"
                             size="xs"
                             onClick={() => handleOpenSpecsModal(v)}
-                            className="text-xs flex items-center gap-1"
-                            title="Configure Accuracy Specifications"
+                            title={v.specCount > 0 ? 'Edit Accuracy Specs' : 'Set Up Accuracy Specs'}
+                            className="text-primary hover:bg-primary/10"
                           >
-                            <IconStandards size={12} />
-                            <span>Specs</span>
+                            <IconStandards size={13} />
                           </Button>
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             size="xs"
                             onClick={() => handleOpenEditModal(v)}
-                            className="text-xs flex items-center gap-1 hover:text-primary"
-                            title="Edit Variant"
+                            title="Edit Variant Dimensions"
                           >
                             <IconEdit size={12} />
                           </Button>
@@ -951,7 +1047,7 @@ export default function ProductVariantsTab({
                                 className="flex items-center gap-1 text-xs"
                               >
                                 <IconEdit size={12} />
-                                <span>Edit Accuracy Specs</span>
+                                <span>{specs.length > 0 ? 'Edit Specs' : 'Set Up Specs'}</span>
                               </Button>
                             )}
                           </div>
@@ -981,6 +1077,7 @@ export default function ProductVariantsTab({
                                     <th className="py-2 px-3 text-right font-medium">Measured Figure</th>
                                     <th className="py-2 px-3 text-center font-medium">Tolerance (±)</th>
                                     <th className="py-2 px-3 text-left font-medium">Total Tolerance Display</th>
+                                    {!readOnly && <th className="py-2 px-3 text-center font-medium w-16">Action</th>}
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/60">
@@ -1058,6 +1155,20 @@ export default function ProductVariantsTab({
                                               '—'
                                             )}
                                           </td>
+                                          {!readOnly && (
+                                            <td className="py-2 px-3 text-center">
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="xs"
+                                                onClick={() => handleOpenSpecsModal(v)}
+                                                title={`Edit ${spec.parameterName}`}
+                                                className="text-primary hover:bg-primary/10 h-6 w-6 p-0 inline-flex items-center justify-center"
+                                              >
+                                                <IconEdit size={12} />
+                                              </Button>
+                                            </td>
+                                          )}
                                         </tr>
                                       );
                                     });
@@ -1195,7 +1306,11 @@ export default function ProductVariantsTab({
       <Modal
         isOpen={Boolean(selectedVariantForSpecs)}
         onClose={() => !isSavingSpecs && setSelectedVariantForSpecs(null)}
-        title={`Accuracy Specifications: ${selectedVariantForSpecs?.variantCode || ''}`}
+        title={
+          variantSpecs.length > 0
+            ? `Edit Specifications: ${selectedVariantForSpecs?.variantCode || ''}`
+            : `Set Up Specifications: ${selectedVariantForSpecs?.variantCode || ''}`
+        }
         size="2xl"
       >
         <div className="space-y-4">
@@ -1225,31 +1340,40 @@ export default function ProductVariantsTab({
                 <button
                   type="button"
                   onClick={() => handleScopeChange('STANDARD_GRADE')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'STANDARD_GRADE'
-                    ? 'bg-primary text-white shadow-xs'
-                    : 'text-text-muted hover:text-heading'
-                    }`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                    specsScope === 'STANDARD_GRADE'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-text-muted hover:text-heading'
+                  }`}
                 >
                   Standard + Grade
                 </button>
                 <button
                   type="button"
                   onClick={() => handleScopeChange('COMMON')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'COMMON'
-                    ? 'bg-primary text-white shadow-xs'
-                    : 'text-text-muted hover:text-heading'
-                    }`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                    specsScope === 'COMMON'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-text-muted hover:text-heading'
+                  }`}
                 >
                   Common Figures
                 </button>
               </div>
             </div>
 
-            {specsScope === 'STANDARD_GRADE' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-border/60">
+            {/* Standard + Grade Pickers (only shown when STANDARD_GRADE is active) */}
+            {specsScope === 'STANDARD_GRADE' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/60">
                 <div>
-                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider block mb-1">
-                    Manufacturing Standard
+                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <span>Manufacturing Standard</span>
+                    <span
+                      className="cursor-help text-text-muted hover:text-heading"
+                      title="Only standards configured in this product's Standards tab are available here."
+                    >
+                      <IconInfo size={11} />
+                    </span>
                   </label>
                   <SearchableSelect
                     value={selectedStandardId || ''}
@@ -1265,8 +1389,14 @@ export default function ProductVariantsTab({
                 </div>
 
                 <div>
-                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider block mb-1">
-                    Allowed Precision Grade
+                  <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <span>Allowed Precision Grade</span>
+                    <span
+                      className="cursor-help text-text-muted hover:text-heading"
+                      title="Only precision grades mapped to the selected standard can be chosen."
+                    >
+                      <IconInfo size={11} />
+                    </span>
                   </label>
                   <SearchableSelect
                     value={selectedGradeId || ''}
@@ -1275,15 +1405,17 @@ export default function ProductVariantsTab({
                       handleGradeChange(raw);
                     }}
                     options={availableGradesForStandard}
-                    placeholder={selectedStandardId ? 'Select Allowed Grade' : 'Select standard first'}
-                    disabled={!selectedStandardId || isSavingSpecs || isSpecsReadOnly}
+                    placeholder={
+                      !selectedStandardId
+                        ? 'Select a standard first'
+                        : availableGradesForStandard.length === 0
+                        ? 'No grades configured'
+                        : 'Select Grade'
+                    }
+                    disabled={isSavingSpecs || isSpecsReadOnly || !selectedStandardId}
                     size="sm"
                   />
                 </div>
-              </div>
-            ) : (
-              <div className="pt-2 border-t border-border/60 text-2xs text-text-muted italic">
-                Editing figures common to all standards and grades (standardId & gradeId will be stored as empty).
               </div>
             )}
           </div>
@@ -1326,12 +1458,53 @@ export default function ProductVariantsTab({
             >
               <thead>
                 <tr className="bg-muted/40 border-b border-border">
-                  <Th className="w-64 min-w-56">Parameter</Th>
-                  <Th className="w-56 min-w-48">Decimal Value</Th>
-                  <Th className="w-24">+ Tol</Th>
-                  <Th className="w-24">− Tol</Th>
-                  <Th className="w-44">Or Text Value</Th>
-                  {!isSpecsReadOnly && <Th className="w-14 text-center">Action</Th>}
+                  <Th className="w-64 min-w-56">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>Parameter</span>
+                      <span
+                        className="cursor-help text-text-muted hover:text-heading"
+                        title={`Each parameter can only be added once per ${
+                          specsScope === 'STANDARD_GRADE' ? 'Standard + Grade set' : 'specification set'
+                        }.`}
+                      >
+                        <IconInfo size={13} />
+                      </span>
+                    </span>
+                  </Th>
+                  <Th className="w-56 min-w-48">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>Decimal Value</span>
+                      <span
+                        className="cursor-help text-text-muted hover:text-heading"
+                        title="Numeric measurement figure (e.g. 6.4). Entering a decimal value disables Text Value."
+                      >
+                        <IconInfo size={12} />
+                      </span>
+                    </span>
+                  </Th>
+                  <Th className="w-32">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>± Tolerance</span>
+                      <span
+                        className="cursor-help text-text-muted hover:text-heading"
+                        title="Symmetric bilateral tolerance limit (e.g. ±0.5). Automatically sets both plus and minus tolerances."
+                      >
+                        <IconInfo size={12} />
+                      </span>
+                    </span>
+                  </Th>
+                  <Th className="w-44">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>Or Text Value</span>
+                      <span
+                        className="cursor-help text-text-muted hover:text-heading"
+                        title="Descriptive or range text (e.g. 5 – 70). Entering text disables Decimal Value."
+                      >
+                        <IconInfo size={12} />
+                      </span>
+                    </span>
+                  </Th>
+                  {!isSpecsReadOnly && <Th className="w-14 text-center sticky right-0 bg-card">Action</Th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -1358,31 +1531,26 @@ export default function ProductVariantsTab({
 
                   return (
                     <tr key={sIdx}>
-                      <td className="p-2">
+                      <td className="p-2 align-middle">
                         {isSpecsReadOnly ? (
                           <span className="font-medium">
                             {paramName} {spec.unitSymbol ? `(${spec.unitSymbol})` : ''}
                           </span>
                         ) : (
-                          <div>
-                            <SearchableSelect
-                              value={spec.specParameterId ? Number(spec.specParameterId) : ''}
-                              onChange={(val) => {
-                                const rawId =
-                                  val && typeof val === 'object' && 'target' in val
-                                    ? val.target.value
-                                    : val;
-                                handleChangeSpecParam(sIdx, rawId);
-                              }}
-                              options={rowParamOptions}
-                              placeholder="Select Parameter"
-                              size="sm"
-                              disabled={isSavingSpecs}
-                            />
-                            <p className="text-[10px] text-muted-foreground mt-1 leading-tight">
-                              Each parameter can only be added once per {specsScope === 'STANDARD_GRADE' ? 'Standard + Grade set' : 'specification set'}.
-                            </p>
-                          </div>
+                          <SearchableSelect
+                            value={spec.specParameterId ? Number(spec.specParameterId) : ''}
+                            onChange={(val) => {
+                              const rawId =
+                                val && typeof val === 'object' && 'target' in val
+                                ? val.target.value
+                                : val;
+                              handleChangeSpecParam(sIdx, rawId);
+                            }}
+                            options={rowParamOptions}
+                            placeholder="Select Parameter"
+                            size="sm"
+                            disabled={isSavingSpecs}
+                          />
                         )}
                       </td>
                       <td className="p-2">
@@ -1401,10 +1569,14 @@ export default function ProductVariantsTab({
                             />
                             <div
                               className="shrink-0 h-[var(--control-height-sm)] px-2 bg-muted/60 text-muted-foreground border border-border rounded-control flex items-center gap-1 text-2xs font-medium select-none cursor-default"
-                              title="Locked to standard formula tolerance"
+                              title={
+                                selectedVariantForSpecs?.lengthMm && selectedVariantForSpecs?.widthMm
+                                  ? `Auto-calculated from size ${selectedVariantForSpecs.lengthMm} × ${selectedVariantForSpecs.widthMm} mm. To change this value, update the variant dimensions.`
+                                  : `Auto-calculated by standard formula. To change this value, update the variant dimensions.`
+                              }
                             >
                               <IconLock size={11} className="text-muted-foreground shrink-0" />
-                              <span>Locked</span>
+                              <span>Auto-calculated</span>
                             </div>
                           </div>
                         ) : (
@@ -1419,57 +1591,35 @@ export default function ProductVariantsTab({
                               setVariantSpecs(next);
                             }}
                             placeholder="e.g. 6.1"
-                            disabled={isSavingSpecs}
-                            className="font-mono flex-1 min-w-0"
+                            disabled={isSavingSpecs || Boolean(spec.valueText && String(spec.valueText).trim())}
+                            className={`font-mono flex-1 min-w-0 ${
+                              Boolean(spec.valueText && String(spec.valueText).trim()) ? 'opacity-40 cursor-not-allowed' : ''
+                            }`}
                           />
                         )}
                       </td>
                       <td className="p-2">
                         {isSpecsReadOnly || isExactFlatnessParam ? (
-                          <span
-                            className="font-mono text-text-muted text-center block text-xs select-none"
-                            title={isExactFlatnessParam ? 'Flatness is a single total allowable limit (no ± bilateral tolerance)' : ''}
-                          >
-                            —
-                          </span>
+                          <span className="font-mono text-text-muted text-center block text-xs select-none">—</span>
                         ) : (
-                          <Input
-                            type="number"
-                            step="any"
-                            size="sm"
-                            value={spec.tolerancePlus ?? ''}
-                            onChange={(e) => {
-                              const next = [...variantSpecs];
-                              next[sIdx].tolerancePlus = e.target.value;
-                              setVariantSpecs(next);
-                            }}
-                            placeholder="+0.5"
-                            disabled={isSavingSpecs}
-                          />
-                        )}
-                      </td>
-                      <td className="p-2">
-                        {isSpecsReadOnly || isExactFlatnessParam ? (
-                          <span
-                            className="font-mono text-text-muted text-center block text-xs select-none"
-                            title={isExactFlatnessParam ? 'Flatness is a single total allowable limit (no ± bilateral tolerance)' : ''}
-                          >
-                            —
-                          </span>
-                        ) : (
-                          <Input
-                            type="number"
-                            step="any"
-                            size="sm"
-                            value={spec.toleranceMinus ?? ''}
-                            onChange={(e) => {
-                              const next = [...variantSpecs];
-                              next[sIdx].toleranceMinus = e.target.value;
-                              setVariantSpecs(next);
-                            }}
-                            placeholder="0.5"
-                            disabled={isSavingSpecs}
-                          />
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-text-muted font-mono shrink-0">±</span>
+                            <Input
+                              type="number"
+                              step="any"
+                              size="sm"
+                              value={spec.tolerancePlus ?? ''}
+                              onChange={(e) => {
+                                const next = [...variantSpecs];
+                                next[sIdx].tolerancePlus = e.target.value;
+                                next[sIdx].toleranceMinus = e.target.value;
+                                setVariantSpecs(next);
+                              }}
+                              placeholder="e.g. 0.5"
+                              disabled={isSavingSpecs}
+                              className="font-mono"
+                            />
+                          </div>
                         )}
                       </td>
                       <td className="p-2">
@@ -1490,12 +1640,20 @@ export default function ProductVariantsTab({
                               setVariantSpecs(next);
                             }}
                             placeholder="e.g. 3 – 25"
-                            disabled={isSavingSpecs}
+                            disabled={
+                              isSavingSpecs ||
+                              (spec.valueDecimal !== '' && spec.valueDecimal !== null && spec.valueDecimal !== undefined)
+                            }
+                            className={
+                              spec.valueDecimal !== '' && spec.valueDecimal !== null && spec.valueDecimal !== undefined
+                                ? 'opacity-40 cursor-not-allowed'
+                                : ''
+                            }
                           />
                         )}
                       </td>
                       {!isSpecsReadOnly && (
-                        <td className="p-2 text-center">
+                        <td className="p-2 text-center sticky right-0 bg-card">
                           <Button
                             type="button"
                             variant="ghost"

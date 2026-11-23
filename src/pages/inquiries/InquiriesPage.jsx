@@ -78,6 +78,7 @@ export default function InquiriesPage() {
     resetFilters,
     deleteInquiry,
     changeInquiryStatus,
+    isLoading,
   } = useInquiriesContext();
 
   const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
@@ -137,7 +138,7 @@ export default function InquiriesPage() {
     pageIndex: 0,
     pageSize: 10,
   });
-  const [loading] = useState(false);
+  const loading = isLoading;
 
   // Helper to resolve user names from user IDs
   const resolveUserName = (userId) => {
