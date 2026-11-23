@@ -667,24 +667,13 @@ export default function ApprovalSettingsPage() {
           <div className="flex items-center gap-2">
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
-              onClick={handleRefresh}
-              loading={isLoading || isRefreshing}
-              className="text-xs shadow-xs"
-            >
-              <IconRefresh size={14} className="mr-1.5 shrink-0" aria-hidden="true" />
-              Refresh
-            </Button>
-            <Button
-              type="button"
               variant="primary"
               size="sm"
               onClick={handleOpenAdd}
               className="text-xs shadow-xs flex items-center gap-1.5"
             >
               <IconAdd size={14} className="shrink-0" aria-hidden="true" />
-              <span>Add Setting</span>
+              <span>Add Approval Flow</span>
             </Button>
           </div>
         }
@@ -936,7 +925,7 @@ export default function ApprovalSettingsPage() {
       <Modal
         isOpen={isAddModalOpen}
         onClose={handleCloseAdd}
-        title="Add Approval Setting"
+        title="Add Approval Flow"
         size="md"
         footer={
           <div className="flex items-center justify-end gap-3">

@@ -30,9 +30,7 @@ import {
   IconDownload,
   IconEdit,
   IconError,
-  IconExternalLink,
   IconFileText,
-  IconGlobe,
   IconImage,
   IconLocation,
   IconMail,
@@ -97,6 +95,11 @@ import {
   getApprovalBadgeVariant,
   normalizeApprovalStatus,
 } from '../../constants/approvalStatus';
+import {
+  ACCOUNTING_GROUP_OPTIONS,
+  SUB_GROUP_OPTIONS_MAP,
+  DEFAULT_SUB_GROUP_OPTIONS,
+} from './VendorFormPage';
 
 const columnHelper = createColumnHelper();
 
@@ -181,6 +184,7 @@ export default function VendorEffectiveDatesPage() {
   const [fetchingVendor, setFetchingVendor] = useState(Boolean(id && !getVendorById(id)));
   const [apiVersions, setApiVersions] = useState(null);
   const [loadingVersions, setLoadingVersions] = useState(false);
+  const lastLoadedVendorIdRef = useRef(null);
 
   const loadVendorVersions = useCallback(async (vendorId) => {
     if (!vendorId) return;
@@ -202,19 +206,25 @@ export default function VendorEffectiveDatesPage() {
   useEffect(() => {
     let isMounted = true;
     if (id) {
-      // Clear previous vendor's versions & selected version state immediately
-      setSelectedVersionId(null);
-      setApiVersions(null);
-      setVersionDetailsMap({});
-      modeInitializedRef.current = false;
-      setPendingDeleteAttachmentIds([]);
-      setAttachmentToDelete(null);
+      const isNewVendor = String(lastLoadedVendorIdRef.current) !== String(id);
+      if (isNewVendor) {
+        lastLoadedVendorIdRef.current = id;
+        // Only clear previous vendor's versions & selected version state when switching to a DIFFERENT vendor
+        setSelectedVersionId(null);
+        setApiVersions(null);
+        setVersionDetailsMap({});
+        modeInitializedRef.current = false;
+        setPendingDeleteAttachmentIds([]);
+        setAttachmentToDelete(null);
 
-      const cached = getVendorById(id);
-      if (cached) {
-        setFetchedVendor(cached);
+        const cached = getVendorById(id);
+        if (cached) {
+          setFetchedVendor(cached);
+        }
       }
+
       if (fetchVendorDetail) {
+        const cached = getVendorById(id);
         if (!cached?.versions || cached.versions.length === 0) {
           setFetchingVendor(true);
         }
@@ -234,7 +244,7 @@ export default function VendorEffectiveDatesPage() {
     return () => {
       isMounted = false;
     };
-  }, [id, getVendorById, fetchVendorDetail, loadVendorVersions]);
+  }, [id]);
 
   const vendor = fetchedVendor || getVendorById(id);
 
@@ -434,8 +444,11 @@ export default function VendorEffectiveDatesPage() {
 
   // Versions array from API (GET /api/vendors/{vendorId}/versions)
   const versions = useMemo(() => {
-    if (!Array.isArray(apiVersions)) return [];
-    return [...apiVersions]
+    const rawList = Array.isArray(apiVersions)
+      ? apiVersions
+      : (vendor?.effectiveVersions || vendor?.versions || []);
+    if (!Array.isArray(rawList)) return [];
+    return [...rawList]
       .map((v) => ({
         id: v.vendorDetailId || v.id,
         vendorDetailId: v.vendorDetailId || v.id,
@@ -450,7 +463,7 @@ export default function VendorEffectiveDatesPage() {
       .sort((a, b) =>
         (b.effectiveDate || '').localeCompare(a.effectiveDate || '')
       );
-  }, [apiVersions]);
+  }, [apiVersions, vendor?.effectiveVersions, vendor?.versions]);
 
   // Current active version (versionState === 'Current' or first in versions array)
   const activeVersion = useMemo(() => {
@@ -459,6 +472,16 @@ export default function VendorEffectiveDatesPage() {
     if (current) return current;
     return versions[0] || null;
   }, [versions]);
+
+  // Check if vendor already has a pending revision or draft in progress
+  const hasPendingRevision = useMemo(() => {
+    if (vendor?.hasPendingChange) return true;
+    return versions.some((v) => {
+      const st = normalizeApprovalStatus(v.approvalStatus);
+      const vs = String(v.versionState || '').toLowerCase();
+      return st === ApprovalStatus.Draft || st === ApprovalStatus.Pending || vs === 'draft' || vs === 'pending';
+    });
+  }, [vendor?.hasPendingChange, versions]);
 
   // UI state: mode is 'VIEW' | 'EDIT' | 'ADD'
   const [mode, setMode] = useState(() => (location.state?.mode === 'EDIT' ? 'EDIT' : 'VIEW'));
@@ -491,6 +514,9 @@ export default function VendorEffectiveDatesPage() {
   // Form state for ADD or EDIT
   const [formData, setFormData] = useState({
     effectiveDate: '',
+    ledgerName: '',
+    group: '',
+    subGroup: '',
     contactPersonName: '',
     phoneNo: '',
     alternatePhoneNo: '',
@@ -513,6 +539,13 @@ export default function VendorEffectiveDatesPage() {
     deliveryTerms: [],
     notes: '',
   });
+
+  const formSubGroupOptions = useMemo(() => {
+    if (formData.group && SUB_GROUP_OPTIONS_MAP[formData.group]) {
+      return SUB_GROUP_OPTIONS_MAP[formData.group];
+    }
+    return [];
+  }, [formData.group]);
 
   // Attachments state for active/edit mode
   const [attachments, setAttachments] = useState([]);
@@ -636,6 +669,8 @@ export default function VendorEffectiveDatesPage() {
 
   // Version details cache for GET /api/vendor-versions/{vendorDetailId}
   const [versionDetailsMap, setVersionDetailsMap] = useState({});
+  const versionDetailsMapRef = useRef(versionDetailsMap);
+  versionDetailsMapRef.current = versionDetailsMap;
   const [isLoadingVersion, setIsLoadingVersion] = useState(false);
 
   // Pre-seed version details cache with currentDetail from GET /api/vendors/{id}
@@ -673,7 +708,7 @@ export default function VendorEffectiveDatesPage() {
       versions[0]?.vendorDetailId ||
       versions[0]?.id;
     if (targetVerId) {
-      if (!versionDetailsMap[targetVerId]) {
+      if (!versionDetailsMapRef.current[targetVerId]) {
         setIsLoadingVersion(true);
         vendorService
           .getVendorVersion(targetVerId)
@@ -696,7 +731,7 @@ export default function VendorEffectiveDatesPage() {
     return () => {
       isMounted = false;
     };
-  }, [selectedVersionId, activeVersion?.vendorDetailId, activeVersion?.id, versions, versionDetailsMap]);
+  }, [selectedVersionId, activeVersion?.vendorDetailId, activeVersion?.id, versions]);
 
   // The currently viewed/selected version object merged with rich version details
   const selectedVersion = useMemo(() => {
@@ -969,11 +1004,17 @@ export default function VendorEffectiveDatesPage() {
     setPendingDeleteAttachmentIds([]);
     setAttachmentToDelete(null);
 
+    const NA = 'Not Available';
+    const clean = (v) => (v === NA ? '' : (v ?? ''));
+
     let full = versionDetailsMap[verId] || ver;
     // Set immediate form values from cache
     setFormData({
       effectiveDate: full.effectiveDate || ver.effectiveDate || '',
-      contactPersonName: full.contactPersonName || ver.contactPersonName || '',
+      ledgerName: vendor?.ledgerName || vendor?.tallyLedgerName || (vendor?.vendorName ? vendor.vendorName.toUpperCase() : ''),
+      group: vendor?.group || vendor?.tallyGroup || '',
+      subGroup: vendor?.subGroup || vendor?.tallySubGroup || '',
+      contactPersonName: clean(full.contactPersonName || ver.contactPersonName),
       phoneNo: full.phoneNo || ver.phoneNo || '',
       alternatePhoneNo: full.alternatePhoneNo || ver.alternatePhoneNo || '',
       email: full.email || ver.email || '',
@@ -987,9 +1028,9 @@ export default function VendorEffectiveDatesPage() {
       website: full.website || ver.website || '',
       countryId: full.countryId || ver.countryId || 2,
       stateId: full.stateId || ver.stateId || '',
-      city: full.city || ver.city || '',
+      city: clean(full.city || ver.city),
       zipCode: full.zipCode || ver.zipCode || '',
-      address1: full.address1 || ver.address1 || '',
+      address1: clean(full.address1 || ver.address1),
       address2: full.address2 || ver.address2 || '',
       paymentTerms: (Array.isArray(full.paymentTerms) ? full.paymentTerms : (full.paymentTerms ? [full.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
       deliveryTerms: (Array.isArray(full.deliveryTerms) ? full.deliveryTerms : (full.deliveryTerms ? [full.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
@@ -1005,7 +1046,10 @@ export default function VendorEffectiveDatesPage() {
         setVersionDetailsMap((prev) => ({ ...prev, [verId]: fetched }));
         setFormData({
           effectiveDate: fetched.effectiveDate || '',
-          contactPersonName: fetched.contactPersonName || '',
+          ledgerName: vendor?.ledgerName || vendor?.tallyLedgerName || (vendor?.vendorName ? vendor.vendorName.toUpperCase() : ''),
+          group: vendor?.group || vendor?.tallyGroup || '',
+          subGroup: vendor?.subGroup || vendor?.tallySubGroup || '',
+          contactPersonName: clean(fetched.contactPersonName),
           phoneNo: fetched.phoneNo || '',
           alternatePhoneNo: fetched.alternatePhoneNo || '',
           email: fetched.email || '',
@@ -1019,9 +1063,9 @@ export default function VendorEffectiveDatesPage() {
           website: fetched.website || '',
           countryId: fetched.countryId || 2,
           stateId: fetched.stateId || '',
-          city: fetched.city || '',
+          city: clean(fetched.city),
           zipCode: fetched.zipCode || '',
-          address1: fetched.address1 || '',
+          address1: clean(fetched.address1),
           address2: fetched.address2 || '',
           paymentTerms: (Array.isArray(fetched.paymentTerms) ? fetched.paymentTerms : (fetched.paymentTerms ? [fetched.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
           deliveryTerms: (Array.isArray(fetched.deliveryTerms) ? fetched.deliveryTerms : (fetched.deliveryTerms ? [fetched.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
@@ -1071,10 +1115,12 @@ export default function VendorEffectiveDatesPage() {
   useEffect(() => {
     if (mode === 'EDIT' && selectedVersionId && versionDetailsMap[selectedVersionId]) {
       const detail = versionDetailsMap[selectedVersionId];
+      const NA = 'Not Available';
+      const clean = (v) => (v === NA ? '' : (v ?? ''));
       if (!formData.contactPersonName && detail.contactPersonName) {
         setFormData({
           effectiveDate: detail.effectiveDate || '',
-          contactPersonName: detail.contactPersonName || '',
+          contactPersonName: clean(detail.contactPersonName),
           phoneNo: detail.phoneNo || '',
           alternatePhoneNo: detail.alternatePhoneNo || '',
           email: detail.email || '',
@@ -1088,9 +1134,9 @@ export default function VendorEffectiveDatesPage() {
           website: detail.website || '',
           countryId: detail.countryId || 'IN',
           stateId: detail.stateId || '',
-          city: detail.city || '',
+          city: clean(detail.city),
           zipCode: detail.zipCode || '',
-          address1: detail.address1 || '',
+          address1: clean(detail.address1),
           address2: detail.address2 || '',
           notes: detail.notes || '',
         });
@@ -1100,10 +1146,17 @@ export default function VendorEffectiveDatesPage() {
   }, [mode, selectedVersionId, versionDetailsMap, formData.contactPersonName]);
 
   async function handleStartAdd() {
+    if (hasPendingRevision) {
+      toast.error('This vendor already has an open revision awaiting approval or in draft. Only one pending revision is allowed at a time.');
+      return;
+    }
     setCopyAttachments(true);
     setSubmitForApproval(true);
     setPendingDeleteAttachmentIds([]);
     setAttachmentToDelete(null);
+
+    const NA = 'Not Available';
+    const clean = (v) => (v === NA ? '' : (v ?? ''));
 
     // Identify the latest version record (newest version at versions[0] or activeVersion)
     const latestVersionRecord = versions[0] || activeVersion || selectedVersion || null;
@@ -1120,7 +1173,10 @@ export default function VendorEffectiveDatesPage() {
       if (!src) return;
       setFormData({
         effectiveDate: initialDate,
-        contactPersonName: src.contactPersonName || '',
+        ledgerName: vendor?.ledgerName || vendor?.tallyLedgerName || (vendor?.vendorName ? vendor.vendorName.toUpperCase() : ''),
+        group: vendor?.group || vendor?.tallyGroup || '',
+        subGroup: vendor?.subGroup || vendor?.tallySubGroup || '',
+        contactPersonName: clean(src.contactPersonName),
         phoneNo: src.phoneNo || '',
         alternatePhoneNo: src.alternatePhoneNo || '',
         email: src.email || '',
@@ -1134,9 +1190,9 @@ export default function VendorEffectiveDatesPage() {
         website: src.website || '',
         countryId: src.countryId || 2,
         stateId: src.stateId || '',
-        city: src.city || '',
+        city: clean(src.city),
         zipCode: src.zipCode || '',
-        address1: src.address1 || '',
+        address1: clean(src.address1),
         address2: src.address2 || '',
         paymentTerms: (Array.isArray(src.paymentTerms) ? src.paymentTerms : (src.paymentTerms ? [src.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
         deliveryTerms: (Array.isArray(src.deliveryTerms) ? src.deliveryTerms : (src.deliveryTerms ? [src.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
@@ -1154,7 +1210,10 @@ export default function VendorEffectiveDatesPage() {
     } else {
       setFormData({
         effectiveDate: initialDate,
-        contactPersonName: latestVersionRecord?.contactPersonName || '',
+        ledgerName: vendor?.ledgerName || vendor?.tallyLedgerName || (vendor?.vendorName ? vendor.vendorName.toUpperCase() : ''),
+        group: vendor?.group || vendor?.tallyGroup || '',
+        subGroup: vendor?.subGroup || vendor?.tallySubGroup || '',
+        contactPersonName: clean(latestVersionRecord?.contactPersonName),
         phoneNo: latestVersionRecord?.phoneNo || '',
         alternatePhoneNo: latestVersionRecord?.alternatePhoneNo || '',
         email: latestVersionRecord?.email || '',
@@ -1168,9 +1227,9 @@ export default function VendorEffectiveDatesPage() {
         website: latestVersionRecord?.website || '',
         countryId: latestVersionRecord?.countryId || '',
         stateId: latestVersionRecord?.stateId || '',
-        city: latestVersionRecord?.city || '',
+        city: clean(latestVersionRecord?.city),
         zipCode: latestVersionRecord?.zipCode || '',
-        address1: latestVersionRecord?.address1 || '',
+        address1: clean(latestVersionRecord?.address1),
         address2: latestVersionRecord?.address2 || '',
         notes: latestVersionRecord?.notes || '',
       });
@@ -1209,6 +1268,23 @@ export default function VendorEffectiveDatesPage() {
 
   function handleInputChange(e) {
     const { name, value } = e.target;
+
+    if (name === 'ledgerName') {
+      const upper = typeof value === 'string' ? value.toUpperCase() : value;
+      setFormData((prev) => ({ ...prev, ledgerName: upper }));
+      if (formErrors.ledgerName) {
+        setFormErrors((prev) => ({ ...prev, ledgerName: '' }));
+      }
+      return;
+    }
+
+    if (name === 'group') {
+      setFormData((prev) => ({ ...prev, group: value, subGroup: '' }));
+      if (formErrors.group) {
+        setFormErrors((prev) => ({ ...prev, group: '' }));
+      }
+      return;
+    }
 
     if (name === 'gstNo') {
       const upper = typeof value === 'string' ? value.toUpperCase() : value;
@@ -1434,6 +1510,11 @@ export default function VendorEffectiveDatesPage() {
       }
     }
 
+    // Ledger Name
+    if (formData.ledgerName && formData.ledgerName.trim().length > 200) {
+      errors.ledgerName = 'Ledger name must be at most 200 characters.';
+    }
+
     // 2. Contact Person Name
     if (!formData.contactPersonName?.trim()) {
       errors.contactPersonName = 'Contact person name is required.';
@@ -1544,10 +1625,9 @@ export default function VendorEffectiveDatesPage() {
           }
         } catch (apiErr) {
           console.warn('PUT /api/vendor-versions/{id} failed:', apiErr);
-          if (apiErr?.status === 400 || apiErr?.status === 422) {
-            toast.error(apiErr.detail || apiErr.message || 'Validation error updating version.');
-            return;
-          }
+          const msg = apiErr?.detail || apiErr?.message || apiErr?.error || 'Validation error updating version.';
+          toast.error(msg);
+          return;
         }
 
         // Invalidate cache for this version
@@ -1637,10 +1717,15 @@ export default function VendorEffectiveDatesPage() {
           }
         } catch (apiErr) {
           console.warn('POST /api/vendors/{id}/versions failed:', apiErr);
-          if (apiErr?.status === 400 || apiErr?.status === 422) {
-            toast.error(apiErr.detail || apiErr.message || 'Validation error adding version.');
-            return;
+          const msg = apiErr?.detail || apiErr?.message || apiErr?.error || 'Validation error adding version.';
+          toast.error(msg);
+          if (apiErr?.status === 409) {
+            setFormErrors((prev) => ({
+              ...prev,
+              effectiveDate: msg,
+            }));
           }
+          return;
         }
 
         // Re-fetch fresh version list from API (GET /api/vendors/{vendorId}/versions)
@@ -1696,6 +1781,31 @@ export default function VendorEffectiveDatesPage() {
         );
         setSelectedVersionId(newVersionId);
         setMode('VIEW');
+      }
+
+      // Synchronize vendor master header fields (Ledger Name, Group, Sub-Group) if edited
+      if (vendor?.id && (formData.ledgerName !== undefined || formData.group !== undefined || formData.subGroup !== undefined)) {
+        const currentLedger = vendor.ledgerName || vendor.tallyLedgerName || '';
+        const currentGroup = vendor.group || vendor.tallyGroup || '';
+        const currentSubGroup = vendor.subGroup || vendor.tallySubGroup || '';
+        const nextLedger = formData.ledgerName !== undefined ? formData.ledgerName.trim() : currentLedger;
+        const nextGroup = formData.group !== undefined ? formData.group.trim() : currentGroup;
+        const nextSubGroup = formData.subGroup !== undefined ? formData.subGroup.trim() : currentSubGroup;
+
+        if (nextLedger !== currentLedger || nextGroup !== currentGroup || nextSubGroup !== currentSubGroup) {
+          try {
+            await vendorService.updateVendorName(vendor.id, {
+              vendorName: vendor.vendorName,
+              vendorCategory: vendor.vendorCategory,
+              ledgerName: nextLedger,
+              group: nextGroup,
+              subGroup: nextSubGroup,
+            });
+            setFetchedVendor((prev) => prev ? ({ ...prev, ledgerName: nextLedger, group: nextGroup, subGroup: nextSubGroup }) : prev);
+          } catch (hdrErr) {
+            console.warn('Failed to update vendor header details:', hdrErr);
+          }
+        }
       }
     } catch {
       toast.error('Failed to save vendor version.');
@@ -1913,7 +2023,7 @@ export default function VendorEffectiveDatesPage() {
     [selectedVersion, mode]
   );
 
-  // Filter out Attachment and Approved By columns as requested
+  // Filter out Attachment, Approved By, and conditionally hide Actions column if there is only 1 version
   const columns = useMemo(
     () =>
       allColumns.filter(
@@ -1921,9 +2031,10 @@ export default function VendorEffectiveDatesPage() {
           col.accessorKey !== 'attachmentCount' &&
           col.id !== 'attachmentCount' &&
           col.accessorKey !== 'approvedByName' &&
-          col.id !== 'approvedByName'
+          col.id !== 'approvedByName' &&
+          !(versions.length <= 1 && (col.id === 'actions' || col.accessorKey === 'actions'))
       ),
-    [allColumns]
+    [allColumns, versions.length]
   );
 
   /* ── React Table Instance with Column Resizing Enabled ── */
@@ -2169,11 +2280,13 @@ export default function VendorEffectiveDatesPage() {
               variant="primary"
               size="sm"
               onClick={handleStartAdd}
-              disabled={!vendor.isActive}
+              disabled={!vendor.isActive || hasPendingRevision}
               className="text-xs shrink-0 w-full sm:w-auto justify-center"
               title={
                 !vendor.isActive
                   ? 'Vendor is inactive. Activate vendor to add new effective dates.'
+                  : hasPendingRevision
+                  ? 'Vendor already has a revision awaiting approval or in draft.'
                   : 'Add new effective date'
               }
             >
@@ -2564,14 +2677,14 @@ export default function VendorEffectiveDatesPage() {
 
         {/* ── Mode 1: VIEW MODE ── */}
         {!loadingVersions && mode === 'VIEW' && selectedVersion && (
-          <div className="p-4 sm:p-6 space-y-6 divide-y divide-border/60">
+          <div className="p-4 sm:p-5 space-y-3.5 divide-y divide-border/60">
             {/* 1. Contact Information */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconContact size={15} className="text-primary" />
                 Contact Information
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2 pt-1">
                 <DetailField
                   label="Effective Date"
                   value={formatDateDisplay(selectedVersion.effectiveDate)}
@@ -2613,12 +2726,12 @@ export default function VendorEffectiveDatesPage() {
             </div>
 
             {/* 2. Statutory & MSME Registrations */}
-            <div className="space-y-3 pt-6">
+            <div className="space-y-2 pt-3.5">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconShieldCheck size={15} className="text-primary" />
                 Statutory & MSME Registrations
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
                 <DetailField
                   label="GST / Tax Identification"
                   value={selectedVersion.gstNo}
@@ -2648,68 +2761,82 @@ export default function VendorEffectiveDatesPage() {
                   value={selectedVersion.msmeActivity}
                 />
               </div>
-
-              {/* Tally / Migration Audit Notice if present */}
-              {(vendor.tallyLedgerName || vendor.tallyGroup || selectedVersion.defaultedFields || selectedVersion.correctedFields) && (
-                <div className="mt-2 rounded-xl border border-primary/20 bg-primary/[0.03] p-3 text-xs space-y-1">
-                  <div className="font-semibold text-heading flex items-center gap-1.5">
-                    <IconBuilding2 size={14} className="text-primary" />
-                    Accounting & Migration Details
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-2xs text-text-muted">
-                    {vendor.tallyLedgerName && <span>Ledger: <strong className="text-heading font-medium">{vendor.tallyLedgerName}</strong></span>}
-                    {vendor.tallyGroup && <span>Group: <strong className="text-heading font-medium">{vendor.tallyGroup}</strong></span>}
-                    {vendor.tallySubGroup && <span>Sub-Group: <strong className="text-heading font-medium">{vendor.tallySubGroup}</strong></span>}
-                    {selectedVersion.correctedFields && <span>Corrected: <span className="text-success font-medium">{selectedVersion.correctedFields}</span></span>}
-                    {selectedVersion.defaultedFields && <span>Defaulted: <span className="text-warning font-medium">{selectedVersion.defaultedFields}</span></span>}
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* 3. Address Details */}
-            <div className="space-y-3 pt-6">
+            {/* 3. Accounting & Ledger Details */}
+            {(vendor?.ledgerName || vendor?.tallyLedgerName || vendor?.group || vendor?.tallyGroup || vendor?.subGroup || vendor?.tallySubGroup) && (
+              <div className="space-y-2 pt-3.5">
+                <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                  <IconBuilding2 size={15} className="text-primary" />
+                  Accounting & Ledger Details
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
+                  <DetailField
+                    label="Ledger Name"
+                    value={vendor.ledgerName || vendor.tallyLedgerName}
+                    mono
+                  />
+                  <DetailField
+                    label="Accounting Group"
+                    value={vendor.group || vendor.tallyGroup}
+                  />
+                  <DetailField
+                    label="Sub-Group"
+                    value={vendor.subGroup || vendor.tallySubGroup}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 4. Registered Business Address */}
+            <div className="space-y-2 pt-3.5">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconLocation size={15} className="text-primary" />
-                Address Details
+                Registered Business Address
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
                 <DetailField
-                  label="Country"
-                  value={getCountryName(selectedVersion.countryId)}
+                  label="Street Address"
+                  value={
+                    [selectedVersion.address1, selectedVersion.address2]
+                      .filter(Boolean)
+                      .join(', ') || null
+                  }
                 />
                 <DetailField
-                  label="State"
-                  value={getStateName(selectedVersion.countryId, selectedVersion.stateId)}
+                  label="City & State"
+                  value={
+                    [
+                      selectedVersion.city,
+                      getStateName(selectedVersion.countryId, selectedVersion.stateId),
+                    ]
+                      .filter(Boolean)
+                      .join(', ') || null
+                  }
                 />
                 <DetailField
-                  label="City"
-                  value={selectedVersion.city}
-                />
-                <DetailField
-                  label="ZIP / Postal Code"
-                  value={selectedVersion.zipCode}
-                  mono
-                />
-                <DetailField
-                  label="Address Line 1"
-                  value={selectedVersion.address1}
-                />
-                <DetailField
-                  label="Address Line 2"
-                  value={selectedVersion.address2}
+                  label="Country & PIN"
+                  value={
+                    [
+                      getCountryName(selectedVersion.countryId),
+                      selectedVersion.zipCode,
+                    ]
+                      .filter(Boolean)
+                      .join(' — ') || null
+                  }
+                  mono={Boolean(selectedVersion.zipCode)}
                 />
               </div>
             </div>
 
-            {/* 4. Commercial Terms & Procurement Notes */}
-            <div className="space-y-3 pt-6">
+            {/* 5. Commercial Terms & Procurement Notes */}
+            <div className="space-y-2 pt-3.5">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                 <IconFileText size={15} className="text-primary" />
                 Commercial Terms & Procurement Notes
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-2 pt-1">
                 {/* Payment Terms View */}
                 <div className="space-y-1">
                   <span className="view-field-label mf-detail-label">Payment Terms</span>
@@ -2778,8 +2905,8 @@ export default function VendorEffectiveDatesPage() {
               </div>
             </div>
 
-            {/* 5. Attachments & Supporting Documents (VIEW MODE — Click opens Screen Popup) */}
-            <div className="space-y-3 pt-6">
+            {/* 6. Attachments & Supporting Documents (VIEW MODE — Click opens Screen Popup) */}
+            <div className="space-y-2 pt-3.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                   <IconAttachment size={15} className="text-primary" />
@@ -2855,6 +2982,37 @@ export default function VendorEffectiveDatesPage() {
         {/* ── Mode 2 & 3: EDIT & ADD FORM ── */}
         {!loadingVersions && (mode === 'EDIT' || mode === 'ADD') && (!isLoadingVersion || formData.effectiveDate || mode === 'ADD') && (
           <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
+            {/* Vendor Master Context Header */}
+            {vendor && (
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-surface/80 rounded-xl border border-border/80 text-xs">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs uppercase">
+                    {vendor.vendorCode?.slice(0, 2) || 'VN'}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-heading flex items-center gap-2">
+                      <span>{vendor.vendorName}</span>
+                      <span className="text-2xs font-mono px-1.5 py-0.5 rounded bg-muted text-text-muted font-normal">
+                        {vendor.vendorCode}
+                      </span>
+                    </div>
+                    <div className="text-2xs text-text-muted flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+                      <span>Category: <strong className="text-heading font-medium">{vendor.vendorCategory || 'Not Categorized'}</strong></span>
+                      {(vendor.group || vendor.tallyGroup) && (
+                        <span>Accounting Group: <strong className="text-heading font-medium">{vendor.group || vendor.tallyGroup}</strong></span>
+                      )}
+                      {(vendor.subGroup || vendor.tallySubGroup) && (
+                        <span>Sub-Group: <strong className="text-heading font-medium">{vendor.subGroup || vendor.tallySubGroup}</strong></span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-2xs text-primary bg-primary/5 border border-primary/20 px-2.5 py-1 rounded-full font-medium">
+                  {mode === 'ADD' ? 'Creating New Effective Revision' : `Editing Revision: ${formData.effectiveDate || 'Draft'}`}
+                </div>
+              </div>
+            )}
+
             {/* Section 1: Effective Date & Contact Information */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
@@ -3061,6 +3219,63 @@ export default function VendorEffectiveDatesPage() {
                     options={msmeActivityOptions}
                     value={formData.msmeActivity}
                     onChange={handleInputChange}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2.5: Accounting & Ledger Details */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
+                <IconBuilding2 size={15} className="text-primary" />
+                Accounting & Ledger Details
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Ledger Name */}
+                <div>
+                  <Input
+                    id="form-ledgerName"
+                    name="ledgerName"
+                    label="Ledger Name"
+                    placeholder="e.g. APEX PRECISION CASTINGS PVT LTD"
+                    value={formData.ledgerName || ''}
+                    onChange={handleInputChange}
+                    error={formErrors.ledgerName}
+                    maxLength={200}
+                    hint="Unique accounting ledger name (max 200 chars)"
+                  />
+                </div>
+
+                {/* Accounting Group */}
+                <div>
+                  <SearchableSelect
+                    id="form-group"
+                    name="group"
+                    label="Accounting Group"
+                    placeholder="Select group..."
+                    searchPlaceholder="Search group..."
+                    options={ACCOUNTING_GROUP_OPTIONS}
+                    value={formData.group || ''}
+                    onChange={handleInputChange}
+                    error={formErrors.group}
+                  />
+                </div>
+
+                {/* Sub-Group */}
+                <div>
+                  <SearchableSelect
+                    id="form-subGroup"
+                    name="subGroup"
+                    label="Sub-Group"
+                    placeholder={!formData.group ? 'Select Accounting Group first...' : 'Select sub-group...'}
+                    searchPlaceholder="Search sub-group..."
+                    options={formData.group ? formSubGroupOptions : []}
+                    value={formData.subGroup || ''}
+                    onChange={handleInputChange}
+                    disabled={!formData.group}
+                    error={formErrors.subGroup}
+                    hint={!formData.group ? 'Requires Accounting Group selection' : undefined}
                   />
                 </div>
               </div>

@@ -683,51 +683,7 @@ export default function CompanyBankDetailsViewPage({ companyId: propCompanyId, e
                 </div>
               </Card>
 
-              {/* Card 3: Disbursement Remarks & Audit Trail */}
-              <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
-                <div className="flex items-center gap-2 border-b border-border pb-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <IconClock size={17} />
-                  </div>
-                  <h3 className="text-sm font-bold text-heading">
-                    Disbursement & Audit Information
-                  </h3>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <span className="view-field-label">Disbursement Remarks</span>
-                    <p className="text-xs text-heading p-3 rounded-lg bg-surface/50 border border-border min-h-[50px] mt-1">
-                      {selectedAccount.remarks || 'No specific remarks entered for this account.'}
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <DetailField
-                      label="Record Created"
-                      value={
-                        selectedAccount.createdAt
-                          ? `${formatDate(selectedAccount.createdAt)} by ${
-                              selectedAccount.createdBy || 'System'
-                            }`
-                          : '—'
-                      }
-                    />
-                    <DetailField
-                      label="Last Updated"
-                      value={
-                        selectedAccount.updatedAt
-                          ? `${formatDate(selectedAccount.updatedAt)} by ${
-                              selectedAccount.updatedBy || 'Admin'
-                            }`
-                          : 'Never modified'
-                      }
-                    />
-                  </div>
-                </div>
-              </Card>
-
-              {/* Card 4: Supporting Documents & Attachments */}
+              {/* Card 3: Supporting Documents & Attachments */}
               <Card padding="md" className="space-y-3.5 shadow-xs border-border bg-bg">
                 <div className="flex items-center justify-between border-b border-border pb-3">
                   <div className="flex items-center gap-2">
@@ -778,6 +734,50 @@ export default function CompanyBankDetailsViewPage({ companyId: propCompanyId, e
                     ))}
                   </div>
                 )}
+              </Card>
+
+              {/* Card 4: Disbursement Remarks & Audit Trail */}
+              <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
+                <div className="flex items-center gap-2 border-b border-border pb-3">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <IconClock size={17} />
+                  </div>
+                  <h3 className="text-sm font-bold text-heading">
+                    Disbursement & Audit Information
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <span className="view-field-label">Disbursement Remarks</span>
+                    <p className="text-xs text-heading p-3 rounded-lg bg-surface/50 border border-border min-h-[50px] mt-1">
+                      {selectedAccount.remarks || 'No specific remarks entered for this account.'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <DetailField
+                      label="Record Created"
+                      value={
+                        selectedAccount.createdAt
+                          ? `${formatDate(selectedAccount.createdAt)} by ${
+                              selectedAccount.createdBy || 'System'
+                            }`
+                          : '—'
+                      }
+                    />
+                    <DetailField
+                      label="Last Updated"
+                      value={
+                        selectedAccount.updatedAt
+                          ? `${formatDate(selectedAccount.updatedAt)} by ${
+                              selectedAccount.updatedBy || 'Admin'
+                            }`
+                          : 'Never modified'
+                      }
+                    />
+                  </div>
+                </div>
               </Card>
             </>
           ) : (

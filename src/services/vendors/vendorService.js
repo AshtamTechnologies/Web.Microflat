@@ -18,9 +18,10 @@ import { normalizeApprovalStatus, ApprovalStatus } from '../../constants/approva
 
 /**
  * Lists vendors with server-side pagination, search, and status filters.
- * @param {{ search?: string, approvalStatus?: string|number, isActive?: boolean|string, hasPendingChange?: boolean, vendorCategory?: string, tallyGroup?: string, hasDefaultedFields?: boolean|string, pageNumber?: number, pageSize?: number }} [params]
+ * @param {{ search?: string, approvalStatus?: string|number, isActive?: boolean|string, hasPendingChange?: boolean, vendorCategory?: string, group?: string, tallyGroup?: string, hasDefaultedFields?: boolean|string, pageNumber?: number, pageSize?: number }} [params]
+ * @param {{ signal?: AbortSignal }} [options]
  */
-export async function listVendors(params = {}) {
+export async function listVendors(params = {}, options = {}) {
   try {
     const query = {};
     if (params.search?.trim()) query.Search = params.search.trim();
@@ -43,8 +44,9 @@ export async function listVendors(params = {}) {
     if (params.vendorCategory && params.vendorCategory !== 'ALL') {
       query.VendorCategory = params.vendorCategory.trim();
     }
-    if (params.tallyGroup && params.tallyGroup !== 'ALL') {
-      query.TallyGroup = params.tallyGroup.trim();
+    const groupVal = params.group || params.tallyGroup;
+    if (groupVal && groupVal !== 'ALL') {
+      query.Group = groupVal.trim();
     }
     if (params.hasDefaultedFields !== undefined && params.hasDefaultedFields !== null && params.hasDefaultedFields !== 'ALL') {
       query.HasDefaultedFields = Boolean(params.hasDefaultedFields);
@@ -56,7 +58,10 @@ export async function listVendors(params = {}) {
       query.PageSize = Number(params.pageSize);
     }
 
-    const response = await axiosInstance.get(VENDOR_ENDPOINTS.VENDORS, { params: query });
+    const response = await axiosInstance.get(VENDOR_ENDPOINTS.VENDORS, {
+      params: query,
+      signal: options.signal,
+    });
     const data = response.data || {};
     const items = Array.isArray(data.items)
       ? data.items.map(vendorItemFromApi)
@@ -80,6 +85,9 @@ export async function listVendors(params = {}) {
       totalPages,
     };
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -126,6 +134,9 @@ export async function getVendor(id) {
 
     return vendor;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -185,38 +196,67 @@ export async function createVendor(formData, submitForApproval = true) {
 
     return createdVendor;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
 
 /**
- * Updates vendor header (vendorName and optional vendorCategory).
- * Matches PUT /api/vendors/{id} schema: { vendorName, vendorCategory }
+ * Updates vendor header fields (vendorName, vendorCategory, ledgerName, group, subGroup).
+ * Matches PUT /api/vendors/{id} schema.
  * @param {string|number} id
- * @param {string|{ vendorName: string, vendorCategory?: string }} vendorNameOrData
+ * @param {string|{ vendorName?: string, vendorCategory?: string, ledgerName?: string, group?: string, subGroup?: string }} vendorNameOrData
  * @param {string} [vendorCategory]
  */
 export async function updateVendorName(id, vendorNameOrData, vendorCategory) {
   try {
-    let name = '';
+    let name = undefined;
     let category = undefined;
+    let ledgerName = undefined;
+    let group = undefined;
+    let subGroup = undefined;
+
     if (typeof vendorNameOrData === 'object' && vendorNameOrData !== null) {
       name = vendorNameOrData.vendorName;
       category = vendorNameOrData.vendorCategory ?? vendorNameOrData.category;
+      ledgerName = vendorNameOrData.ledgerName;
+      group = vendorNameOrData.group;
+      subGroup = vendorNameOrData.subGroup;
     } else {
       name = vendorNameOrData;
       category = vendorCategory;
     }
-    const payload = { vendorName: String(name || '').trim() };
+
+    const payload = {};
+    if (name !== undefined) {
+      payload.vendorName = String(name || '').trim();
+    }
     if (category !== undefined) {
       payload.vendorCategory = category ? String(category).trim() : null;
     }
+    if (ledgerName !== undefined) {
+      payload.ledgerName = ledgerName === '' ? '' : (ledgerName ? String(ledgerName).trim() : null);
+    }
+    if (group !== undefined) {
+      payload.group = group === '' ? '' : (group ? String(group).trim() : null);
+    }
+    if (subGroup !== undefined) {
+      payload.subGroup = subGroup === '' ? '' : (subGroup ? String(subGroup).trim() : null);
+    }
+
     const response = await axiosInstance.put(VENDOR_ENDPOINTS.VENDOR_BY_ID(id), payload);
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
+
+export const updateVendorHeader = updateVendorName;
 
 /**
  * Activates or deactivates an approved vendor.
@@ -235,6 +275,9 @@ export async function updateVendorStatus(id, { isActive, inactiveDate, inactiveC
     const response = await axiosInstance.patch(VENDOR_ENDPOINTS.STATUS(id), payload);
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -248,6 +291,9 @@ export async function deleteVendor(id) {
     const response = await axiosInstance.delete(VENDOR_ENDPOINTS.VENDOR_BY_ID(id));
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -260,6 +306,9 @@ export async function getVendorSummary() {
     const response = await axiosInstance.get(VENDOR_ENDPOINTS.SUMMARY);
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -284,6 +333,9 @@ export async function getVendorLookups() {
       msmeActivities: ['Manufacturing', 'Traders', 'Services'],
     };
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -297,6 +349,9 @@ export async function getVendorApprovalHistory(id) {
     const response = await axiosInstance.get(VENDOR_ENDPOINTS.APPROVAL_HISTORY(id));
     return Array.isArray(response.data) ? response.data : [];
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -310,6 +365,9 @@ export async function getVendorVersions(id) {
     const response = await axiosInstance.get(VENDOR_ENDPOINTS.VERSIONS(id));
     return Array.isArray(response.data) ? response.data : [];
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -325,6 +383,9 @@ export async function getVendorVersion(versionId) {
     const response = await axiosInstance.get(VENDOR_ENDPOINTS.VENDOR_VERSION_BY_ID(validId));
     return vendorVersionDetailFromApi(response.data);
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -364,6 +425,9 @@ export async function editVendorVersion(versionId, formData) {
     });
     return vendorVersionDetailFromApi(response.data) || response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -379,6 +443,9 @@ export async function deleteVendorVersion(versionId) {
     const response = await axiosInstance.delete(VENDOR_ENDPOINTS.VENDOR_VERSION_BY_ID(validId));
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -399,6 +466,9 @@ export async function submitVendorVersion(versionId, { comments, autoApprove } =
     const response = await axiosInstance.post(VENDOR_ENDPOINTS.SUBMIT_VERSION(validId), payload);
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -414,6 +484,9 @@ export async function getVersionAttachments(versionId) {
     const response = await axiosInstance.get(VENDOR_ENDPOINTS.VERSION_ATTACHMENTS(validId));
     return Array.isArray(response.data) ? response.data : [];
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -443,6 +516,9 @@ export async function uploadVersionAttachment(versionId, { documentTypeId, docum
     );
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -469,6 +545,9 @@ export async function downloadVendorAttachment(attachmentId, fileName = 'attachm
     URL.revokeObjectURL(url);
     return true;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -484,6 +563,9 @@ export async function deleteVendorAttachment(attachmentId) {
     const response = await axiosInstance.delete(VENDOR_ENDPOINTS.DELETE_ATTACHMENT(validId));
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -503,6 +585,9 @@ export async function createVendorVersion(id, formData, copyAttachments = true, 
     const response = await axiosInstance.post(VENDOR_ENDPOINTS.VERSIONS(validId), payload);
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -553,6 +638,9 @@ export async function listVendorBankDetails(params = {}) {
       totalPages: data.totalPages || 1,
     };
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -568,6 +656,9 @@ export async function getVendorBankDetails(vendorId) {
     const items = Array.isArray(response.data) ? response.data : [];
     return items.map(bankDetailFromApi);
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -584,6 +675,9 @@ export async function createVendorBankDetail(vendorId, form) {
     const response = await axiosInstance.post(VENDOR_ENDPOINTS.VENDOR_BANK_DETAILS(validId), payload);
     return bankDetailFromApi(response.data) || response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -598,6 +692,9 @@ export async function getBankDetail(id) {
     const response = await axiosInstance.get(VENDOR_ENDPOINTS.BANK_DETAIL_BY_ID(validId));
     return bankDetailFromApi(response.data);
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -614,6 +711,9 @@ export async function updateBankDetail(id, form) {
     const response = await axiosInstance.put(VENDOR_ENDPOINTS.BANK_DETAIL_BY_ID(validId), payload);
     return bankDetailFromApi(response.data) || response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -630,6 +730,9 @@ export async function updateBankDetailStatus(id, isActive) {
     const response = await axiosInstance.patch(VENDOR_ENDPOINTS.BANK_DETAIL_STATUS(validId), payload);
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -644,6 +747,9 @@ export async function getBankDetailAttachments(id) {
     const response = await axiosInstance.get(VENDOR_ENDPOINTS.BANK_DETAIL_ATTACHMENTS(validId));
     return Array.isArray(response.data) ? response.data : [];
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -673,6 +779,9 @@ export async function uploadBankDetailAttachment(id, { documentTypeId, documentN
     );
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -700,6 +809,9 @@ export async function downloadBankAttachment(attachmentId, fileName = 'bank_atta
     URL.revokeObjectURL(url);
     return true;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -715,6 +827,9 @@ export async function deleteBankAttachment(attachmentId) {
     const response = await axiosInstance.delete(VENDOR_ENDPOINTS.BANK_DELETE_ATTACHMENT(validId));
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
@@ -734,6 +849,9 @@ export async function authenticateVendorBank(vendorId, password) {
     );
     return response.data;
   } catch (err) {
+    if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError') {
+      throw err;
+    }
     throw normalizeApiError(err);
   }
 }
