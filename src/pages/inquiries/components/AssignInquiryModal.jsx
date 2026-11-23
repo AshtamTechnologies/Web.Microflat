@@ -59,7 +59,7 @@ export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
     }
   }, [isOpen, inquiry]);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     if (e) e.preventDefault();
     if (!selectedUserId) {
       setError('Please select an assignee from the list.');
@@ -68,8 +68,8 @@ export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
 
     setSubmitting(true);
     try {
-      const res = reassignInquiry(inquiry.id || inquiry.InquiryId, selectedUserId, remarks);
-      if (res.ok) {
+      const res = await reassignInquiry(inquiry.id || inquiry.InquiryId, selectedUserId, remarks);
+      if (res?.ok) {
         onClose();
       }
     } finally {

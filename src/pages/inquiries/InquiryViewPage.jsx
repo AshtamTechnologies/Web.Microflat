@@ -242,17 +242,44 @@ export default function InquiryViewPage() {
   const location = useLocation();
   const { id } = useParams();
 
-  const { getInquiryById, addInquiryComment } = useInquiriesContext();
+  const { getInquiryById, fetchInquiryById, addInquiryComment } = useInquiriesContext();
   const { allUsers = [], users = [] } = useUsersContext();
-  const { getDocumentsByInquiryId, getMissingMandatoryDocumentTypes } = useInquiryDocumentsContext();
+  const {
+    getDocumentsByInquiryId,
+    fetchDocumentsByInquiryId,
+    getMissingMandatoryDocumentTypes,
+    downloadDocument,
+    deleteDocument,
+  } = useInquiryDocumentsContext();
   const { documentTypes = [], getDocumentTypeById } = useDocumentTypesContext();
   const { categories = [] } = useProductCategoriesContext();
 
   const userList = allUsers.length > 0 ? allUsers : users;
 
+  const [liveInquiry, setLiveInquiry] = useState(null);
+
   const inquiry = useMemo(() => {
-    return getInquiryById(id);
-  }, [id, getInquiryById]);
+    return liveInquiry || getInquiryById(id);
+  }, [liveInquiry, id, getInquiryById]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (id) {
+      if (fetchInquiryById) {
+        fetchInquiryById(id).then((detail) => {
+          if (isMounted && detail) {
+            setLiveInquiry(detail);
+          }
+        });
+      }
+      if (fetchDocumentsByInquiryId) {
+        fetchDocumentsByInquiryId(id);
+      }
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [id, fetchInquiryById, fetchDocumentsByInquiryId]);
 
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -455,28 +482,56 @@ export default function InquiryViewPage() {
     });
   };
 
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     const textStr = typeof commentText === 'string' ? commentText : commentText?.target?.value || '';
     const stripped = textStr.replace(/<[^>]*>/g, '').trim();
     if (!stripped || isSubmittingComment) return;
 
     setIsSubmittingComment(true);
     try {
-      const result = addInquiryComment(inquiry.id || inquiry.InquiryId, textStr);
+      const result = await addInquiryComment(inquiry.id || inquiry.InquiryId, textStr);
       if (result?.ok) {
         setCommentText('');
-        toast.success('Internal note posted');
+        if (result.activities && liveInquiry) {
+          setLiveInquiry((prev) => ({
+            ...prev,
+            activity: result.activities,
+            activities: result.activities,
+          }));
+        }
       }
     } finally {
       setIsSubmittingComment(false);
     }
   };
 
-  const handleDownloadAttachment = (item) => {
+  const handleDeleteAttachment = async (item) => {
+    if (!item) return;
+    const docId = item.id || item.attachmentId || item.documentId;
+    if (!docId) return;
+    if (window.confirm(`Are you sure you want to delete attachment "${item.fileName || item.documentTitle || 'document'}"?`)) {
+      if (deleteDocument) {
+        await deleteDocument(docId);
+      }
+    }
+  };
+
+  const handleDownloadAttachment = async (item) => {
     if (!item) return;
 
     try {
       const fileName = item.fileName || 'attachment.pdf';
+      const docId = item.id || item.attachmentId || item.documentId;
+
+      if (docId && downloadDocument) {
+        try {
+          await downloadDocument(docId, fileName);
+          return;
+        } catch (downloadErr) {
+          console.warn('downloadDocument API failed, attempting fallback download:', downloadErr);
+        }
+      }
+
       const fileUrl = item.fileUrl;
 
       if (fileUrl) {
@@ -1157,6 +1212,8 @@ export default function InquiryViewPage() {
               type="button"
               variant="primary"
               size="sm"
+              disabled={inquiry?.isEditable === false}
+              title={inquiry?.isEditable === false ? `Inquiry is locked in status ${inquiry?.status || inquiry?.StatusId}` : 'Edit Inquiry'}
               onClick={() => navigate(`/inquiries/${id}/edit`)}
               className="text-xs shadow-2xs"
             >

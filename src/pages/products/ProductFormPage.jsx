@@ -1265,10 +1265,15 @@ export default function ProductFormPage() {
 
         {/* ── Section 3: Product Variants & Dimensions (Full Width) ── */}
         <CollapsibleCard
-          title="Product Variants & Dimensions"
+          title={
+            <span className="inline-flex items-center gap-2">
+              <span>Product Variants & Dimensions</span>
+              {!isEditMode && <Badge variant="neutral">Optional</Badge>}
+            </span>
+          }
           subtitle="Physical sizes, grades, and dimensional figures"
           icon={<IconLayers size={18} />}
-          defaultOpen={true}
+          defaultOpen={isEditMode}
         >
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -1424,7 +1429,7 @@ export default function ProductFormPage() {
             title="Product Options & Accessories"
             subtitle="Optional fixtures, covers, and attachment configurations"
             icon={<IconLayers size={18} />}
-            defaultOpen={true}
+            defaultOpen={isEditMode}
           >
             <ProductOptionsEditor
               options={options}
@@ -1437,7 +1442,7 @@ export default function ProductFormPage() {
             title="Technical Documents & Attachments"
             subtitle="CAD drawings, calibration certificates, and datasheets"
             icon={<IconFileText size={18} />}
-            defaultOpen={true}
+            defaultOpen={isEditMode}
           >
             <div className="space-y-3">
               <div className="flex items-center justify-between">
