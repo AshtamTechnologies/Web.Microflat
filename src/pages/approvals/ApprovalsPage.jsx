@@ -100,6 +100,39 @@ const MODULE_THEMES = {
   },
 };
 
+const MODULE_CONFIG = {
+  ALL: {
+    title: 'Global Approvals',
+    subtitle: 'Centralized review, audit timeline, and decision hub across all system modules.',
+    pendingLabel: 'Awaiting Action',
+  },
+  VENDOR: {
+    title: 'Vendor Approvals',
+    subtitle: 'Review, audit, and approve new vendor registrations and revisions.',
+    pendingLabel: 'Vendor Pending',
+  },
+  PURCHASE_REQUISITION: {
+    title: 'Purchase Requisition Approvals',
+    subtitle: 'Review, audit, and approve material and tooling purchase requisitions.',
+    pendingLabel: 'PR Pending',
+  },
+  PR: {
+    title: 'Purchase Requisition Approvals',
+    subtitle: 'Review, audit, and approve material and tooling purchase requisitions.',
+    pendingLabel: 'PR Pending',
+  },
+  QUOTATION: {
+    title: 'Quotation Approvals',
+    subtitle: 'Review, audit, and approve customer sales quotations and pricing revisions.',
+    pendingLabel: 'Quotation Pending',
+  },
+  PRODUCT: {
+    title: 'Product Approvals',
+    subtitle: 'Review, audit, and approve product engineering specifications and catalog additions.',
+    pendingLabel: 'Product Pending',
+  },
+};
+
 function getModuleTheme(code = '') {
   const normalized = String(code).toUpperCase().trim();
   return MODULE_THEMES[normalized] || MODULE_THEMES.DEFAULT;
@@ -761,20 +794,14 @@ export default function ApprovalsPage() {
     getPaginationRowModel: getPaginationRowModel(),
   });
 
+  const currentModuleConfig = MODULE_CONFIG[moduleFilter] || MODULE_CONFIG.ALL;
+
   return (
     <div className="space-y-4 sm:space-y-6 w-full pb-8 sm:pb-12">
       {/* ── 1. Page Header ── */}
       <PageHeader
-        title={
-          moduleFilter && moduleFilter !== 'ALL'
-            ? `${moduleFilter.replace(/_/g, ' ')} Approvals`
-            : 'Global Approvals'
-        }
-        subtitle={
-          moduleFilter && moduleFilter !== 'ALL'
-            ? `Review, audit, and approve requests for ${moduleFilter.replace(/_/g, ' ').toLowerCase()}.`
-            : 'Centralized review, audit timeline, and decision hub across all system modules.'
-        }
+        title={currentModuleConfig.title}
+        subtitle={currentModuleConfig.subtitle}
         icon={<IconApproval className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" aria-hidden="true" />}
         moduleCode={
           moduleFilter && moduleFilter !== 'ALL'
@@ -804,7 +831,7 @@ export default function ApprovalsPage() {
         <div className="bg-surface rounded-xl border border-border p-4 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-2xs font-semibold uppercase tracking-wider text-text-muted">
-              {moduleFilter && moduleFilter !== 'ALL' ? `${moduleFilter} Pending` : 'Awaiting Action'}
+              {currentModuleConfig.pendingLabel}
             </p>
             <p className="text-2xl font-bold font-mono text-heading mt-1">
               {summaryCounts.pending || 0}

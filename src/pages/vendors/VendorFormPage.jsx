@@ -100,6 +100,9 @@ const INITIAL_FORM = {
   effectiveDate: getTodayISO(),
   vendorName: '',
   vendorCategory: '',
+  ledgerName: '',
+  group: '',
+  subGroup: '',
   contactPersonName: '',
   phoneNo: '',
   alternatePhoneNo: '',
@@ -126,6 +129,41 @@ const INITIAL_FORM = {
   inactiveComment: '',
 };
 
+export const ACCOUNTING_GROUP_OPTIONS = [
+  { value: '', label: 'Select Group...' },
+  { value: 'Sundry Creditors', label: 'Sundry Creditors' },
+  { value: 'Sundry Debtors', label: 'Sundry Debtors' },
+];
+
+export const SUB_GROUP_OPTIONS_MAP = {
+  'Sundry Creditors': [
+    { value: '', label: 'Select Sub-Group...' },
+    { value: 'SUNDRY CREDITORS GOODS', label: 'SUNDRY CREDITORS GOODS' },
+    { value: 'SUNDRY CREDITORS SERVICES', label: 'SUNDRY CREDITORS SERVICES' },
+    { value: 'SUNDRY CREDITORS EXPENSES', label: 'SUNDRY CREDITORS EXPENSES' },
+    { value: 'SUNDRY CREDITORS - DOMESTIC', label: 'SUNDRY CREDITORS - DOMESTIC' },
+    { value: 'SUNDRY CREDITORS - IMPORT', label: 'SUNDRY CREDITORS - IMPORT' },
+  ],
+  'Sundry Debtors': [
+    { value: '', label: 'Select Sub-Group...' },
+    { value: 'SUNDRY DEBTORS - DOMESTIC', label: 'SUNDRY DEBTORS - DOMESTIC' },
+    { value: 'SUNDRY DEBTORS - EXPORT', label: 'SUNDRY DEBTORS - EXPORT' },
+    { value: 'SUNDRY DEBTORS GOODS', label: 'SUNDRY DEBTORS GOODS' },
+    { value: 'SUNDRY DEBTORS SERVICES', label: 'SUNDRY DEBTORS SERVICES' },
+  ],
+};
+
+export const DEFAULT_SUB_GROUP_OPTIONS = [
+  { value: '', label: 'Select Sub-Group...' },
+  { value: 'SUNDRY CREDITORS GOODS', label: 'SUNDRY CREDITORS GOODS' },
+  { value: 'SUNDRY CREDITORS SERVICES', label: 'SUNDRY CREDITORS SERVICES' },
+  { value: 'SUNDRY DEBTORS - DOMESTIC', label: 'SUNDRY DEBTORS - DOMESTIC' },
+  { value: 'SUNDRY DEBTORS - EXPORT', label: 'SUNDRY DEBTORS - EXPORT' },
+];
+
+const NA_PLACEHOLDER = 'Not Available';
+const cleanPlaceholder = (v) => (v === NA_PLACEHOLDER ? '' : (v ?? ''));
+
 function validateField(name, value, currentForm = {}) {
   const str = typeof value === 'string' ? value.trim() : '';
 
@@ -137,6 +175,15 @@ function validateField(name, value, currentForm = {}) {
       if (!str) return 'Vendor name is required.';
       return '';
     case 'vendorCategory':
+      return '';
+    case 'ledgerName':
+      if (str && str.length > 200) return 'Ledger name must be at most 200 characters.';
+      return '';
+    case 'group':
+      if (str && str.length > 50) return 'Group must be at most 50 characters.';
+      return '';
+    case 'subGroup':
+      if (str && str.length > 50) return 'Sub-group must be at most 50 characters.';
       return '';
     case 'effectiveDate':
       if (!str) return 'Effective date is required.';
@@ -378,6 +425,13 @@ export default function VendorFormPage() {
     ...msmeActivities.map((a) => ({ value: a, label: a })),
   ], [msmeActivities]);
 
+  const subGroupOptions = useMemo(() => {
+    if (form.group && SUB_GROUP_OPTIONS_MAP[form.group]) {
+      return SUB_GROUP_OPTIONS_MAP[form.group];
+    }
+    return [];
+  }, [form.group]);
+
   const documentTypeOptions = useMemo(() => {
     if (apiDocTypes && apiDocTypes.length > 0) {
       return apiDocTypes.map((dt) => ({
@@ -428,7 +482,10 @@ export default function VendorFormPage() {
           effectiveDate: existingVendor.effectiveDate || getTodayIsoDate(),
           vendorName: existingVendor.vendorName || '',
           vendorCategory: existingVendor.vendorCategory || '',
-          contactPersonName: existingVendor.contactPersonName || '',
+          ledgerName: existingVendor.ledgerName || existingVendor.tallyLedgerName || '',
+          group: existingVendor.group || existingVendor.tallyGroup || '',
+          subGroup: existingVendor.subGroup || existingVendor.tallySubGroup || '',
+          contactPersonName: cleanPlaceholder(existingVendor.contactPersonName),
           phoneNo: existingVendor.phoneNo || '',
           alternatePhoneNo: existingVendor.alternatePhoneNo || '',
           email: existingVendor.email || '',
@@ -442,9 +499,9 @@ export default function VendorFormPage() {
           website: existingVendor.website || '',
           countryId: existingVendor.countryId || '',
           stateId: existingVendor.stateId || '',
-          city: existingVendor.city || '',
+          city: cleanPlaceholder(existingVendor.city),
           zipCode: existingVendor.zipCode || '',
-          address1: existingVendor.address1 || '',
+          address1: cleanPlaceholder(existingVendor.address1),
           address2: existingVendor.address2 || '',
           paymentTerms: (Array.isArray(existingVendor.paymentTerms) ? existingVendor.paymentTerms : (existingVendor.paymentTerms ? [existingVendor.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
           deliveryTerms: (Array.isArray(existingVendor.deliveryTerms) ? existingVendor.deliveryTerms : (existingVendor.deliveryTerms ? [existingVendor.deliveryTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
@@ -502,6 +559,27 @@ export default function VendorFormPage() {
   function handleChange(e) {
     const { name, value } = e.target;
 
+    if (name === 'vendorName') {
+      const trimmedOrRaw = value || '';
+      setForm((prev) => {
+        const next = { ...prev, vendorName: value };
+        const currentLedger = prev.ledgerName || '';
+        const currentVendor = prev.vendorName || '';
+        if (
+          !currentLedger ||
+          currentLedger === currentVendor ||
+          currentLedger === currentVendor.toUpperCase()
+        ) {
+          next.ledgerName = trimmedOrRaw.toUpperCase();
+        }
+        return next;
+      });
+      if (errors.vendorName) {
+        setErrors((prev) => ({ ...prev, vendorName: '' }));
+      }
+      return;
+    }
+
     if (name === 'gstNo') {
       const upper = typeof value === 'string' ? value.toUpperCase() : value;
       setForm((prev) => {
@@ -517,6 +595,14 @@ export default function VendorFormPage() {
       });
       if (errors.gstNo) {
         setErrors((prev) => ({ ...prev, gstNo: '' }));
+      }
+      return;
+    }
+
+    if (name === 'group') {
+      setForm((prev) => ({ ...prev, group: value, subGroup: '' }));
+      if (errors.group || errors.subGroup) {
+        setErrors((prev) => ({ ...prev, group: '', subGroup: '' }));
       }
       return;
     }
@@ -726,7 +812,13 @@ export default function VendorFormPage() {
     setLoading(true);
     try {
       if (isEdit && existingVendor) {
-        const res = await updateVendor(existingVendor.id, form);
+        const payload = {
+          ...form,
+          ledgerName: form.ledgerName.trim() === '' ? '' : form.ledgerName.trim(),
+          group: form.group.trim() === '' ? '' : form.group.trim(),
+          subGroup: form.subGroup.trim() === '' ? '' : form.subGroup.trim(),
+        };
+        const res = await updateVendor(existingVendor.id, payload);
         if (res?.ok) {
           navigate(`/vendors/${existingVendor?.id || id}`);
         } else {
@@ -735,7 +827,10 @@ export default function VendorFormPage() {
             setErrors((prev) => ({ ...prev, ...res.fieldErrors }));
           }
           if (res?.error) {
-            if (/gst/i.test(res.error)) {
+            if (/ledger/i.test(res.error)) {
+              setErrors((prev) => ({ ...prev, ledgerName: res.error }));
+              document.getElementById('ledgerName')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (/gst/i.test(res.error)) {
               setErrors((prev) => ({ ...prev, gstNo: res.error }));
               document.getElementById('gstNo')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } else if (/vendor\s*code/i.test(res.error)) {
@@ -757,7 +852,10 @@ export default function VendorFormPage() {
             setErrors((prev) => ({ ...prev, ...res.fieldErrors }));
           }
           if (res?.error) {
-            if (/gst/i.test(res.error)) {
+            if (/ledger/i.test(res.error)) {
+              setErrors((prev) => ({ ...prev, ledgerName: res.error }));
+              document.getElementById('ledgerName')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (/gst/i.test(res.error)) {
               setErrors((prev) => ({ ...prev, gstNo: res.error }));
               document.getElementById('gstNo')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             } else if (/vendor\s*code/i.test(res.error)) {
@@ -773,7 +871,10 @@ export default function VendorFormPage() {
     } catch (err) {
       const msg = err?.message || err?.detail || 'An error occurred while saving vendor.';
       toast.error(msg);
-      if (/gst/i.test(msg)) {
+      if (/ledger/i.test(msg) || err?.status === 409 || err?.response?.status === 409) {
+        setErrors((prev) => ({ ...prev, ledgerName: msg }));
+        document.getElementById('ledgerName')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (/gst/i.test(msg)) {
         setErrors((prev) => ({ ...prev, gstNo: msg }));
         document.getElementById('gstNo')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
@@ -985,6 +1086,57 @@ export default function VendorFormPage() {
                     ? 'Effective date cannot be changed for an existing vendor. Use Effective Dates page to add a new version.'
                     : 'Initial effective start date'
                 }
+              />
+            </div>
+          </div>
+
+          {/* Row 2: Ledger Name, Accounting Group (Dropdown), Sub-Group (Dropdown) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 pt-2">
+            <div>
+              <Input
+                id="ledgerName"
+                name="ledgerName"
+                type="text"
+                label="Ledger Name"
+                placeholder="e.g. APEX PRECISION CASTINGS PVT LTD"
+                value={form.ledgerName}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                error={errors.ledgerName}
+                maxLength={200}
+                hint="Unique accounting ledger name (max 200 chars)"
+              />
+            </div>
+
+            <div>
+              <SearchableSelect
+                id="group"
+                name="group"
+                label="Accounting Group"
+                placeholder="Select group..."
+                searchPlaceholder="Search group..."
+                options={ACCOUNTING_GROUP_OPTIONS}
+                value={form.group}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                error={errors.group}
+              />
+            </div>
+
+            <div>
+              <SearchableSelect
+                id="subGroup"
+                name="subGroup"
+                label="Sub-Group"
+                placeholder={!form.group ? 'Select Accounting Group first...' : 'Select sub-group...'}
+                searchPlaceholder="Search sub-group..."
+                options={form.group ? subGroupOptions : []}
+                value={form.subGroup}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                disabled={!form.group}
+                error={errors.subGroup}
+                hint={!form.group ? 'Requires Accounting Group selection' : undefined}
               />
             </div>
           </div>

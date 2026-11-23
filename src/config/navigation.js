@@ -62,7 +62,7 @@ export const APPROVALS_NAV_MODE = 'dropdown'; // 'dropdown' | 'unified'
 const approvalNavItem =
   APPROVALS_NAV_MODE === 'dropdown'
     ? {
-        label: 'Approval',
+        label: 'Approvals',
         icon: IconApproval,
         roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
         children: [
@@ -73,25 +73,25 @@ const approvalNavItem =
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
           },
           {
-            label: 'Vendor Approval',
+            label: 'Vendor Approvals',
             icon: IconVendorApproval,
             path: '/approvals?module=VENDOR',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
           },
           {
-            label: 'PR Approval',
+            label: 'PR Approvals',
             icon: IconPRApproval,
             path: '/approvals?module=PURCHASE_REQUISITION',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
           },
           {
-            label: 'Quotation Approval',
+            label: 'Quotation Approvals',
             icon: IconQuotation,
             path: '/approvals?module=QUOTATION',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
           },
           {
-            label: 'Product Approval',
+            label: 'Product Approvals',
             icon: IconProduct,
             path: '/approvals?module=PRODUCT',
             roles: ['ADMIN', 'MANAGER', 'PROCUREMENT'],
