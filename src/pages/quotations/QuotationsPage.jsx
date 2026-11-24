@@ -140,7 +140,7 @@ export default function QuotationsPage() {
       }),
       columnHelper.accessor((row) => {
         const currentRev = row.revisions?.[row.currentRevision] || row.revisions?.[row.revisions.length - 1];
-        return currentRev?.grandTotal || 0;
+        return Number(currentRev?.grandTotal ?? row.totalAmount ?? row.grandTotal) || 0;
       }, {
         id: 'grandTotal',
         header: () => <span className="w-full text-right block">Total</span>,

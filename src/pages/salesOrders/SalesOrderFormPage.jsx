@@ -164,6 +164,21 @@ function buildPrefillFromQuotation(quotation) {
   };
 }
 
+function formatAddressForDisplay(a) {
+  if (!a) return '';
+  if (typeof a === 'string') return a;
+  const parts = [
+    a.address1 || a.addressLine1 || a.address,
+    a.address2 || a.addressLine2,
+    a.city,
+    a.stateName || a.state,
+    a.zipCode || a.pincode,
+  ].filter(Boolean);
+  const typeTag = a.addressType ? `${a.addressType}: ` : '';
+  const labelTag = a.addressLabel && a.addressLabel !== a.addressType ? `(${a.addressLabel}) ` : '';
+  return `${typeTag}${labelTag}${parts.join(', ')}`.trim() || parts.join(', ') || 'Address';
+}
+
 export default function SalesOrderFormPage() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -390,12 +405,16 @@ export default function SalesOrderFormPage() {
           setFormData((prev) => {
             const hasValidAddr = prev.clientAddressId && addrs.some((a) => String(a.clientAddressId || a.id) === String(prev.clientAddressId));
             const hasValidContact = prev.clientContactId && contacts.some((c) => String(c.clientContactId || c.id) === String(prev.clientContactId));
-            const firstAddr = addrs[0];
+            const preferredAddr =
+              addrs.find((a) => (a.addressType || '').toLowerCase() === 'billing') ||
+              addrs.find((a) => (a.addressLabel || '').toLowerCase().includes('billing')) ||
+              addrs.find((a) => a.isPrimary) ||
+              addrs[0];
             const primaryContact = contacts.find((c) => c.isPrimary) || contacts[0];
             return {
               ...prev,
-              clientAddressId: hasValidAddr ? prev.clientAddressId : (firstAddr?.clientAddressId || firstAddr?.id || prev.clientAddressId || null),
-              clientAddress: hasValidAddr ? prev.clientAddress : (firstAddr ? [firstAddr.addressLabel, firstAddr.address1, firstAddr.city].filter(Boolean).join(', ') : prev.clientAddress),
+              clientAddressId: hasValidAddr ? prev.clientAddressId : (preferredAddr?.clientAddressId || preferredAddr?.id || prev.clientAddressId || null),
+              clientAddress: hasValidAddr ? prev.clientAddress : formatAddressForDisplay(preferredAddr),
               clientContactId: hasValidContact ? prev.clientContactId : (primaryContact?.clientContactId || primaryContact?.id || prev.clientContactId || null),
               contactPerson: hasValidContact ? prev.contactPerson : (primaryContact ? `${primaryContact.firstName || ''} ${primaryContact.lastName || ''}`.trim() : prev.contactPerson),
             };
@@ -521,18 +540,18 @@ export default function SalesOrderFormPage() {
         setClientDetailData(fullClient);
         const addrs = (fullClient.currentDetail?.addresses || []).filter((a) => a.isActive !== false);
         const contacts = (fullClient.currentDetail?.contacts || []).filter((c) => c.isActive !== false);
-        const firstAddr = addrs[0];
+        const preferredAddr =
+          addrs.find((a) => (a.addressType || '').toLowerCase() === 'billing') ||
+          addrs.find((a) => (a.addressLabel || '').toLowerCase().includes('billing')) ||
+          addrs.find((a) => a.isPrimary) ||
+          addrs[0];
         const primaryContact = contacts.find((c) => c.isPrimary) || contacts[0];
 
-        const defaultAddressStr = firstAddr
-          ? [firstAddr.addressLabel, firstAddr.address1, firstAddr.address2, firstAddr.city, firstAddr.stateName, firstAddr.zipCode]
-              .filter(Boolean)
-              .join(', ')
-          : '';
+        const defaultAddressStr = formatAddressForDisplay(preferredAddr);
 
         setFormData((prev) => ({
           ...prev,
-          clientAddressId: firstAddr?.clientAddressId || firstAddr?.id || null,
+          clientAddressId: preferredAddr?.clientAddressId || preferredAddr?.id || null,
           clientAddress: defaultAddressStr,
           clientContactId: primaryContact?.clientContactId || primaryContact?.id || null,
           contactPerson: primaryContact?.fullName || `${primaryContact?.firstName || ''} ${primaryContact?.lastName || ''}`.trim() || '',
@@ -556,12 +575,12 @@ export default function SalesOrderFormPage() {
     const activeAddrs = rawAddrs.filter((a) => a.isActive !== false);
     const opts = activeAddrs.map((a) => {
       const aid = a.clientAddressId || a.id;
-      const labelParts = [a.addressLabel, a.address1, a.address2, a.city, a.stateName || a.state, a.zipCode].filter(Boolean);
-      const display = labelParts.join(', ') || `Address #${aid}`;
+      const display = formatAddressForDisplay(a);
       return {
         value: String(aid),
         label: display,
         rawAddress: display,
+        addressObj: a,
       };
     });
     if (formData.clientAddress && !opts.some((o) => o.rawAddress === formData.clientAddress || o.value === String(formData.clientAddressId))) {
@@ -579,7 +598,7 @@ export default function SalesOrderFormPage() {
     setFormData((prev) => ({
       ...prev,
       clientAddressId: addrId && addrId !== 'current' ? Number(addrId) : prev.clientAddressId,
-      clientAddress: found?.rawAddress || prev.clientAddress,
+      clientAddress: found?.rawAddress || found?.label || prev.clientAddress,
     }));
     setErrors((prev) => ({ ...prev, clientAddressId: undefined }));
   }
@@ -1371,7 +1390,10 @@ export default function SalesOrderFormPage() {
               options={clientAddressOptions}
               value={formData.clientAddressId ? String(formData.clientAddressId) : ''}
               error={errors.clientAddressId}
-              onChange={(e) => handleSelectAddress(e.target.value)}
+              onChange={(e) => {
+                const val = e?.target ? e.target.value : e;
+                handleSelectAddress(val);
+              }}
             />
 
             <SearchableSelect

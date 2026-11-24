@@ -84,6 +84,7 @@ export default function QuotationFormPage() {
   const {
     quotations,
     getQuotationById,
+    fetchQuotationDetail,
     getNextQuotationNo,
     createQuotation,
     createRevision,
@@ -98,9 +99,27 @@ export default function QuotationFormPage() {
   const userList = allUsers.length > 0 ? allUsers : users;
 
   const isRevisionMode = Boolean(id);
+  const [isLoadingRevisionDetail, setIsLoadingRevisionDetail] = useState(isRevisionMode);
   const targetQuotation = useMemo(() => {
     return isRevisionMode ? getQuotationById(id) : null;
   }, [isRevisionMode, id, getQuotationById]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isRevisionMode && id && fetchQuotationDetail) {
+      setIsLoadingRevisionDetail(true);
+      fetchQuotationDetail(id)
+        .then(() => {
+          if (isMounted) setIsLoadingRevisionDetail(false);
+        })
+        .catch(() => {
+          if (isMounted) setIsLoadingRevisionDetail(false);
+        });
+    } else {
+      setIsLoadingRevisionDetail(false);
+    }
+    return () => { isMounted = false; };
+  }, [isRevisionMode, id, fetchQuotationDetail]);
 
   const userOptions = useMemo(() => {
     return userList.map((u) => {
@@ -470,19 +489,35 @@ export default function QuotationFormPage() {
         targetQuotation.revisions?.[targetQuotation.currentRevision] ||
         targetQuotation.revisions?.[targetQuotation.revisions.length - 1];
 
+      const revItems =
+        (latestRev?.items && latestRev.items.length > 0)
+          ? latestRev.items
+          : (targetQuotation.items || []);
+
+      if (targetQuotation.clientId) {
+        clientService.getClientById(targetQuotation.clientId).then((res) => {
+          const addrs = res?.currentDetail?.addresses || res?.addresses || res?.versions?.[0]?.addresses || [];
+          const contacts = res?.currentDetail?.contacts || res?.contacts || res?.versions?.[0]?.contacts || [];
+          if (addrs.length > 0) setDynamicClientAddresses(addrs);
+          if (contacts.length > 0) setDynamicClientContacts(contacts);
+        }).catch((e) => console.warn('Could not load client details for revision:', e));
+      }
+
       setFormData({
         quotationNo: targetQuotation.quotationNo,
         inquiryNo: targetQuotation.inquiryNo,
         inquiryId: targetQuotation.inquiryId,
-        revisionNo: (targetQuotation.revisions?.length || 1),
+        revisionNo: (targetQuotation.revisions?.length || (Number(targetQuotation.currentRevision) + 1) || 1),
         revisionDate: new Date().toISOString().split('T')[0],
         revisionReason: '',
-        clientName: targetQuotation.clientName,
+        clientName: targetQuotation.clientName || targetQuotation.client?.companyName || '',
         clientId: targetQuotation.clientId,
-        clientAddress: targetQuotation.clientAddress,
-        contactPerson: targetQuotation.contactPerson,
-        contactEmail: targetQuotation.contactEmail,
-        contactPhone: targetQuotation.contactPhone,
+        clientAddress: targetQuotation.clientAddress || '',
+        clientAddressId: targetQuotation.clientAddressId || null,
+        contactPerson: targetQuotation.contactPerson || '',
+        clientContactId: targetQuotation.clientContactId || null,
+        contactEmail: targetQuotation.contactEmail || '',
+        contactPhone: targetQuotation.contactPhone || '',
         currency: targetQuotation.currency || 'INR',
         currencyId: targetQuotation.currencyId || 2,
         validUntil: targetQuotation.validUntil || '',
@@ -500,7 +535,7 @@ export default function QuotationFormPage() {
           .map((t) => Number(t.taxConfigDetailId || t.id || t))
           .filter(Boolean),
         pricingNotes: targetQuotation.pricingNotes || targetQuotation.remarks || '',
-        items: latestRev?.items?.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })) || [],
+        items: revItems.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })),
       });
 
       setNegotiationStageData((prev) => ({
@@ -1402,6 +1437,18 @@ export default function QuotationFormPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (isRevisionMode && isLoadingRevisionDetail) {
+    return (
+      <div className="p-16 max-w-xl mx-auto text-center space-y-4">
+        <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+        <h3 className="text-base font-bold text-heading">Loading Previous Revision Data...</h3>
+        <p className="text-xs text-text-muted">
+          Copying all products, line items, pricing, client address, and terms from previous revision.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-w-0 space-y-6 pb-24">

@@ -201,10 +201,10 @@ export function QuotationsProvider({ children }) {
         return data;
       }
     } catch (err) {
-      console.warn('fetchQuotationDetail fallback to local:', err);
+      console.warn('fetchQuotationDetail error:', err);
     }
-    return getQuotationById(id);
-  }, [getQuotationById]);
+    return null;
+  }, []);
 
   /**
    * Get Next Quotation Number preview
@@ -753,10 +753,15 @@ export function QuotationsProvider({ children }) {
 
   const submitForApproval = useCallback(async (quotationId) => {
     try {
-      await quotationService.submitQuotationForApproval(quotationId);
-      toast.success('Quotation submitted for approval.');
+      console.log(`[QUOTATIONS_CONTEXT] Submitting quotation ${quotationId} for approval...`);
+      const res = await quotationService.submitQuotationForApproval(quotationId);
+      console.log(`[QUOTATIONS_CONTEXT] Submit response:`, res);
+      const appStatus = res?.approvalStatus;
+      const statusText = appStatus === 2 ? 'Pending Approval' : appStatus === 6 ? 'Approval Not Required (Backend Rule)' : (appStatus || 'Submitted');
+      toast.success(`Quotation submitted: Status is now "${statusText}". Request ID: ${res?.pendingApprovalRequestId || 'None'}`, { duration: 6000 });
       await fetchQuotationDetail(quotationId);
     } catch (err) {
+      console.error(`[QUOTATIONS_CONTEXT] Submit failed:`, err);
       toast.error(err?.detail || err?.message || 'Failed to submit for approval.');
     }
   }, [fetchQuotationDetail]);

@@ -216,6 +216,15 @@ export default function ApprovalsPage() {
     pageSize: 10,
   });
 
+  // Live Diagnostics State
+  const [moduleSetting, setModuleSetting] = useState(null);
+  const [diagnostics, setDiagnostics] = useState({
+    pendingCount: null,
+    listCount: null,
+    awaitingCount: null,
+    error: null,
+  });
+
   // Modal States - Approve
   const [itemToApprove, setItemToApprove] = useState(null);
   const [approveComments, setApproveComments] = useState('');
@@ -267,25 +276,35 @@ export default function ApprovalsPage() {
     async (targetModule = moduleFilter) => {
       try {
         if (!targetModule || targetModule === 'ALL') {
-          const summary = await approvalsService.getApprovalSummary({ mine: false });
-          if (summary) {
-            setSummaryCounts({
-              pending: summary.pending || 0,
-              approved: summary.approved || 0,
-              rejected: summary.rejected || 0,
-              cancelled: summary.cancelled || 0,
-            });
-          }
+          const [summaryRes, pendingRes] = await Promise.allSettled([
+            approvalsService.getApprovalSummary({ mine: false }),
+            approvalsService.getPendingApprovals({ mine: false }),
+          ]);
+          const summary = summaryRes.status === 'fulfilled' ? summaryRes.value : null;
+          const pendingCount =
+            pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.items)
+              ? pendingRes.value.items.length
+              : (summary?.pending || 0);
+
+          setSummaryCounts({
+            pending: Math.max(summary?.pending || 0, pendingCount),
+            approved: summary?.approved || 0,
+            rejected: summary?.rejected || 0,
+            cancelled: summary?.cancelled || 0,
+          });
         } else {
           // Module-specific counts for targetModule
-          const [pendingRes, historyRes] = await Promise.allSettled([
-            approvalsService.getAwaitingMeApprovals({ moduleCode: targetModule }),
+          const [pendingRes, listPendingRes, historyRes] = await Promise.allSettled([
+            approvalsService.getPendingApprovals({ moduleCode: targetModule, mine: false }),
+            approvalsService.listApprovalRequests({ moduleCode: targetModule, status: 2, mine: false }),
             approvalsService.getApprovalHistory({ moduleCode: targetModule, mine: false, pageSize: 100 }),
           ]);
 
           const pendingItems =
-            pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.items)
+            (pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.items) && pendingRes.value.items.length > 0)
               ? pendingRes.value.items
+              : (listPendingRes.status === 'fulfilled' && Array.isArray(listPendingRes.value?.items))
+              ? listPendingRes.value.items
               : [];
           const historyItems =
             historyRes.status === 'fulfilled' && Array.isArray(historyRes.value?.items)
@@ -313,7 +332,26 @@ export default function ApprovalsPage() {
   /* ── 2. Load Approvals Queue ── */
   const loadApprovalsData = useCallback(async () => {
     setIsLoading(true);
+    console.log('[APPROVALS_PAGE] Loading approvals queue. activeTab:', activeTab, 'moduleFilter:', moduleFilter);
+    let pCount = null;
+    let lCount = null;
+    let aCount = null;
+
     try {
+      // If module is specific, check its backend configuration rule
+      if (moduleFilter && moduleFilter !== 'ALL') {
+        try {
+          const setting = await approvalsService.getApprovalSettingByModule(moduleFilter);
+          setModuleSetting(setting);
+          console.log(`[APPROVALS_PAGE] Backend setting for ${moduleFilter}:`, setting);
+        } catch (sErr) {
+          console.warn('[APPROVALS_PAGE] Failed to get module setting:', sErr);
+          setModuleSetting(null);
+        }
+      } else {
+        setModuleSetting(null);
+      }
+
       const params = {};
       if (moduleFilter && moduleFilter !== 'ALL') {
         params.moduleCode = moduleFilter;
@@ -321,22 +359,80 @@ export default function ApprovalsPage() {
 
       let res;
       if (activeTab === 'PENDING') {
-        res = await approvalsService.getAwaitingMeApprovals(params);
+        const combinedItems = [];
+
+        // 1. Try GET /api/approval-requests/pending?Mine=false
+        try {
+          const pendingRes = await approvalsService.getPendingApprovals({ ...params, mine: false });
+          if (Array.isArray(pendingRes?.items)) {
+            combinedItems.push(...pendingRes.items);
+          }
+          pCount = Array.isArray(pendingRes?.items) ? pendingRes.items.length : 0;
+          console.log('[APPROVALS_PAGE] Pending approvals result:', pendingRes);
+        } catch (pendingErr) {
+          pCount = 'ERR: ' + (pendingErr?.status || pendingErr?.message || 'Failed');
+          console.warn('[APPROVALS_PAGE] getPendingApprovals threw, falling back:', pendingErr);
+        }
+
+        // 2. Try full list endpoint GET /api/approval-requests?Status=2 (includes self-submitted records for auditing)
+        try {
+          const listRes = await approvalsService.listApprovalRequests({ ...params, status: 2 });
+          lCount = Array.isArray(listRes?.items) ? listRes.items.length : 0;
+          console.log('[APPROVALS_PAGE] listApprovalRequests (Status=2) result:', listRes);
+          if (Array.isArray(listRes?.items)) {
+            for (const item of listRes.items) {
+              const itemId = item.id || item.approvalRequestId;
+              if (!combinedItems.some((existing) => (existing.id || existing.approvalRequestId) === itemId)) {
+                combinedItems.push(item);
+              }
+            }
+          }
+        } catch (listErr) {
+          lCount = 'ERR: ' + (listErr?.status || listErr?.message || 'Failed');
+          console.warn('[APPROVALS_PAGE] listApprovalRequests threw:', listErr);
+        }
+
+        // 3. Fallback: check awaiting-me
+        try {
+          const awaitingRes = await approvalsService.getAwaitingMeApprovals(params);
+          aCount = Array.isArray(awaitingRes?.items) ? awaitingRes.items.length : 0;
+          console.log('[APPROVALS_PAGE] awaiting-me result:', awaitingRes);
+          if (Array.isArray(awaitingRes?.items)) {
+            for (const item of awaitingRes.items) {
+              const itemId = item.id || item.approvalRequestId;
+              if (!combinedItems.some((existing) => (existing.id || existing.approvalRequestId) === itemId)) {
+                combinedItems.push(item);
+              }
+            }
+          }
+        } catch (awaitingErr) {
+          aCount = 'ERR: ' + (awaitingErr?.status || awaitingErr?.message || 'Failed');
+          console.warn('[APPROVALS_PAGE] awaiting-me threw:', awaitingErr);
+        }
+
+        res = { items: combinedItems };
       } else {
         if (historyStatusFilter !== 'ALL') {
           params.status = historyStatusFilter;
         }
         res = await approvalsService.getApprovalHistory({ ...params, mine: false });
+        console.log('[APPROVALS_PAGE] History approvals result:', res);
       }
 
-      if (res && Array.isArray(res.items)) {
-        setItems(res.items);
-      } else {
-        setItems([]);
-      }
+      setDiagnostics({
+        pendingCount: pCount,
+        listCount: lCount,
+        awaitingCount: aCount,
+        error: null,
+      });
+
+      const finalItems = (res && Array.isArray(res.items)) ? res.items : [];
+      console.log(`[APPROVALS_PAGE] Setting ${finalItems.length} items to table for module ${moduleFilter}`);
+      setItems(finalItems);
       fetchSummary(moduleFilter);
     } catch (err) {
-      console.error('Failed to fetch approval requests:', err);
+      console.error('[APPROVALS_PAGE] Failed to fetch approval requests:', err);
+      setDiagnostics((prev) => ({ ...prev, error: err?.message || 'Unknown error' }));
       toast.error(err?.detail || err?.message || 'Failed to load approvals queue.');
       setItems([]);
     } finally {
@@ -1006,6 +1102,36 @@ export default function ApprovalsPage() {
           </div>
         )}
       </TableToolbar>
+
+      {/* ── Diagnostic Hub for Live Backend Debugging ── */}
+      <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 text-xs text-text-muted space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-heading">Backend Live Diagnostics:</span>
+            <span>Module: <strong className="text-primary font-mono">{moduleFilter}</strong></span>
+            <span>·</span>
+            <span>Setting: <strong className={moduleSetting?.isApprovalRequired ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-red-500 font-semibold'}>
+              {moduleSetting
+                ? (moduleSetting.isApprovalRequired
+                    ? `Approval REQUIRED (${moduleSetting.approverRoleName || 'Role ID ' + moduleSetting.approverRoleId})`
+                    : 'Approval NOT REQUIRED')
+                : (moduleFilter === 'ALL' ? 'Multi-module Global Queue' : 'Fetching setting...')}
+            </strong></span>
+          </div>
+          <div className="flex items-center gap-2 font-mono">
+            <span>Pending API: <strong>{String(diagnostics.pendingCount ?? '—')}</strong></span>
+            <span>·</span>
+            <span>All Requests (Status 2): <strong>{String(diagnostics.listCount ?? '—')}</strong></span>
+            <span>·</span>
+            <span>Awaiting-Me: <strong>{String(diagnostics.awaitingCount ?? '—')}</strong></span>
+          </div>
+        </div>
+        {moduleSetting && !moduleSetting.isApprovalRequired && moduleFilter === 'QUOTATION' && (
+          <div className="text-amber-700 dark:text-amber-400 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 text-xs leading-relaxed">
+            ⚠️ <strong>Quotation Approval is DISABLED on Backend:</strong> In the database, <code>isApprovalRequired</code> is currently <code>false</code> for Quotations. Per the Swagger API specification, submitting a quotation automatically marks it as <code>NotRequired</code> and does not create an approval request in this queue. You can turn Quotation approvals ON anytime in <button type="button" onClick={() => navigate('/approvals/settings')} className="underline font-bold hover:text-amber-800">Approval Settings (/approvals/settings)</button>.
+          </div>
+        )}
+      </div>
 
       {/* ── 5. Main TanStack DataTable ── */}
       <DataTable

@@ -5,7 +5,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { triggerPdfDownload } from '../../utils/fileHelpers';
 import {
   IconBack,
@@ -63,7 +63,7 @@ export default function QuotationViewPage() {
     if (id && fetchQuotationDetail) {
       fetchQuotationDetail(id);
     }
-  }, [id, fetchQuotationDetail]);
+  }, [id]);
 
   useEffect(() => {
     fetchLookups?.();
@@ -99,6 +99,13 @@ export default function QuotationViewPage() {
     return quotation.revisions[selectedRevIndex] || quotation.revisions[latestRevIndex];
   }, [quotation, selectedRevIndex, latestRevIndex]);
 
+  const displayedItems = useMemo(() => {
+    if (activeRevision?.items && activeRevision.items.length > 0) {
+      return activeRevision.items;
+    }
+    return quotation?.items || [];
+  }, [activeRevision?.items, quotation?.items]);
+
   const activeTaxTreatment = activeRevision?.taxTreatment || quotation?.taxTreatment || 'INTRA_STATE';
   const activeTaxTreatmentLabel = useMemo(() => {
     return TAX_TREATMENTS.find((t) => t.value === activeTaxTreatment)?.label || activeTaxTreatment;
@@ -123,27 +130,27 @@ export default function QuotationViewPage() {
 
   const activeTotalsBreakdown = useMemo(() => {
     return calculateQuotationTotals(
-      activeRevision?.items || [],
+      displayedItems,
       activeTaxTreatment,
       activeTaxes,
       activeRevision?.otherCharges || quotation?.otherCharges || 0
     );
-  }, [activeRevision?.items, activeTaxTreatment, activeTaxes, activeRevision?.otherCharges, quotation?.otherCharges]);
+  }, [displayedItems, activeTaxTreatment, activeTaxes, activeRevision?.otherCharges, quotation?.otherCharges]);
 
   const itemsWithDescription = useMemo(() => {
-    return (activeRevision?.items || []).filter((it) => Boolean(it.description?.trim()));
-  }, [activeRevision?.items]);
+    return displayedItems.filter((it) => Boolean(it.description?.trim()));
+  }, [displayedItems]);
 
   const totalItemQuantity = useMemo(() => {
-    return (activeRevision?.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
-  }, [activeRevision?.items]);
+    return displayedItems.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+  }, [displayedItems]);
 
   const allDescriptionsExpanded = useMemo(() => {
     if (itemsWithDescription.length === 0) return false;
-    return (activeRevision?.items || []).every((it, idx) =>
+    return displayedItems.every((it, idx) =>
       !it.description?.trim() || expandedDescIds.has(it.id || `row-${idx}`)
     );
-  }, [activeRevision?.items, itemsWithDescription.length, expandedDescIds]);
+  }, [displayedItems, itemsWithDescription.length, expandedDescIds]);
 
   const handleToggleDescription = (key) => {
     setExpandedDescIds((prev) => {
@@ -257,6 +264,25 @@ export default function QuotationViewPage() {
                 PO Received
               </Badge>
             )}
+
+            {quotation.approvalStatus === 2 || quotation.pendingApprovalRequestId ? (
+              <Link
+                to="/approvals?module=QUOTATION"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
+                title="Click to view in Approvals Queue"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                Approval Pending
+              </Link>
+            ) : quotation.approvalStatus === 3 ? (
+              <Badge variant="success" size="md">
+                Approved
+              </Badge>
+            ) : quotation.approvalStatus === 4 ? (
+              <Badge variant="danger" size="md">
+                Approval Rejected
+              </Badge>
+            ) : null}
           </div>
         }
         subtitle={
@@ -509,23 +535,26 @@ export default function QuotationViewPage() {
             <Card title="Client & Contact Details" className="lg:col-span-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <DetailField label="Client Company" value={quotation.clientName} />
-                <DetailField label="Contact Person" value={quotation.contactPerson || '—'} />
+                <DetailField
+                  label="Contact Person"
+                  value={quotation.contactPerson || quotation.client?.primaryContact || quotation.inquiry?.contactPerson || '—'}
+                />
                 <DetailField
                   label="Phone"
-                  value={quotation.contactPhone}
+                  value={quotation.contactPhone || quotation.client?.officialMobile || quotation.inquiry?.contactPhone || ''}
                   icon={IconPhone}
-                  isPhone={Boolean(quotation.contactPhone)}
+                  isPhone={Boolean(quotation.contactPhone || quotation.client?.officialMobile || quotation.inquiry?.contactPhone)}
                   mono
                 />
                 <DetailField
                   label="Email"
-                  value={quotation.contactEmail}
+                  value={quotation.contactEmail || quotation.client?.officialEmail || quotation.inquiry?.contactEmail || ''}
                   icon={IconMail}
-                  isEmail={Boolean(quotation.contactEmail)}
+                  isEmail={Boolean(quotation.contactEmail || quotation.client?.officialEmail || quotation.inquiry?.contactEmail)}
                 />
                 <DetailField
                   label="Billing / Shipping Address"
-                  value={formatAddressValue(quotation.clientAddress) || '—'}
+                  value={formatAddressValue(quotation.clientAddress) || formatAddressValue(quotation.client?.addresses?.[0]) || '—'}
                   className="sm:col-span-2"
                 />
               </div>
@@ -658,7 +687,7 @@ export default function QuotationViewPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {(activeRevision?.items || []).map((item, idx) => {
+                  {displayedItems.map((item, idx) => {
                     const lineAmount =
                       (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
                       (Number(item.otherCharges) || 0);
