@@ -157,6 +157,16 @@ export async function getInquiryLookups() {
   };
 }
 
+export async function getSources() {
+  const lookups = await getInquiryLookups();
+  return lookups?.sources || [];
+}
+
+export async function getPriorityLevels() {
+  const lookups = await getInquiryLookups();
+  return lookups?.priorities || [];
+}
+
 export async function getNextInquiryNumber(inquiryDate) {
   await new Promise((r) => setTimeout(r, 40));
   const yr = inquiryDate ? new Date(inquiryDate).getFullYear() : new Date().getFullYear();

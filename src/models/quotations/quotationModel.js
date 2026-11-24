@@ -148,6 +148,33 @@ export function quotationListItemFromApi(dto = {}) {
   };
 }
 
+export function formatAddressValue(addr) {
+  if (!addr) return '';
+  if (typeof addr === 'string') return addr;
+  if (typeof addr === 'object') {
+    const parts = [
+      addr.addressLabel || addr.addressType,
+      addr.address1 || addr.addressLine1 || addr.address,
+      addr.address2 || addr.addressLine2,
+      addr.city,
+      addr.stateName || addr.state,
+      addr.zipCode || addr.pincode,
+      addr.countryName || addr.country,
+    ].filter(Boolean);
+    return parts.join(', ');
+  }
+  return String(addr);
+}
+
+export function formatContactPersonValue(contact) {
+  if (!contact) return '';
+  if (typeof contact === 'string') return contact;
+  if (typeof contact === 'object') {
+    return contact.contactPerson || contact.contactName || contact.name || contact.fullName || '';
+  }
+  return String(contact);
+}
+
 /**
  * Normalizes full quotation details from GET /api/quotations/{id}
  */
@@ -160,6 +187,31 @@ export function quotationDetailFromApi(dto = {}) {
   const subtotal = Number(latestRev.subTotal ?? dto.subTotal ?? dto.subtotal) || 0;
   const otherCharges = Number(latestRev.otherCharges ?? dto.otherCharges) || 0;
   const totalTax = Number(latestRev.taxAmount ?? dto.taxAmount) || 0;
+
+  // Address & Contact Resolution (Handles object vs string responses from backend)
+  const rawAddress = dto.clientAddress || latestRev.clientAddress || dto.address || latestRev.address;
+  const clientAddress = formatAddressValue(rawAddress);
+  const clientAddressId =
+    dto.clientAddressId ||
+    latestRev.clientAddressId ||
+    (typeof rawAddress === 'object' ? rawAddress?.clientAddressId || rawAddress?.id : null);
+
+  const rawContact = dto.contactPerson || latestRev.contactPerson || dto.clientContact || latestRev.clientContact;
+  const contactPerson = formatContactPersonValue(rawContact);
+  const clientContactId =
+    dto.clientContactId ||
+    latestRev.clientContactId ||
+    (typeof rawContact === 'object' ? rawContact?.clientContactId || rawContact?.id : null);
+  const contactEmail =
+    dto.contactEmail ||
+    latestRev.contactEmail ||
+    (typeof rawContact === 'object' ? rawContact?.email || rawContact?.contactEmail : '') ||
+    '';
+  const contactPhone =
+    dto.contactPhone ||
+    latestRev.contactPhone ||
+    (typeof rawContact === 'object' ? rawContact?.phone || rawContact?.mobile || rawContact?.contactPhone : '') ||
+    '';
 
   // Normalize line items
   const rawItems = latestRev.lineItems || dto.lineItems || [];
@@ -214,14 +266,15 @@ export function quotationDetailFromApi(dto = {}) {
     clientId: dto.clientId,
     clientCode: dto.clientCode || '',
     clientName: dto.clientName || '',
-    clientAddressId: dto.clientAddressId || latestRev.clientAddressId,
-    clientAddress: dto.clientAddress || latestRev.clientAddress || '',
-    clientContactId: dto.clientContactId || latestRev.clientContactId,
-    contactPerson: dto.contactPerson || latestRev.contactPerson || '',
-    contactEmail: dto.contactEmail || latestRev.contactEmail || '',
-    contactPhone: dto.contactPhone || latestRev.contactPhone || '',
-    paymentTermId: dto.paymentTermId || latestRev.paymentTermId,
+    clientAddressId,
+    clientAddress,
+    clientContactId,
+    contactPerson,
+    contactEmail,
+    contactPhone,
+    paymentTermId: dto.paymentTermId || latestRev.paymentTermId || null,
     paymentTerms: dto.paymentTerms || latestRev.paymentTerms || '',
+    deliveryTermId: dto.deliveryTermId || latestRev.deliveryTermId || null,
     deliveryTerms: dto.deliveryTerms || latestRev.deliveryTerms || '',
     currency: dto.currencyCode || latestRev.currencyCode || 'INR',
     currencyId: dto.currencyId || latestRev.currencyId,
@@ -257,6 +310,27 @@ export function quotationDetailFromApi(dto = {}) {
 }
 
 /**
+ * Sanitizes deliveryTerms to ensure it is always a string or null (never an array []).
+ * Database column is max 500 characters.
+ */
+function formatDeliveryTerms(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    const valid = value
+      .filter(Boolean)
+      .map(String)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return valid.length > 0 ? valid.join(', ').slice(0, 500) : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed.slice(0, 500) : null;
+  }
+  return null;
+}
+
+/**
  * Builds payload for POST /api/quotations (Create Rev 0)
  * Per Guide §5.4f.1
  */
@@ -286,9 +360,10 @@ export function buildCreateQuotationPayload(formValues = {}) {
     clientAddressId: formValues.clientAddressId ? cleanId(formValues.clientAddressId) : null,
     clientContactId: formValues.clientContactId ? cleanId(formValues.clientContactId) : null,
     paymentTermId: formValues.paymentTermId ? cleanId(formValues.paymentTermId) : null,
+    deliveryTermId: formValues.deliveryTermId ? cleanId(formValues.deliveryTermId) : null,
     currencyId: formValues.currencyId ? cleanId(formValues.currencyId) : null,
     validUntil: formValues.validUntil || null,
-    deliveryTerms: formValues.deliveryTerms || '',
+    deliveryTerms: formatDeliveryTerms(formValues.deliveryTerms),
     termsAndConditions: formValues.termsAndConditions || '',
     otherCharges: Number(formValues.otherCharges) || 0,
     otherChargesDescription: formValues.otherChargesDescription || '',
@@ -325,9 +400,10 @@ export function buildUpdateQuotationPayload(formValues = {}) {
     clientAddressId: formValues.clientAddressId ? cleanId(formValues.clientAddressId) : null,
     clientContactId: formValues.clientContactId ? cleanId(formValues.clientContactId) : null,
     paymentTermId: formValues.paymentTermId ? cleanId(formValues.paymentTermId) : null,
+    deliveryTermId: formValues.deliveryTermId ? cleanId(formValues.deliveryTermId) : null,
     currencyId: formValues.currencyId ? cleanId(formValues.currencyId) : null,
     validUntil: formValues.validUntil || null,
-    deliveryTerms: formValues.deliveryTerms || '',
+    deliveryTerms: formatDeliveryTerms(formValues.deliveryTerms),
     termsAndConditions: formValues.termsAndConditions || '',
     otherCharges: Number(formValues.otherCharges) || 0,
     otherChargesDescription: formValues.otherChargesDescription || '',

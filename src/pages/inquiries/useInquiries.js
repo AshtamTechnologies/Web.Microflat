@@ -6,29 +6,28 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { inquiryService, isMockApi } from '../../services';
-import { mockInquiries, STATUS_OPTIONS, PRIORITY_OPTIONS } from '../../mocks/inquiries';
-import { mockUsers } from '../../mocks/users';
+import { STATUS_OPTIONS, PRIORITY_OPTIONS } from '../../mocks/inquiries';
 import { formatDateTime, getTodayISO } from '../../utils/dateUtils';
 import {
   inquiryListItemFromApi,
   inquiryDetailFromApi,
 } from '../../models/inquiries/inquiryModel';
 
-let nextSeqNumber = mockInquiries.length + 101 + 1;
-let nextIdNumber = mockInquiries.length + 1;
+let nextSeqNumber = 101;
+let nextIdNumber = 1;
 
 function formatAuditTimestamp(date = new Date()) {
   return formatDateTime(date);
 }
 
-function resolveUserName(userId, usersList = mockUsers) {
+function resolveUserName(userId, usersList = []) {
   if (!userId) return 'Unassigned';
-  const found = usersList.find((u) => String(u.id) === String(userId));
-  return found ? `${found.firstName} ${found.lastName}` : 'Unassigned';
+  const found = (usersList || []).find((u) => String(u.id || u.userId) === String(userId));
+  return found ? `${found.firstName || ''} ${found.lastName || ''}`.trim() || found.userName || 'Unassigned' : 'Unassigned';
 }
 
-export function useInquiries(usersList = mockUsers) {
-  const [inquiries, setInquiries] = useState(() => mockInquiries.map(inquiryListItemFromApi));
+export function useInquiries(usersList = []) {
+  const [inquiries, setInquiries] = useState([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -40,7 +39,7 @@ export function useInquiries(usersList = mockUsers) {
 
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [totalCount, setTotalCount] = useState(mockInquiries.length);
+  const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(!isMockApi);
   const [error, setError] = useState(null);
@@ -62,17 +61,20 @@ export function useInquiries(usersList = mockUsers) {
     let isMounted = true;
     async function loadLookups() {
       try {
-        const [sourcesRes, prioritiesRes] = await Promise.allSettled([
-          inquiryService.getSources(),
-          inquiryService.getPriorityLevels(),
-        ]);
-        if (isMounted) {
-          if (sourcesRes.status === 'fulfilled' && Array.isArray(sourcesRes.value)) {
-            setSources(sourcesRes.value);
-          }
-          if (prioritiesRes.status === 'fulfilled' && Array.isArray(prioritiesRes.value)) {
-            setPriorityLevels(prioritiesRes.value);
-          }
+        const lookups = await inquiryService.getInquiryLookups();
+        if (isMounted && lookups) {
+          const sourcesList = Array.isArray(lookups.sources)
+            ? lookups.sources
+            : Array.isArray(lookups.inquirySources)
+            ? lookups.inquirySources
+            : [];
+          const prioritiesList = Array.isArray(lookups.priorityLevels)
+            ? lookups.priorityLevels
+            : Array.isArray(lookups.priorities)
+            ? lookups.priorities
+            : [];
+          if (sourcesList.length > 0) setSources(sourcesList);
+          if (prioritiesList.length > 0) setPriorityLevels(prioritiesList);
         }
       } catch (err) {
         console.warn('Failed to load inquiry lookups:', err);
@@ -247,7 +249,12 @@ export function useInquiries(usersList = mockUsers) {
         const errMsg = err?.message || 'Failed to create inquiry.';
         toast.error(errMsg);
 
-        // Fallback to local creation for smooth dev/offline experience
+        // When connected to the real backend, report error so the form stays open with validation hints
+        if (!isMockApi) {
+          return { ok: false, error: errMsg };
+        }
+
+        // Fallback to local creation for offline mock mode
         const now = formatAuditTimestamp();
         const generatedNo = formData.InquiryNo?.trim() || getNextInquiryNo();
         nextSeqNumber += 1;
@@ -297,6 +304,10 @@ export function useInquiries(usersList = mockUsers) {
         console.error('Failed to update inquiry:', err);
         const errMsg = err?.message || 'Failed to update inquiry.';
         toast.error(errMsg);
+
+        if (!isMockApi) {
+          return { ok: false, error: errMsg };
+        }
 
         // Fallback local update
         let updatedRecord = null;

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import {
   Bold,
@@ -148,7 +147,6 @@ export default function RichTextEditor({
           keepAttributes: false,
         },
       }),
-      Underline,
       TextColor,
       Placeholder.configure({
         placeholder,

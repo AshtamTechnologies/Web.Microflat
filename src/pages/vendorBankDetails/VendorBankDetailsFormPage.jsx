@@ -179,7 +179,8 @@ export default function VendorBankDetailsFormPage({
 
     if (cached) {
       setFetchedVendor(cached);
-    } else if (fetchVendorDetail) {
+    }
+    if (fetchVendorDetail) {
       fetchVendorDetail(selectedVendorId)
         .then((v) => {
           if (isMounted && v) setFetchedVendor(v);

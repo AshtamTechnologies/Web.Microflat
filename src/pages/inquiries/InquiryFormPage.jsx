@@ -78,7 +78,7 @@ import { useProductCategoriesContext } from '../../context/ProductCategoriesCont
 import { useRegions } from '../../context/RegionsContext';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useCountryState } from '../../context/CountryStateContext';
-import { inquiryService } from '../../services';
+import { inquiryService, productService } from '../../services';
 import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/treeUtils';
 import { getTodayISO } from '../../utils/dateUtils';
 import {
@@ -87,7 +87,6 @@ import {
   STATUS_OPTIONS,
   UOM_OPTIONS,
 } from '../../mocks/inquiries';
-import { MOCK_MATERIALS } from '../../mocks/purchaseRequisitions';
 import { formatFileSizeKB, getDocumentType } from '../../mocks/inquiryDocuments';
 import {
   INQUIRY_CATALOG_CATEGORIES,
@@ -98,14 +97,6 @@ import {
 const CLIENT_TYPE_OPTIONS = [
   { value: 'New', label: 'New Client' },
   { value: 'Existing', label: 'Existing Client' },
-];
-
-const PRODUCT_SELECT_OPTIONS = [
-  { value: '', label: '-- Select Product from Catalog --' },
-  ...MOCK_MATERIALS.map((m) => ({
-    value: String(m.itemId),
-    label: `${m.itemName} (${m.itemCode})`,
-  })),
 ];
 
 function normalizeUom(val) {
@@ -373,13 +364,14 @@ export default function InquiryFormPage() {
   }, [userList.length, ensureUsersLoaded]);
 
   const [fetchedInquiry, setFetchedInquiry] = useState(null);
+  const initializedWithDetailRef = useRef(false);
   const existingInquiry = useMemo(() => {
     return isEdit ? (fetchedInquiry || getInquiryById(id)) : null;
   }, [isEdit, id, fetchedInquiry, getInquiryById]);
 
   useEffect(() => {
     let isMounted = true;
-    if (isEdit && id && !getInquiryById(id) && fetchInquiryById) {
+    if (isEdit && id && fetchInquiryById) {
       fetchInquiryById(id).then((inq) => {
         if (isMounted && inq) setFetchedInquiry(inq);
       });
@@ -387,7 +379,7 @@ export default function InquiryFormPage() {
     return () => {
       isMounted = false;
     };
-  }, [isEdit, id, getInquiryById, fetchInquiryById]);
+  }, [isEdit, id, fetchInquiryById]);
 
   const dynamicSourceOptions = useMemo(() => {
     if (Array.isArray(sources) && sources.length > 0) {
@@ -532,41 +524,259 @@ export default function InquiryFormPage() {
   const [itemFieldErrors, setItemFieldErrors] = useState({});
   const inquiryItemErrorCountRef = useRef(0);
 
-  // Product Catalog Options for Section 3
-  const catalogCategoryOptions = useMemo(() => {
-    return [
-      { value: '', label: 'Select Category...' },
-      ...INQUIRY_CATALOG_CATEGORIES,
-    ];
+  // Dynamic Product Master, Variants & Options State for Section 3 Drawer
+  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [productVariantsMap, setProductVariantsMap] = useState({});
+  const [productOptionsMap, setProductOptionsMap] = useState({});
+  const [productDetailsMap, setProductDetailsMap] = useState({});
+
+  // Dynamically fetch approved products for the catalog
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCatalogProducts() {
+      try {
+        const prodRes = await productService.listProducts({
+          approvalStatus: 'Approved',
+          isActive: true,
+          pageSize: 100,
+        }).catch(() => null);
+        if (isMounted && Array.isArray(prodRes?.items) && prodRes.items.length > 0) {
+          setCatalogProducts(prodRes.items);
+        }
+      } catch (err) {
+        console.warn('Could not load dynamic products catalog for inquiry:', err);
+      }
+    }
+    loadCatalogProducts();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
+  // Dynamically load product variants, options, and full details when selected product changes
+  useEffect(() => {
+    if (!itemFormState.productId) return;
+    const prodIdNum = Number(itemFormState.productId);
+    if (isNaN(prodIdNum)) return;
+
+    let isMounted = true;
+    async function fetchDynamicDetails() {
+      try {
+        const [varRes, detailRes, optRes] = await Promise.all([
+          productService.listProductVariants(prodIdNum, { pageSize: 100 }).catch(() => null),
+          productService.getProductById(prodIdNum).catch(() => null),
+          productService.listProductOptions({ productId: prodIdNum, pageSize: 100 }).catch(() => null),
+        ]);
+
+        if (isMounted) {
+          if (Array.isArray(varRes?.items)) {
+            setProductVariantsMap((prev) => ({ ...prev, [itemFormState.productId]: varRes.items }));
+          }
+          if (detailRes) {
+            setProductDetailsMap((prev) => ({ ...prev, [itemFormState.productId]: detailRes }));
+          }
+          const optionsList = Array.isArray(optRes?.items) && optRes.items.length > 0
+            ? optRes.items
+            : Array.isArray(detailRes?.options) && detailRes.options.length > 0
+            ? detailRes.options
+            : [];
+          if (optionsList.length > 0) {
+            setProductOptionsMap((prev) => ({ ...prev, [itemFormState.productId]: optionsList }));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load dynamic variants/options for inquiry item:', itemFormState.productId, err);
+      }
+    }
+
+    if (!productVariantsMap[itemFormState.productId] || !productDetailsMap[itemFormState.productId]) {
+      fetchDynamicDetails();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [itemFormState.productId, productVariantsMap, productDetailsMap]);
+
+  // Merged dynamic & fallback catalog products
+  const mergedCatalogProducts = useMemo(() => {
+    const backendItems = (Array.isArray(catalogProducts) ? catalogProducts : []).map((p) => ({
+      ...p,
+      id: String(p.id || p.productId),
+      productId: p.id || p.productId,
+      categoryId: String(p.categoryId || 'cat-sp'),
+      categoryName: p.categoryName || 'Surface Plates',
+      productName: p.productName || p.name || 'Product',
+      productCode: p.productCode || p.code || 'PRD',
+      description: p.description || '',
+      standardInfo: p.standardInfo || p.standardCode || '',
+      materialName: p.materialName || '',
+      finishType: p.finishType || '',
+      variants: Array.isArray(p.variants) ? p.variants : [],
+      options: Array.isArray(p.options) ? p.options : [],
+    }));
+
+    const standardItems = INQUIRY_CATALOG_PRODUCTS.map((p) => ({
+      ...p,
+      id: String(p.id),
+      productId: p.id,
+      categoryId: String(p.categoryId),
+      categoryName:
+        INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === p.categoryId)?.label || 'Precision Metrology',
+    }));
+
+    // Avoid duplicate entries if backend already returned a product with the same code or name
+    const backendCodes = new Set(backendItems.map((p) => String(p.productCode || '').toLowerCase()));
+    const backendNames = new Set(backendItems.map((p) => String(p.productName || '').toLowerCase()));
+
+    const uniqueStandardItems = standardItems.filter(
+      (p) =>
+        !backendCodes.has(String(p.itemCodePrefix || '').toLowerCase()) &&
+        !backendNames.has(String(p.productName || '').toLowerCase())
+    );
+
+    return [...backendItems, ...uniqueStandardItems];
+  }, [catalogProducts]);
+
+  const activeProductObj = useMemo(() => {
+    const base = mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId)) || null;
+    const details = productDetailsMap[itemFormState.productId];
+    if (!base && !details) return null;
+    return {
+      ...(base || {}),
+      ...(details || {}),
+    };
+  }, [itemFormState.productId, mergedCatalogProducts, productDetailsMap]);
+
+  // Product Catalog Options for Section 3
+  const catalogCategoryOptions = useMemo(() => {
+    const catMap = new Map();
+    // Default standard categories
+    INQUIRY_CATALOG_CATEGORIES.forEach((c) => {
+      catMap.set(String(c.value), c.label);
+    });
+    // Context categories
+    if (Array.isArray(categories)) {
+      categories.forEach((c) => {
+        const id = String(c.categoryId || c.id);
+        const name = c.categoryName || c.name;
+        if (id && name) catMap.set(id, name);
+      });
+    }
+    // Categories from merged products
+    mergedCatalogProducts.forEach((p) => {
+      if (p.categoryId && p.categoryName && !catMap.has(String(p.categoryId))) {
+        catMap.set(String(p.categoryId), p.categoryName);
+      }
+    });
+
+    return [
+      { value: '', label: 'All Categories' },
+      ...Array.from(catMap.entries()).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    ];
+  }, [categories, mergedCatalogProducts]);
+
   const catalogProductOptions = useMemo(() => {
-    let list = INQUIRY_CATALOG_PRODUCTS;
+    let list = mergedCatalogProducts;
     if (itemFormState.categoryId) {
-      list = list.filter((p) => p.categoryId === itemFormState.categoryId);
+      const selectedCat = catalogCategoryOptions.find((c) => String(c.value) === String(itemFormState.categoryId));
+      const selectedLabel = (selectedCat ? selectedCat.label : '').toLowerCase();
+      const filterVal = String(itemFormState.categoryId).toLowerCase();
+
+      list = list.filter((p) => {
+        const pCatId = String(p.categoryId || '').toLowerCase();
+        const pCatName = String(p.categoryName || '').toLowerCase();
+        return (
+          pCatId === filterVal ||
+          (selectedLabel && pCatName === selectedLabel) ||
+          (selectedLabel && (pCatName.includes(selectedLabel) || selectedLabel.includes(pCatName)))
+        );
+      });
     }
     return [
       { value: '', label: 'Select Product...' },
       ...list.map((p) => ({
-        value: p.id,
-        label: p.productName,
+        value: String(p.id),
+        label: `${p.productCode ? p.productCode + ' · ' : ''}${p.productName}`,
       })),
     ];
-  }, [itemFormState.categoryId]);
+  }, [itemFormState.categoryId, mergedCatalogProducts, catalogCategoryOptions]);
+
+  const standardOptions = useMemo(() => {
+    return [
+      { value: 'IS-7327-2003', label: 'IS-7327-2003 (Indian Standard - Granite)' },
+      { value: 'DIN-876', label: 'DIN-876 (German Standard)' },
+      { value: 'BS-817', label: 'BS-817 (British Standard)' },
+      { value: 'US-Fed GGG-P-463c', label: 'US-Fed GGG-P-463c (Federal Specification)' },
+      { value: 'JIS-B-7513', label: 'JIS-B-7513 (Japanese Industrial Standard)' },
+      { value: 'IS-2285', label: 'IS-2285 (Cast Iron Surface Plates)' },
+      { value: 'IS-5268', label: 'IS-5268 (Straight Edges)' },
+      { value: 'IS-6985', label: 'IS-6985 (Angle Plates & Box Squares)' },
+    ];
+  }, []);
+
+  const gradeOptions = useMemo(() => {
+    return [
+      { value: 'Grade 00', label: 'Grade 00 · Calibration / Lab Grade' },
+      { value: 'Grade 0', label: 'Grade 0 · Inspection / Metrology Grade' },
+      { value: 'Grade 1', label: 'Grade 1 · Tool Room / Shop Floor' },
+      { value: 'Grade 2', label: 'Grade 2 · Workshop / Machining Grade' },
+      { value: 'Grade 3', label: 'Grade 3 · Rough Workshop Grade' },
+    ];
+  }, []);
 
   const catalogVariantOptions = useMemo(() => {
     if (!itemFormState.productId) return [];
-    const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === itemFormState.productId);
-    if (!prod) return [];
+    const dynamicVars = productVariantsMap[itemFormState.productId];
+    if (Array.isArray(dynamicVars) && dynamicVars.length > 0) {
+      return [
+        { value: '', label: 'Select Size / Variant...' },
+        ...dynamicVars.map((v) => {
+          const sizePart = v.variantName || v.name || v.size || 'Standard Size';
+          const gradePart = v.gradeName || v.grade ? ` · Grade: ${v.gradeName || v.grade}` : '';
+          const stdPart = v.standardName || v.standard ? ` · Std: ${v.standardName || v.standard}` : '';
+          const codePart = v.variantCode || v.itemCode ? ` (${v.variantCode || v.itemCode})` : '';
+          return {
+            value: String(v.id || v.productVariantId),
+            label: `${sizePart}${gradePart}${stdPart}${codePart}`,
+            variantObj: v,
+          };
+        }),
+      ];
+    }
+    const prod = mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId)) ||
+      INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === itemFormState.productId);
+    if (!prod || !Array.isArray(prod.variants)) return [];
     return [
       { value: '', label: 'Select Size / Variant...' },
       ...prod.variants.map((v) => ({
-        value: v.id,
-        label: v.variantName,
+        value: String(v.id),
+        label: `${v.variantName || v.size}${v.grade ? ' · ' + v.grade : ''} (${v.itemCode || v.variantCode || 'ITM'})`,
+        variantObj: v,
       })),
-
     ];
-  }, [itemFormState.productId]);
+  }, [itemFormState.productId, productVariantsMap, mergedCatalogProducts]);
+
+  const availableDrawerOptions = useMemo(() => {
+    const dynamicOpts = productOptionsMap[itemFormState.productId];
+    if (Array.isArray(dynamicOpts) && dynamicOpts.length > 0) {
+      return dynamicOpts.map((opt) => ({
+        id: opt.id || opt.productOptionId,
+        name: opt.optionName || opt.name,
+        isStandard: Boolean(opt.isStandard),
+        unitPrice: Number(opt.unitPrice || 0),
+      }));
+    }
+    return CATALOG_OPTIONS.map((name) => ({
+      id: null,
+      name,
+      isStandard: name.includes('Standard'),
+      unitPrice: 0,
+    }));
+  }, [itemFormState.productId, productOptionsMap]);
   const parentCategoryOptions = useMemo(() => {
     const roots = categories.filter(
       (c) => !c.parentCategoryId && (c.isActive || c.categoryId === itemFormState.parentCategoryId)
@@ -710,11 +920,26 @@ export default function InquiryFormPage() {
     return Object.values(colWidths).reduce((sum, w) => sum + (Number(w) || 0), 0);
   }, [colWidths]);
 
-  const handleToggleOption = (optionLabel) => {
+  const handleToggleOption = (optionObjOrName) => {
+    const optName = typeof optionObjOrName === 'object' && optionObjOrName !== null ? optionObjOrName.name : optionObjOrName;
+    const optId = typeof optionObjOrName === 'object' && optionObjOrName !== null ? optionObjOrName.id : null;
     const currentOptions = itemFormState.options || [];
-    const nextOptions = currentOptions.includes(optionLabel)
-      ? currentOptions.filter((o) => o !== optionLabel)
-      : [...currentOptions, optionLabel];
+    const currentOptionIds = itemFormState.selectedOptionIds || [];
+
+    const isChecked = currentOptions.includes(optName);
+    const nextOptions = isChecked
+      ? currentOptions.filter((o) => o !== optName)
+      : [...currentOptions, optName];
+
+    const isValidDbId = typeof optId === 'number' && !isNaN(optId) && optId > 0;
+    const nextOptionIds = isChecked
+      ? (isValidDbId ? currentOptionIds.filter((id) => id !== optId) : currentOptionIds)
+      : (isValidDbId && !currentOptionIds.includes(optId) ? [...currentOptionIds, optId] : currentOptionIds);
+
+    setItemFormState((prev) => ({
+      ...prev,
+      selectedOptionIds: nextOptionIds,
+    }));
     handleItemFieldChange('options', nextOptions);
   };
 
@@ -725,7 +950,7 @@ export default function InquiryFormPage() {
 
   const handleItemFieldChange = (field, value) => {
     if (field === 'categoryId') {
-      const catObj = INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === value);
+      const catObj = INQUIRY_CATALOG_CATEGORIES.find((c) => String(c.value) === String(value));
       setItemFormState((prev) => ({
         ...prev,
         categoryId: value,
@@ -741,80 +966,145 @@ export default function InquiryFormPage() {
         material: '',
         finish: '',
         standards: '',
+        options: [],
+        selectedOptionIds: [],
         specification: '',
       }));
     } else if (field === 'productId') {
-      const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === value);
-      const catObj = prod ? INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === prod.categoryId) : null;
-      let mat = 'Indian Black Granite';
-      let fin = 'Hand Lapped';
-      let std = 'IS-7327-2003';
-      if (prod) {
-        if (prod.productName?.toLowerCase().includes('cast iron')) {
+      const prod =
+        mergedCatalogProducts.find((p) => String(p.id) === String(value)) ||
+        INQUIRY_CATALOG_PRODUCTS.find((p) => String(p.id) === String(value));
+      const catObj = prod
+        ? (catalogCategoryOptions.find((c) => String(c.value) === String(prod.categoryId)) || null)
+        : null;
+
+      let mat = prod?.materialName || 'Indian Black Granite';
+      let fin = prod?.finishType || 'Hand Lapped';
+      let std = prod?.standardInfo || 'IS-7327-2003';
+      if (!prod?.materialName) {
+        if (prod?.productName?.toLowerCase().includes('cast iron')) {
           mat = 'Close-grained Cast Iron';
           fin = 'Hand Scraped';
           std = 'IS-2285';
-        } else if (prod.productName?.toLowerCase().includes('straight edge')) {
+        } else if (prod?.productName?.toLowerCase().includes('straight edge')) {
           mat = 'Indian Black Granite';
           fin = 'Lapped Faces';
           std = 'IS-5268';
-        } else if (prod.productName?.toLowerCase().includes('square') || prod.productName?.toLowerCase().includes('angle')) {
+        } else if (prod?.productName?.toLowerCase().includes('square') || prod?.productName?.toLowerCase().includes('angle')) {
           mat = 'Indian Black Granite';
           fin = '6 Faces Finished';
           std = 'IS-6985';
-        } else if (prod.productName?.toLowerCase().includes('comparator')) {
+        } else if (prod?.productName?.toLowerCase().includes('comparator')) {
           mat = 'Indian Black Granite';
           fin = 'Hard Chrome Column';
           std = 'ISO / IS Standards';
         }
       }
+
       setItemFormState((prev) => ({
         ...prev,
         productId: value,
         productName: prod ? prod.productName : '',
-        categoryId: prod ? prod.categoryId : prev.categoryId,
+        categoryId: prod?.categoryId ? String(prod.categoryId) : prev.categoryId,
         categoryName: catObj ? catObj.label : prev.categoryName,
         variantId: '',
         variantName: '',
-        itemCode: prod ? prod.itemCodePrefix : '',
+        itemCode: prod ? (prod.productCode || prod.itemCodePrefix || '') : '',
         material: mat,
         finish: fin,
         standards: std,
         dimensions: '',
         grade: '',
         flatness: '',
-        technicalDetails: prod ? prod.standardInfo : '',
+        options: [],
+        selectedOptionIds: [],
+        technicalDetails: prod ? (prod.description || prod.standardInfo || '') : '',
         specification: prod ? `${prod.productName}. Standard configuration.` : '',
       }));
     } else if (field === 'variantId') {
-      const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === itemFormState.productId);
-      const variant = prod ? prod.variants.find((v) => v.id === value) : null;
-      const std = itemFormState.standards || (prod?.productName?.toLowerCase().includes('cast iron') ? 'IS-2285' : 'IS-7327-2003');
+      const prod =
+        mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId)) ||
+        INQUIRY_CATALOG_PRODUCTS.find((p) => String(p.id) === String(itemFormState.productId));
+      const dynamicVars = productVariantsMap[itemFormState.productId] || [];
+      const variant =
+        dynamicVars.find((v) => String(v.id || v.productVariantId) === String(value)) ||
+        prod?.variants?.find((v) => String(v.id) === String(value)) ||
+        null;
+
+      const variantName = variant ? (variant.variantName || variant.name || variant.size || '') : '';
+      const dimensions = variant ? (variant.dimensions || variant.size || variant.variantName || '') : '';
+      const grade = variant ? (variant.gradeName || variant.grade || 'Grade 0') : '';
+      const std = variant?.standardName || variant?.standard || itemFormState.standards || 'IS-7327-2003';
+      const flatness = variant ? (variant.flatness || variant.tolerance || '—') : '';
+      const itemCode = variant ? (variant.variantCode || variant.itemCode || prod?.productCode || '') : (prod?.productCode || '');
+      const mat = variant?.materialName || prod?.materialName || itemFormState.material || 'Indian Black Granite';
+      const fin = variant?.finishType || prod?.finishType || itemFormState.finish || 'Hand Lapped';
+
       const optsText = (itemFormState.options || []).length > 0
         ? ` Options: ${itemFormState.options.join(', ')}.`
         : '';
       const generatedSpec = variant && prod
-        ? `${prod.productName}, ${variant.size || variant.variantName}, ${variant.grade || 'Grade 0'} (${std}).${optsText}`
+        ? `${prod.productName}, ${dimensions || variantName}, ${grade} (${std}).${optsText}`
         : itemFormState.specification;
 
       setItemFormState((prev) => ({
         ...prev,
         variantId: value,
-        variantName: variant ? variant.variantName : '',
-        dimensions: variant ? variant.size || variant.variantName : '',
-        grade: variant ? variant.grade || '' : '',
-        flatness: variant ? variant.flatness || '' : '',
-        technicalDetails: variant ? variant.technicalDetails : (prod ? prod.standardInfo : ''),
-        itemCode: variant ? variant.itemCode : (prod ? prod.itemCodePrefix : ''),
+        variantName: variantName,
+        dimensions: dimensions,
+        grade: grade,
+        flatness: flatness,
+        standards: std,
+        material: mat,
+        finish: fin,
+        technicalDetails: variant ? (variant.technicalDetails || variant.description || prod?.standardInfo || '') : (prod?.standardInfo || ''),
+        itemCode: itemCode,
+        specification: generatedSpec,
+      }));
+    } else if (field === 'standards' || field === 'grade') {
+      const nextStandards = field === 'standards' ? value : (itemFormState.standards || 'IS-7327-2003');
+      const nextGrade = field === 'grade' ? value : (itemFormState.grade || 'Grade 0');
+
+      const prod =
+        mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId)) ||
+        INQUIRY_CATALOG_PRODUCTS.find((p) => String(p.id) === String(itemFormState.productId));
+      const dynamicVars = productVariantsMap[itemFormState.productId] || [];
+      const variant =
+        dynamicVars.find((v) => String(v.id || v.productVariantId) === String(itemFormState.variantId)) ||
+        prod?.variants?.find((v) => String(v.id) === String(itemFormState.variantId)) ||
+        null;
+
+      const variantName = variant ? (variant.variantName || variant.name || variant.size || '') : '';
+      const dimensions = variant ? (variant.dimensions || variant.size || variant.variantName || '') : (itemFormState.dimensions || '');
+      const optsText = (itemFormState.options || []).length > 0 ? ` Options: ${itemFormState.options.join(', ')}.` : '';
+
+      const generatedSpec = prod
+        ? `${prod.productName}${dimensions ? `, ${dimensions}` : ''}, ${nextGrade} (${nextStandards}).${optsText}`
+        : itemFormState.specification;
+
+      setItemFormState((prev) => ({
+        ...prev,
+        [field]: value,
+        standards: nextStandards,
+        grade: nextGrade,
         specification: generatedSpec,
       }));
     } else if (field === 'options') {
-      const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === itemFormState.productId);
-      const variant = prod ? prod.variants.find((v) => v.id === itemFormState.variantId) : null;
-      const std = itemFormState.standards || 'IS-7327-2003';
+      const prod =
+        mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId)) ||
+        INQUIRY_CATALOG_PRODUCTS.find((p) => String(p.id) === String(itemFormState.productId));
+      const dynamicVars = productVariantsMap[itemFormState.productId] || [];
+      const variant =
+        dynamicVars.find((v) => String(v.id || v.productVariantId) === String(itemFormState.variantId)) ||
+        prod?.variants?.find((v) => String(v.id) === String(itemFormState.variantId)) ||
+        null;
+
+      const dimensions = variant ? (variant.dimensions || variant.size || variant.variantName || '') : '';
+      const grade = variant ? (variant.gradeName || variant.grade || 'Grade 0') : '';
+      const std = variant?.standardName || variant?.standard || itemFormState.standards || 'IS-7327-2003';
       const optsText = (value || []).length > 0 ? ` Options: ${value.join(', ')}.` : '';
       const generatedSpec = variant && prod
-        ? `${prod.productName}, ${variant.size || variant.variantName}, ${variant.grade || 'Grade 0'} (${std}).${optsText}`
+        ? `${prod.productName}, ${dimensions || variant.variantName}, ${grade} (${std}).${optsText}`
         : itemFormState.specification;
 
       setItemFormState((prev) => ({
@@ -888,7 +1178,10 @@ export default function InquiryFormPage() {
       categoryId: itemFormState.categoryId || '',
       categoryName: itemFormState.categoryName || '',
       productId: itemFormState.productId || '',
+      productVariantId: Number(itemFormState.variantId) || null,
+      productOptionIds: (itemFormState.selectedOptionIds || []).filter((id) => typeof id === 'number' && !isNaN(id) && id > 0),
       productName: itemFormState.productName || '',
+      itemName: itemFormState.itemName || itemFormState.productName || itemFormState.displayName || 'Product',
       variantId: itemFormState.variantId || '',
       variantName: itemFormState.variantName || '—',
       dimensions: itemFormState.dimensions || '',
@@ -1093,7 +1386,10 @@ export default function InquiryFormPage() {
       categoryId: itemFormState.categoryId || '',
       categoryName: itemFormState.categoryName || '',
       productId: itemFormState.productId || '',
+      productVariantId: Number(itemFormState.variantId) || null,
+      productOptionIds: (itemFormState.selectedOptionIds || []).filter((id) => typeof id === 'number' && !isNaN(id) && id > 0),
       productName: itemFormState.productName || '',
+      itemName: itemFormState.itemName || itemFormState.productName || itemFormState.displayName || 'Product',
       variantId: itemFormState.variantId || '',
       variantName: itemFormState.isCustomSize
         ? (itemFormState.customSize ? `${itemFormState.customSize} (Custom)` : 'Custom Size')
@@ -1491,78 +1787,103 @@ export default function InquiryFormPage() {
   // Initialize form state
   useEffect(() => {
     if (isEdit) {
-      if (existingInquiry && initializedIdRef.current !== id) {
-        initializedIdRef.current = id;
-        const mappedItems = Array.isArray(existingInquiry.items)
-          ? existingInquiry.items.map((it) => ({
-            ...it,
-            uom: normalizeUom(it.uom),
-            categoryName: it.categoryName || (it.categoryId ? getCategoryPathName(it.categoryId, categories) : '—'),
-          }))
-          : existingInquiry.Quantity
-            ? [
-              {
-                prItemId: 1,
-                itemCode: existingInquiry.ItemCode || 'MAT-CAT-001',
-                itemName: existingInquiry.Subject || 'Main Product Requirement',
-                specification: existingInquiry.Specification || '',
-                quantity: Number(existingInquiry.Quantity) || 1,
-                uom: normalizeUom(existingInquiry.UOM),
-                categoryId: existingInquiry.CategoryId || '',
-                categoryName: existingInquiry.CategoryId ? getCategoryPathName(existingInquiry.CategoryId, categories) : '—',
-              },
-            ]
-            : [];
-
-        const loadedRegionId = existingInquiry.RegionId ?? existingInquiry.regionId ?? '';
-
-        const matchedClient = clients.find((c) =>
-          (existingInquiry.clientId && (c.clientId === existingInquiry.clientId || c.id === existingInquiry.clientId)) ||
-          ((c.companyName || '').toLowerCase() === (existingInquiry.CustomerName || '').toLowerCase())
+      if (existingInquiry) {
+        const hasDetail = Boolean(
+          existingInquiry.address1 ||
+          existingInquiry.AddressLine1 ||
+          existingInquiry.countryId ||
+          existingInquiry.countryName ||
+          existingInquiry.Country ||
+          existingInquiry.city ||
+          existingInquiry.City
         );
-        const loadedClientId = existingInquiry.clientId || (matchedClient ? (matchedClient.clientId || matchedClient.id) : '');
-        const loadedClientType = existingInquiry.clientType
-          ? existingInquiry.clientType
-          : loadedClientId
-            ? 'Existing'
-            : 'New';
 
-        const data = {
-          clientType: loadedClientType,
-          clientId: loadedClientId,
-          InquiryNo: existingInquiry.InquiryNo || '',
-          InquiryDate: existingInquiry.InquiryDate || getTodayISO(),
-          Subject: existingInquiry.Subject || '',
-          Description: existingInquiry.Description || '',
-          Source: existingInquiry.Source || 'Website',
-          DistributorName: existingInquiry.DistributorName || '',
-          Priority: existingInquiry.Priority || 'Medium',
-          CustomerName: existingInquiry.CustomerName || '',
-          ContactPerson: existingInquiry.ContactPerson || '',
-          Email: existingInquiry.Email || '',
-          Phone: existingInquiry.Phone || '',
-          AlternativePhone: existingInquiry.AlternativePhone || '',
-          AddressLine1: existingInquiry.AddressLine1 || '',
-          AddressLine2: existingInquiry.AddressLine2 || '',
-          City: existingInquiry.City || '',
-          State: existingInquiry.State || '',
-          Country: existingInquiry.Country || '',
-          parentRegionId: '',
-          RegionId: loadedRegionId,
-          CategoryId: existingInquiry.CategoryId || (mappedItems[0]?.categoryId || ''),
-          Quantity: existingInquiry.Quantity !== undefined ? String(existingInquiry.Quantity) : '1',
-          UOM: normalizeUom(existingInquiry.UOM || mappedItems[0]?.uom || 'PCS'),
-          EstimatedValue: existingInquiry.EstimatedValue !== undefined ? String(existingInquiry.EstimatedValue) : '',
-          RequiredByDate: existingInquiry.RequiredByDate || existingInquiry.EstimateDate || '',
-          items: mappedItems,
-          AssignedTo: existingInquiry.AssignedTo || (userList.length > 0 ? userList[0].id : ''),
-          StatusId: existingInquiry.StatusId || 'New',
-          initialComment: '',
-          attachments: [],
-        };
-        setForm(data);
-        setInitialSnapshot(data);
-        setErrors({});
+        if (initializedIdRef.current !== id || (!initializedWithDetailRef.current && hasDetail)) {
+          initializedIdRef.current = id;
+          if (hasDetail) initializedWithDetailRef.current = true;
+
+          const mappedItems = Array.isArray(existingInquiry.items)
+            ? existingInquiry.items.map((it) => ({
+              ...it,
+              uom: normalizeUom(it.uom),
+              categoryName: it.categoryName || (it.categoryId ? getCategoryPathName(it.categoryId, categories) : '—'),
+            }))
+            : existingInquiry.Quantity
+              ? [
+                {
+                  prItemId: 1,
+                  itemCode: existingInquiry.ItemCode || 'MAT-CAT-001',
+                  itemName: existingInquiry.Subject || 'Main Product Requirement',
+                  specification: existingInquiry.Specification || '',
+                  quantity: Number(existingInquiry.Quantity) || 1,
+                  uom: normalizeUom(existingInquiry.UOM),
+                  categoryId: existingInquiry.CategoryId || '',
+                  categoryName: existingInquiry.CategoryId ? getCategoryPathName(existingInquiry.CategoryId, categories) : '—',
+                },
+              ]
+              : [];
+
+          const loadedRegionId = existingInquiry.RegionId ?? existingInquiry.regionId ?? '';
+
+          const companyMatchName = String(existingInquiry.CustomerName || existingInquiry.companyName || '').trim().toLowerCase();
+          const matchedClient = clients.find((c) =>
+            (existingInquiry.clientId && (String(c.clientId || c.id) === String(existingInquiry.clientId))) ||
+            (companyMatchName && (c.companyName || c.clientName || '').trim().toLowerCase() === companyMatchName)
+          );
+          const loadedClientId = existingInquiry.clientId || (matchedClient ? (matchedClient.clientId || matchedClient.id) : '');
+          const loadedClientType = loadedClientId ? 'Existing' : 'New';
+
+          const resolvedCountry = existingInquiry.Country || existingInquiry.countryName || '';
+          const resolvedState = existingInquiry.State || existingInquiry.stateName || '';
+
+          const data = {
+            clientType: loadedClientType,
+            clientId: loadedClientId,
+            InquiryNo: existingInquiry.InquiryNo || '',
+            InquiryDate: existingInquiry.InquiryDate || getTodayISO(),
+            Subject: existingInquiry.Subject || '',
+            Description: existingInquiry.Description || existingInquiry.detailedSpecification || '',
+            Source: existingInquiry.Source || existingInquiry.sourceName || 'Website',
+            DistributorName: existingInquiry.DistributorName || '',
+            Priority: existingInquiry.Priority || existingInquiry.priorityName || 'Medium',
+            CustomerName: existingInquiry.CustomerName || existingInquiry.companyName || '',
+            ContactPerson: existingInquiry.ContactPerson || existingInquiry.contactPersonName || '',
+            Email: existingInquiry.Email || existingInquiry.email || '',
+            Phone: existingInquiry.Phone || existingInquiry.mobileNo || '',
+            AlternativePhone: existingInquiry.AlternativePhone || existingInquiry.alternatePhoneNo || '',
+            AddressLine1: existingInquiry.AddressLine1 || existingInquiry.address1 || '',
+            address1: existingInquiry.address1 || existingInquiry.AddressLine1 || '',
+            AddressLine2: existingInquiry.AddressLine2 || existingInquiry.address2 || '',
+            address2: existingInquiry.address2 || existingInquiry.AddressLine2 || '',
+            City: existingInquiry.City || existingInquiry.city || '',
+            city: existingInquiry.city || existingInquiry.City || '',
+            State: resolvedState,
+            state: resolvedState,
+            Country: resolvedCountry,
+            country: resolvedCountry,
+            countryId: existingInquiry.countryId || null,
+            stateId: existingInquiry.stateId || null,
+            parentRegionId: '',
+            RegionId: loadedRegionId,
+            CategoryId: existingInquiry.CategoryId || (mappedItems[0]?.categoryId || ''),
+            Quantity: existingInquiry.Quantity !== undefined ? String(existingInquiry.Quantity) : '1',
+            UOM: normalizeUom(existingInquiry.UOM || mappedItems[0]?.uom || 'PCS'),
+            EstimatedValue: existingInquiry.EstimatedValue !== undefined ? String(existingInquiry.EstimatedValue) : '',
+            RequiredByDate: existingInquiry.RequiredByDate || existingInquiry.EstimateDate || existingInquiry.estimateDate || '',
+            items: mappedItems,
+            AssignedTo: existingInquiry.AssignedTo || existingInquiry.assignedToUserId || (userList.length > 0 ? userList[0].id : ''),
+            StatusId: existingInquiry.StatusId || existingInquiry.status || 'New',
+            initialComment: '',
+            attachments: [],
+          };
+          setForm(data);
+          setInitialSnapshot(data);
+          setErrors({});
+
+          if (existingInquiry.countryId && fetchStatesForCountry) {
+            fetchStatesForCountry(existingInquiry.countryId);
+          }
+        }
       }
     } else {
       if (initializedIdRef.current !== 'new') {
@@ -1603,19 +1924,27 @@ export default function InquiryFormPage() {
     fetchStatesForCountry,
     statesCache,
     loadingStatesMap,
+    ensureCountriesLoaded,
   } = useCountryState();
+
+  useEffect(() => {
+    if (ensureCountriesLoaded) {
+      ensureCountriesLoaded();
+    }
+  }, [ensureCountriesLoaded]);
 
   // Find selected country object
   const selectedCountryObj = useMemo(() => {
-    if (!form.Country) return null;
+    if (!form.Country && !form.countryId) return null;
     return (
       countries.find(
         (c) =>
+          (form.countryId && Number(c.id) === Number(form.countryId)) ||
           String(c.id) === String(form.Country) ||
           c.countryName?.toLowerCase() === String(form.Country).toLowerCase()
       ) || null
     );
-  }, [form.Country, countries]);
+  }, [form.Country, form.countryId, countries]);
 
   // Formatted options for Country SearchableSelect
   const countryDropdownOptions = useMemo(() => {
@@ -1645,10 +1974,16 @@ export default function InquiryFormPage() {
   const handleCountrySelect = (e) => {
     const val = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
     const nextVal = typeof val === 'object' && val !== null ? val.value || '' : String(val || '');
+    const matchedCountry = countries.find(
+      (c) => String(c.id) === String(nextVal) || c.countryName?.toLowerCase() === nextVal.toLowerCase()
+    );
+    const cId = matchedCountry ? matchedCountry.id : (nextVal.toLowerCase() === 'india' ? 1 : null);
     setForm((prev) => ({
       ...prev,
-      Country: nextVal,
-      State: '', // reset state on country change
+      Country: matchedCountry ? matchedCountry.countryName : nextVal,
+      countryId: cId,
+      State: '',
+      stateId: null,
     }));
     if (errors.Country || errors.State) {
       setErrors((prev) => ({ ...prev, Country: '', State: '' }));
@@ -1658,7 +1993,15 @@ export default function InquiryFormPage() {
   const handleStateSelect = (e) => {
     const val = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
     const nextVal = typeof val === 'object' && val !== null ? val.value || '' : String(val || '');
-    setForm((prev) => ({ ...prev, State: nextVal }));
+    const currentStates = selectedCountryObj?.id ? (statesCache[String(selectedCountryObj.id)] || []) : [];
+    const matchedState = currentStates.find(
+      (s) => String(s.id) === String(nextVal) || s.stateName?.toLowerCase() === nextVal.toLowerCase()
+    );
+    setForm((prev) => ({
+      ...prev,
+      State: matchedState ? matchedState.stateName : nextVal,
+      stateId: matchedState ? matchedState.id : null,
+    }));
     if (errors.State) {
       setErrors((prev) => ({ ...prev, State: '' }));
     }
@@ -2721,15 +3064,28 @@ export default function InquiryFormPage() {
                   onChange={(e) => handleItemFieldChange('variantId', e.target.value)}
                 />
 
-                {/* Item Code (Auto-populated, Read Only) */}
-                <Input
-                  id="drawer-item-code"
-                  label="Item Code"
-                  readOnly
-                  disabled
-                  value={itemFormState.itemCode || 'Auto-generated'}
-                  className="font-mono text-xs bg-surface/70 text-text-muted cursor-not-allowed select-none"
-                  hint="Automatically assigned from catalog variant"
+                {/* Standard */}
+                <SearchableSelect
+                  id="drawer-item-standard"
+                  label="Manufacturing Standard"
+                  options={standardOptions}
+                  value={itemFormState.standards || ''}
+                  placeholder={!itemFormState.productId ? 'Select product first' : 'Select standard...'}
+                  searchPlaceholder="Search standard..."
+                  disabled={!itemFormState.productId}
+                  onChange={(e) => handleItemFieldChange('standards', e.target.value)}
+                />
+
+                {/* Grade / Accuracy */}
+                <SearchableSelect
+                  id="drawer-item-grade"
+                  label="Grade / Accuracy"
+                  options={gradeOptions}
+                  value={itemFormState.grade || ''}
+                  placeholder={!itemFormState.productId ? 'Select product first' : 'Select grade...'}
+                  searchPlaceholder="Search grade..."
+                  disabled={!itemFormState.productId}
+                  onChange={(e) => handleItemFieldChange('grade', e.target.value)}
                 />
 
                 {/* Quantity */}
@@ -2744,6 +3100,19 @@ export default function InquiryFormPage() {
                     value={itemFormState.quantity !== undefined && itemFormState.quantity !== null ? itemFormState.quantity : '1'}
                     error={itemFieldErrors.quantity}
                     onChange={(e) => handleItemFieldChange('quantity', e.target.value)}
+                  />
+                </div>
+
+                {/* Item Code (Auto-populated, Read Only) */}
+                <div className="sm:col-span-2">
+                  <Input
+                    id="drawer-item-code"
+                    label="Item Code"
+                    readOnly
+                    disabled
+                    value={itemFormState.itemCode || 'Auto-generated'}
+                    className="font-mono text-xs bg-surface/70 text-text-muted cursor-not-allowed select-none"
+                    hint="Automatically assigned from catalog variant"
                   />
                 </div>
               </div>
@@ -2795,11 +3164,13 @@ export default function InquiryFormPage() {
                   <span className="text-2xs text-text-muted">Select all applicable accessories / machining</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-xl border border-border bg-surface/30">
-                  {CATALOG_OPTIONS.map((opt) => {
-                    const isChecked = (itemFormState.options || []).includes(opt);
+                  {availableDrawerOptions.map((opt) => {
+                    const optName = typeof opt === 'object' && opt !== null ? opt.name : opt;
+                    const optId = typeof opt === 'object' && opt !== null ? (opt.id || optName) : optName;
+                    const isChecked = (itemFormState.options || []).includes(optName);
                     return (
                       <label
-                        key={opt}
+                        key={optId}
                         className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer text-xs select-none ${
                           isChecked
                             ? 'border-primary/50 bg-primary/5 text-heading font-medium'
@@ -2809,9 +3180,9 @@ export default function InquiryFormPage() {
                         <Checkbox
                           checked={isChecked}
                           onChange={() => handleToggleOption(opt)}
-                          aria-label={opt}
+                          aria-label={optName}
                         />
-                        <span className="truncate">{opt}</span>
+                        <span className="truncate">{optName}</span>
                       </label>
                     );
                   })}
@@ -2997,192 +3368,6 @@ export default function InquiryFormPage() {
               </div>
             </div>
 
-            {/* ── Legacy Sub-Card ── */}{false && (
-            <div
-              className={`p-4 sm:p-5 rounded-xl border bg-surface/50 space-y-4 transition-all duration-200 ${editingItemId
-                ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
-                : 'border-border'
-                }`}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-border/70">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${editingItemId
-                      ? 'bg-primary text-white'
-                      : 'bg-primary/10 text-primary'
-                      }`}
-                  >
-                    {editingItemId ? <IconEdit size={15} /> : <IconPackage size={16} />}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-heading">
-                      {editingItemId ? 'Edit Inquiry Product Item' : 'Add Item to Inquiry'}
-                    </h4>
-                    <p className="text-2xs text-text-muted">
-                      Select product category, catalog item or enter specifications, quantity and unit below.
-                    </p>
-                  </div>
-                </div>
-
-                {editingItemId && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={resetItemForm}
-                    className="text-xs self-start sm:self-auto h-7 px-2"
-                  >
-                    <IconClose size={13} className="mr-1" />
-                    Cancel
-                  </Button>
-                )}
-              </div>
-
-              {/* 3 columns per row layout */}
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Parent Category */}
-                  <div>
-                    <SearchableSelect
-                      id="item-form-parent-category"
-                      label="Parent Category"
-                      options={parentCategoryOptions}
-                      value={itemFormState.parentCategoryId || ''}
-                      placeholder="-- Select Parent Category --"
-                      searchPlaceholder="Search parent categories..."
-                      onChange={(e) => handleItemFieldChange('parentCategoryId', e.target.value)}
-                    />
-                  </div>
-
-                  {/* Sub-Category */}
-                  <div>
-                    <SearchableSelect
-                      id="item-form-category"
-                      label="Sub-Category"
-                      options={subCategoryOptions}
-                      value={itemFormState.categoryId || ''}
-                      placeholder={
-                        !itemFormState.parentCategoryId
-                          ? 'Select parent category first'
-                          : subCategoryOptions.length <= 1
-                            ? 'No sub-categories (Parent selected)'
-                            : '-- Select Sub-Category --'
-                      }
-                      searchPlaceholder="Search sub-categories..."
-                      disabled={!itemFormState.parentCategoryId || subCategoryOptions.length <= 1}
-                      onChange={(e) => handleItemFieldChange('categoryId', e.target.value)}
-                    />
-                  </div>
-
-                  {/* Product (was Material Catalog Preset) */}
-                  <div>
-                    <SearchableSelect
-                      id="item-catalog-preset"
-                      label="Product"
-                      options={PRODUCT_SELECT_OPTIONS}
-                      value={itemFormState.itemId ? String(itemFormState.itemId) : ''}
-                      placeholder="-- Select Product from Catalog --"
-                      searchPlaceholder="Search catalog..."
-                      error={itemFieldErrors.itemCode}
-                      onChange={(e) => handleItemFieldChange('itemId', e.target.value)}
-                    />
-                  </div>
-
-                  {/* Item Code (Disabled: Auto-populated from Catalog) */}
-                  <div>
-                    <Input
-                      id="item-form-code"
-                      label="Item Code"
-                      placeholder="Auto-populated from Product Catalog"
-                      value={itemFormState.itemCode || ''}
-                      error={itemFieldErrors.itemCode}
-                      disabled
-                      readOnly
-                      className="font-mono text-xs bg-surface/70 text-text-muted cursor-not-allowed opacity-90 select-none placeholder:text-text-muted/50"
-                      hint="Auto-assigned when selecting a product above"
-                    />
-                  </div>
-
-                  {/* Specification */}
-                  <div>
-                    <Input
-                      id="item-form-spec"
-                      label="Specification"
-                      placeholder="e.g. M6 × 125 MM High Tensile Zinc Plated"
-                      value={itemFormState.specification || ''}
-                      error={itemFieldErrors.specification}
-                      onChange={(e) => handleItemFieldChange('specification', e.target.value)}
-                    />
-                  </div>
-
-                  {/* Quantity */}
-                  <div>
-                    <Input
-                      id="item-form-qty"
-                      label="Quantity"
-                      type="number"
-                      min="1"
-                      required
-                      placeholder="1"
-                      value={itemFormState.quantity !== undefined && itemFormState.quantity !== null ? itemFormState.quantity : ''}
-                      error={itemFieldErrors.quantity}
-                      onChange={(e) => handleItemFieldChange('quantity', e.target.value)}
-                    />
-                  </div>
-
-                  {/* UOM */}
-                  <div>
-                    <SearchableSelect
-                      id="item-form-uom"
-                      label="UOM"
-                      options={UOM_OPTIONS}
-                      value={itemFormState.uom || 'Nos'}
-                      placeholder="Select UOM..."
-                      searchPlaceholder="Search unit of measure..."
-                      onChange={(e) => handleItemFieldChange('uom', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Form Action Buttons */}
-                <div className="flex items-center justify-end gap-2.5 pt-1">
-                  {editingItemId && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={resetItemForm}
-                      className="cursor-pointer text-xs"
-                    >
-                      <IconClose size={14} className="mr-1" />
-                      Cancel
-                    </Button>
-                  )}
-
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    onClick={handleAddOrUpdateItem}
-                    className="font-semibold shadow-xs cursor-pointer text-xs"
-                  >
-                    {editingItemId ? (
-                      <>
-                        <IconCheck size={14} className="mr-1.5" />
-                        Update Item
-                      </>
-                    ) : (
-                      <>
-                        <IconAdd size={14} className="mr-1.5" />
-                        Add Item
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            )}
             {/* ── Sub-Card: Items Grid Table ── */}
             <div className="rounded-xl border border-border overflow-hidden bg-bg">
               <div className="p-3.5 bg-surface/80 border-b border-border flex items-center justify-between gap-3 flex-wrap">

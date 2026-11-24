@@ -37,7 +37,6 @@ import {
 import { useMeetingForm } from './hooks/useMeetingForm';
 import { useUserOptions } from '../../context/UsersContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
-import { mockInquiries } from '../../mocks/inquiries';
 import AttendeeManager from './components/AttendeeManager';
 import MeetingAttachmentManager from './components/MeetingAttachmentManager';
 
@@ -69,15 +68,8 @@ export default function MeetingFormPage() {
   const [searchParams] = useSearchParams();
   const inquiryIdParam = searchParams.get('inquiryId');
   const { options: userOptions } = useUserOptions();
-  let inquiriesList = mockInquiries;
-  try {
-    const inqCtx = useInquiriesContext();
-    if (inqCtx && inqCtx.inquiries && inqCtx.inquiries.length > 0) {
-      inquiriesList = inqCtx.inquiries;
-    }
-  } catch {
-    inquiriesList = mockInquiries;
-  }
+  const inqCtx = useInquiriesContext();
+  const inquiriesList = Array.isArray(inqCtx?.inquiries) ? inqCtx.inquiries : [];
 
   const {
     isEdit,

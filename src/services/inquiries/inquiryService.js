@@ -115,6 +115,30 @@ export async function getInquiryLookups() {
 }
 
 /**
+ * Convenience helper to get inquiry sources
+ */
+export async function getSources() {
+  const lookups = await getInquiryLookups();
+  return Array.isArray(lookups.sources)
+    ? lookups.sources
+    : Array.isArray(lookups.inquirySources)
+    ? lookups.inquirySources
+    : [];
+}
+
+/**
+ * Convenience helper to get inquiry priority levels
+ */
+export async function getPriorityLevels() {
+  const lookups = await getInquiryLookups();
+  return Array.isArray(lookups.priorityLevels)
+    ? lookups.priorityLevels
+    : Array.isArray(lookups.priorities)
+    ? lookups.priorities
+    : [];
+}
+
+/**
  * 4. Next inquiry number preview.
  * GET /api/inquiries/next-number?inquiryDate=
  * @param {string} [inquiryDate]

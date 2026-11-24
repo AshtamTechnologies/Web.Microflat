@@ -1,3 +1,5 @@
+import React, { useId } from 'react';
+
 /**
  * Input — reusable text-input primitive.
  *
@@ -25,6 +27,8 @@ export default function Input({
   className = '',
   ...rest
 }) {
+  const autoId = useId();
+  const effectiveId = id || (label ? `input-${autoId}` : undefined);
   const hasError = Boolean(error);
   const effectiveHint = hint || helperText;
 
@@ -33,7 +37,7 @@ export default function Input({
   return (
     <div className="mf-field">
       {label && (
-        <label htmlFor={id} className="mf-label">
+        <label htmlFor={effectiveId} className="mf-label">
           {label}
           {required && (
             <span className="mf-required" aria-hidden="true">
@@ -51,7 +55,7 @@ export default function Input({
         )}
 
         <input
-          id={id}
+          id={effectiveId}
           className={[
             'mf-input',
             sizeClass,
@@ -65,9 +69,10 @@ export default function Input({
           data-has-left-icon={leftIcon ? 'true' : undefined}
           data-has-right-element={rightElement ? 'true' : undefined}
           aria-describedby={
-            error ? `${id}-error` : effectiveHint ? `${id}-hint` : undefined
+            effectiveId && error ? `${effectiveId}-error` : effectiveId && effectiveHint ? `${effectiveId}-hint` : undefined
           }
           aria-invalid={hasError ? 'true' : undefined}
+          aria-label={label ? undefined : rest['aria-label']}
           {...rest}
         />
 
@@ -80,14 +85,14 @@ export default function Input({
 
       {/* Field-level error */}
       {hasError && (
-        <p id={`${id}-error`} role="alert" className="mf-error flex items-center gap-1">
+        <p id={effectiveId ? `${effectiveId}-error` : undefined} role="alert" className="mf-error flex items-center gap-1">
           {error}
         </p>
       )}
 
       {/* Hint text */}
       {!hasError && effectiveHint && (
-        <p id={`${id}-hint`} className="mf-hint">
+        <p id={effectiveId ? `${effectiveId}-hint` : undefined} className="mf-hint">
           {effectiveHint}
         </p>
       )}

@@ -29,10 +29,31 @@ function sanitizeQuotation(q) {
   if (id && typeof id === 'object') {
     id = id.documentNumber || id.id || String(qNo || Date.now());
   }
+
+  let clientAddress = q.clientAddress;
+  if (clientAddress && typeof clientAddress === 'object') {
+    const parts = [
+      clientAddress.addressLabel || clientAddress.addressType,
+      clientAddress.address1 || clientAddress.addressLine1 || clientAddress.address,
+      clientAddress.address2 || clientAddress.addressLine2,
+      clientAddress.city,
+      clientAddress.stateName || clientAddress.state,
+      clientAddress.zipCode || clientAddress.pincode,
+    ].filter(Boolean);
+    clientAddress = parts.join(', ');
+  }
+
+  let contactPerson = q.contactPerson;
+  if (contactPerson && typeof contactPerson === 'object') {
+    contactPerson = contactPerson.contactPerson || contactPerson.contactName || contactPerson.name || '';
+  }
+
   return {
     ...q,
     id: String(id || qNo || ''),
     quotationNo: String(qNo || id || ''),
+    clientAddress: clientAddress !== undefined ? clientAddress : (q.clientAddress || ''),
+    contactPerson: contactPerson !== undefined ? contactPerson : (q.contactPerson || ''),
   };
 }
 
@@ -53,18 +74,24 @@ function mapStagedDocuments(docs = [], revisionNo = 0, defaultStage = '—') {
 
 export function QuotationsProvider({ children }) {
   const [quotations, setQuotations] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.map(sanitizeQuotation);
+    if (isMockApi) {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return parsed.map(sanitizeQuotation);
+          }
         }
+      } catch (e) {
+        console.error('Failed to load quotations from localStorage:', e);
       }
-    } catch (e) {
-      console.error('Failed to load quotations from localStorage:', e);
+      return INITIAL_QUOTATIONS.map(sanitizeQuotation);
     }
-    return INITIAL_QUOTATIONS.map(sanitizeQuotation);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
+    return [];
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -74,8 +101,9 @@ export function QuotationsProvider({ children }) {
     defaultCurrencyId: 1,
   });
 
-  // Persist to localStorage whenever state changes
+  // Persist to localStorage only when in mock API mode
   useEffect(() => {
+    if (!isMockApi) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(quotations));
     } catch (e) {
@@ -131,23 +159,16 @@ export function QuotationsProvider({ children }) {
     try {
       setIsLoading(true);
       const res = await quotationService.listQuotations(params);
-      const items = Array.isArray(res?.items) ? res.items : [];
-      if (items.length > 0) {
-        setQuotations((prev) => {
-          // Merge API items with local quotations to avoid losing local revisions/PO data
-          const apiIds = new Set(items.map((i) => String(i.id)));
-          const localOnly = prev.filter((p) => !apiIds.has(String(p.id)));
-          return [...items, ...localOnly].map(sanitizeQuotation);
-        });
-      }
+      const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+      setQuotations(items.map(sanitizeQuotation));
       return items;
     } catch (err) {
-      console.warn('Could not fetch live quotations, falling back to local state:', err);
-      return quotations;
+      console.warn('Could not fetch live quotations:', err);
+      return [];
     } finally {
       setIsLoading(false);
     }
-  }, [quotations]);
+  }, []);
 
   /**
    * Find quotation by ID or quotation number from state
@@ -214,7 +235,7 @@ export function QuotationsProvider({ children }) {
       return await quotationService.getQuotationPrefill(inquiryId);
     } catch (err) {
       console.warn('Failed to fetch quotation prefill:', err);
-      return null;
+      throw err;
     }
   }, []);
 
@@ -223,72 +244,68 @@ export function QuotationsProvider({ children }) {
    */
   const createQuotation = useCallback(
     async (payload) => {
-      let created = null;
-
-      // 1. Attempt API create when not in mock mode
+      // 1. Live API create when not in mock mode
       if (!isMockApi) {
-        try {
-          created = await quotationService.createQuotation(payload);
-        } catch (err) {
-          console.warn('Backend create failed, creating in local fallback:', err);
-        }
+        const created = await quotationService.createQuotation(payload);
+        const sanitized = sanitizeQuotation(created);
+        setQuotations((prev) => [sanitized, ...prev]);
+        toast.success(payload.status === 'Sent' ? 'Quotation saved & marked as Sent' : 'Quotation created as Draft');
+        return sanitized;
       }
 
-      // 2. Local fallback if API not used or failed
-      if (!created) {
-        const quotationNo = payload.quotationNo || `QT-${new Date().getFullYear()}-${String(quotations.length + 1).padStart(4, '0')}`;
-        const totals = calculateQuotationTotals(payload.items || [], payload.taxTreatment || 'INTRA_STATE');
+      // 2. Local fallback if in mock mode
+      const quotationNo = payload.quotationNo || `QT-${new Date().getFullYear()}-${String(quotations.length + 1).padStart(4, '0')}`;
+      const totals = calculateQuotationTotals(payload.items || [], payload.taxTreatment || 'INTRA_STATE');
 
-        const rev0 = {
-          revisionNo: 0,
-          revisionDate: payload.revisionDate || new Date().toISOString().split('T')[0],
-          revisionReason: payload.revisionReason || 'Initial quotation',
-          status: payload.status || 'Draft',
-          currency: payload.currency || 'INR',
-          taxTreatment: payload.taxTreatment || 'INTRA_STATE',
-          items: totals.calculatedItems,
-          subtotal: totals.subtotal,
-          totalTax: totals.totalTax,
-          grandTotal: totals.grandTotal,
-        };
+      const rev0 = {
+        revisionNo: 0,
+        revisionDate: payload.revisionDate || new Date().toISOString().split('T')[0],
+        revisionReason: payload.revisionReason || 'Initial quotation',
+        status: payload.status || 'Draft',
+        currency: payload.currency || 'INR',
+        taxTreatment: payload.taxTreatment || 'INTRA_STATE',
+        items: totals.calculatedItems,
+        subtotal: totals.subtotal,
+        totalTax: totals.totalTax,
+        grandTotal: totals.grandTotal,
+      };
 
-        created = {
-          id: quotationNo,
-          quotationNo,
-          inquiryNo: payload.inquiryNo || '',
-          inquiryId: payload.inquiryId || '',
-          clientName: payload.clientName || '',
-          clientId: payload.clientId || '',
-          clientAddress: payload.clientAddress || '',
-          clientAddressId: payload.clientAddressId || null,
-          clientContactId: payload.clientContactId || null,
-          contactPerson: payload.contactPerson || '',
-          contactEmail: payload.contactEmail || '',
-          contactPhone: payload.contactPhone || '',
-          status: payload.status || 'Draft',
-          poReceived: false,
-          poDetails: null,
-          confirmedOn: null,
-          currentRevision: 0,
-          currency: payload.currency || 'INR',
-          validUntil: payload.validUntil || '',
-          paymentTerms: payload.paymentTerms || 'Net 30',
-          paymentTermId: payload.paymentTermId || null,
-          deliveryTerms: payload.deliveryTerms || '',
-          taxTreatment: payload.taxTreatment || 'INTRA_STATE',
-          termsAndConditions: payload.termsAndConditions || '',
-          lastUpdatedBy: payload.lastUpdatedBy || 'Current User',
-          lastUpdatedAt: new Date().toISOString(),
-          revisions: [rev0],
-          items: totals.calculatedItems,
-          subtotal: totals.subtotal,
-          totalTax: totals.totalTax,
-          grandTotal: totals.grandTotal,
-          negotiations: [],
-          documents: mapStagedDocuments(payload.documents, 0),
-          mailLogs: [],
-        };
-      }
+      const created = {
+        id: quotationNo,
+        quotationNo,
+        inquiryNo: payload.inquiryNo || '',
+        inquiryId: payload.inquiryId || '',
+        clientName: payload.clientName || '',
+        clientId: payload.clientId || '',
+        clientAddress: payload.clientAddress || '',
+        clientAddressId: payload.clientAddressId || null,
+        clientContactId: payload.clientContactId || null,
+        contactPerson: payload.contactPerson || '',
+        contactEmail: payload.contactEmail || '',
+        contactPhone: payload.contactPhone || '',
+        status: payload.status || 'Draft',
+        poReceived: false,
+        poDetails: null,
+        confirmedOn: null,
+        currentRevision: 0,
+        currency: payload.currency || 'INR',
+        validUntil: payload.validUntil || '',
+        paymentTerms: payload.paymentTerms || 'Net 30',
+        paymentTermId: payload.paymentTermId || null,
+        deliveryTerms: payload.deliveryTerms || '',
+        taxTreatment: payload.taxTreatment || 'INTRA_STATE',
+        termsAndConditions: payload.termsAndConditions || '',
+        lastUpdatedBy: payload.lastUpdatedBy || 'Current User',
+        lastUpdatedAt: new Date().toISOString(),
+        revisions: [rev0],
+        items: totals.calculatedItems,
+        subtotal: totals.subtotal,
+        totalTax: totals.totalTax,
+        grandTotal: totals.grandTotal,
+        negotiations: [],
+        documents: mapStagedDocuments(payload.documents, 0),
+        mailLogs: [],
+      };
 
       setQuotations((prev) => [created, ...prev]);
       toast.success(payload.status === 'Sent' ? 'Quotation saved & marked as Sent' : 'Quotation created as Draft');
@@ -302,25 +319,25 @@ export function QuotationsProvider({ children }) {
    */
   const updateQuotation = useCallback(
     async (id, payload) => {
-      let updated = null;
       if (!isMockApi) {
-        try {
-          updated = await quotationService.updateQuotation(id, payload);
-        } catch (err) {
-          console.warn('Backend update failed, using local update:', err);
-        }
+        const updated = await quotationService.updateQuotation(id, payload);
+        const sanitized = sanitizeQuotation(updated);
+        setQuotations((prev) =>
+          prev.map((q) => (String(q.id) === String(id) || String(q.quotationNo) === String(id) ? { ...q, ...sanitized } : q))
+        );
+        toast.success('Quotation updated successfully');
+        return sanitized;
       }
 
       setQuotations((prev) =>
         prev.map((q) => {
           if (String(q.id) !== String(id) && String(q.quotationNo) !== String(id)) return q;
-          const merged = updated ? { ...q, ...updated } : { ...q, ...payload, lastUpdatedAt: new Date().toISOString() };
-          return merged;
+          return { ...q, ...payload, lastUpdatedAt: new Date().toISOString() };
         })
       );
 
       toast.success('Quotation updated successfully');
-      return updated;
+      return payload;
     },
     []
   );
@@ -329,22 +346,19 @@ export function QuotationsProvider({ children }) {
    * Create a new revision (Revision N+1)
    */
   const createRevision = useCallback(async (quotationId, payload) => {
-    let apiUpdated = null;
     if (!isMockApi) {
-      try {
-        apiUpdated = await quotationService.createRevision(quotationId, payload);
-      } catch (err) {
-        console.warn('Backend createRevision failed, using local fallback:', err);
-      }
+      const apiUpdated = await quotationService.createRevision(quotationId, payload);
+      const sanitized = sanitizeQuotation(apiUpdated);
+      setQuotations((prev) =>
+        prev.map((q) => (String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId) ? { ...q, ...sanitized } : q))
+      );
+      toast.success('New revision created successfully');
+      return sanitized;
     }
 
     setQuotations((prev) =>
       prev.map((q) => {
         if (String(q.id) !== String(quotationId) && String(q.quotationNo) !== String(quotationId)) return q;
-
-        if (apiUpdated) {
-          return { ...q, ...apiUpdated };
-        }
 
         const nextRevNo = (q.revisions || []).length;
         const totals = calculateQuotationTotals(payload.items || [], payload.taxTreatment || q.taxTreatment);
@@ -416,21 +430,19 @@ export function QuotationsProvider({ children }) {
    * Update Quotation Status
    */
   const updateQuotationStatus = useCallback(async (quotationId, newStatus, confirmedOn = null) => {
-    let apiUpdated = null;
     if (!isMockApi) {
-      try {
-        apiUpdated = await quotationService.updateQuotationStatus(quotationId, newStatus);
-      } catch (err) {
-        console.warn('Backend updateStatus failed, using local fallback:', err);
-      }
+      const apiUpdated = await quotationService.updateQuotationStatus(quotationId, newStatus);
+      const sanitized = sanitizeQuotation(apiUpdated);
+      setQuotations((prev) =>
+        prev.map((q) => (String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId) ? { ...q, ...sanitized, status: newStatus } : q))
+      );
+      toast.success(`Quotation status updated to ${newStatus}`);
+      return sanitized;
     }
 
     setQuotations((prev) =>
       prev.map((q) => {
         if (String(q.id) !== String(quotationId) && String(q.quotationNo) !== String(quotationId)) return q;
-        if (apiUpdated) {
-          return { ...q, ...apiUpdated };
-        }
         return {
           ...q,
           status: newStatus,
@@ -447,13 +459,14 @@ export function QuotationsProvider({ children }) {
    * Sends multipart form-data to POST /api/quotations/{id}/po-received
    */
   const recordClientPO = useCallback(async (quotationId, poData) => {
-    let apiUpdated = null;
     if (!isMockApi) {
-      try {
-        apiUpdated = await quotationService.recordQuotationPo(quotationId, poData);
-      } catch (err) {
-        console.warn('Backend recordQuotationPo failed, recording in local state:', err);
-      }
+      const apiUpdated = await quotationService.recordQuotationPo(quotationId, poData);
+      const sanitized = sanitizeQuotation(apiUpdated);
+      setQuotations((prev) =>
+        prev.map((q) => (String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId) ? { ...q, ...sanitized, poReceived: true } : q))
+      );
+      toast.success('Client Purchase Order recorded successfully');
+      return sanitized;
     }
 
     setQuotations((prev) =>
