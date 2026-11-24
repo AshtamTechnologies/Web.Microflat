@@ -33,7 +33,22 @@ export default function DetailField({
   valueClassName = '',
   children,
 }) {
-  const hasContent = value !== undefined && value !== null && value !== '' && value !== false;
+  let displayValue = value;
+  if (typeof value === 'object' && value !== null && !React.isValidElement(value)) {
+    const parts = [
+      value.addressLabel || value.addressType,
+      value.address1 || value.addressLine1 || value.address,
+      value.address2 || value.addressLine2,
+      value.city,
+      value.stateName || value.state,
+      value.zipCode || value.pincode,
+      value.countryName || value.country,
+      value.name || value.contactPerson || value.label || value.title,
+    ].filter(Boolean);
+    displayValue = parts.length > 0 ? parts.join(', ') : '';
+  }
+
+  const hasContent = displayValue !== undefined && displayValue !== null && displayValue !== '' && displayValue !== false;
 
   const renderIcon = (extraClass = '') => {
     if (!icon) return null;
@@ -54,34 +69,34 @@ export default function DetailField({
       return <span className="text-text-muted">{emptyText}</span>;
     }
 
-    if (isEmail && typeof value === 'string') {
+    if (isEmail && typeof displayValue === 'string') {
       return (
         <a
-          href={`mailto:${value}`}
+          href={`mailto:${displayValue}`}
           className="font-medium text-primary hover:underline inline-flex items-center gap-1.5 truncate max-w-full"
         >
           {renderIcon('text-primary/80')}
-          <span className="truncate">{value}</span>
+          <span className="truncate">{displayValue}</span>
         </a>
       );
     }
 
-    if (isPhone && typeof value === 'string') {
+    if (isPhone && typeof displayValue === 'string') {
       return (
         <a
-          href={`tel:${value}`}
+          href={`tel:${displayValue}`}
           className={`font-medium text-heading hover:text-primary hover:underline inline-flex items-center gap-1.5 ${
             mono ? 'font-mono tabular-nums' : ''
           }`}
         >
           {renderIcon('text-text-muted')}
-          <span>{value}</span>
+          <span>{displayValue}</span>
         </a>
       );
     }
 
     if (isLink) {
-      const targetHref = href || (typeof value === 'string' ? value : '');
+      const targetHref = href || (typeof displayValue === 'string' ? displayValue : '');
       const fullHref = targetHref.startsWith('http') ? targetHref : `https://${targetHref}`;
       return (
         <a
@@ -91,7 +106,7 @@ export default function DetailField({
           className="text-primary hover:underline inline-flex items-center gap-1 break-all"
         >
           {renderIcon()}
-          <span>{value}</span>
+          <span>{displayValue}</span>
           <ExternalLink size={12} className="shrink-0" />
         </a>
       );
@@ -104,7 +119,7 @@ export default function DetailField({
         } ${valueClassName}`}
       >
         {renderIcon('text-text-muted')}
-        <span className="break-words">{value}</span>
+        <span className="break-words">{displayValue}</span>
       </div>
     );
   };

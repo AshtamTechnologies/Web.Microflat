@@ -139,9 +139,16 @@ export default function ClientFormPage() {
     let isMounted = true;
     async function loadClientData() {
       if (isEdit) {
-        let existing = getClientById(id);
-        if (!existing && fetchClientDetail) {
-          existing = await fetchClientDetail(id);
+        let existing = null;
+        if (fetchClientDetail) {
+          try {
+            existing = await fetchClientDetail(id);
+          } catch (e) {
+            console.warn('Could not fetch client details from API, checking cache:', e);
+          }
+        }
+        if (!existing) {
+          existing = getClientById(id);
         }
         if (!isMounted) return;
 

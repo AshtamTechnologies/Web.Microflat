@@ -6,7 +6,6 @@
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { inquiryService } from '../../services';
-import { mockInquiryDocuments } from '../../mocks/inquiryDocuments';
 import { INITIAL_DOCUMENT_TYPES } from '../../mocks/documentTypes';
 
 function formatAuditTimestamp(date = new Date()) {
@@ -23,7 +22,7 @@ function formatAuditTimestamp(date = new Date()) {
 }
 
 export function useInquiryDocuments() {
-  const [documents, setDocuments] = useState(mockInquiryDocuments);
+  const [documents, setDocuments] = useState([]);
 
   /* ── Get documents for a specific inquiry (synchronous from cache) ── */
   const getDocumentsByInquiryId = useCallback(

@@ -79,11 +79,6 @@ export async function getMeetings(params = {}) {
     const response = await axiosInstance.get(MEETINGS_ENDPOINTS.MEETINGS, { params: query });
     return meetingListFromApi(response.data);
   } catch (err) {
-    // If backend endpoint is unavailable or not deployed yet, fall back gracefully to mock
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn('[meetingsService] API /api/meetings unavailable, falling back to mock data.', err);
-      return mockService.getMeetings(params);
-    }
     throw normalizeApiError(err);
   }
 }
@@ -116,7 +111,7 @@ export async function getMeetingCounts(currentUserId, currentUserEmail, currentU
       cancelled,
     };
   } catch (err) {
-    return mockService.getMeetingCounts(currentUserId, currentUserEmail, currentUserName);
+    return { all: 0, mine: 0, scheduled: 0, completed: 0, cancelled: 0 };
   }
 }
 
@@ -136,10 +131,6 @@ export async function getMeetingById(id) {
     const response = await axiosInstance.get(MEETINGS_ENDPOINTS.MEETING_BY_ID(id));
     return meetingFromApi(response.data);
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn(`[meetingsService] API /api/meetings/${id} unavailable, falling back to mock.`, err);
-      return mockService.getMeetingById(id);
-    }
     throw normalizeApiError(err);
   }
 }
@@ -162,10 +153,6 @@ export async function scheduleMeeting(payload, currentUser) {
     const response = await axiosInstance.post(MEETINGS_ENDPOINTS.MEETINGS, body);
     return meetingFromApi(response.data);
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn('[meetingsService] API POST /api/meetings unavailable, falling back to mock.', err);
-      return mockService.scheduleMeeting(payload, currentUser);
-    }
     throw normalizeApiError(err);
   }
 }
@@ -188,10 +175,6 @@ export async function updateMeeting(id, payload) {
     const response = await axiosInstance.put(MEETINGS_ENDPOINTS.MEETING_BY_ID(id), body);
     return meetingFromApi(response.data);
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn(`[meetingsService] API PUT /api/meetings/${id} unavailable, falling back to mock.`, err);
-      return mockService.updateMeeting(id, payload);
-    }
     throw normalizeApiError(err);
   }
 }
@@ -216,10 +199,6 @@ export async function changeMeetingStatus(id, { status, remarks }) {
     });
     return meetingFromApi(response.data);
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn(`[meetingsService] API PATCH /api/meetings/${id}/status unavailable, falling back to mock.`, err);
-      return mockService.changeMeetingStatus(id, { status, remarks });
-    }
     throw normalizeApiError(err);
   }
 }
@@ -242,10 +221,6 @@ export async function addAttendee(meetingId, attendeeData) {
     const response = await axiosInstance.post(MEETINGS_ENDPOINTS.ATTENDEES(meetingId), body);
     return attendeeFromApi(response.data);
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn(`[meetingsService] API POST /api/meetings/${meetingId}/attendees unavailable, falling back to mock.`, err);
-      return mockService.addAttendee(meetingId, attendeeData);
-    }
     throw normalizeApiError(err);
   }
 }
@@ -267,10 +242,6 @@ export async function removeAttendee(meetingId, attendeeId) {
     await axiosInstance.delete(MEETINGS_ENDPOINTS.ATTENDEE_BY_ID(meetingId, attendeeId));
     return true;
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn(`[meetingsService] API DELETE /api/meetings/${meetingId}/attendees/${attendeeId} unavailable, falling back to mock.`, err);
-      return mockService.removeAttendee(meetingId, attendeeId);
-    }
     throw normalizeApiError(err);
   }
 }
@@ -296,15 +267,6 @@ export async function getMeetingDocumentTypes() {
     });
     return response.data || [];
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn('[meetingsService] GET /api/document-types unavailable, returning fallback.');
-      return [
-        { id: 1, documentTypeCode: 'MOM', documentTypeName: 'Minutes of Meeting', maxFileSizeMB: 10, allowedExtensions: '.pdf,.doc,.docx' },
-        { id: 2, documentTypeCode: 'AGENDA', documentTypeName: 'Agenda', maxFileSizeMB: 10, allowedExtensions: '.pdf,.doc,.docx' },
-        { id: 3, documentTypeCode: 'PRESENTATION', documentTypeName: 'Presentation', maxFileSizeMB: 25, allowedExtensions: '.pdf,.ppt,.pptx' },
-        { id: 4, documentTypeCode: 'OTHER', documentTypeName: 'Other Document', maxFileSizeMB: 10, allowedExtensions: '.pdf,.doc,.docx,.png,.jpg,.jpeg' },
-      ];
-    }
     throw normalizeApiError(err);
   }
 }
@@ -329,10 +291,6 @@ export async function getMeetingAttachments(meetingId) {
       : [];
     return items.map(meetingAttachmentFromApi).filter(Boolean);
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn(`[meetingsService] GET /api/meetings/${meetingId}/attachments unavailable, falling back to mock.`);
-      return mockService.getMeetingAttachments ? mockService.getMeetingAttachments(meetingId) : [];
-    }
     throw normalizeApiError(err);
   }
 }
@@ -376,12 +334,6 @@ export async function uploadMeetingAttachment(meetingId, { documentTypeId, file,
     });
     return meetingAttachmentFromApi(response.data);
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn(`[meetingsService] POST /api/meetings/${meetingId}/attachments unavailable, falling back to mock.`);
-      if (mockService.uploadMeetingAttachment) {
-        return mockService.uploadMeetingAttachment(meetingId, { documentTypeId, file, documentName, documentTitle, remarks });
-      }
-    }
     throw normalizeApiError(err);
   }
 }
@@ -433,10 +385,6 @@ export async function deleteMeetingAttachment(attachmentId) {
     await axiosInstance.delete(MEETINGS_ENDPOINTS.ATTACHMENT_BY_ID(attachmentId));
     return true;
   } catch (err) {
-    if (err?.code === 'ERR_NETWORK' || err?.response?.status === 404) {
-      console.warn(`[meetingsService] DELETE /api/meeting-attachments/${attachmentId} unavailable, falling back to mock.`);
-      return mockService.deleteMeetingAttachment ? mockService.deleteMeetingAttachment(attachmentId) : true;
-    }
     throw normalizeApiError(err);
   }
 }

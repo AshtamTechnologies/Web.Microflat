@@ -81,44 +81,9 @@ import AssignInquiryModal from './components/AssignInquiryModal';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import UploadDocumentModal from './components/UploadDocumentModal';
 import DealFormModal from '../deals/DealFormModal';
-import { dealService } from '../../services';
+import { dealService, isMockApi } from '../../services';
 import { formatDate, formatDateTime } from '../../utils/dateUtils';
 import { getMeetings } from '../../services/meetings/meetingsService';
-
-// Realistic dummy meetings tailored for Inquiry negotiations & reviews
-const DUMMY_INQUIRY_MEETINGS = [
-  {
-    id: 101,
-    meetingTitle: 'Technical Drawing & Tolerance Review',
-    meetingType: 'Client',
-    status: 'Completed',
-    meetingDate: '2026-11-10',
-    startTime: '10:30',
-    endTime: '11:30',
-    location: 'Conference Room Alpha & Google Meet',
-    attendees: [
-      { name: 'Janvi Motwani', role: 'Sales Lead', isInternal: true },
-      { name: 'Rajesh Sharma', role: 'Chief Engineer (Client)', isInternal: false },
-      { name: 'Hardik Mehta', role: 'QA Inspector', isInternal: true },
-    ],
-    remarks: 'Client approved drawing Rev-B with 304 Stainless Steel. Agreed to submit commercial quotation by Friday.',
-  },
-  {
-    id: 102,
-    meetingTitle: 'Internal Machining Feasibility & Costing',
-    meetingType: 'Internal',
-    status: 'Scheduled',
-    meetingDate: '2026-11-15',
-    startTime: '14:00',
-    endTime: '15:00',
-    location: 'Production Planning Room B',
-    attendees: [
-      { name: 'Janvi Motwani', role: 'Sales Lead', isInternal: true },
-      { name: 'Ketan Patel', role: 'Production Head', isInternal: true },
-    ],
-    remarks: null,
-  },
-];
 
 const INITIAL_ITEM_WIDTHS = {
   index: 48,
@@ -265,14 +230,15 @@ export default function InquiryViewPage() {
   useEffect(() => {
     let isMounted = true;
     if (id) {
-      if (fetchInquiryById) {
+      const isNumeric = !isNaN(Number(id));
+      if (fetchInquiryById && (isNumeric || isMockApi)) {
         fetchInquiryById(id).then((detail) => {
           if (isMounted && detail) {
             setLiveInquiry(detail);
           }
         });
       }
-      if (fetchDocumentsByInquiryId) {
+      if (fetchDocumentsByInquiryId && (isNumeric || isMockApi)) {
         fetchDocumentsByInquiryId(id);
       }
     }
@@ -343,21 +309,20 @@ export default function InquiryViewPage() {
   useEffect(() => {
     let isMounted = true;
     async function loadMeetings() {
-      if (!id) return;
+      if (!id || (isNaN(Number(id)) && !isMockApi)) {
+        setInquiryMeetings([]);
+        return;
+      }
       try {
         setLoadingMeetings(true);
         const data = await getMeetings({ inquiryId: id });
         if (isMounted) {
-          if (Array.isArray(data) && data.length > 0) {
-            setInquiryMeetings(data);
-          } else {
-            setInquiryMeetings(DUMMY_INQUIRY_MEETINGS);
-          }
+          setInquiryMeetings(Array.isArray(data) ? data : []);
         }
       } catch (err) {
-        console.error('Failed to load inquiry meetings, falling back to dummy:', err);
+        console.warn('Failed to load inquiry meetings:', err);
         if (isMounted) {
-          setInquiryMeetings(DUMMY_INQUIRY_MEETINGS);
+          setInquiryMeetings([]);
         }
       } finally {
         if (isMounted) setLoadingMeetings(false);

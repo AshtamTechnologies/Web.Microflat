@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   IconBack,
@@ -21,6 +21,7 @@ import {
   IconChevronUp,
   IconMessageSquare,
   IconRotateCcw,
+  IconWarning,
 } from '../../constants/icons';
 import {
   PageHeader,
@@ -44,7 +45,7 @@ import {
   Checkbox,
   Modal,
 } from '../../components/ui';
-import { productService, clientService } from '../../services';
+import { productService, clientService, inquiryService } from '../../services';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useClientsContext } from '../../context/ClientsContext';
@@ -56,8 +57,6 @@ import {
   formatCurrency,
 } from '../../mocks/quotations';
 import {
-  INQUIRY_CATALOG_CATEGORIES,
-  INQUIRY_CATALOG_PRODUCTS,
   buildCatalogProductDescription,
 } from '../../mocks/inquiryCatalog';
 import useColumnResize from '../../hooks/useColumnResize';
@@ -93,7 +92,7 @@ export default function QuotationFormPage() {
     lookups,
   } = useQuotationsContext();
 
-  const { inquiries = [] } = useInquiriesContext();
+  const { inquiries = [], fetchInquiries } = useInquiriesContext();
   const { clients = [], ensureClientsLoaded } = useClientsContext();
   const { allUsers = [], users = [] } = useUsersContext();
   const userList = allUsers.length > 0 ? allUsers : users;
@@ -132,6 +131,7 @@ export default function QuotationFormPage() {
     paymentTerms: [],
     paymentTermId: null,
     deliveryTerms: [],
+    deliveryTermId: null,
     termsAndConditions: '',
     otherCharges: 0,
     otherChargesDescription: '',
@@ -178,6 +178,7 @@ export default function QuotationFormPage() {
   const [drawerOptions, setDrawerOptions] = useState(['Rexine Cover (Standard)']);
   const [drawerDescription, setDrawerDescription] = useState('');
   const [isDescriptionEdited, setIsDescriptionEdited] = useState(false);
+  const [inquiryPrefillError, setInquiryPrefillError] = useState(null);
 
   // Dynamic Client Addresses & Contacts State
   const [dynamicClientAddresses, setDynamicClientAddresses] = useState([]);
@@ -219,7 +220,8 @@ export default function QuotationFormPage() {
   }, [availableInquiries]);
 
   // Handle Inquiry Selection (with dynamic API prefill)
-  const handleSelectInquiry = async (inquiryNoOrId) => {
+  async function handleSelectInquiry(inquiryNoOrId) {
+    setInquiryPrefillError(null);
     if (!inquiryNoOrId) {
       setFormData((prev) => ({
         ...prev,
@@ -247,11 +249,20 @@ export default function QuotationFormPage() {
 
     // Fetch dynamic prefill from API
     let prefill = null;
+    let prefillFailed = false;
     if (inqId && fetchQuotationPrefill) {
       try {
         prefill = await fetchQuotationPrefill(inqId);
+        setInquiryPrefillError(null);
       } catch (e) {
-        console.warn('API fetchQuotationPrefill failed, using local inq fallback:', e);
+        prefillFailed = true;
+        console.warn('API fetchQuotationPrefill failed:', e);
+        const errMsg =
+          e?.status === 409 || e?.response?.status === 409 || e?.message?.toLowerCase().includes('new client')
+            ? 'This inquiry was received from a new prospect client. Please register the client in the Clients module before generating a quotation.'
+            : e?.message || 'Failed to fetch quotation prefill';
+        setInquiryPrefillError(errMsg);
+        toast.error(errMsg, { duration: 6000 });
       }
     }
 
@@ -336,19 +347,18 @@ export default function QuotationFormPage() {
     if (Array.isArray(rawItems) && rawItems.length > 0) {
       mappedItems = rawItems.map((it, idx) => {
         const catProd =
-          mergedCatalogProducts.find((p) => String(p.id) === String(it.productId) || String(p.productId) === String(it.productId)) ||
-          INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === it.productId);
+          mergedCatalogProducts.find((p) => String(p.id) === String(it.productId) || String(p.productId) === String(it.productId)) || null;
         const catVar = catProd?.variants?.find((v) => String(v.id) === String(it.variantId) || String(v.productVariantId) === String(it.productVariantId));
         const fallbackDesc = catProd ? buildCatalogProductDescription(catProd, catVar) : '';
         return {
           id: it.id || `it-${Date.now()}-${idx}`,
           quotationLineItemId: it.id || null,
-          categoryId: it.categoryId || catProd?.categoryId || 'cat-sp',
-          productId: it.productId || catProd?.productId || catProd?.id || 'prod-gsp',
-          productName: it.productName || catProd?.productName || it.itemName || 'Precision Plate',
+          categoryId: it.categoryId || catProd?.categoryId || '',
+          productId: it.productId || catProd?.productId || catProd?.id || null,
+          productName: it.productName || catProd?.productName || it.itemName || 'Product',
           variantId: it.variantId || it.productVariantId || '',
           variantName: it.variantName || catVar?.variantName || 'Standard Size',
-          itemCode: it.itemCode || it.productCode || catVar?.variantCode || 'ITM-01',
+          itemCode: it.itemCode || it.productCode || catVar?.variantCode || '—',
           technicalDetails: it.technicalDetails || it.specification || '',
           description: it.description || it.specification || fallbackDesc || '',
           quantity: Number(it.quantity) || 1,
@@ -383,6 +393,7 @@ export default function QuotationFormPage() {
       deliveryTerms: (prefill?.deliveryTerms
         ? (Array.isArray(prefill.deliveryTerms) ? prefill.deliveryTerms : [prefill.deliveryTerms])
         : prev.deliveryTerms || []).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
+      deliveryTermId: prefill?.deliveryTermId || prev.deliveryTermId || null,
       items: mappedItems.length > 0 ? mappedItems : prev.items,
     }));
 
@@ -390,7 +401,9 @@ export default function QuotationFormPage() {
       toast(`${prefill.skippedCustomItems.length} custom line item(s) skipped from auto-pricing.`);
     }
 
-    toast.success(`Inquiry ${matchedInq?.InquiryNo || inquiryNoOrId} selected · Client & items loaded`);
+    if (!prefillFailed) {
+      toast.success(`Inquiry ${matchedInq?.InquiryNo || inquiryNoOrId} selected · Client & items loaded`);
+    }
   };
 
   // ── Column Resizing State for Product Grid (via shared hook) ──
@@ -473,6 +486,8 @@ export default function QuotationFormPage() {
         currency: targetQuotation.currency || 'INR',
         currencyId: targetQuotation.currencyId || 2,
         validUntil: targetQuotation.validUntil || '',
+        paymentTermId: targetQuotation.paymentTermId || latestRev?.paymentTermId || null,
+        deliveryTermId: targetQuotation.deliveryTermId || latestRev?.deliveryTermId || null,
         paymentTerms: (Array.isArray(targetQuotation.paymentTerms)
           ? targetQuotation.paymentTerms
           : (targetQuotation.paymentTerms ? [targetQuotation.paymentTerms] : [])).filter((t) => typeof t !== 'string' || !isHtmlMarkup(t)),
@@ -537,10 +552,7 @@ export default function QuotationFormPage() {
         options: Array.isArray(p.options) ? p.options : [],
       }));
     }
-    return INQUIRY_CATALOG_PRODUCTS.map((p) => ({
-      ...p,
-      productId: p.id,
-    }));
+    return [];
   }, [catalogProducts]);
 
   // Catalog Options (Dynamic categories from Product Master API)
@@ -551,10 +563,7 @@ export default function QuotationFormPage() {
         label: cat.categoryName || cat.name || cat.label,
       }));
     }
-    return INQUIRY_CATALOG_CATEGORIES.map((cat) => ({
-      value: String(cat.value || cat.id),
-      label: cat.label || cat.name,
-    }));
+    return [];
   }, [catalogCategories]);
 
   // Dynamic Product Options (filtered by Category)
@@ -1056,8 +1065,7 @@ export default function QuotationFormPage() {
     setDrawerProduct(prodId);
     setDrawerVariant('');
     const prod =
-      mergedCatalogProducts.find((p) => String(p.id) === String(prodId)) ||
-      INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === prodId) || null;
+      mergedCatalogProducts.find((p) => String(p.id) === String(prodId)) || null;
     if (prod && !drawerCategory && prod.categoryId) {
       setDrawerCategory(String(prod.categoryId));
     }
@@ -2206,7 +2214,7 @@ export default function QuotationFormPage() {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="mf-label text-xs font-semibold text-heading">
+                <label htmlFor="drawer-unit-rate" className="mf-label text-xs font-semibold text-heading">
                   Unit Rate ({formData.currency}) <span className="mf-required" aria-hidden="true">*</span>
                 </label>
                 <button
@@ -2220,6 +2228,8 @@ export default function QuotationFormPage() {
                 </button>
               </div>
               <Input
+                id="drawer-unit-rate"
+                aria-label="Unit Rate"
                 type="number"
                 step="0.01"
                 min="0.01"

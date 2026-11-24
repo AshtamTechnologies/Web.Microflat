@@ -59,29 +59,56 @@ export function inquiryProductFromApi(dto) {
  */
 export function inquiryProductToApi(item) {
   if (!item) return null;
-  const isCustom = !item.productId;
+
+  const rawProdId = item.productId ?? item.itemId;
+  const numProdId = Number(rawProdId);
+  const hasValidNumericProductId = !isNaN(numProdId) && numProdId > 0;
+
+  const rawVarId = item.productVariantId ?? item.variantId;
+  const numVarId = Number(rawVarId);
+  const hasValidNumericVariantId = !isNaN(numVarId) && numVarId > 0;
+
+  const isCustom = !hasValidNumericProductId;
+
+  const resolvedItemName = String(
+    item.itemName ||
+    item.productName ||
+    item.displayName ||
+    item.itemCode ||
+    'Custom Product'
+  ).trim();
+
+  const resolvedSpec = String(
+    item.specification ||
+    item.notes ||
+    item.technicalDetails ||
+    item.variantName ||
+    (isCustom ? resolvedItemName : '')
+  ).trim();
 
   // Extract integer option IDs
   let productOptionIds = null;
   if (Array.isArray(item.productOptionIds)) {
-    productOptionIds = item.productOptionIds.map(Number).filter((id) => !isNaN(id) && id > 0);
+    const validIds = item.productOptionIds.map(Number).filter((id) => !isNaN(id) && id > 0);
+    productOptionIds = validIds.length > 0 ? validIds : null;
   } else if (Array.isArray(item.options)) {
-    productOptionIds = item.options
+    const validIds = item.options
       .map((opt) => (typeof opt === 'object' && opt !== null ? opt.productOptionId || opt.id : opt))
       .map(Number)
       .filter((id) => !isNaN(id) && id > 0);
+    productOptionIds = validIds.length > 0 ? validIds : null;
   }
 
   const payload = {
-    productId: isCustom ? null : Number(item.productId),
-    productVariantId: isCustom || !item.productVariantId ? null : Number(item.productVariantId),
-    isCustomSize: !isCustom && Boolean(item.isCustomSize),
-    customSize: !isCustom && item.isCustomSize ? String(item.customSize || '').trim() || null : null,
-    itemName: isCustom ? String(item.itemName || item.displayName || item.productName || '').trim() : null,
+    productId: hasValidNumericProductId ? numProdId : null,
+    productVariantId: hasValidNumericVariantId ? numVarId : null,
+    isCustomSize: hasValidNumericProductId && Boolean(item.isCustomSize),
+    customSize: hasValidNumericProductId && item.isCustomSize ? String(item.customSize || '').trim() || null : null,
+    itemName: isCustom ? (resolvedItemName || 'Custom Product') : null,
     quantity: Math.max(0.01, Number(item.quantity) || 1),
-    specification: item.specification ? String(item.specification).trim() : '',
+    specification: resolvedSpec || (isCustom ? 'Standard custom specification' : ''),
     remarks: item.remarks || item.notes ? String(item.remarks || item.notes).trim() : null,
-    productOptionIds: isCustom ? null : productOptionIds,
+    productOptionIds: isCustom || !productOptionIds || productOptionIds.length === 0 ? null : productOptionIds,
     isActive: item.isActive !== false,
   };
 
@@ -263,6 +290,52 @@ export function inquiryDetailFromApi(dto) {
   };
 }
 
+function resolveCleanNumber(val, defaultVal = null) {
+  if (val === null || val === undefined || val === '') return defaultVal;
+  if (typeof val === 'number') return isNaN(val) ? defaultVal : val;
+  const str = String(val).trim();
+  const direct = Number(str);
+  if (!isNaN(direct) && direct > 0) return direct;
+  const digits = parseInt(str.replace(/^[^0-9]+/, ''), 10);
+  return !isNaN(digits) && digits > 0 ? digits : defaultVal;
+}
+
+const COMMON_COUNTRIES = {
+  india: 1,
+  'united states': 2,
+  usa: 2,
+  us: 2,
+  germany: 3,
+  'united kingdom': 4,
+  uk: 4,
+  'united arab emirates': 5,
+  uae: 5,
+  qatar: 6,
+  'saudi arabia': 7,
+  australia: 8,
+  canada: 9,
+  japan: 10,
+  singapore: 11,
+};
+
+const COMMON_INDIAN_STATES = {
+  gujarat: 1,
+  maharashtra: 2,
+  karnataka: 3,
+  'tamil nadu': 4,
+  delhi: 5,
+  rajasthan: 6,
+  'uttar pradesh': 7,
+  haryana: 8,
+  'madhya pradesh': 9,
+  telangana: 10,
+  'andhra pradesh': 11,
+  'west bengal': 12,
+  punjab: 13,
+  kerala: 14,
+  odisha: 15,
+};
+
 /**
  * Builds the request body for `POST /api/inquiries`.
  * @param {object} form
@@ -270,32 +343,45 @@ export function inquiryDetailFromApi(dto) {
  */
 export function inquiryToCreatePayload(form) {
   const isNew = form.isNewClient ?? (form.clientType === 'New' || !form.clientId);
-  const clientId = isNew ? null : (Number(form.clientId) || null);
+  const clientId = isNew ? null : (resolveCleanNumber(form.clientId) || null);
 
   const products = Array.isArray(form.products || form.items)
     ? (form.products || form.items).map(inquiryProductToApi).filter(Boolean)
     : [];
 
+  const rawCountry = String(form.Country || form.country || '').trim().toLowerCase();
+  let resolvedCountryId = resolveCleanNumber(form.countryId) || COMMON_COUNTRIES[rawCountry] || (rawCountry === 'india' ? 1 : null);
+
+  const rawState = String(form.State || form.state || '').trim().toLowerCase();
+  let resolvedStateId = resolveCleanNumber(form.stateId);
+  if (!resolvedStateId && rawState) {
+    resolvedStateId = COMMON_INDIAN_STATES[rawState] || null;
+  }
+  // stateId requires countryId
+  if (resolvedStateId && !resolvedCountryId) {
+    resolvedCountryId = 1;
+  }
+
   const payload = {
     inquiryDate: form.inquiryDate || form.InquiryDate || new Date().toISOString().slice(0, 10),
     estimateDate: form.estimateDate || form.RequiredByDate || null,
-    regionId: Number(form.regionId || form.RegionId),
-    inquirySourceId: form.inquirySourceId ? Number(form.inquirySourceId) : null,
-    priorityLevelId: form.priorityLevelId ? Number(form.priorityLevelId) : (form.defaultPriorityLevelId ? Number(form.defaultPriorityLevelId) : 2),
+    regionId: resolveCleanNumber(form.regionId || form.RegionId, 1),
+    inquirySourceId: resolveCleanNumber(form.inquirySourceId, 1),
+    priorityLevelId: resolveCleanNumber(form.priorityLevelId || form.defaultPriorityLevelId, 2),
     detailedSpecification: form.detailedSpecification || form.Description || null,
     isNewClient: isNew,
     clientId,
-    companyName: isNew ? String(form.companyName || form.CustomerName || '').trim() : (form.companyName || form.CustomerName || null),
+    companyName: isNew ? String(form.companyName || form.CustomerName || '').trim() : null,
     contactPersonName: form.contactPersonName || form.ContactPerson || null,
     email: form.email || form.Email ? String(form.email || form.Email).trim().toLowerCase() : null,
     mobileNo: form.mobileNo || form.Phone ? String(form.mobileNo || form.Phone).trim() : null,
     alternatePhoneNo: form.alternatePhoneNo || form.AlternativePhone ? String(form.alternatePhoneNo || form.AlternativePhone).trim() : null,
     city: form.city || form.City || null,
-    countryId: form.countryId ? Number(form.countryId) : (form.Country ? 1 : null),
-    stateId: form.stateId ? Number(form.stateId) : null,
+    countryId: resolvedCountryId,
+    stateId: resolvedStateId,
     address1: form.address1 || form.AddressLine1 || null,
     address2: form.address2 || form.AddressLine2 || null,
-    assignedToUserId: Number(form.assignedToUserId || form.AssignedTo),
+    assignedToUserId: resolveCleanNumber(form.assignedToUserId || form.AssignedTo, 1),
     comment: form.comment || form.initialComment ? String(form.comment || form.initialComment).trim() : null,
     products,
   };

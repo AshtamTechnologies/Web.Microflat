@@ -329,7 +329,7 @@ export default function VendorFormPage() {
   } = useVendorsContext();
 
   const [fetchedVendor, setFetchedVendor] = useState(null);
-  const [fetchingVendor, setFetchingVendor] = useState(Boolean(isEdit && !getVendorById(id)));
+  const [fetchingVendor, setFetchingVendor] = useState(Boolean(isEdit));
 
   useEffect(() => {
     let isMounted = true;
@@ -337,8 +337,8 @@ export default function VendorFormPage() {
       const cached = getVendorById(id);
       if (cached) {
         setFetchedVendor(cached);
-        setFetchingVendor(false);
-      } else if (fetchVendorDetail) {
+      }
+      if (fetchVendorDetail) {
         setFetchingVendor(true);
         fetchVendorDetail(id)
           .then((v) => {
@@ -346,10 +346,12 @@ export default function VendorFormPage() {
               setFetchedVendor(v);
             }
           })
-          .catch((err) => console.warn('Could not fetch vendor:', err))
+          .catch((err) => console.warn('Could not fetch full vendor details:', err))
           .finally(() => {
             if (isMounted) setFetchingVendor(false);
           });
+      } else {
+        setFetchingVendor(false);
       }
     } else {
       setFetchingVendor(false);
