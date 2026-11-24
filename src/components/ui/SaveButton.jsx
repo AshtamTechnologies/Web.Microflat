@@ -32,6 +32,7 @@ export default function SaveButton({
   iconRight,
   showIcon = true,
   loading = false,
+  isLoading,
   loadingText,
   variant = 'primary',
   type = 'submit',
@@ -41,16 +42,17 @@ export default function SaveButton({
   ...rest
 }) {
   void _iconSize; void _iconClassName;
+  const isBusy = Boolean(loading || isLoading);
   const content = children ?? label ?? 'Save';
-  const displayedText = loading && loadingText ? loadingText : content;
+  const displayedText = isBusy && loadingText ? loadingText : content;
 
   return (
     <Button
       type={type}
       variant={variant}
       size={size}
-      loading={loading}
-      disabled={disabled}
+      loading={isBusy}
+      disabled={disabled || isBusy}
       className={className}
       icon={showIcon ? Icon : undefined}
       iconRight={iconRight}

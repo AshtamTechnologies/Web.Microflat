@@ -62,12 +62,13 @@ export default function SearchableSelect({
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
-      const width = Math.min(rect.width, viewportWidth - 24);
-      const left = Math.max(12, Math.min(rect.left, viewportWidth - width - 12));
+      // Allow dropdown to expand up to 280px minimum for readable content if trigger is narrower
+      const dropdownWidth = Math.min(Math.max(rect.width, 260), viewportWidth - 24);
+      const left = Math.max(12, Math.min(rect.left, viewportWidth - dropdownWidth - 12));
       setCoords({
         top: rect.bottom + 6,
         left,
-        width,
+        width: dropdownWidth,
       });
     }
   }, []);
@@ -317,7 +318,7 @@ export default function SearchableSelect({
                           : 'text-text hover:bg-surface/70',
                       ].join(' ')}
                     >
-                      <span className="truncate">{option.label}</span>
+                      <span className="truncate" title={option.label}>{option.label}</span>
                       {isSelected && (
                         <Check
                           size={12}

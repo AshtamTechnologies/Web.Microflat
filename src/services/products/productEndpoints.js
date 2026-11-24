@@ -29,4 +29,7 @@ export const PRODUCT_ENDPOINTS = {
   // Product Prices (from ProductPriceList.md)
   PRODUCT_PRICES: '/api/product-prices',
   PRODUCT_PRICES_LOOKUP: '/api/product-prices/lookup',
+  PRODUCT_PRICE_BY_ID: (id) => `/api/product-prices/${id}`,
+  PRODUCT_PRICES_BY_PRODUCT: (productId) => `/api/products/${productId}/prices`,
+  PRODUCT_OPTION_PRICE: (optionId) => `/api/product-options/${optionId}/price`,
 };

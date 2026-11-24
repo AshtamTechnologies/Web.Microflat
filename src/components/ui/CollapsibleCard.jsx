@@ -85,10 +85,10 @@ export default function CollapsibleCard({
         }}
         onClick={handleToggle}
         className={[
-          'flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:px-6 sm:py-4 select-none',
+          'flex justify-between gap-3 p-4 sm:px-6 sm:py-4 select-none',
+          headerClassName || 'flex-col sm:flex-row sm:items-center',
           collapsible ? 'cursor-pointer hover:bg-surface-hover/40 transition-colors' : '',
           open ? 'border-b border-border' : '',
-          headerClassName,
         ]
           .filter(Boolean)
           .join(' ')}
@@ -115,7 +115,7 @@ export default function CollapsibleCard({
 
         {/* Right: Badges, Actions & Chevron */}
         <div
-          className="flex items-center gap-2.5 shrink-0 self-end sm:self-center"
+          className="flex items-center gap-2.5 flex-wrap shrink-0 justify-end"
           onClick={(e) => e.stopPropagation()}
         >
           {badge}
