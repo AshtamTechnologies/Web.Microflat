@@ -69,6 +69,7 @@ import { DocumentTypesProvider } from './context/DocumentTypesContext';
 import ProductCategoriesPage from './pages/configuration/ProductCategoriesPage';
 import { ProductCategoriesProvider } from './context/ProductCategoriesContext';
 import ProductsPage from './pages/products/ProductsPage';
+import ProductPriceListPage from './pages/products/ProductPriceListPage';
 import ProductFormPage from './pages/products/ProductFormPage';
 import ProductViewPage from './pages/products/ProductViewPage';
 import { ProductsProvider } from './context/ProductsContext';
@@ -321,6 +322,8 @@ export default function App() {
 
               {/* Product Routes */}
               <Route path="/products" element={<ProductsPage />} />
+              <Route path="/products/prices" element={<ProductPriceListPage />} />
+              <Route path="/product-prices" element={<ProductPriceListPage />} />
               <Route path="/products/new" element={<ProductFormPage />} />
               <Route path="/products/:id" element={<ProductViewPage />} />
               <Route path="/products/:id/edit" element={<ProductFormPage />} />

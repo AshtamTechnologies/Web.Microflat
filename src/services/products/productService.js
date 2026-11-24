@@ -602,17 +602,142 @@ export async function lookupProductPrice(params = {}) {
  */
 export async function listProductPrices(params = {}) {
   try {
-    const res = await axiosInstance.get(PRODUCT_ENDPOINTS.PRODUCT_PRICES, { params });
+    const query = {};
+    const pageNum = params.pageNumber ?? params.PageNumber ?? 1;
+    const pSize = params.pageSize ?? params.PageSize ?? 20;
+    query.PageNumber = Number(pageNum);
+    query.PageSize = Math.min(100, Math.max(1, Number(pSize)));
+
+    const search = params.search ?? params.Search;
+    if (search !== undefined && search !== null && String(search).trim() !== '') {
+      query.Search = String(search).trim();
+    }
+
+    const prodId = params.productId ?? params.ProductId;
+    if (prodId !== undefined && prodId !== null && prodId !== '' && prodId !== 'ALL') {
+      query.ProductId = Number(prodId);
+    }
+
+    const catId = params.categoryId ?? params.CategoryId;
+    if (catId !== undefined && catId !== null && catId !== '' && catId !== 'ALL') {
+      query.CategoryId = Number(catId);
+    }
+
+    const varId = params.productVariantId ?? params.ProductVariantId;
+    if (varId !== undefined && varId !== null && varId !== '' && varId !== 'ALL') {
+      query.ProductVariantId = Number(varId);
+    }
+
+    const stdId = params.standardId ?? params.StandardId;
+    if (stdId !== undefined && stdId !== null && stdId !== '' && stdId !== 'ALL') {
+      query.StandardId = Number(stdId);
+    }
+
+    const grdId = params.gradeId ?? params.GradeId;
+    if (grdId !== undefined && grdId !== null && grdId !== '' && grdId !== 'ALL') {
+      query.GradeId = Number(grdId);
+    }
+
+    const curId = params.currencyId ?? params.CurrencyId;
+    if (curId !== undefined && curId !== null && curId !== '' && curId !== 'ALL') {
+      query.CurrencyId = Number(curId);
+    }
+
+    const act = params.isActive ?? params.IsActive;
+    if (act !== undefined && act !== null && act !== 'ALL') {
+      query.IsActive = Boolean(act);
+    }
+
+    const res = await axiosInstance.get(PRODUCT_ENDPOINTS.PRODUCT_PRICES, { params: query });
     const data = res?.data || {};
     return {
       items: Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [],
       totalCount: data.totalCount ?? 0,
-      pageNumber: data.pageNumber ?? 1,
-      pageSize: data.pageSize ?? 20,
+      pageNumber: data.pageNumber ?? Number(pageNum),
+      pageSize: data.pageSize ?? Number(pSize),
       totalPages: data.totalPages ?? 1,
     };
   } catch (err) {
     throw normalizeApiError(err);
   }
 }
+
+/**
+ * Get single product price by ID.
+ * GET /api/product-prices/{id}
+ */
+export async function getProductPriceById(id) {
+  try {
+    const res = await axiosInstance.get(PRODUCT_ENDPOINTS.PRODUCT_PRICE_BY_ID(id));
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Add a price configuration to a product.
+ * POST /api/products/{id}/prices
+ */
+export async function createProductPrice(productId, data) {
+  try {
+    const res = await axiosInstance.post(PRODUCT_ENDPOINTS.PRODUCT_PRICES_BY_PRODUCT(productId), data);
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Update an existing price configuration.
+ * PUT /api/product-prices/{id}
+ */
+export async function updateProductPrice(id, data) {
+  try {
+    const res = await axiosInstance.put(PRODUCT_ENDPOINTS.PRODUCT_PRICE_BY_ID(id), data);
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Delete a product price configuration.
+ * DELETE /api/product-prices/{id}
+ */
+export async function deleteProductPrice(id) {
+  try {
+    const res = await axiosInstance.delete(PRODUCT_ENDPOINTS.PRODUCT_PRICE_BY_ID(id));
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Replace entire price list for a product.
+ * PUT /api/products/{id}/prices
+ */
+export async function replaceProductPrices(productId, items = []) {
+  try {
+    const res = await axiosInstance.put(PRODUCT_ENDPOINTS.PRODUCT_PRICES_BY_PRODUCT(productId), items);
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
+ * Set or clear an option's price.
+ * PUT /api/product-options/{id}/price
+ */
+export async function setProductOptionPrice(optionId, data) {
+  try {
+    const res = await axiosInstance.put(PRODUCT_ENDPOINTS.PRODUCT_OPTION_PRICE(optionId), data);
+    return res?.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
 

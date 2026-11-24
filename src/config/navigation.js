@@ -48,6 +48,7 @@ import {
   IconList,
   IconAdd,
   IconMeeting,
+  IconCreditCard,
   IconEmailTemplates, IconMyQueue,
 } from '../constants/icons';
 
@@ -181,15 +182,28 @@ const navigation = [
         roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
       },
       {
-        label: 'Products',
+        label: 'Products & Price',
         icon: IconProduct,
-        path: '/products',
         roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
-        quickAction: {
-          icon: IconAdd,
-          title: 'New Product',
-          path: '/products/new',
-        },
+        children: [
+          {
+            label: 'Products',
+            icon: IconProduct,
+            path: '/products',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+            quickAction: {
+              icon: IconAdd,
+              title: 'New Product',
+              path: '/products/new',
+            },
+          },
+          {
+            label: 'Product Price',
+            icon: IconCreditCard,
+            path: '/product-prices',
+            roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+          },
+        ],
       },
     ],
   },

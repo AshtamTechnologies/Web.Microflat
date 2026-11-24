@@ -35,6 +35,7 @@ export default function DocumentUploader({
   showDocTypeSelect = true,
   docTypeLabel = 'Document Type',
   moduleFilter = '', // e.g. 'PO', 'VENDOR', 'INQUIRY', 'SALES_ORDER'
+  options = null, // Optional explicit options override (e.g. from lookups)
   selectedDocTypeId,
   onDocTypeChange,
   defaultDocTypeKeyword = '', // e.g. 'PO' or 'Quotation'
@@ -58,8 +59,21 @@ export default function DocumentUploader({
     ensureDocumentTypesLoaded?.();
   }, [ensureDocumentTypesLoaded]);
 
-  // Options from Document Types master (100% dynamic, strictly filtered by module)
+  // Options from Document Types master (or explicit options prop, strictly filtered by module)
   const documentTypeOptions = useMemo(() => {
+    if (Array.isArray(options) && options.length > 0) {
+      return options.map((dt) => ({
+        value: String(dt.id || dt.documentTypeId || dt.value || dt.documentTypeName || dt.typeName),
+        label: dt.documentTypeName || dt.typeName || dt.label,
+        id: dt.id || dt.documentTypeId || dt.value,
+        moduleId: dt.moduleId,
+        moduleCode: dt.moduleCode,
+        allowedExtensions: dt.allowedExtensions,
+        allowedExtensionList: dt.allowedExtensionList,
+        maxFileSizeMB: dt.maxFileSizeMB || dt.maxSizeMB || 10,
+      }));
+    }
+
     // 1. Filter only active document types
     const activeList = (documentTypes || []).filter(
       (dt) => dt.isActive === true || dt.isActive === 'true' || dt.isActive === undefined
@@ -105,7 +119,7 @@ export default function DocumentUploader({
       allowedExtensionList: dt.allowedExtensionList,
       maxFileSizeMB: dt.maxFileSizeMB || dt.maxSizeMB || 5,
     }));
-  }, [documentTypes, modules, moduleFilter]);
+  }, [documentTypes, modules, moduleFilter, options]);
 
   // Determine active document type
   const activeDocTypeId = selectedDocTypeId !== undefined ? selectedDocTypeId : internalDocTypeId;
@@ -200,6 +214,7 @@ export default function DocumentUploader({
         fileSizeBytes: file.size,
         documentTypeId: currentDocType?.id || null,
         documentType: currentDocType?.label || 'General Document',
+        documentName: currentDocType?.label || 'General Document',
         uploadedAt: new Date().toISOString().split('T')[0],
       }));
       onFilesAdded?.(newItems);

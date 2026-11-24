@@ -50,6 +50,8 @@ import {
   DataTable,
   TableToolbar,
   Checkbox,
+  RejectApprovalModal,
+  ApproveApprovalModal,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { useAuthContext } from '../../context/AuthContext';
@@ -292,18 +294,21 @@ export default function VendorApprovalPage() {
   }
 
   /* ── Confirm Approve ── */
-  async function handleConfirmApprove(e) {
+  async function handleConfirmApprove(e, payload) {
     if (e && e.preventDefault) e.preventDefault();
     if (!vendorToApprove) return;
+
+    const docVerifiedToUse = payload?.isDocVerified !== undefined ? payload.isDocVerified : isDocVerified;
+    const commentsToUse = payload?.comments !== undefined ? payload.comments : approveComments;
 
     try {
       setIsSubmittingApprove(true);
       const reqId = vendorToApprove.approvalRequestId || vendorToApprove.id;
 
       await approvalsService.approveRequest(reqId, {
-        comments: approveComments.trim(),
+        comments: commentsToUse.trim(),
         // Send true only if documents were present and verified; otherwise send false
-        isDocumentVerified: vendorHasDocs ? Boolean(isDocVerified) : false,
+        isDocumentVerified: vendorHasDocs ? Boolean(docVerifiedToUse) : false,
       });
 
       toast.success(`${vendorToApprove.vendorName} approved successfully.`);
@@ -326,9 +331,10 @@ export default function VendorApprovalPage() {
   }
 
   /* ── Confirm Reject ── */
-  async function handleConfirmReject(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!vendorToReject || !rejectComments.trim()) {
+  async function handleConfirmReject(reasonOrEvent) {
+    if (reasonOrEvent && reasonOrEvent.preventDefault) reasonOrEvent.preventDefault();
+    const finalComments = (typeof reasonOrEvent === 'string' ? reasonOrEvent : rejectComments).trim();
+    if (!vendorToReject || !finalComments) {
       toast.error('Rejection reason comments are required.');
       return;
     }
@@ -338,7 +344,7 @@ export default function VendorApprovalPage() {
       const reqId = vendorToReject.approvalRequestId || vendorToReject.id;
 
       await approvalsService.rejectRequest(reqId, {
-        comments: rejectComments.trim(),
+        comments: finalComments,
       });
 
       toast.success(`${vendorToReject.vendorName} rejected.`);
@@ -756,165 +762,44 @@ export default function VendorApprovalPage() {
         }
       />
 
-      {/* ── 1. APPROVE CONFIRMATION MODAL ── */}
-      <Modal
+      {/* ── 1. APPROVE CONFIRMATION MODAL (CENTRALIZED) ── */}
+      <ApproveApprovalModal
         isOpen={Boolean(vendorToApprove)}
         onClose={handleCloseApprove}
+        onConfirm={(payload) => handleConfirmApprove(null, payload)}
+        loading={isSubmittingApprove}
         title="Approve Vendor Application"
-        maxWidth="max-w-xl"
-      >
-        {vendorToApprove && (
-          <form onSubmit={handleConfirmApprove} className="space-y-4">
-            <div className="flex items-start gap-3.5 p-4 rounded-xl bg-success/5 border border-success/20">
-              <div className="w-11 h-11 rounded-xl bg-success/15 border border-success/30 text-success flex items-center justify-center shrink-0">
-                <IconSuccess size={22} aria-hidden="true" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <h3 className="text-sm sm:text-base font-bold text-heading truncate">
-                    {vendorToApprove.vendorName}
-                  </h3>
-                  <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
-                    {vendorToApprove.vendorCode}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
-                  {vendorToApprove.contactPersonName && (
-                    <span className="flex items-center gap-1">
-                      <IconUser size={12} className="text-text-muted/70" />
-                      {vendorToApprove.contactPersonName}
-                    </span>
-                  )}
-                  {vendorToApprove.city && (
-                    <span className="flex items-center gap-1">
-                      <IconLocation size={12} className="text-text-muted/70" />
-                      {vendorToApprove.city}, {getStateName(vendorToApprove.countryId, vendorToApprove.stateId)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+        entityName={vendorToApprove?.vendorName || ''}
+        entitySubtitle={
+          vendorToApprove
+            ? `${vendorToApprove.vendorCode}${vendorToApprove.city ? ` • ${vendorToApprove.city}` : ''}`
+            : ''
+        }
+        hasDocuments={vendorHasDocs}
+        isDocVerified={isDocVerified}
+        onDocVerifiedChange={setIsDocVerified}
+        comments={approveComments}
+        onCommentsChange={setApproveComments}
+        auditNote="Approving will set status to Approved (3) and activate this vendor version for procurement workflows."
+      />
 
-            <p className="text-xs text-text-muted">
-              Approving will set status to <strong>Approved (3)</strong> and activate this vendor version for procurement workflows.
-            </p>
-
-            {/* Conditional Checkbox: ONLY if vendor has documents */}
-            {vendorHasDocs && (
-              <div className="p-3 bg-surface border border-border rounded-xl">
-                <label className="flex items-center gap-2.5 text-xs text-heading font-medium cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isDocVerified}
-                    onChange={(e) => setIsDocVerified(e.target.checked)}
-                    className="rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer"
-                  />
-                  <span>Confirm GST, PAN and KYC compliance documents are verified</span>
-                </label>
-              </div>
-            )}
-
-            <Textarea
-              id="approve-comments"
-              label="Approval Comments / Remarks (Optional)"
-              rows={3}
-              value={approveComments}
-              onChange={(e) => setApproveComments(e.target.value)}
-              placeholder="Enter approval remarks or internal audit notes..."
-            />
-
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={handleCloseApprove}
-                disabled={isSubmittingApprove}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                loading={isSubmittingApprove}
-                className="flex items-center gap-1.5 bg-success hover:bg-success/90 text-white border-transparent"
-              >
-                <IconCheck size={15} />
-                Confirm Approval
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      {/* ── 2. REJECT FEEDBACK MODAL ── */}
-      <Modal
+      {/* ── 2. REJECT FEEDBACK MODAL (CENTRALIZED) ── */}
+      <RejectApprovalModal
         isOpen={Boolean(vendorToReject)}
         onClose={handleCloseReject}
+        onConfirm={handleConfirmReject}
+        loading={isSubmittingReject}
         title="Reject Vendor Application"
-        maxWidth="max-w-xl"
-      >
-        {vendorToReject && (
-          <form onSubmit={handleConfirmReject} className="space-y-5">
-            <div className="flex items-start gap-3.5 p-4 rounded-xl bg-surface/70 border border-border">
-              <div className="w-11 h-11 rounded-xl bg-danger/10 border border-danger/20 text-danger flex items-center justify-center shrink-0">
-                <IconBuilding size={20} aria-hidden="true" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <h3 className="text-sm sm:text-base font-bold text-heading truncate">
-                    {vendorToReject.vendorName}
-                  </h3>
-                  <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
-                    {vendorToReject.vendorCode}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <Textarea
-              id="reject-comments"
-              label="Reason for Rejection (Required)"
-              required
-              rows={3}
-              value={rejectComments}
-              onChange={(e) => setRejectComments(e.target.value)}
-              placeholder="Explain why this vendor application is being rejected (required for audit log)..."
-            />
-
-            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-danger/5 border border-danger/15 text-xs text-text-muted">
-              <IconError size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
-              <span>
-                Rejecting sets status to <strong>Rejected (4)</strong>. The vendor creator can edit and resubmit the version for approval.
-              </span>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={handleCloseReject}
-                disabled={isSubmittingReject}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="danger"
-                size="md"
-                disabled={!rejectComments.trim() || isSubmittingReject}
-                loading={isSubmittingReject}
-                className="flex items-center gap-1.5"
-              >
-                <IconClose size={15} />
-                Confirm Rejection
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
+        entityName={vendorToReject?.vendorName || ''}
+        entitySubtitle={
+          vendorToReject
+            ? `${vendorToReject.vendorCode}${vendorToReject.city ? ` • ${vendorToReject.city}` : ''}`
+            : ''
+        }
+        comments={rejectComments}
+        onCommentsChange={setRejectComments}
+        auditNote="Rejecting sets status to Rejected (4). The vendor creator can edit and resubmit the version for approval."
+      />
 
       {/* ── 3. TIMELINE AUDIT MODAL ── */}
       <Modal

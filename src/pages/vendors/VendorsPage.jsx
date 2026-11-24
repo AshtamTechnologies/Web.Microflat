@@ -290,11 +290,6 @@ export default function VendorsPage() {
                     {row.vendorCategory}
                   </span>
                 )}
-                {row.hasPendingChange && (
-                  <span className="inline-flex items-center text-3xs font-semibold px-1.5 py-0.5 rounded bg-warning/15 text-warning-heading border border-warning/30">
-                    Revision Pending
-                  </span>
-                )}
               </div>
               <span className="text-text-muted text-xs leading-normal truncate">
                 {row.contactPersonName} {row.email ? `• ${row.email}` : ''}
@@ -545,11 +540,6 @@ export default function VendorsPage() {
                     {vendor.vendorCategory && (
                       <span className="inline-flex items-center text-3xs font-medium px-1.5 py-0.5 rounded bg-surface border border-border text-text-muted">
                         {vendor.vendorCategory}
-                      </span>
-                    )}
-                    {vendor.hasPendingChange && (
-                      <span className="inline-flex items-center text-3xs font-semibold px-1.5 py-0.5 rounded bg-warning/15 text-warning-heading border border-warning/30">
-                        Revision Pending
                       </span>
                     )}
                   </div>
