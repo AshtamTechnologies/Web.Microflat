@@ -49,6 +49,8 @@ import {
   Textarea,
   StatusBadge,
   Checkbox,
+  RejectApprovalModal,
+  ApproveApprovalModal,
 } from '../../components/ui';
 import { approvalsService, vendorService } from '../../services';
 import { useAuthContext } from '../../context/AuthContext';
@@ -166,10 +168,13 @@ export default function VendorApprovalViewPage() {
   const canDecide = isAdmin && (!isOwnRequest || isSuperAdmin);
 
   /* ── Confirm Approve ── */
-  async function handleConfirmApprove(e) {
+  async function handleConfirmApprove(e, payload) {
     if (e && e.preventDefault) e.preventDefault();
 
-    if (hasDocuments && !isDocVerified) {
+    const commentsToUse = payload?.comments !== undefined ? payload.comments : approveComments;
+    const docVerifiedToUse = payload?.isDocVerified !== undefined ? payload.isDocVerified : isDocVerified;
+
+    if (hasDocuments && !docVerifiedToUse) {
       toast.error('Please verify the attached compliance documents before approving.');
       return;
     }
@@ -177,9 +182,9 @@ export default function VendorApprovalViewPage() {
     try {
       setIsSubmittingApprove(true);
       await approvalsService.approveRequest(id, {
-        comments: approveComments.trim(),
-        // Send true if verified, or true if no documents were attached
-        isDocumentVerified: hasDocuments ? Boolean(isDocVerified) : true,
+        comments: (commentsToUse || '').trim(),
+        // Send true if documents were attached and verified; otherwise false
+        isDocumentVerified: hasDocuments ? Boolean(docVerifiedToUse) : false,
       });
 
       toast.success('Vendor approved successfully.');
@@ -206,9 +211,10 @@ export default function VendorApprovalViewPage() {
   }
 
   /* ── Confirm Reject ── */
-  async function handleConfirmReject(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!rejectComments.trim()) {
+  async function handleConfirmReject(reasonOrEvent) {
+    if (reasonOrEvent && reasonOrEvent.preventDefault) reasonOrEvent.preventDefault();
+    const finalComments = (typeof reasonOrEvent === 'string' ? reasonOrEvent : rejectComments).trim();
+    if (!finalComments) {
       toast.error('Rejection reason comments are required.');
       return;
     }
@@ -216,7 +222,7 @@ export default function VendorApprovalViewPage() {
     try {
       setIsSubmittingReject(true);
       await approvalsService.rejectRequest(id, {
-        comments: rejectComments.trim(),
+        comments: finalComments,
       });
 
       toast.success('Vendor application rejected.');
@@ -596,154 +602,44 @@ export default function VendorApprovalViewPage() {
         </div>
       </div>
 
-      {/* ── APPROVE MODAL ── */}
-      <Modal
+      {/* ── APPROVE MODAL (CENTRALIZED) ── */}
+      <ApproveApprovalModal
         isOpen={isApproveOpen}
         onClose={() => !isSubmittingApprove && setIsApproveOpen(false)}
+        onConfirm={(payload) => handleConfirmApprove(null, payload)}
+        loading={isSubmittingApprove}
         title="Approve Vendor Application"
-        maxWidth="max-w-xl"
-      >
-        <form onSubmit={handleConfirmApprove} className="space-y-4">
-          <div className="flex items-start gap-3.5 p-4 rounded-xl bg-success/5 border border-success/20">
-            <div className="w-11 h-11 rounded-xl bg-success/15 border border-success/30 text-success flex items-center justify-center shrink-0">
-              <IconSuccess size={22} aria-hidden="true" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm sm:text-base font-bold text-heading truncate">
-                {vendorDetail.vendorName}
-              </h3>
-              <p className="text-xs text-text-muted font-mono mt-0.5">
-                {vendorDetail.vendorCode} • {vendorDetail.city}
-              </p>
-            </div>
-          </div>
+        entityName={vendorDetail?.vendorName || ''}
+        entitySubtitle={
+          vendorDetail
+            ? `${vendorDetail.vendorCode}${vendorDetail.city ? ` • ${vendorDetail.city}` : ''}`
+            : ''
+        }
+        hasDocuments={hasDocuments}
+        isDocVerified={isDocVerified}
+        onDocVerifiedChange={setIsDocVerified}
+        comments={approveComments}
+        onCommentsChange={setApproveComments}
+        auditNote="Approving sets the status to Approved (3) and activates this vendor version for procurement workflows."
+      />
 
-          <p className="text-xs text-text-muted">
-            Approving sets the status to <strong>Approved (3)</strong> and activates this vendor version for procurement workflows.
-          </p>
-
-          {/* Conditional Checkbox: ONLY if vendor has documents */}
-          {hasDocuments ? (
-            <div className="p-3 bg-surface border border-primary/20 rounded-xl">
-              <Checkbox
-                id="verify-kyc-docs"
-                checked={isDocVerified}
-                onChange={(e) => setIsDocVerified(e.target.checked)}
-                label={
-                  <div className="text-xs">
-                    <span className="font-semibold text-heading block">
-                      Verify Supporting Documents <span className="text-danger">*</span>
-                    </span>
-                    <span className="text-text-muted">
-                      Confirm that all uploaded registration and compliance documents have been checked.
-                    </span>
-                  </div>
-                }
-              />
-            </div>
-          ) : (
-            <div className="p-3 bg-surface border border-border rounded-xl text-xs text-text-muted flex items-center gap-2">
-              <IconFileText size={15} className="text-text-muted shrink-0" />
-              <span>No compliance documents were attached with this registration.</span>
-            </div>
-          )}
-
-          <Textarea
-            id="approve-comments"
-            label="Approval Comments / Remarks (Optional)"
-            rows={3}
-            value={approveComments}
-            onChange={(e) => setApproveComments(e.target.value)}
-            placeholder="Enter approval remarks or internal audit notes..."
-          />
-
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={() => setIsApproveOpen(false)}
-              disabled={isSubmittingApprove}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              loading={isSubmittingApprove}
-              className="flex items-center gap-1.5 bg-success hover:bg-success/90 text-white border-transparent"
-            >
-              <IconCheck size={15} />
-              Confirm Approval
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* ── REJECT MODAL ── */}
-      <Modal
+      {/* ── REJECT MODAL (CENTRALIZED) ── */}
+      <RejectApprovalModal
         isOpen={isRejectOpen}
         onClose={() => !isSubmittingReject && setIsRejectOpen(false)}
+        onConfirm={handleConfirmReject}
+        loading={isSubmittingReject}
         title="Reject Vendor Application"
-        maxWidth="max-w-xl"
-      >
-        <form onSubmit={handleConfirmReject} className="space-y-4">
-          <div className="flex items-start gap-3.5 p-4 rounded-xl bg-danger/5 border border-danger/20">
-            <div className="w-11 h-11 rounded-xl bg-danger/15 border border-danger/30 text-danger flex items-center justify-center shrink-0">
-              <IconClose size={22} aria-hidden="true" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm sm:text-base font-bold text-heading truncate">
-                {vendorDetail.vendorName}
-              </h3>
-              <p className="text-xs text-text-muted font-mono mt-0.5">
-                {vendorDetail.vendorCode} • {vendorDetail.city}
-              </p>
-            </div>
-          </div>
-
-          <Textarea
-            id="reject-comments"
-            label="Reason for Rejection (Required)"
-            required
-            rows={3}
-            value={rejectComments}
-            onChange={(e) => setRejectComments(e.target.value)}
-            placeholder="Explain why this vendor application is being rejected (required for audit log)..."
-          />
-
-          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-danger/5 border border-danger/15 text-xs text-text-muted">
-            <IconError size={15} className="text-danger shrink-0 mt-0.5" aria-hidden="true" />
-            <span>
-              Rejecting sets status to <strong>Rejected (4)</strong>. The vendor creator can edit and resubmit the version for approval.
-            </span>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={() => setIsRejectOpen(false)}
-              disabled={isSubmittingReject}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="danger"
-              size="md"
-              disabled={!rejectComments.trim() || isSubmittingReject}
-              loading={isSubmittingReject}
-              className="flex items-center gap-1.5"
-            >
-              <IconClose size={15} />
-              Confirm Rejection
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        entityName={vendorDetail?.vendorName || ''}
+        entitySubtitle={
+          vendorDetail
+            ? `${vendorDetail.vendorCode}${vendorDetail.city ? ` • ${vendorDetail.city}` : ''}`
+            : ''
+        }
+        comments={rejectComments}
+        onCommentsChange={setRejectComments}
+        auditNote="Rejecting sets status to Rejected (4). The vendor creator can edit and resubmit the version for approval."
+      />
 
       {/* ── TIMELINE MODAL ── */}
       <Modal

@@ -173,15 +173,25 @@ export default function CompanyBankDetailsViewPage({ companyId: propCompanyId, e
     };
   }, [bankQueryId, effectiveCompanyId, companyId]);
 
+  // Status Filter for Master Bank Accounts list: 'ALL' | 'ACTIVE'
+  const [statusFilter, setStatusFilter] = useState('ALL');
+
+  const filteredBankAccounts = useMemo(() => {
+    if (statusFilter === 'ACTIVE') {
+      return bankAccounts.filter((b) => b.isActive);
+    }
+    return bankAccounts;
+  }, [bankAccounts, statusFilter]);
+
   // Sync selectedBankId
   useEffect(() => {
-    if (bankAccounts.length > 0) {
-      const exists = bankAccounts.some(
+    if (filteredBankAccounts.length > 0) {
+      const exists = filteredBankAccounts.some(
         (b) => String(b.bankDetailId || b.id) === String(selectedBankId)
       );
       if (!exists) {
         if (bankQueryId) {
-          const match = bankAccounts.find(
+          const match = filteredBankAccounts.find(
             (b) => String(b.bankDetailId || b.id) === String(bankQueryId)
           );
           if (match) {
@@ -189,12 +199,12 @@ export default function CompanyBankDetailsViewPage({ companyId: propCompanyId, e
             return;
           }
         }
-        const activeOne = bankAccounts.find((b) => b.isActive);
-        const first = bankAccounts[0];
+        const activeOne = filteredBankAccounts.find((b) => b.isActive);
+        const first = filteredBankAccounts[0];
         setSelectedBankId((activeOne || first).bankDetailId || (activeOne || first).id);
       }
     }
-  }, [bankAccounts, selectedBankId, bankQueryId]);
+  }, [filteredBankAccounts, selectedBankId, bankQueryId]);
 
   const handleSelectAccount = useCallback(async (accId) => {
     setSelectedBankId(accId);
@@ -374,28 +384,63 @@ export default function CompanyBankDetailsViewPage({ companyId: propCompanyId, e
         />
       )}
 
-      {/* ── 2-Column Responsive Bank Console Layout (xl:grid-cols-12) ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* ── LEFT RAIL: Compact Metrics & Bank Account Navigator (xl:col-span-5) ── */}
-        <div className="xl:col-span-5 space-y-4">
-          {/* Metrics Pill Bar */}
+      {/* ── 2-Column Responsive Bank Console Layout (lg:grid-cols-12) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* ── LEFT RAIL: Compact Metrics & Bank Account Navigator (lg:col-span-4) ── */}
+        <div className="lg:col-span-4 xl:col-span-4 space-y-4">
+          {/* Metrics Pill Bar with interactive status filter */}
           <div className="grid grid-cols-2 gap-2.5">
-            <Card padding="sm" className="bg-bg text-center space-y-0.5">
-              <span className="text-3xs text-text-muted uppercase font-semibold block">Total</span>
-              <span className="text-base font-bold text-heading font-mono">{bankAccounts.length}</span>
-            </Card>
-            <Card padding="sm" className="bg-bg text-center space-y-0.5">
-              <span className="text-3xs text-success uppercase font-semibold block">Active</span>
-              <span className="text-base font-bold text-success font-mono">{activeCount}</span>
-            </Card>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ALL')}
+              className={`p-3 rounded-xl border flex flex-col justify-between shadow-2xs text-left cursor-pointer transition-all duration-150 ${
+                statusFilter === 'ALL'
+                  ? 'bg-primary/[0.08] border-primary ring-2 ring-primary/20'
+                  : 'bg-surface/60 border-border hover:border-primary/40 hover:bg-surface'
+              }`}
+              title="Click to view all bank accounts"
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-semibold">
+                  Total Accounts
+                </span>
+                <span className="w-2 h-2 rounded-full bg-primary/60" />
+              </div>
+              <span className="text-xl font-bold text-heading font-mono mt-1">
+                {bankAccounts.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ACTIVE')}
+              className={`p-3 rounded-xl border flex flex-col justify-between shadow-2xs text-left cursor-pointer transition-all duration-150 ${
+                statusFilter === 'ACTIVE'
+                  ? 'bg-success/[0.08] border-success ring-2 ring-success/20'
+                  : 'bg-surface/60 border-border hover:border-success/40 hover:bg-surface'
+              }`}
+              title="Click to view active bank accounts only"
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-2xs uppercase tracking-wider text-text-muted font-semibold">
+                  Active Accounts
+                </span>
+                <span className="w-2 h-2 rounded-full bg-success" />
+              </div>
+              <span className="text-xl font-bold text-success font-mono mt-1">
+                {activeCount}
+              </span>
+            </button>
           </div>
 
           {/* Account Selection Cards List */}
-          <Card padding="md" className="space-y-3.5 shadow-xs border-border bg-bg">
-            <div className="flex items-center justify-between pb-3 border-b border-border flex-wrap gap-2">
+          <Card padding="none" className="shadow-xs border-border bg-bg overflow-hidden">
+            <div className="flex items-center justify-between p-3.5 border-b border-border flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <IconBankDetails size={17} className="text-primary shrink-0" />
-                <h3 className="text-sm font-bold text-heading">Configured Accounts</h3>
+                <IconBankDetails size={16} className="text-primary shrink-0" />
+                <h3 className="text-xs font-bold text-heading uppercase tracking-wider">
+                  Configured Accounts ({filteredBankAccounts.length})
+                </h3>
               </div>
               <Button
                 type="button"
@@ -409,22 +454,38 @@ export default function CompanyBankDetailsViewPage({ companyId: propCompanyId, e
               </Button>
             </div>
 
-            {bankAccounts.length === 0 ? (
-              <div className="py-8 text-center text-xs text-text-muted space-y-2">
-                <p>No bank accounts configured for this company.</p>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  onClick={() => navigate(editUrl)}
-                  className="text-xs"
-                >
-                  Configure Bank Account
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-[580px] overflow-y-auto pr-0.5 overscroll-contain">
-                {bankAccounts.map((acc) => {
+            <div className="p-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto overscroll-contain">
+              {filteredBankAccounts.length === 0 ? (
+                <div className="py-8 text-center text-xs text-text-muted space-y-2">
+                  <p>
+                    {statusFilter === 'ACTIVE'
+                      ? 'No active bank accounts found.'
+                      : 'No bank accounts configured for this company.'}
+                  </p>
+                  {statusFilter === 'ACTIVE' ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setStatusFilter('ALL')}
+                      className="text-2xs"
+                    >
+                      Show All Accounts
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={() => navigate(editUrl)}
+                      className="text-xs"
+                    >
+                      Configure Bank Account
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                filteredBankAccounts.map((acc) => {
                   const accId = acc.bankDetailId || acc.id;
                   const isSelected =
                     (selectedAccount?.bankDetailId || selectedAccount?.id) === accId;
@@ -469,317 +530,321 @@ export default function CompanyBankDetailsViewPage({ companyId: propCompanyId, e
                       </div>
                     </div>
                   );
-                })}
-              </div>
-            )}
+                })
+              )}
+            </div>
           </Card>
         </div>
 
-        {/* ── RIGHT STAGE: Active Account Details Console (xl:col-span-7) ── */}
-        <div className="xl:col-span-7 space-y-6">
+        {/* ── RIGHT STAGE: Active Account Unified Console Card (lg:col-span-8) ── */}
+        <div className="lg:col-span-8 xl:col-span-8">
           {selectedAccount ? (
-            <>
-              {/* Card 1: Beneficiary & Account Information */}
-              <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
-                <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <IconCreditCard size={18} />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-heading">
-                        {selectedAccount.bankName}
-                      </h3>
-                      <p className="text-2xs text-text-muted">
-                        Primary banking credentials for disbursement
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Badge variant={selectedAccount.isActive ? 'active' : 'inactive'}>
+            <Card className="overflow-hidden shadow-xs border-border bg-bg">
+              {/* Panel Top Header */}
+              <div className="p-4 sm:px-6 sm:py-3.5 bg-bg border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm sm:text-base font-bold text-heading">
+                      {selectedAccount.bankName}
+                    </h3>
+                    <Badge variant="neutral" size="sm">
+                      {selectedAccount.accountType || 'Current'}
+                    </Badge>
+                    <Badge variant={selectedAccount.isActive ? 'active' : 'inactive'} size="sm">
                       {selectedAccount.isActive ? 'Active' : 'Inactive'}
                     </Badge>
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="xs"
-                      icon={IconEdit}
-                      onClick={() =>
-                        navigate(
-                          getEditAccountUrl(
-                            selectedAccount.bankDetailId || selectedAccount.id
-                          )
-                        )
-                      }
-                      className="text-2xs font-semibold h-7 px-2"
-                    >
-                      Edit Account
-                    </Button>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-4 gap-x-6 text-sm">
-                  <DetailField
-                    label="Account Holder Name"
-                    value={selectedAccount.accountHolderName || '—'}
-                    valueClassName="font-semibold text-heading"
-                  />
-                  <DetailField label="Bank Name" value={selectedAccount.bankName || '—'} />
-                  <DetailField label="Branch Name" value={selectedAccount.branchName || '—'} />
-
-                  {/* Account Number with Reveal & Copy */}
-                  <div>
-                    <span className="view-field-label">Account Number</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="font-mono text-sm font-bold text-heading tabular-nums">
-                        {maskedAccount}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setIsRevealed((prev) => !prev)}
-                        className="text-text-muted hover:text-heading p-1 rounded transition-colors"
-                        title={isRevealed ? 'Hide account number' : 'Reveal full account number'}
-                      >
-                        {isRevealed ? <IconEyeOff size={15} /> : <IconView size={15} />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleCopy(selectedAccount.accountNumber, 'Account Number')
-                        }
-                        className="text-text-muted hover:text-primary p-1 rounded transition-colors"
-                        title="Copy account number"
-                      >
-                        {copiedField === 'Account Number' ? (
-                          <IconCheck size={15} className="text-success" />
-                        ) : (
-                          <IconCopy size={15} />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <DetailField
-                    label="Account Type"
-                    value={
-                      <Badge variant="neutral" size="sm">
-                        {selectedAccount.accountType || 'Current'}
-                      </Badge>
-                    }
-                  />
-                </div>
-              </Card>
-
-              {/* Card 2: Branch & Routing Details */}
-              <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
-                <div className="flex items-center gap-2 border-b border-border pb-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <IconLocation size={17} />
-                  </div>
-                  <h3 className="text-sm font-bold text-heading">Branch & Routing Details</h3>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-y-4 gap-x-6 text-sm">
-                  <div>
-                    <span className="view-field-label">IFSC Code</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
-                        {selectedAccount.ifscCode || '—'}
-                      </span>
-                      {selectedAccount.ifscCode && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(selectedAccount.ifscCode, 'IFSC Code')}
-                          className="text-text-muted hover:text-primary p-0.5 rounded transition-colors"
-                          title="Copy IFSC"
-                        >
-                          {copiedField === 'IFSC Code' ? (
-                            <IconCheck size={14} className="text-success" />
-                          ) : (
-                            <IconCopy size={14} />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="view-field-label">SWIFT / BIC Code</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
-                        {selectedAccount.swiftCode || '—'}
-                      </span>
-                      {selectedAccount.swiftCode && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(selectedAccount.swiftCode, 'SWIFT Code')}
-                          className="text-text-muted hover:text-primary p-0.5 rounded transition-colors"
-                          title="Copy SWIFT"
-                        >
-                          {copiedField === 'SWIFT Code' ? (
-                            <IconCheck size={14} className="text-success" />
-                          ) : (
-                            <IconCopy size={14} />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="view-field-label">MICR Code</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
-                        {selectedAccount.micrCode || '—'}
-                      </span>
-                      {selectedAccount.micrCode && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(selectedAccount.micrCode, 'MICR Code')}
-                          className="text-text-muted hover:text-primary p-0.5 rounded transition-colors"
-                          title="Copy MICR Code"
-                        >
-                          {copiedField === 'MICR Code' ? (
-                            <IconCheck size={14} className="text-success" />
-                          ) : (
-                            <IconCopy size={14} />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="view-field-label">IBAN</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
-                        {selectedAccount.iban || '—'}
-                      </span>
-                      {selectedAccount.iban && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(selectedAccount.iban, 'IBAN')}
-                          className="text-text-muted hover:text-primary p-0.5 rounded transition-colors"
-                          title="Copy IBAN"
-                        >
-                          {copiedField === 'IBAN' ? (
-                            <IconCheck size={14} className="text-success" />
-                          ) : (
-                            <IconCopy size={14} />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="sm:col-span-2 lg:col-span-4 pt-1 border-t border-border/50">
-                    <DetailField
-                      label="Branch Address"
-                      value={selectedAccount.branchAddress || '—'}
-                      icon={IconLocation}
-                    />
-                  </div>
-                </div>
-              </Card>
-
-              {/* Card 3: Supporting Documents & Attachments */}
-              <Card padding="md" className="space-y-3.5 shadow-xs border-border bg-bg">
-                <div className="flex items-center justify-between border-b border-border pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <IconAttachment size={17} />
-                    </div>
-                    <h3 className="text-sm font-bold text-heading">
-                      Attached Documents ({selectedAttachments.length})
-                    </h3>
-                  </div>
-                </div>
-
-                {selectedAttachments.length === 0 ? (
-                  <p className="text-xs text-text-muted py-5 text-center italic">
-                    No supporting documents attached for this account.
+                  <p className="text-2xs sm:text-xs text-text-muted mt-0.5">
+                    Primary banking credentials for disbursement and statutory routing
                   </p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {selectedAttachments.map((att) => (
-                      <div
-                        key={att.id}
-                        className="p-3 bg-surface/50 rounded-xl border border-border flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {getFileIcon(att.fileName, att.fileType)}
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-heading truncate" title={att.documentTypeName || att.documentName || att.fileName}>
-                              {att.documentTypeName || att.documentName || 'Banking Document'}
-                            </p>
-                            <p className="text-3xs text-text-muted truncate" title={att.fileName}>
-                              {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
-                            </p>
-                          </div>
-                        </div>
+                </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-primary shrink-0 hover:bg-primary/10"
-                            onClick={() => downloadAttachment(att.downloadUrl || att.companyBankAttachmentId || att.id, att.fileName)}
-                            title="Download attachment"
-                          >
-                            <IconDownload size={14} />
-                          </Button>
-                        </div>
+                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="xs"
+                    icon={IconEdit}
+                    onClick={() =>
+                      navigate(
+                        getEditAccountUrl(
+                          selectedAccount.bankDetailId || selectedAccount.id
+                        )
+                      )
+                    }
+                    className="text-xs font-semibold h-8 px-3 shadow-2xs"
+                  >
+                    Edit Account
+                  </Button>
+                </div>
+              </div>
+
+              {/* Panel Body: Cleanly Segmented Grid */}
+              <div className="p-4 sm:p-5 space-y-5">
+                {/* 1. BENEFICIARY & ACCOUNT INFORMATION */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                    <IconCreditCard size={14} className="text-primary" />
+                    Beneficiary & Account Information
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5 pt-0.5">
+                    <DetailField
+                      label="Account Holder Name"
+                      value={selectedAccount.accountHolderName || '—'}
+                      valueClassName="font-semibold text-heading"
+                    />
+                    <DetailField label="Bank Name" value={selectedAccount.bankName || '—'} />
+                    <DetailField label="Branch Name" value={selectedAccount.branchName || '—'} />
+
+                    {/* Account Number with Reveal & Copy */}
+                    <div>
+                      <span className="view-field-label">Account Number</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-xs sm:text-sm font-bold text-heading tabular-nums">
+                          {maskedAccount}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsRevealed((prev) => !prev)}
+                          className="text-text-muted hover:text-heading p-1 rounded transition-colors cursor-pointer"
+                          title={isRevealed ? 'Hide account number' : 'Reveal full account number'}
+                        >
+                          {isRevealed ? <IconEyeOff size={14} /> : <IconView size={14} />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleCopy(selectedAccount.accountNumber, 'Account Number')
+                          }
+                          className="text-text-muted hover:text-primary p-1 rounded transition-colors cursor-pointer"
+                          title="Copy account number"
+                        >
+                          {copiedField === 'Account Number' ? (
+                            <IconCheck size={14} className="text-success" />
+                          ) : (
+                            <IconCopy size={14} />
+                          )}
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
+                    </div>
 
-              {/* Card 4: Disbursement Remarks & Audit Trail */}
-              <Card padding="md" className="space-y-4 shadow-xs border-border bg-bg">
-                <div className="flex items-center gap-2 border-b border-border pb-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <IconClock size={17} />
+                    <DetailField
+                      label="Account Type"
+                      value={
+                        <Badge variant="neutral" size="sm">
+                          {selectedAccount.accountType || 'Current'}
+                        </Badge>
+                      }
+                    />
                   </div>
-                  <h3 className="text-sm font-bold text-heading">
-                    Disbursement & Audit Information
-                  </h3>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <span className="view-field-label">Disbursement Remarks</span>
-                    <p className="text-xs text-heading p-3 rounded-lg bg-surface/50 border border-border min-h-[50px] mt-1">
-                      {selectedAccount.remarks || 'No specific remarks entered for this account.'}
-                    </p>
+                {/* 2. BRANCH & ROUTING DETAILS */}
+                <div className="space-y-2.5 pt-4 border-t border-border/60">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                    <IconLocation size={14} className="text-primary" />
+                    Branch & Routing Details
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 pt-0.5">
+                    <div>
+                      <span className="view-field-label">IFSC Code</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
+                          {selectedAccount.ifscCode || '—'}
+                        </span>
+                        {selectedAccount.ifscCode && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(selectedAccount.ifscCode, 'IFSC Code')}
+                            className="text-text-muted hover:text-primary p-0.5 rounded transition-colors cursor-pointer"
+                            title="Copy IFSC"
+                          >
+                            {copiedField === 'IFSC Code' ? (
+                              <IconCheck size={13} className="text-success" />
+                            ) : (
+                              <IconCopy size={13} />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="view-field-label">SWIFT / BIC Code</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
+                          {selectedAccount.swiftCode || '—'}
+                        </span>
+                        {selectedAccount.swiftCode && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(selectedAccount.swiftCode, 'SWIFT Code')}
+                            className="text-text-muted hover:text-primary p-0.5 rounded transition-colors cursor-pointer"
+                            title="Copy SWIFT"
+                          >
+                            {copiedField === 'SWIFT Code' ? (
+                              <IconCheck size={13} className="text-success" />
+                            ) : (
+                              <IconCopy size={13} />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="view-field-label">MICR Code</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
+                          {selectedAccount.micrCode || '—'}
+                        </span>
+                        {selectedAccount.micrCode && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(selectedAccount.micrCode, 'MICR Code')}
+                            className="text-text-muted hover:text-primary p-0.5 rounded transition-colors cursor-pointer"
+                            title="Copy MICR Code"
+                          >
+                            {copiedField === 'MICR Code' ? (
+                              <IconCheck size={13} className="text-success" />
+                            ) : (
+                              <IconCopy size={13} />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="view-field-label">IBAN</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border font-bold text-heading">
+                          {selectedAccount.iban || '—'}
+                        </span>
+                        {selectedAccount.iban && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(selectedAccount.iban, 'IBAN')}
+                            className="text-text-muted hover:text-primary p-0.5 rounded transition-colors cursor-pointer"
+                            title="Copy IBAN"
+                          >
+                            {copiedField === 'IBAN' ? (
+                              <IconCheck size={13} className="text-success" />
+                            ) : (
+                              <IconCopy size={13} />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="col-span-full pt-1">
+                      <DetailField
+                        label="Branch Address"
+                        value={selectedAccount.branchAddress || '—'}
+                        icon={IconLocation}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. DUAL-COLUMN SUBGRID: DISBURSEMENT & ATTACHMENTS */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 pt-4 border-t border-border/60">
+                  {/* Disbursement & Audit Trail */}
                   <div className="space-y-3">
-                    <DetailField
-                      label="Record Created"
-                      value={
-                        selectedAccount.createdAt
-                          ? `${formatDate(selectedAccount.createdAt)} by ${
-                              selectedAccount.createdBy || 'System'
-                            }`
-                          : '—'
-                      }
-                    />
-                    <DetailField
-                      label="Last Updated"
-                      value={
-                        selectedAccount.updatedAt
-                          ? `${formatDate(selectedAccount.updatedAt)} by ${
-                              selectedAccount.updatedBy || 'Admin'
-                            }`
-                          : 'Never modified'
-                      }
-                    />
+                    <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                      <IconClock size={14} className="text-primary" />
+                      Disbursement & Audit Information
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <span className="view-field-label">Disbursement Remarks</span>
+                        <p className="text-xs text-heading p-2.5 rounded-lg bg-surface/50 border border-border min-h-[46px] mt-1">
+                          {selectedAccount.remarks || 'No specific remarks entered for this account.'}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <DetailField
+                          label="Record Created"
+                          value={
+                            selectedAccount.createdAt
+                              ? `${formatDate(selectedAccount.createdAt)} by ${
+                                  selectedAccount.createdBy || 'System'
+                                }`
+                              : '—'
+                          }
+                        />
+                        <DetailField
+                          label="Last Updated"
+                          value={
+                            selectedAccount.updatedAt
+                              ? `${formatDate(selectedAccount.updatedAt)} by ${
+                                  selectedAccount.updatedBy || 'Admin'
+                                }`
+                              : 'Never modified'
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Supporting Documents */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                        <IconAttachment size={14} className="text-primary" />
+                        Attached Documents ({selectedAttachments.length})
+                      </div>
+                    </div>
+
+                    {selectedAttachments.length === 0 ? (
+                      <div className="p-4 rounded-xl border border-dashed border-border bg-surface/30 text-center">
+                        <p className="text-xs text-text-muted italic">
+                          No supporting documents attached for this account.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[180px] overflow-y-auto overscroll-contain pr-1">
+                        {selectedAttachments.map((att) => (
+                          <div
+                            key={att.id}
+                            className="p-2.5 bg-surface/50 rounded-lg border border-border flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              {getFileIcon(att.fileName, att.fileType)}
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-heading truncate" title={att.documentTypeName || att.documentName || att.fileName}>
+                                  {att.documentTypeName || att.documentName || 'Banking Document'}
+                                </p>
+                                <p className="text-3xs text-text-muted truncate" title={att.fileName}>
+                                  {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-primary shrink-0 hover:bg-primary/10"
+                                onClick={() => downloadAttachment(att.downloadUrl || att.companyBankAttachmentId || att.id, att.fileName)}
+                                title="Download attachment"
+                              >
+                                <IconDownload size={14} />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </Card>
-            </>
+              </div>
+            </Card>
           ) : (
             <Card padding="lg" className="py-12 text-center text-text-muted">
               Select a bank account from the left to view complete details.

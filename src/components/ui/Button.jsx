@@ -34,6 +34,7 @@ export default function Button({
   variant = 'primary',
   size = 'md',
   loading = false,
+  isLoading,
   fullWidth = false,
   disabled = false,
   type = 'button',
@@ -45,6 +46,7 @@ export default function Button({
   children,
   ...rest
 }) {
+  const isBusy = Boolean(loading || isLoading);
   const effectiveIcon = icon || leftIcon;
   const effectiveIconRight = iconRight || rightIcon;
   const renderIcon = (iconItem) => {
@@ -60,7 +62,7 @@ export default function Button({
   return (
     <button
       type={type}
-      disabled={disabled || loading}
+      disabled={disabled || isBusy}
       className={[
         'mf-btn',
         variantClasses[variant] || variantClasses.primary,
@@ -72,7 +74,7 @@ export default function Button({
         .join(' ')}
       {...rest}
     >
-      {loading ? (
+      {isBusy ? (
         <Loader2
           size={16}
           className="animate-spin shrink-0"

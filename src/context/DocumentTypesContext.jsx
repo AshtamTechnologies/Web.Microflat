@@ -16,7 +16,8 @@ export function DocumentTypesProvider({ children }) {
     location?.pathname?.startsWith('/configuration/document-types') ||
     location?.pathname?.startsWith('/inquiries') ||
     location?.pathname?.startsWith('/quotations') ||
-    location?.pathname?.startsWith('/sales-orders')
+    location?.pathname?.startsWith('/sales-orders') ||
+    location?.pathname?.startsWith('/vendors')
   );
   const shouldFetch = isRelevantRoute || hasRequested;
 

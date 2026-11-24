@@ -59,6 +59,8 @@ import {
   Checkbox,
   Select,
   SearchableSelect,
+  RejectApprovalModal,
+  ApproveApprovalModal,
 } from '../../components/ui';
 import { useAuthContext } from '../../context/AuthContext';
 import { approvalsService } from '../../services';
@@ -414,12 +416,15 @@ export default function ApprovalsPage() {
     setIsLoadingDocs(false);
   }
 
-  async function handleConfirmApprove() {
+  async function handleConfirmApprove(payload) {
     if (!itemToApprove) return;
     const isVendor = itemToApprove.moduleCode?.toUpperCase() === 'VENDOR';
 
+    const commentsToUse = payload?.comments !== undefined ? payload.comments : approveComments;
+    const docVerifiedToUse = payload?.isDocVerified !== undefined ? payload.isDocVerified : isDocVerified;
+
     // If documents are attached, user MUST select that option!
-    if (isVendor && hasVendorDocs && !isDocVerified) {
+    if (isVendor && hasVendorDocs && !docVerifiedToUse) {
       toast.error('Please verify the attached compliance documents before approving.');
       return;
     }
@@ -429,9 +434,9 @@ export default function ApprovalsPage() {
     try {
       setIsSubmittingApprove(true);
       await approvalsService.approveRequest(reqId, {
-        comments: approveComments.trim() || undefined,
-        // Send true if verified OR if no documents were attached; for other modules: undefined
-        isDocumentVerified: isVendor ? (hasVendorDocs ? Boolean(isDocVerified) : true) : undefined,
+        comments: commentsToUse.trim() || undefined,
+        // Send true if documents were attached and verified; otherwise false; for other modules: undefined
+        isDocumentVerified: isVendor ? (hasVendorDocs ? Boolean(docVerifiedToUse) : false) : undefined,
       });
 
       toast.success(
@@ -1021,169 +1026,58 @@ export default function ApprovalsPage() {
         }
       />
 
-      {/* ── MODAL: APPROVE ── */}
-      <Modal
+      {/* ── CENTRALIZED MODAL: APPROVE ── */}
+      <ApproveApprovalModal
         isOpen={Boolean(itemToApprove)}
         onClose={handleCloseApprove}
-        title={`Approve ${itemToApprove?.moduleName || 'Request'}`}
-        size="md"
-        footer={
-          <div className="flex items-center justify-end gap-3">
-            <Button
-              variant="ghost"
-              onClick={handleCloseApprove}
-              disabled={isSubmittingApprove}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleConfirmApprove}
-              loading={isSubmittingApprove}
-              className="flex items-center gap-1.5"
-            >
-              <IconCheck size={14} />
-              <span>Confirm Approval</span>
-            </Button>
-          </div>
+        onConfirm={handleConfirmApprove}
+        loading={isSubmittingApprove}
+        title={
+          itemToApprove?.moduleCode === 'VENDOR' || itemToApprove?.moduleName?.toLowerCase().includes('vendor')
+            ? 'Approve Vendor Application'
+            : `Approve ${itemToApprove?.moduleName || 'Request'}`
         }
-      >
-        <div className="space-y-4 text-sm">
-          <div className="p-3.5 bg-surface-subtle rounded-lg border border-border space-y-1.5">
-            <p className="font-semibold text-heading text-sm">
-              {itemToApprove?.referenceTitle}
-            </p>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
-              <span>
-                Module: <strong>{itemToApprove?.moduleName}</strong>
-              </span>
-              <span>•</span>
-              <span>
-                Submitted by: <strong>{itemToApprove?.initiatedByName || 'System'}</strong>
-              </span>
-            </div>
-          </div>
+        entityName={itemToApprove?.referenceTitle || itemToApprove?.entityName || 'Approval Request'}
+        entitySubtitle={
+          itemToApprove?.referenceNo
+            ? `${itemToApprove.referenceNo} • ${itemToApprove.moduleName || ''}`
+            : itemToApprove?.moduleName || ''
+        }
+        showDocVerification={itemToApprove?.moduleCode?.toUpperCase() === 'VENDOR'}
+        docVerificationLoading={isLoadingDocs}
+        hasDocuments={hasVendorDocs}
+        isDocVerified={isDocVerified}
+        onDocVerifiedChange={setIsDocVerified}
+        comments={approveComments}
+        onCommentsChange={setApproveComments}
+        auditNote={
+          itemToApprove?.moduleCode === 'VENDOR'
+            ? 'Approving sets status to Approved (3) and activates this vendor version for procurement workflows.'
+            : 'Approving advances the request to approved status and completes the workflow.'
+        }
+      />
 
-          {/* Conditional requirement for Vendor module: Document Verification */}
-          {itemToApprove?.moduleCode?.toUpperCase() === 'VENDOR' && (
-            isLoadingDocs ? (
-              <div className="p-3 rounded-lg border border-border bg-surface-subtle text-xs text-text-muted flex items-center gap-2">
-                <IconRefresh size={14} className="animate-spin text-primary shrink-0" />
-                <span>Checking attached documents...</span>
-              </div>
-            ) : hasVendorDocs ? (
-              <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-2">
-                <Checkbox
-                  id="verify-supporting-docs"
-                  checked={isDocVerified}
-                  onChange={(e) => setIsDocVerified(e.target.checked)}
-                  label={
-                    <div className="text-xs">
-                      <span className="font-semibold text-heading block">
-                        Verify Supporting Documents <span className="text-danger">*</span>
-                      </span>
-                      <span className="text-text-muted">
-                        Confirm that all uploaded registration and compliance documents have been checked.
-                      </span>
-                    </div>
-                  }
-                />
-              </div>
-            ) : (
-              <div className="p-3 rounded-lg border border-border bg-surface-subtle text-xs text-text-muted flex items-center gap-2">
-                <IconFileText size={15} className="text-text-muted shrink-0" />
-                <span>No compliance documents were attached with this registration.</span>
-              </div>
-            )
-          )}
-
-          <div>
-            <label className="block text-xs font-semibold text-heading mb-1.5">
-              Approval Remarks (Optional)
-            </label>
-            <Textarea
-              rows={3}
-              value={approveComments}
-              onChange={(e) => setApproveComments(e.target.value)}
-              placeholder="Add optional notes or audit remarks for the approval..."
-            />
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── MODAL: REJECT ── */}
-      <Modal
+      {/* ── CENTRALIZED MODAL: REJECT ── */}
+      <RejectApprovalModal
         isOpen={Boolean(itemToReject)}
         onClose={handleCloseReject}
-        title={`Reject ${itemToReject?.moduleName || 'Request'}`}
-        size="md"
-        footer={
-          <div className="flex items-center justify-end gap-3">
-            <Button
-              variant="ghost"
-              onClick={handleCloseReject}
-              disabled={isSubmittingReject}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleConfirmReject}
-              loading={isSubmittingReject}
-              className="flex items-center gap-1.5"
-            >
-              <IconClose size={14} />
-              <span>Confirm Rejection</span>
-            </Button>
-          </div>
+        onConfirm={handleConfirmReject}
+        loading={isSubmittingReject}
+        title={
+          itemToReject?.moduleCode === 'VENDOR' || itemToReject?.moduleName?.toLowerCase().includes('vendor')
+            ? 'Reject Vendor Application'
+            : `Reject ${itemToReject?.moduleName || 'Request'}`
         }
-      >
-        <div className="space-y-4 text-sm">
-          <div className="p-3.5 bg-danger/5 border border-danger/20 rounded-lg space-y-1">
-            <p className="font-semibold text-danger text-sm">
-              Rejection Warning
-            </p>
-            <p className="text-xs text-text-muted">
-              Rejecting this request will mark the document as <strong>Rejected</strong> and notify the submitter. The record will become editable so they can resolve the issues and resubmit.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-heading mb-1.5">
-              Rejection Remarks <span className="text-danger">*</span>
-            </label>
-            <Textarea
-              rows={3}
-              value={rejectComments}
-              onChange={(e) => setRejectComments(e.target.value)}
-              placeholder="State the clear reason for rejection (required)..."
-              required
-            />
-          </div>
-
-          {/* Quick preset chips */}
-          <div>
-            <span className="text-2xs text-text-muted block mb-1.5">Quick Reasons:</span>
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                'Missing supporting documents',
-                'Information is incomplete or unreadable',
-                'Pricing or terms mismatch specifications',
-                'Requires revision before proceeding',
-              ].map((reason) => (
-                <button
-                  key={reason}
-                  type="button"
-                  onClick={() => setRejectComments(reason)}
-                  className="text-2xs px-2 py-1 rounded bg-surface-subtle hover:bg-border text-text-muted border border-border cursor-pointer transition-colors"
-                >
-                  {reason}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Modal>
+        entityName={itemToReject?.referenceTitle || itemToReject?.entityName || 'Approval Request'}
+        entitySubtitle={
+          itemToReject?.referenceNo
+            ? `${itemToReject.referenceNo} • ${itemToReject.moduleName || ''}`
+            : itemToReject?.moduleName || ''
+        }
+        comments={rejectComments}
+        onCommentsChange={setRejectComments}
+        auditNote="Rejecting sets status to Rejected (4). The vendor creator can edit and resubmit the version for approval."
+      />
 
       {/* ── MODAL: CANCEL / WITHDRAW ── */}
       <Modal

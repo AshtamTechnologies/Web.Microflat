@@ -69,6 +69,7 @@ import {
   PaymentTermsSelect,
   DeliveryTermsSelect,
   FormattedHtmlBlock,
+  DocumentUploader,
 } from '../../components/ui';
 import { useVendorsContext } from '../../context/VendorsContext';
 import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
@@ -558,6 +559,7 @@ export default function VendorEffectiveDatesPage() {
   // Deletion confirmation and deferred deletion on Save
   const [attachmentToDelete, setAttachmentToDelete] = useState(null);
   const [versionToDelete, setVersionToDelete] = useState(null);
+  const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState(false);
   const [pendingDeleteAttachmentIds, setPendingDeleteAttachmentIds] = useState([]);
 
   const [formErrors, setFormErrors] = useState({});
@@ -1332,63 +1334,34 @@ export default function VendorEffectiveDatesPage() {
   }
 
   /* ── Attachment Handlers ── */
-  function handleFilesAdded(files) {
-    const fileList = Array.from(files);
-    if (fileList.length === 0) return;
+  function handleFilesAdded(filesOrItems) {
+    const list = Array.from(filesOrItems || []);
+    if (list.length === 0) return;
 
-    // Allowed extensions from selected document type or default
-    const allowedExts =
-      currentDocTypeConfig?.allowedExtensionList &&
-      currentDocTypeConfig.allowedExtensionList.length > 0
-        ? currentDocTypeConfig.allowedExtensionList.map((e) => e.toLowerCase().trim())
-        : (currentDocTypeConfig?.allowedExtensions
-            ? currentDocTypeConfig.allowedExtensions.split(',').map((e) => e.toLowerCase().trim())
-            : ALLOWED_FILE_EXTENSIONS);
-
-    const maxMb = currentDocTypeConfig?.maxFileSizeMB || 10;
-    const maxBytes = maxMb * 1024 * 1024;
-
-    for (const file of fileList) {
-      const name = (file.name || '').toLowerCase();
-      const hasValidExt = allowedExts.some((ext) => name.endsWith(ext));
-      if (!hasValidExt) {
-        setAttachmentError(
-          `"${file.name}" is not an allowed file type. Allowed formats: ${allowedExts.join(', ')}`
-        );
-        return;
-      }
-      if (file.size > maxBytes) {
-        setAttachmentError(
-          `"${file.name}" exceeds the maximum allowed file size of ${maxMb} MB.`
-        );
-        return;
-      }
-    }
-
-    setAttachmentError('');
-
-    const matchedDocType = currentDocTypeConfig;
-    const docTypeId = matchedDocType?.id || matchedDocType?.documentTypeId || 1;
-
-    const newAttachments = fileList.map((file, idx) => {
+    const newAttachments = list.map((item, idx) => {
+      const file = item.file || item;
       const docName =
+        item.documentName ||
+        item.documentType ||
         selectedDocType ||
-        file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') ||
+        file.name?.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') ||
         'Vendor Document';
+      const docTypeId = item.documentTypeId || currentDocTypeConfig?.id || 1;
       const fileUrl = file.type?.startsWith('image/')
         ? URL.createObjectURL(file)
         : null;
 
       return {
-        id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${idx}`,
+        id: item.id || `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${idx}`,
         documentTypeId: docTypeId,
         documentName: docName,
-        fileName: file.name,
-        fileSize: formatFileSize(file.size),
-        fileSizeBytes: file.size,
-        fileType: file.type || 'application/octet-stream',
+        documentType: docName,
+        fileName: item.fileName || file.name,
+        fileSize: item.fileSize || formatFileSize(file.size),
+        fileSizeBytes: item.fileSizeBytes || file.size,
+        fileType: item.fileType || file.type || 'application/octet-stream',
         fileUrl,
-        uploadedAt: getTodayISO(),
+        uploadedAt: item.uploadedAt || getTodayISO(),
         file,
       };
     });
@@ -1822,13 +1795,49 @@ export default function VendorEffectiveDatesPage() {
       setIsSaving(true);
       await vendorService.submitVendorVersion(targetVerId);
       toast.success('Version submitted for approval.');
+      setIsSubmitConfirmOpen(false);
+
+      // Optimistically update version status in local state so buttons hide immediately
+      setApiVersions((prev) => {
+        if (!Array.isArray(prev)) return prev;
+        return prev.map((v) => {
+          if (String(v.vendorDetailId || v.id) === String(targetVerId)) {
+            return {
+              ...v,
+              approvalStatus: ApprovalStatus.Pending,
+              versionState: 'Pending',
+            };
+          }
+          return v;
+        });
+      });
+
+      // Clear cached version detail so fresh details are fetched
       setVersionDetailsMap((prev) => {
         const next = { ...prev };
         delete next[targetVerId];
         return next;
       });
-      if (getVendorById) {
-        getVendorById(vendor.id);
+
+      // Re-fetch fresh version list and vendor details from API
+      const vendorId = vendor?.id || id;
+      if (vendorId) {
+        await loadVendorVersions(vendorId);
+        try {
+          const fresh = await vendorService.getVendorVersion(targetVerId);
+          if (fresh) {
+            setVersionDetailsMap((prev) => ({ ...prev, [targetVerId]: fresh }));
+          }
+        } catch {
+          // fallback if individual version fetch fails
+        }
+        if (fetchVendorDetail) {
+          fetchVendorDetail(vendorId)
+            .then((v) => {
+              if (v) setFetchedVendor(v);
+            })
+            .catch(() => { });
+        }
       }
     } catch (err) {
       toast.error(err?.detail || err?.message || 'Failed to submit version for approval.');
@@ -1986,8 +1995,8 @@ export default function VendorEffectiveDatesPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        minSize: 80,
-        size: 90,
+        minSize: 90,
+        size: 110,
         enableSorting: false,
         enableResizing: false,
         cell: (info) => {
@@ -1996,6 +2005,16 @@ export default function VendorEffectiveDatesPage() {
           const isSelected =
             String(selectedVersion?.vendorDetailId || selectedVersion?.id) ===
             String(rowId);
+
+          const numSt = normalizeApprovalStatus(row.approvalStatus);
+          const verState = String(row.versionState || '').toLowerCase();
+          const canEditRow =
+            !isReadOnly &&
+            vendor?.isActive &&
+            (numSt === ApprovalStatus.Draft ||
+              numSt === ApprovalStatus.Rejected ||
+              verState === 'draft' ||
+              verState === 'rejected');
 
           return (
             <div
@@ -2015,12 +2034,28 @@ export default function VendorEffectiveDatesPage() {
               >
                 <IconView size={15} />
               </Button>
+
+              {canEditRow && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleStartEdit(row)}
+                  title="Edit this version"
+                  className={
+                    isSelected && mode === 'EDIT'
+                      ? 'bg-primary/15 text-primary'
+                      : 'text-text-muted hover:text-primary hover:bg-surface'
+                  }
+                >
+                  <IconEdit size={15} />
+                </Button>
+              )}
             </div>
           );
         },
       }),
     ],
-    [selectedVersion, mode]
+    [selectedVersion, mode, isReadOnly, vendor?.isActive]
   );
 
   // Filter out Attachment, Approved By, and conditionally hide Actions column if there is only 1 version
@@ -2214,11 +2249,10 @@ export default function VendorEffectiveDatesPage() {
         <button
           type="button"
           onClick={() => setSearchParams({ tab: 'profile' })}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'profile'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-text-muted hover:text-heading'
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${activeTab === 'profile'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-text-muted hover:text-heading'
+            }`}
         >
           <IconVendor size={15} />
           <span>Vendor Profile & Versions</span>
@@ -2226,11 +2260,10 @@ export default function VendorEffectiveDatesPage() {
         <button
           type="button"
           onClick={() => setSearchParams({ tab: 'bank' })}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'bank'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-text-muted hover:text-heading'
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${activeTab === 'bank'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-text-muted hover:text-heading'
+            }`}
         >
           <IconBankDetails size={15} />
           <span>Bank Accounts</span>
@@ -2246,190 +2279,190 @@ export default function VendorEffectiveDatesPage() {
       {activeTab === 'profile' && (
         <>
           {/* ── INACTIVE VENDOR NOTICE (SIMPLE & SINGLE) ── */}
-      {!vendor.isActive && (
-        <div className="rounded-xl border border-danger/30 bg-danger/[0.04] p-3.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
-            <div className="p-1.5 rounded-lg bg-danger/10 text-danger shrink-0 mt-0.5 sm:mt-0">
-              <IconError size={16} className="" />
-            </div>
-            <div className="text-xs text-heading flex items-center gap-1.5 flex-wrap">
-              <span className="font-bold text-danger">Inactive Reason:</span>
-              <span className="font-medium text-heading">
-                {vendor.inactiveComment || 'No inactive reason specified.'}
-              </span>
-              {vendor.inactiveDate && (
-                <span className="text-2xs font-mono text-text-muted ml-1">
-                  ({formatDate(vendor.inactiveDate)})</span>
+          {!vendor.isActive && (
+            <div className="rounded-xl border border-danger/30 bg-danger/[0.04] p-3.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                <div className="p-1.5 rounded-lg bg-danger/10 text-danger shrink-0 mt-0.5 sm:mt-0">
+                  <IconError size={16} className="" />
+                </div>
+                <div className="text-xs text-heading flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-danger">Inactive Reason:</span>
+                  <span className="font-medium text-heading">
+                    {vendor.inactiveComment || 'No inactive reason specified.'}
+                  </span>
+                  {vendor.inactiveDate && (
+                    <span className="text-2xs font-mono text-text-muted ml-1">
+                      ({formatDate(vendor.inactiveDate)})</span>
 
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── 2. EFFECTIVE DATES GRID / CARDS (CARD WITH RESIZABLE COLUMNS) ── */}
+          <CollapsibleCard
+            title="Effective Dates"
+            subtitle="Timeline of version records for this vendor. Drag column borders to resize columns."
+            icon={<IconCalendar size={17} />}
+            defaultOpen={true}
+            className="overflow-hidden shadow-xs border-border"
+            actions={
+              !isReadOnly && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleStartAdd}
+                  disabled={!vendor.isActive || hasPendingRevision}
+                  className="text-xs shrink-0 w-full sm:w-auto justify-center"
+                  title={
+                    !vendor.isActive
+                      ? 'Vendor is inactive. Activate vendor to add new effective dates.'
+                      : hasPendingRevision
+                        ? 'Vendor already has a revision awaiting approval or in draft.'
+                        : 'Add new effective date'
+                  }
+                >
+                  <IconAdd size={14} className="mr-1.5" />
+                  Add New Effective Date
+                </Button>
+              )
+            }
+          >
+
+            {/* ── MOBILE VIEW (< md): Card List for Small Screens ── */}
+            <div className="block md:hidden p-3 space-y-2.5 bg-bg/50 max-h-[260px] overflow-y-auto overscroll-y-contain border-t border-border/60">
+              {loadingVersions ? (
+                <div className="py-8 text-center text-xs text-text-muted flex items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                  <span>Loading versions...</span>
+                </div>
+              ) : versions.length === 0 ? (
+                <div className="py-8 text-center text-xs text-text-muted">
+                  No effective date records found for this vendor.
+                </div>
+              ) : (
+                versions.map((ver) => {
+                  const isSelected =
+                    String(selectedVersion?.vendorDetailId || selectedVersion?.id) ===
+                    String(ver.vendorDetailId || ver.id);
+                  const attCount = Number(ver.attachmentCount) || 0;
+                  const state = ver.versionState || 'History';
+                  const s = String(state).toLowerCase();
+                  let stateBadgeCls = 'bg-muted/30 text-text-muted border-border';
+                  if (s === 'current') {
+                    stateBadgeCls = 'bg-success/15 text-success border-success/30 font-bold';
+                  } else if (s === 'scheduled') {
+                    stateBadgeCls = 'bg-sky-500/15 text-sky-600 border-sky-500/30 font-semibold';
+                  }
+
+                  return (
+                    <div
+                      key={ver.vendorDetailId || ver.id}
+                      onClick={() => handleSelectView(ver)}
+                      className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${isSelected
+                        ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
+                        : 'bg-surface border-border hover:border-primary/40'
+                        }`}
+                    >
+                      {/* Top line: Date + Badges + Actions */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-xs font-bold text-heading">
+                              {formatDateDisplay(ver.effectiveDate)}</span>
+
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs border select-none ${stateBadgeCls}`}>
+                              {state}</span>
+
+                            <Badge variant={getApprovalBadgeVariant(ver.approvalStatus)}>
+                              {getApprovalStatusLabel(ver.approvalStatus)}
+                            </Badge>
+                            <StatusBadge status={ver.isActive} size="sm" />
+                          </div>
+                        </div>
+
+                        {/* Mobile Card Actions */}
+                        <div
+                          className="flex items-center gap-1 shrink-0 -mt-1 -mr-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleSelectView(ver)}
+                            title="View this version"
+                            className={`h-7 w-7 ${isSelected && mode === 'VIEW'
+                              ? 'bg-primary/15 text-primary'
+                              : 'text-text-muted hover:text-primary hover:bg-surface'
+                              }`}
+                          >
+                            <IconView size={14} />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Middle / Bottom line: Context info */}
+                      <div className="mt-2 pt-2 border-t border-border/60 flex flex-wrap items-center justify-between gap-2 text-2xs text-text-muted">
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <IconClock size={11} className="shrink-0 text-text-muted/70" />
+                          <span>{ver.approvedByName ? `Approved by: ${ver.approvedByName}` : 'Not approved yet'}</span>
+                        </div>
+
+                        {ver.lastUpdatedOn && (
+                          <div className="flex items-center gap-1.5 font-mono">
+                            <IconClock size={11} className="shrink-0 text-text-muted/70" />
+                            <span>Updated: {formatDateDisplay(ver.lastUpdatedOn)}</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1 text-2xs font-medium">
+                          <IconAttachment size={11} className={attCount > 0 ? 'text-primary' : 'text-text-muted/60'} />
+                          <span>{attCount} attachment{attCount !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* ── 2. EFFECTIVE DATES GRID / CARDS (CARD WITH RESIZABLE COLUMNS) ── */}
-      <CollapsibleCard
-        title="Effective Dates"
-        subtitle="Timeline of version records for this vendor. Drag column borders to resize columns."
-        icon={<IconCalendar size={17} />}
-        defaultOpen={true}
-        className="overflow-hidden shadow-xs border-border"
-        actions={
-          !isReadOnly && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleStartAdd}
-              disabled={!vendor.isActive || hasPendingRevision}
-              className="text-xs shrink-0 w-full sm:w-auto justify-center"
-              title={
-                !vendor.isActive
-                  ? 'Vendor is inactive. Activate vendor to add new effective dates.'
-                  : hasPendingRevision
-                  ? 'Vendor already has a revision awaiting approval or in draft.'
-                  : 'Add new effective date'
-              }
-            >
-              <IconAdd size={14} className="mr-1.5" />
-              Add New Effective Date
-            </Button>
-          )
-        }
-      >
+            {/* ── DESKTOP & TABLET VIEW (md+): Resizable TanStack Table Grid with Scroll & Sticky Header ── */}
+            <div className="hidden md:block max-h-[230px] overflow-y-auto overscroll-y-contain border-t border-border/60">
+              <TableContainer>
+                <thead>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id} className="bg-surface border-b border-border sticky top-0 z-10 shadow-2xs">
+                      {headerGroup.headers.map((header) => {
+                        const canSort = header.column.getCanSort();
+                        const sorted = header.column.getIsSorted();
 
-        {/* ── MOBILE VIEW (< md): Card List for Small Screens ── */}
-        <div className="block md:hidden p-3 space-y-2.5 bg-bg/50 max-h-[260px] overflow-y-auto overscroll-y-contain border-t border-border/60">
-          {loadingVersions ? (
-            <div className="py-8 text-center text-xs text-text-muted flex items-center justify-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
-              <span>Loading versions...</span>
-            </div>
-          ) : versions.length === 0 ? (
-            <div className="py-8 text-center text-xs text-text-muted">
-              No effective date records found for this vendor.
-            </div>
-          ) : (
-            versions.map((ver) => {
-              const isSelected =
-                String(selectedVersion?.vendorDetailId || selectedVersion?.id) ===
-                String(ver.vendorDetailId || ver.id);
-              const attCount = Number(ver.attachmentCount) || 0;
-              const state = ver.versionState || 'History';
-              const s = String(state).toLowerCase();
-              let stateBadgeCls = 'bg-muted/30 text-text-muted border-border';
-              if (s === 'current') {
-                stateBadgeCls = 'bg-success/15 text-success border-success/30 font-bold';
-              } else if (s === 'scheduled') {
-                stateBadgeCls = 'bg-sky-500/15 text-sky-600 border-sky-500/30 font-semibold';
-              }
-
-              return (
-                <div
-                  key={ver.vendorDetailId || ver.id}
-                  onClick={() => handleSelectView(ver)}
-                  className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${isSelected
-                    ? 'bg-primary/[0.06] border-primary ring-2 ring-primary/20 shadow-xs'
-                    : 'bg-surface border-border hover:border-primary/40'
-                    }`}
-                >
-                  {/* Top line: Date + Badges + Actions */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono text-xs font-bold text-heading">
-                          {formatDateDisplay(ver.effectiveDate)}</span>
-        
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs border select-none ${stateBadgeCls}`}>
-                          {state}</span>
-        
-                        <Badge variant={getApprovalBadgeVariant(ver.approvalStatus)}>
-                          {getApprovalStatusLabel(ver.approvalStatus)}
-                        </Badge>
-                        <StatusBadge status={ver.isActive} size="sm" />
-                      </div>
-                    </div>
-
-                    {/* Mobile Card Actions */}
-                    <div
-                      className="flex items-center gap-1 shrink-0 -mt-1 -mr-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleSelectView(ver)}
-                        title="View this version"
-                        className={`h-7 w-7 ${isSelected && mode === 'VIEW'
-                          ? 'bg-primary/15 text-primary'
-                          : 'text-text-muted hover:text-primary hover:bg-surface'
-                          }`}
-                      >
-                        <IconView size={14} />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Middle / Bottom line: Context info */}
-                  <div className="mt-2 pt-2 border-t border-border/60 flex flex-wrap items-center justify-between gap-2 text-2xs text-text-muted">
-                    <div className="flex items-center gap-1.5 font-mono">
-                      <IconClock size={11} className="shrink-0 text-text-muted/70" />
-                      <span>{ver.approvedByName ? `Approved by: ${ver.approvedByName}` : 'Not approved yet'}</span>
-                    </div>
-
-                    {ver.lastUpdatedOn && (
-                      <div className="flex items-center gap-1.5 font-mono">
-                        <IconClock size={11} className="shrink-0 text-text-muted/70" />
-                        <span>Updated: {formatDateDisplay(ver.lastUpdatedOn)}</span>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-1 text-2xs font-medium">
-                      <IconAttachment size={11} className={attCount > 0 ? 'text-primary' : 'text-text-muted/60'} />
-                      <span>{attCount} attachment{attCount !== 1 ? 's' : ''}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* ── DESKTOP & TABLET VIEW (md+): Resizable TanStack Table Grid with Scroll & Sticky Header ── */}
-        <div className="hidden md:block max-h-[230px] overflow-y-auto overscroll-y-contain border-t border-border/60">
-          <TableContainer>
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} className="bg-surface border-b border-border sticky top-0 z-10 shadow-2xs">
-                  {headerGroup.headers.map((header) => {
-                    const canSort = header.column.getCanSort();
-                    const sorted = header.column.getIsSorted();
-
-                    return (
-                      <Th
-                        key={header.id}
-                        style={{ width: header.getSize() }}
-                        isResizing={header.column.getIsResizing()}
-                        resizeHandler={
-                          header.column.getCanResize()
-                            ? header.getResizeHandler()
-                            : undefined
-                        }
-                        className={`relative py-3.5 px-6 select-none bg-surface ${canSort ? 'cursor-pointer hover:bg-surface/80' : ''
-                          }`}
-                      >
-                        {header.isPlaceholder ? null : canSort ? (
-                          <button
-                            type="button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            className="group/th-btn flex items-center gap-1.5 w-full text-left select-none cursor-pointer hover:text-heading transition-colors"
+                        return (
+                          <Th
+                            key={header.id}
+                            style={{ width: header.getSize() }}
+                            isResizing={header.column.getIsResizing()}
+                            resizeHandler={
+                              header.column.getCanResize()
+                                ? header.getResizeHandler()
+                                : undefined
+                            }
+                            className={`relative py-3.5 px-6 select-none bg-surface ${canSort ? 'cursor-pointer hover:bg-surface/80' : ''
+                              }`}
                           >
-                            <span className="truncate">
-                              {flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                            </span>
-                            {/* REMOVE_OLD_HEADER
+                            {header.isPlaceholder ? null : canSort ? (
+                              <button
+                                type="button"
+                                onClick={header.column.getToggleSortingHandler()}
+                                className="group/th-btn flex items-center gap-1.5 w-full text-left select-none cursor-pointer hover:text-heading transition-colors"
+                              >
+                                <span className="truncate">
+                                  {flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext()
+                                  )}
+                                </span>
+                                {/* REMOVE_OLD_HEADER
                               {flexRender(
                                 header.column.columnDef.header,
                                 header.getContext()
@@ -2443,30 +2476,30 @@ export default function VendorEffectiveDatesPage() {
             
 
                             REMOVE_OLD_HEADER */}
-                            <span className="shrink-0 ml-1 inline-flex items-center">
-                              {sorted === 'asc' ? (
-                                <IconChevronUp
-                                  size={14}
-                                  className="text-primary"
-                                  aria-hidden="true"
-                                />
-                              ) : sorted === 'desc' ? (
-                                <IconChevronDown
-                                  size={14}
-                                  className="text-primary"
-                                  aria-hidden="true"
-                                />
-                              ) : (
-                                <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
-                                  <IconChevronUp size={11} />
-                                  <IconChevronDown size={11} />
+                                <span className="shrink-0 ml-1 inline-flex items-center">
+                                  {sorted === 'asc' ? (
+                                    <IconChevronUp
+                                      size={14}
+                                      className="text-primary"
+                                      aria-hidden="true"
+                                    />
+                                  ) : sorted === 'desc' ? (
+                                    <IconChevronDown
+                                      size={14}
+                                      className="text-primary"
+                                      aria-hidden="true"
+                                    />
+                                  ) : (
+                                    <span className="flex flex-col items-center -space-y-1.5 opacity-40 group-hover/th-btn:opacity-90 group-hover/th-btn:text-heading transition-all">
+                                      <IconChevronUp size={11} />
+                                      <IconChevronDown size={11} />
+                                    </span>
+                                  )}
                                 </span>
-                              )}
-                            </span>
-                          </button>
-                        ) : (
-                          <div
-                            style={{/*
+                              </button>
+                            ) : (
+                              <div
+                                style={{/*
                                 </span>
                               )}
                             </span>
@@ -2483,361 +2516,363 @@ export default function VendorEffectiveDatesPage() {
                           <div
 
                             */}}
-                            className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''
-                              }`}
-                          >
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
+                                className={`select-none ${header.id === 'actions' ? 'text-right w-full pr-1' : ''
+                                  }`}
+                              >
+                                {flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                              </div>
                             )}
-                          </div>
-                        )}
-                      </Th>
-                    );
-                  })}
-                </tr>
-              ))}
-            </thead>
-            <tbody className="divide-y divide-border bg-bg">
-              {loadingVersions ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="py-8 text-center text-xs text-text-muted"
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
-                      <span>Loading versions...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="py-8 text-center text-xs text-text-muted"
-                  >
-                    No effective date records found for this vendor.
-                  </td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map((row) => {
-                  const isSelected =
-                    String(selectedVersion?.vendorDetailId || selectedVersion?.id) ===
-                    String(row.original.vendorDetailId || row.original.id);
-                  return (
-                    <tr
-                      key={row.id}
-                      onClick={() => handleSelectView(row.original)}
-                      className={`cursor-pointer transition-colors duration-120 ${isSelected
-                        ? 'bg-primary/[0.06]'
-                        : 'hover:bg-surface/50'
-                        }`}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <Td
-                          key={cell.id}
-                          style={{ width: cell.column.getSize() }}
-                          className="py-3.5 px-6"
-                        >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
-                        </Td>
-                      ))}
+                          </Th>
+                        );
+                      })}
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </TableContainer>
-        </div>
-      </CollapsibleCard>
+                  ))}
+                </thead>
+                <tbody className="divide-y divide-border bg-bg">
+                  {loadingVersions ? (
+                    <tr>
+                      <td
+                        colSpan={columns.length}
+                        className="py-8 text-center text-xs text-text-muted"
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                          <span>Loading versions...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : table.getRowModel().rows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={columns.length}
+                        className="py-8 text-center text-xs text-text-muted"
+                      >
+                        No effective date records found for this vendor.
+                      </td>
+                    </tr>
+                  ) : (
+                    table.getRowModel().rows.map((row) => {
+                      const isSelected =
+                        String(selectedVersion?.vendorDetailId || selectedVersion?.id) ===
+                        String(row.original.vendorDetailId || row.original.id);
+                      return (
+                        <tr
+                          key={row.id}
+                          onClick={() => handleSelectView(row.original)}
+                          className={`cursor-pointer transition-colors duration-120 ${isSelected
+                            ? 'bg-primary/[0.06]'
+                            : 'hover:bg-surface/50'
+                            }`}
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <Td
+                              key={cell.id}
+                              style={{ width: cell.column.getSize() }}
+                              className="py-3.5 px-6"
+                            >
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </Td>
+                          ))}
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </TableContainer>
+            </div>
+          </CollapsibleCard>
 
-      {/* ── 3. DETAIL / FORM PANEL (CARD) ── */}
-      <CollapsibleCard
-        title={
-          mode === 'VIEW' ? (
-            <>
-              Viewing version — Effective{' '}
-              <span className="font-mono text-primary">
-                {formatDateDisplay(selectedVersion?.effectiveDate)}
-              </span>
-            </>
-          ) : mode === 'EDIT' ? (
-            <>
-              Editing version — Effective{' '}
-              <span className="font-mono text-primary">
-                {formatDateDisplay(formData.effectiveDate || selectedVersion?.effectiveDate)}
-              </span>
-            </>
-          ) : (
-            'Add new effective date'
-          )
-        }
-        subtitle={
-          mode === 'VIEW'
-            ? 'Read-only view of fields and attachments effective from this date.'
-            : mode === 'EDIT'
-              ? 'Modify versioned vendor information, address, and attachments.'
-              : 'Clone-forward from current active version with a new unique effective date.'
-        }
-        icon={<IconVendor size={17} />}
-        defaultOpen={true}
-        className="overflow-hidden shadow-xs border-border"
-        actions={
-          <div className="flex items-center gap-2 self-start sm:self-auto w-full sm:w-auto justify-end">
-            {!isReadOnly && mode === 'VIEW' && selectedVersion && isDraftOrRejected && (
-              <>
-                {isDraftOrRejected && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={handleSubmitVersionForApproval}
-                    disabled={isSaving || !vendor.isActive}
-                    className="text-xs w-full sm:w-auto justify-center bg-primary text-white"
-                    title="Submit this draft version for approval"
-                  >
-                    <IconShieldCheck size={13} className="mr-1.5" />
-                    Submit for Approval
-                  </Button>
+          {/* ── 3. DETAIL / FORM PANEL (CARD) ── */}
+          <CollapsibleCard
+            title={
+              mode === 'VIEW' ? (
+                <>
+                  Viewing version — Effective{' '}
+                  <span className="font-mono text-primary">
+                    {formatDateDisplay(selectedVersion?.effectiveDate)}
+                  </span>
+                </>
+              ) : mode === 'EDIT' ? (
+                <>
+                  Editing version — Effective{' '}
+                  <span className="font-mono text-primary">
+                    {formatDateDisplay(formData.effectiveDate || selectedVersion?.effectiveDate)}
+                  </span>
+                </>
+              ) : (
+                'Add new effective date'
+              )
+            }
+            subtitle={
+              mode === 'VIEW'
+                ? 'Read-only view of fields and attachments effective from this date.'
+                : mode === 'EDIT'
+                  ? 'Modify versioned vendor information, address, and attachments.'
+                  : 'Clone-forward from current active version with a new unique effective date.'
+            }
+            icon={<IconVendor size={17} />}
+            defaultOpen={true}
+            className="overflow-hidden shadow-xs border-border"
+            headerClassName="flex-col xl:flex-row xl:items-center items-start"
+            actions={
+              <div className="flex items-center gap-2 flex-wrap">
+                {!isReadOnly && mode === 'VIEW' && selectedVersion && isDraftOrRejected && (
+                  <>
+                    {isDraftOrRejected && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setIsSubmitConfirmOpen(true)}
+                        disabled={isSaving || !vendor.isActive}
+                        className="text-xs w-auto justify-center bg-primary text-white"
+                        title="Submit this draft version for approval"
+                      >
+                        <IconShieldCheck size={13} className="mr-1.5" />
+                        Submit for Approval
+                      </Button>
+                    )}
+                    {isDraftOrRejected && versions.length > 1 && (
+                      <Button
+                        variant="danger-soft"
+                        size="sm"
+                        onClick={() => handleRequestDeleteVersion(selectedVersion)}
+                        disabled={isSaving}
+                        className="text-xs w-auto justify-center text-danger hover:bg-danger/10"
+                        title="Delete this draft version"
+                      >
+                        <IconDelete size={13} className="mr-1.5" />
+                        Delete Version
+                      </Button>
+                    )}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleStartEdit(selectedVersion)}
+                      disabled={!vendor.isActive}
+                      className="text-xs w-auto justify-center"
+                      title={
+                        !vendor.isActive
+                          ? 'Vendor is inactive. Activate vendor to edit version.'
+                          : 'Edit this version'
+                      }
+                    >
+                      <IconEdit size={13} className="mr-1.5" />
+                      Edit this version
+                    </Button>
+                  </>
                 )}
-                {isDraftOrRejected && versions.length > 1 && (
-                  <Button
-                    variant="danger-soft"
-                    size="sm"
-                    onClick={() => handleRequestDeleteVersion(selectedVersion)}
-                    disabled={isSaving}
-                    className="text-xs w-full sm:w-auto justify-center text-danger hover:bg-danger/10"
-                    title="Delete this draft version"
-                  >
-                    <IconDelete size={13} className="mr-1.5" />
-                    Delete Version
-                  </Button>
+
+                {(mode === 'EDIT' || mode === 'ADD') && (
+                  <>
+                    <CancelButton
+                      size="sm"
+                      onClick={handleCancel}
+                      disabled={isSaving}
+                      className="text-xs shadow-2xs"
+                    />
+                    <SaveButton
+                      type="button"
+                      size="sm"
+                      onClick={handleSubmit}
+                      loading={isSaving}
+                      loadingText="Saving..."
+                      disabled={isSaving}
+                      className="text-xs"
+                    >
+                      Save Changes
+                    </SaveButton>
+                  </>
                 )}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleStartEdit(selectedVersion)}
-                  disabled={!vendor.isActive}
-                  className="text-xs w-full sm:w-auto justify-center"
-                  title={
-                    !vendor.isActive
-                      ? 'Vendor is inactive. Activate vendor to edit version.'
-                      : 'Edit this version'
-                  }
-                >
-                  <IconEdit size={13} className="mr-1.5" />
-                  Edit this version
-                </Button>
-              </>
-            )}
-
-            {(mode === 'EDIT' || mode === 'ADD') && (
-              <>
-                <CancelButton
-                  size="sm"
-                  onClick={handleCancel}
-                  disabled={isSaving}
-                  className="text-xs shadow-2xs"
-                />
-                <SaveButton
-                  type="button"
-                  size="sm"
-                  onClick={handleSubmit}
-                  loading={isSaving}
-                  loadingText="Saving..."
-                  disabled={isSaving}
-                  className="text-xs"
-                >
-                  Save Changes
-                </SaveButton>
-              </>
-            )}
-          </div>
-        }
-      >
-
-        {/* Loading spinner while versions or version details are loading */}
-        {loadingVersions ||
-        (isLoadingVersion && !selectedVersion && mode === 'VIEW') ||
-        (mode === 'EDIT' && (loadingVersions || (isLoadingVersion && !formData.effectiveDate))) ? (
-          <div className="py-12 text-center text-xs text-text-muted flex items-center justify-center gap-2">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
-            <span>Loading version details...</span>
-          </div>
-        ) : null}
-
-        {!loadingVersions && versions.length === 0 ? (
-          <div className="py-12 text-center text-xs text-text-muted">
-            No effective date records found for this vendor.
-          </div>
-        ) : null}
-
-        {/* ── Mode 1: VIEW MODE ── */}
-        {!loadingVersions && mode === 'VIEW' && selectedVersion && (
-          <div className="p-4 sm:p-5 space-y-3.5 divide-y divide-border/60">
-            {/* 1. Contact Information */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <IconContact size={15} className="text-primary" />
-                Contact Information
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2 pt-1">
-                <DetailField
-                  label="Effective Date"
-                  value={formatDateDisplay(selectedVersion.effectiveDate)}
-                  mono
-                />
-                <DetailField
-                  label="Vendor Category"
-                  value={vendor?.vendorCategory || selectedVersion?.vendorCategory || 'Not Categorized'}
-                />
-                <DetailField
-                  label="Contact Person Name"
-                  value={selectedVersion.contactPersonName}
-                />
-                <DetailField
-                  label="Phone Number"
-                  value={selectedVersion.phoneNo}
-                  mono
-                />
-                <DetailField
-                  label="Alternate Phone"
-                  value={selectedVersion.alternatePhoneNo}
-                  mono
-                />
-                <DetailField
-                  label="Email Address"
-                  value={selectedVersion.email}
-                />
-                <DetailField
-                  label="CC Email Address"
-                  value={selectedVersion.ccEmail}
-                />
-                <DetailField
-                  label="Website URL"
-                  value={selectedVersion.website}
-                  isLink
-                  href={selectedVersion.website}
-                />
-              </div>
-            </div>
+            }
+          >
 
-            {/* 2. Statutory & MSME Registrations */}
-            <div className="space-y-2 pt-3.5">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <IconShieldCheck size={15} className="text-primary" />
-                Statutory & MSME Registrations
+            {/* Loading spinner while versions or version details are loading */}
+            {loadingVersions ||
+              (isLoadingVersion && !selectedVersion && mode === 'VIEW') ||
+              (mode === 'EDIT' && (loadingVersions || (isLoadingVersion && !formData.effectiveDate))) ? (
+              <div className="py-12 text-center text-xs text-text-muted flex items-center justify-center gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
+                <span>Loading version details...</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
-                <DetailField
-                  label="GST / Tax Identification"
-                  value={selectedVersion.gstNo}
-                  mono
-                />
-                <DetailField
-                  label="Permanent Account Number (PAN)"
-                  value={selectedVersion.panNo}
-                  mono
-                />
-                <DetailField
-                  label="Corporate ID Number (CIN)"
-                  value={selectedVersion.cin}
-                  mono
-                />
-                <DetailField
-                  label="Udyam Registration Number"
-                  value={selectedVersion.udhyamNo}
-                  mono
-                />
-                <DetailField
-                  label="MSME Enterprise Type"
-                  value={selectedVersion.msmeType}
-                />
-                <DetailField
-                  label="MSME Primary Activity"
-                  value={selectedVersion.msmeActivity}
-                />
-              </div>
-            </div>
+            ) : null}
 
-            {/* 3. Accounting & Ledger Details */}
-            {(vendor?.ledgerName || vendor?.tallyLedgerName || vendor?.group || vendor?.tallyGroup || vendor?.subGroup || vendor?.tallySubGroup) && (
-              <div className="space-y-2 pt-3.5">
-                <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                  <IconBuilding2 size={15} className="text-primary" />
-                  Accounting & Ledger Details
+            {!loadingVersions && versions.length === 0 ? (
+              <div className="py-12 text-center text-xs text-text-muted">
+                No effective date records found for this vendor.
+              </div>
+            ) : null}
+
+            {/* ── Mode 1: VIEW MODE ── */}
+            {!loadingVersions && mode === 'VIEW' && selectedVersion && (
+              <div className="p-4 sm:p-5 space-y-3.5 divide-y divide-border/60">
+                {/* 1. Contact Information */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                    <IconContact size={15} className="text-primary" />
+                    Contact Information
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2 pt-1">
+                    <DetailField
+                      label="Effective Date"
+                      value={formatDateDisplay(selectedVersion.effectiveDate)}
+                      mono
+                    />
+                    <DetailField
+                      label="Vendor Category"
+                      value={vendor?.vendorCategory || selectedVersion?.vendorCategory || 'Not Categorized'}
+                    />
+                    <DetailField
+                      label="Contact Person Name"
+                      value={selectedVersion.contactPersonName}
+                    />
+                    <DetailField
+                      label="Phone Number"
+                      value={selectedVersion.phoneNo}
+                      mono
+                    />
+                    <DetailField
+                      label="Alternate Phone"
+                      value={selectedVersion.alternatePhoneNo}
+                      mono
+                    />
+                    <DetailField
+                      label="Email Address"
+                      value={selectedVersion.email}
+                    />
+                    <DetailField
+                      label="CC Email Address"
+                      value={selectedVersion.ccEmail}
+                    />
+                    <DetailField
+                      label="Website URL"
+                      value={selectedVersion.website}
+                      isLink
+                      href={selectedVersion.website}
+                    />
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
-                  <DetailField
-                    label="Ledger Name"
-                    value={vendor.ledgerName || vendor.tallyLedgerName}
-                    mono
-                  />
-                  <DetailField
-                    label="Accounting Group"
-                    value={vendor.group || vendor.tallyGroup}
-                  />
-                  <DetailField
-                    label="Sub-Group"
-                    value={vendor.subGroup || vendor.tallySubGroup}
-                  />
+
+                {/* 2. Statutory & MSME Registrations */}
+                <div className="space-y-2 pt-3.5">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                    <IconShieldCheck size={15} className="text-primary" />
+                    Statutory & MSME Registrations
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
+                    <DetailField
+                      label="GST / Tax Identification"
+                      value={selectedVersion.gstNo}
+                      mono
+                    />
+                    <DetailField
+                      label="Permanent Account Number (PAN)"
+                      value={selectedVersion.panNo}
+                      mono
+                    />
+                    <DetailField
+                      label="Corporate ID Number (CIN)"
+                      value={selectedVersion.cin}
+                      mono
+                    />
+                    <DetailField
+                      label="Udyam Registration Number"
+                      value={selectedVersion.udhyamNo}
+                      mono
+                    />
+                    <DetailField
+                      label="MSME Enterprise Type"
+                      value={selectedVersion.msmeType}
+                    />
+                    <DetailField
+                      label="MSME Primary Activity"
+                      value={selectedVersion.msmeActivity}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* 4. Registered Business Address */}
-            <div className="space-y-2 pt-3.5">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <IconLocation size={15} className="text-primary" />
-                Registered Business Address
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
-                <DetailField
-                  label="Street Address"
-                  value={
-                    [selectedVersion.address1, selectedVersion.address2]
-                      .filter(Boolean)
-                      .join(', ') || null
-                  }
-                />
-                <DetailField
-                  label="City & State"
-                  value={
-                    [
-                      selectedVersion.city,
-                      getStateName(selectedVersion.countryId, selectedVersion.stateId),
-                    ]
-                      .filter(Boolean)
-                      .join(', ') || null
-                  }
-                />
-                <DetailField
-                  label="Country & PIN"
-                  value={
-                    [
-                      getCountryName(selectedVersion.countryId),
-                      selectedVersion.zipCode,
-                    ]
-                      .filter(Boolean)
-                      .join(' — ') || null
-                  }
-                  mono={Boolean(selectedVersion.zipCode)}
-                />
-              </div>
-            </div>
+                {/* 3. Accounting & Ledger Details */}
+                {(vendor?.ledgerName || vendor?.tallyLedgerName || vendor?.group || vendor?.tallyGroup || vendor?.subGroup || vendor?.tallySubGroup) && (
+                  <div className="space-y-2 pt-3.5">
+                    <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                      <IconBuilding2 size={15} className="text-primary" />
+                      Accounting & Ledger Details
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
+                      <DetailField
+                        label="Ledger Name"
+                        value={vendor.ledgerName || vendor.tallyLedgerName}
+                        mono
+                      />
+                      <DetailField
+                        label="Accounting Group"
+                        value={vendor.group || vendor.tallyGroup}
+                      />
+                      <DetailField
+                        label="Sub-Group"
+                        value={vendor.subGroup || vendor.tallySubGroup}
+                      />
+                    </div>
+                  </div>
+                )}
 
-            {/* 5. Commercial Terms & Procurement Notes */}
-            <div className="space-y-2 pt-3.5">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                <IconFileText size={15} className="text-primary" />
-                Commercial Terms & Procurement Notes
-              </div>
+                {/* 4. Registered Business Address */}
+                <div className="space-y-2 pt-3.5">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                    <IconLocation size={15} className="text-primary" />
+                    Registered Business Address
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
+                    <DetailField
+                      label="Street Address"
+                      value={
+                        [selectedVersion.address1, selectedVersion.address2]
+                          .filter(Boolean)
+                          .join(', ') || null
+                      }
+                    />
+                    <DetailField
+                      label="City & State"
+                      value={
+                        [
+                          selectedVersion.city,
+                          getStateName(selectedVersion.countryId, selectedVersion.stateId),
+                        ]
+                          .filter(Boolean)
+                          .join(', ') || null
+                      }
+                    />
+                    <DetailField
+                      label="Country & PIN"
+                      value={
+                        [
+                          getCountryName(selectedVersion.countryId),
+                          selectedVersion.zipCode,
+                        ]
+                          .filter(Boolean)
+                          .join(' — ') || null
+                      }
+                      mono={Boolean(selectedVersion.zipCode)}
+                    />
+                  </div>
+                </div>
 
+                {/* 5. Procurement & Operational Notes */}
+                <div className="space-y-2 pt-3.5">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                    <IconFileText size={15} className="text-primary" />
+                    Procurement & Operational Notes
+                  </div>
+
+                  {/* Commented out Payment Terms and Delivery Terms */}
+                  {/*
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-2 pt-1">
-                {/* Payment Terms View */}
                 <div className="space-y-1">
                   <span className="view-field-label mf-detail-label">Payment Terms</span>
                   <div className="text-xs bg-surface/50 rounded-lg p-3 border border-border/60 min-h-[46px] flex items-center">
@@ -2858,7 +2893,6 @@ export default function VendorEffectiveDatesPage() {
                   </div>
                 </div>
 
-                {/* Delivery Terms View */}
                 <div className="space-y-1">
                   <span className="view-field-label mf-detail-label">Delivery Terms</span>
                   <div className="text-xs bg-surface/50 rounded-lg p-3 border border-border/60 min-h-[46px] flex items-center">
@@ -2879,517 +2913,520 @@ export default function VendorEffectiveDatesPage() {
                   </div>
                 </div>
               </div>
+              */}
 
-              <div className="space-y-3 pt-1">
-                <div className="space-y-1">
-                  <span className="view-field-label mf-detail-label">
-                    Procurement & Quality Notes
-                  </span>
-  
-                  <div className="text-xs text-heading font-medium bg-surface/50 rounded-lg p-3.5 border border-border/60 whitespace-pre-line leading-relaxed">
-                    {selectedVersion.notes || 'No specific notes recorded for this effective date.'}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <DetailField
-                    label="Approved On"
-                    value={selectedVersion.approvedOn ? formatDateDisplay(selectedVersion.approvedOn) : 'Not approved yet'}
-                    mono
-                  />
-                  <DetailField
-                    label="Approved By"
-                    value={selectedVersion.approvedByName || 'Not approved yet'}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 6. Attachments & Supporting Documents (VIEW MODE — Click opens Screen Popup) */}
-            <div className="space-y-2 pt-3.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                  <IconAttachment size={15} className="text-primary" />
-                  Attachments & Supporting Documents
-                  <span className="text-2xs font-normal text-text-muted ml-1">
-                    ({currentViewAttachments.length})
-                  </span>
-  
-                </div>
-
-
-
-              </div>
-
-              {currentViewAttachments.length === 0 ? (
-                <div className="p-6 text-center bg-surface/30 rounded-xl border border-dashed border-border text-xs text-text-muted">
-                  No documents or certificates attached for this effective date.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-                  {currentViewAttachments.map((att) => (
-                    <div
-                      key={att.id}
-
-                      className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface hover:border-primary/40 transition-all select-none"
-
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="p-2 rounded-lg bg-surface border border-border group-hover:border-primary/30 group-hover:bg-primary/10 transition-colors shrink-0">
-                          {getFileIcon(att.fileName, att.fileType)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-heading truncate group-hover:text-primary transition-colors">
-                            {att.documentName || att.fileName}
-                          </p>
-                          <p className="text-2xs text-text-muted truncate mt-0.5">
-                            {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0 ml-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            /* no-op */
-                          }}
-                          className="!hidden hidden" style={{ display: 'none' }}
-
-                        >
-                          {null}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => handleDownloadAttachment(att, e)}
-                          title="Download document"
-                          className="h-8 w-8 text-text-muted hover:text-primary hover:bg-primary/10"
-                        >
-                          <IconDownload size={13} />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── Mode 2 & 3: EDIT & ADD FORM ── */}
-        {!loadingVersions && (mode === 'EDIT' || mode === 'ADD') && (!isLoadingVersion || formData.effectiveDate || mode === 'ADD') && (
-          <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
-            {/* Vendor Master Context Header */}
-            {vendor && (
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-surface/80 rounded-xl border border-border/80 text-xs">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs uppercase">
-                    {vendor.vendorCode?.slice(0, 2) || 'VN'}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-heading flex items-center gap-2">
-                      <span>{vendor.vendorName}</span>
-                      <span className="text-2xs font-mono px-1.5 py-0.5 rounded bg-muted text-text-muted font-normal">
-                        {vendor.vendorCode}
+                  <div className="space-y-3 pt-1">
+                    <div className="space-y-1">
+                      <span className="view-field-label mf-detail-label">
+                        Procurement & Quality Notes
                       </span>
+
+                      <div className="text-xs text-heading font-medium bg-surface/50 rounded-lg p-3.5 border border-border/60 whitespace-pre-line leading-relaxed">
+                        {selectedVersion.notes || 'No specific notes recorded for this effective date.'}
+                      </div>
                     </div>
-                    <div className="text-2xs text-text-muted flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
-                      <span>Category: <strong className="text-heading font-medium">{vendor.vendorCategory || 'Not Categorized'}</strong></span>
-                      {(vendor.group || vendor.tallyGroup) && (
-                        <span>Accounting Group: <strong className="text-heading font-medium">{vendor.group || vendor.tallyGroup}</strong></span>
-                      )}
-                      {(vendor.subGroup || vendor.tallySubGroup) && (
-                        <span>Sub-Group: <strong className="text-heading font-medium">{vendor.subGroup || vendor.tallySubGroup}</strong></span>
-                      )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                      <DetailField
+                        label="Approved On"
+                        value={selectedVersion.approvedOn ? formatDateDisplay(selectedVersion.approvedOn) : 'Not approved yet'}
+                        mono
+                      />
+                      <DetailField
+                        label="Approved By"
+                        value={selectedVersion.approvedByName || 'Not approved yet'}
+                      />
                     </div>
                   </div>
                 </div>
-                <div className="text-2xs text-primary bg-primary/5 border border-primary/20 px-2.5 py-1 rounded-full font-medium">
-                  {mode === 'ADD' ? 'Creating New Effective Revision' : `Editing Revision: ${formData.effectiveDate || 'Draft'}`}
+
+                {/* 6. Attachments & Supporting Documents (VIEW MODE — Click opens Screen Popup) */}
+                <div className="space-y-2 pt-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
+                      <IconAttachment size={15} className="text-primary" />
+                      Attachments & Supporting Documents
+                      <span className="text-2xs font-normal text-text-muted ml-1">
+                        ({currentViewAttachments.length})
+                      </span>
+
+                    </div>
+
+
+
+                  </div>
+
+                  {currentViewAttachments.length === 0 ? (
+                    <div className="p-6 text-center bg-surface/30 rounded-xl border border-dashed border-border text-xs text-text-muted">
+                      No documents or certificates attached for this effective date.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                      {currentViewAttachments.map((att) => (
+                        <div
+                          key={att.id}
+
+                          className="flex items-center justify-between p-3.5 rounded-xl border border-border bg-surface hover:border-primary/40 transition-all select-none"
+
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="p-2 rounded-lg bg-surface border border-border group-hover:border-primary/30 group-hover:bg-primary/10 transition-colors shrink-0">
+                              {getFileIcon(att.fileName, att.fileType)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-heading truncate group-hover:text-primary transition-colors">
+                                {att.documentName || att.fileName}
+                              </p>
+                              <p className="text-2xs text-text-muted truncate mt-0.5">
+                                {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                /* no-op */
+                              }}
+                              className="!hidden hidden" style={{ display: 'none' }}
+
+                            >
+                              {null}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => handleDownloadAttachment(att, e)}
+                              title="Download document"
+                              className="h-8 w-8 text-text-muted hover:text-primary hover:bg-primary/10"
+                            >
+                              <IconDownload size={13} />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Section 1: Effective Date & Contact Information */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <IconContact size={15} className="text-primary" />
-                Contact Information
-              </div>
+            {/* ── Mode 2 & 3: EDIT & ADD FORM ── */}
+            {!loadingVersions && (mode === 'EDIT' || mode === 'ADD') && (!isLoadingVersion || formData.effectiveDate || mode === 'ADD') && (
+              <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6">
+                {/* Vendor Master Context Header */}
+                {vendor && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-surface/80 rounded-xl border border-border/80 text-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs uppercase">
+                        {vendor.vendorCode?.slice(0, 2) || 'VN'}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-heading flex items-center gap-2">
+                          <span>{vendor.vendorName}</span>
+                          <span className="text-2xs font-mono px-1.5 py-0.5 rounded bg-muted text-text-muted font-normal">
+                            {vendor.vendorCode}
+                          </span>
+                        </div>
+                        <div className="text-2xs text-text-muted flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+                          <span>Category: <strong className="text-heading font-medium">{vendor.vendorCategory || 'Not Categorized'}</strong></span>
+                          {(vendor.group || vendor.tallyGroup) && (
+                            <span>Accounting Group: <strong className="text-heading font-medium">{vendor.group || vendor.tallyGroup}</strong></span>
+                          )}
+                          {(vendor.subGroup || vendor.tallySubGroup) && (
+                            <span>Sub-Group: <strong className="text-heading font-medium">{vendor.subGroup || vendor.tallySubGroup}</strong></span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-2xs text-primary bg-primary/5 border border-primary/20 px-2.5 py-1 rounded-full font-medium">
+                      {mode === 'ADD' ? 'Creating New Effective Revision' : `Editing Revision: ${formData.effectiveDate || 'Draft'}`}
+                    </div>
+                  </div>
+                )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Effective Date */}
-                <div>
-                  <DatePicker
-                    id="effectiveDate"
-                    name="effectiveDate"
-                    label="Effective Date"
-                    min={mode === 'ADD' ? (minAllowedEffectiveDate || undefined) : undefined}
-                    value={formData.effectiveDate}
-                    onChange={handleInputChange}
-                    error={formErrors.effectiveDate}
-                    disabled={mode === 'EDIT'}
-                    hint={
-                      mode === 'EDIT'
-                        ? 'Effective date cannot be changed for an existing revision.'
-                        : (minAllowedEffectiveDate ? `Must be on or after ${formatDateDisplay(minAllowedEffectiveDate)}` : undefined)
-                    }
-                    required
-                  />
+                {/* Section 1: Effective Date & Contact Information */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
+                    <IconContact size={15} className="text-primary" />
+                    Contact Information
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Effective Date */}
+                    <div>
+                      <DatePicker
+                        id="effectiveDate"
+                        name="effectiveDate"
+                        label="Effective Date"
+                        min={mode === 'ADD' ? (minAllowedEffectiveDate || undefined) : undefined}
+                        value={formData.effectiveDate}
+                        onChange={handleInputChange}
+                        error={formErrors.effectiveDate}
+                        disabled={isReadOnly}
+                        hint={
+                          minAllowedEffectiveDate
+                            ? `Must be on or after ${formatDateDisplay(minAllowedEffectiveDate)}`
+                            : undefined
+                        }
+                        required
+                      />
+                    </div>
+
+                    {/* Contact Person Name */}
+                    <div>
+                      <Input
+                        id="contactPersonName"
+                        name="contactPersonName"
+                        label="Contact Person Name"
+                        placeholder="e.g. Rajesh Patel"
+                        value={formData.contactPersonName}
+                        onChange={handleInputChange}
+                        error={formErrors.contactPersonName}
+                        required
+                      />
+                    </div>
+
+                    {/* Phone Number */}
+                    <div>
+                      <Input
+                        id="phoneNo"
+                        name="phoneNo"
+                        label="Phone Number"
+                        type="tel"
+                        placeholder="e.g. 9876543210"
+                        value={formData.phoneNo}
+                        onChange={handleInputChange}
+                        error={formErrors.phoneNo}
+                        required
+                      />
+                    </div>
+
+                    {/* Alternate Phone */}
+                    <div>
+                      <Input
+                        id="alternatePhoneNo"
+                        name="alternatePhoneNo"
+                        label="Alternate Phone"
+                        type="tel"
+                        placeholder="e.g. 9823456781"
+                        value={formData.alternatePhoneNo}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+
+                    {/* Email Address */}
+                    <div>
+                      <Input
+                        id="email"
+                        name="email"
+                        label="Email Address"
+                        type="email"
+                        placeholder="e.g. rajesh.patel@apexcastings.com"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        error={formErrors.email}
+                        required
+                      />
+                    </div>
+
+                    {/* CC Email */}
+                    <div>
+                      <Input
+                        id="ccEmail"
+                        name="ccEmail"
+                        label="CC Email Address"
+                        type="email"
+                        placeholder="e.g. accounts@apexcastings.com"
+                        value={formData.ccEmail}
+                        onChange={handleInputChange}
+                        error={formErrors.ccEmail}
+                        hint="Optional carbon-copy email"
+                      />
+                    </div>
+
+                    {/* Website */}
+                    <div className="sm:col-span-2 lg:col-span-3">
+                      <Input
+                        id="website"
+                        name="website"
+                        label="Website URL"
+                        type="url"
+                        placeholder="e.g. https://www.apexcastings.com"
+                        value={formData.website}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Contact Person Name */}
-                <div>
-                  <Input
-                    id="contactPersonName"
-                    name="contactPersonName"
-                    label="Contact Person Name"
-                    placeholder="e.g. Rajesh Patel"
-                    value={formData.contactPersonName}
-                    onChange={handleInputChange}
-                    error={formErrors.contactPersonName}
-                    required
-                  />
+                {/* Section 2: Statutory & MSME Registrations */}
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
+                    <IconShieldCheck size={15} className="text-primary" />
+                    Statutory & MSME Registrations
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* GST Number */}
+                    <div>
+                      <Input
+                        id="gstNo"
+                        name="gstNo"
+                        label="GST / Tax ID"
+                        placeholder="e.g. 24AABCA1234F1Z5"
+                        maxLength={15}
+                        value={formData.gstNo}
+                        onChange={handleInputChange}
+                        error={formErrors.gstNo}
+                        className="font-mono uppercase"
+                      />
+                    </div>
+
+                    {/* PAN Number */}
+                    <div>
+                      <Input
+                        id="panNo"
+                        name="panNo"
+                        label="Permanent Account Number (PAN)"
+                        placeholder="e.g. AABCA1234F"
+                        maxLength={10}
+                        value={formData.panNo}
+                        onChange={handleInputChange}
+                        error={formErrors.panNo}
+                        className="font-mono uppercase"
+                      />
+                    </div>
+
+                    {/* CIN */}
+                    <div>
+                      <Input
+                        id="cin"
+                        name="cin"
+                        label="Corporate ID Number (CIN)"
+                        placeholder="e.g. U74999GJ2020PTC118123"
+                        maxLength={21}
+                        value={formData.cin}
+                        onChange={handleInputChange}
+                        error={formErrors.cin}
+                        className="font-mono uppercase"
+                      />
+                    </div>
+
+                    {/* Udyam Registration Number */}
+                    <div>
+                      <Input
+                        id="udhyamNo"
+                        name="udhyamNo"
+                        label="Udyam Registration Number"
+                        placeholder="e.g. UDYAM-GJ-01-0012345"
+                        value={formData.udhyamNo}
+                        onChange={handleInputChange}
+                        className="font-mono uppercase"
+                      />
+                    </div>
+
+                    {/* MSME Enterprise Type */}
+                    <div>
+                      <SearchableSelect
+                        id="msmeType"
+                        name="msmeType"
+                        label="MSME Enterprise Type"
+                        placeholder="Select MSME Type..."
+                        searchPlaceholder="Search types..."
+                        options={msmeTypeOptions}
+                        value={formData.msmeType}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+
+                    {/* MSME Primary Activity */}
+                    <div>
+                      <SearchableSelect
+                        id="msmeActivity"
+                        name="msmeActivity"
+                        label="MSME Primary Activity"
+                        placeholder="Select MSME Activity..."
+                        searchPlaceholder="Search activities..."
+                        options={msmeActivityOptions}
+                        value={formData.msmeActivity}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Phone Number */}
-                <div>
-                  <Input
-                    id="phoneNo"
-                    name="phoneNo"
-                    label="Phone Number"
-                    type="tel"
-                    placeholder="e.g. 9876543210"
-                    value={formData.phoneNo}
-                    onChange={handleInputChange}
-                    error={formErrors.phoneNo}
-                    required
-                  />
+                {/* Section 2.5: Accounting & Ledger Details */}
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
+                    <IconBuilding2 size={15} className="text-primary" />
+                    Accounting & Ledger Details
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Ledger Name */}
+                    <div>
+                      <Input
+                        id="form-ledgerName"
+                        name="ledgerName"
+                        label="Ledger Name"
+                        placeholder="e.g. APEX PRECISION CASTINGS PVT LTD"
+                        value={formData.ledgerName || ''}
+                        onChange={handleInputChange}
+                        error={formErrors.ledgerName}
+                        maxLength={200}
+                        hint="Unique accounting ledger name (max 200 chars)"
+                      />
+                    </div>
+
+                    {/* Accounting Group */}
+                    <div>
+                      <SearchableSelect
+                        id="form-group"
+                        name="group"
+                        label="Accounting Group"
+                        placeholder="Select group..."
+                        searchPlaceholder="Search group..."
+                        options={ACCOUNTING_GROUP_OPTIONS}
+                        value={formData.group || ''}
+                        onChange={handleInputChange}
+                        error={formErrors.group}
+                      />
+                    </div>
+
+                    {/* Sub-Group */}
+                    <div>
+                      <SearchableSelect
+                        id="form-subGroup"
+                        name="subGroup"
+                        label="Sub-Group"
+                        placeholder={!formData.group ? 'Select Accounting Group first...' : 'Select sub-group...'}
+                        searchPlaceholder="Search sub-group..."
+                        options={formData.group ? formSubGroupOptions : []}
+                        value={formData.subGroup || ''}
+                        onChange={handleInputChange}
+                        disabled={!formData.group}
+                        error={formErrors.subGroup}
+                        hint={!formData.group ? 'Requires Accounting Group selection' : undefined}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Alternate Phone */}
-                <div>
-                  <Input
-                    id="alternatePhoneNo"
-                    name="alternatePhoneNo"
-                    label="Alternate Phone"
-                    type="tel"
-                    placeholder="e.g. 9823456781"
-                    value={formData.alternatePhoneNo}
-                    onChange={handleInputChange}
-                  />
+                {/* Section 3: Address Details */}
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
+                    <IconLocation size={15} className="text-primary" />
+                    Address Details
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Country */}
+                    <div>
+                      <SearchableSelect
+                        id="countryId"
+                        name="countryId"
+                        label="Country"
+                        required
+                        options={countryOptions}
+                        value={formData.countryId}
+                        onChange={handleCountryChange}
+                        placeholder="Select Country..."
+                        searchPlaceholder="Search country..."
+                        error={formErrors.countryId}
+                      />
+                    </div>
+
+                    {/* State */}
+                    <div>
+                      <SearchableSelect
+                        id="stateId"
+                        name="stateId"
+                        label="State"
+                        required
+                        options={stateOptions}
+                        value={formData.stateId}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, stateId: e.target.value }));
+                          if (formErrors.stateId) {
+                            setFormErrors((prev) => ({ ...prev, stateId: '' }));
+                          }
+                        }}
+                        placeholder="Select State..."
+                        searchPlaceholder="Search state..."
+                        disabled={!formData.countryId}
+                        error={formErrors.stateId}
+                      />
+                    </div>
+
+                    {/* City */}
+                    <div>
+                      <Input
+                        id="city"
+                        name="city"
+                        label="City"
+                        placeholder="e.g. Vallabh Vidyanagar"
+                        value={formData.city}
+                        onChange={handleInputChange}
+                        error={formErrors.city}
+                        required
+                      />
+                    </div>
+
+                    {/* Address Line 1 */}
+                    <div className="sm:col-span-2 lg:col-span-3">
+                      <Input
+                        id="address1"
+                        name="address1"
+                        label="Address Line 1"
+                        placeholder="e.g. Plot 45, GIDC Industrial Estate Phase II"
+                        value={formData.address1}
+                        onChange={handleInputChange}
+                        error={formErrors.address1}
+                        required
+                      />
+                    </div>
+
+                    {/* Address Line 2 */}
+                    <div className="sm:col-span-2 lg:col-span-2">
+                      <Input
+                        id="address2"
+                        name="address2"
+                        label="Address Line 2"
+                        placeholder="e.g. Near Anand Cross Road"
+                        value={formData.address2}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+
+                    {/* ZIP / Postal Code */}
+                    <div>
+                      <Input
+                        id="zipCode"
+                        name="zipCode"
+                        label="ZIP / Postal Code"
+                        placeholder="e.g. 388120"
+                        value={formData.zipCode}
+                        onChange={handleInputChange}
+                        error={formErrors.zipCode}
+                        required
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Email Address */}
-                <div>
-                  <Input
-                    id="email"
-                    name="email"
-                    label="Email Address"
-                    type="email"
-                    placeholder="e.g. rajesh.patel@apexcastings.com"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    error={formErrors.email}
-                    required
-                  />
-                </div>
+                {/* Section 4: Procurement & Operational Notes */}
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
+                    <IconFileText size={15} className="text-primary" />
+                    Procurement & Operational Notes
+                  </div>
 
-                {/* CC Email */}
-                <div>
-                  <Input
-                    id="ccEmail"
-                    name="ccEmail"
-                    label="CC Email Address"
-                    type="email"
-                    placeholder="e.g. accounts@apexcastings.com"
-                    value={formData.ccEmail}
-                    onChange={handleInputChange}
-                    error={formErrors.ccEmail}
-                    hint="Optional carbon-copy email"
-                  />
-                </div>
-
-                {/* Website */}
-                <div className="sm:col-span-2 lg:col-span-3">
-                  <Input
-                    id="website"
-                    name="website"
-                    label="Website URL"
-                    type="url"
-                    placeholder="e.g. https://www.apexcastings.com"
-                    value={formData.website}
-                    onChange={handleInputChange}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Section 2: Statutory & MSME Registrations */}
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <IconShieldCheck size={15} className="text-primary" />
-                Statutory & MSME Registrations
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* GST Number */}
-                <div>
-                  <Input
-                    id="gstNo"
-                    name="gstNo"
-                    label="GST / Tax ID"
-                    placeholder="e.g. 24AABCA1234F1Z5"
-                    maxLength={15}
-                    value={formData.gstNo}
-                    onChange={handleInputChange}
-                    error={formErrors.gstNo}
-                    className="font-mono uppercase"
-                  />
-                </div>
-
-                {/* PAN Number */}
-                <div>
-                  <Input
-                    id="panNo"
-                    name="panNo"
-                    label="Permanent Account Number (PAN)"
-                    placeholder="e.g. AABCA1234F"
-                    maxLength={10}
-                    value={formData.panNo}
-                    onChange={handleInputChange}
-                    error={formErrors.panNo}
-                    className="font-mono uppercase"
-                  />
-                </div>
-
-                {/* CIN */}
-                <div>
-                  <Input
-                    id="cin"
-                    name="cin"
-                    label="Corporate ID Number (CIN)"
-                    placeholder="e.g. U74999GJ2020PTC118123"
-                    maxLength={21}
-                    value={formData.cin}
-                    onChange={handleInputChange}
-                    error={formErrors.cin}
-                    className="font-mono uppercase"
-                  />
-                </div>
-
-                {/* Udyam Registration Number */}
-                <div>
-                  <Input
-                    id="udhyamNo"
-                    name="udhyamNo"
-                    label="Udyam Registration Number"
-                    placeholder="e.g. UDYAM-GJ-01-0012345"
-                    value={formData.udhyamNo}
-                    onChange={handleInputChange}
-                    className="font-mono uppercase"
-                  />
-                </div>
-
-                {/* MSME Enterprise Type */}
-                <div>
-                  <SearchableSelect
-                    id="msmeType"
-                    name="msmeType"
-                    label="MSME Enterprise Type"
-                    placeholder="Select MSME Type..."
-                    searchPlaceholder="Search types..."
-                    options={msmeTypeOptions}
-                    value={formData.msmeType}
-                    onChange={handleInputChange}
-                  />
-                </div>
-
-                {/* MSME Primary Activity */}
-                <div>
-                  <SearchableSelect
-                    id="msmeActivity"
-                    name="msmeActivity"
-                    label="MSME Primary Activity"
-                    placeholder="Select MSME Activity..."
-                    searchPlaceholder="Search activities..."
-                    options={msmeActivityOptions}
-                    value={formData.msmeActivity}
-                    onChange={handleInputChange}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Section 2.5: Accounting & Ledger Details */}
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <IconBuilding2 size={15} className="text-primary" />
-                Accounting & Ledger Details
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Ledger Name */}
-                <div>
-                  <Input
-                    id="form-ledgerName"
-                    name="ledgerName"
-                    label="Ledger Name"
-                    placeholder="e.g. APEX PRECISION CASTINGS PVT LTD"
-                    value={formData.ledgerName || ''}
-                    onChange={handleInputChange}
-                    error={formErrors.ledgerName}
-                    maxLength={200}
-                    hint="Unique accounting ledger name (max 200 chars)"
-                  />
-                </div>
-
-                {/* Accounting Group */}
-                <div>
-                  <SearchableSelect
-                    id="form-group"
-                    name="group"
-                    label="Accounting Group"
-                    placeholder="Select group..."
-                    searchPlaceholder="Search group..."
-                    options={ACCOUNTING_GROUP_OPTIONS}
-                    value={formData.group || ''}
-                    onChange={handleInputChange}
-                    error={formErrors.group}
-                  />
-                </div>
-
-                {/* Sub-Group */}
-                <div>
-                  <SearchableSelect
-                    id="form-subGroup"
-                    name="subGroup"
-                    label="Sub-Group"
-                    placeholder={!formData.group ? 'Select Accounting Group first...' : 'Select sub-group...'}
-                    searchPlaceholder="Search sub-group..."
-                    options={formData.group ? formSubGroupOptions : []}
-                    value={formData.subGroup || ''}
-                    onChange={handleInputChange}
-                    disabled={!formData.group}
-                    error={formErrors.subGroup}
-                    hint={!formData.group ? 'Requires Accounting Group selection' : undefined}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Section 3: Address Details */}
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <IconLocation size={15} className="text-primary" />
-                Address Details
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Country */}
-                <div>
-                  <SearchableSelect
-                    id="countryId"
-                    name="countryId"
-                    label="Country"
-                    required
-                    options={countryOptions}
-                    value={formData.countryId}
-                    onChange={handleCountryChange}
-                    placeholder="Select Country..."
-                    searchPlaceholder="Search country..."
-                    error={formErrors.countryId}
-                  />
-                </div>
-
-                {/* State */}
-                <div>
-                  <SearchableSelect
-                    id="stateId"
-                    name="stateId"
-                    label="State"
-                    required
-                    options={stateOptions}
-                    value={formData.stateId}
-                    onChange={(e) => {
-                      setFormData((prev) => ({ ...prev, stateId: e.target.value }));
-                      if (formErrors.stateId) {
-                        setFormErrors((prev) => ({ ...prev, stateId: '' }));
-                      }
-                    }}
-                    placeholder="Select State..."
-                    searchPlaceholder="Search state..."
-                    disabled={!formData.countryId}
-                    error={formErrors.stateId}
-                  />
-                </div>
-
-                {/* City */}
-                <div>
-                  <Input
-                    id="city"
-                    name="city"
-                    label="City"
-                    placeholder="e.g. Vallabh Vidyanagar"
-                    value={formData.city}
-                    onChange={handleInputChange}
-                    error={formErrors.city}
-                    required
-                  />
-                </div>
-
-                {/* Address Line 1 */}
-                <div className="sm:col-span-2 lg:col-span-3">
-                  <Input
-                    id="address1"
-                    name="address1"
-                    label="Address Line 1"
-                    placeholder="e.g. Plot 45, GIDC Industrial Estate Phase II"
-                    value={formData.address1}
-                    onChange={handleInputChange}
-                    error={formErrors.address1}
-                    required
-                  />
-                </div>
-
-                {/* Address Line 2 */}
-                <div className="sm:col-span-2 lg:col-span-2">
-                  <Input
-                    id="address2"
-                    name="address2"
-                    label="Address Line 2"
-                    placeholder="e.g. Near Anand Cross Road"
-                    value={formData.address2}
-                    onChange={handleInputChange}
-                  />
-                </div>
-
-                {/* ZIP / Postal Code */}
-                <div>
-                  <Input
-                    id="zipCode"
-                    name="zipCode"
-                    label="ZIP / Postal Code"
-                    placeholder="e.g. 388120"
-                    value={formData.zipCode}
-                    onChange={handleInputChange}
-                    error={formErrors.zipCode}
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Section 4: Commercial Terms & Notes */}
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <IconFileText size={15} className="text-primary" />
-                Commercial Terms & Notes
-              </div>
-
+                  {/* Commented out Payment Terms and Delivery Terms */}
+                  {/*
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <PaymentTermsSelect
                   id="version-paymentTerms"
@@ -3413,241 +3450,210 @@ export default function VendorEffectiveDatesPage() {
                   hint="Multiple terms can be selected from Configuration"
                 />
               </div>
+              */}
 
-              <div>
-                <Textarea
-                  id="notes"
-                  name="notes"
-                  label="Procurement & Quality Notes"
-                  rows={3}
-                  value={formData.notes}
-                  onChange={handleInputChange}
-                  placeholder="Summarize reasons for this effective date update or revision..."
-                />
-              </div>
-            </div>
-
-            {/* Section 5: Attachments & Supporting Documents (EDIT/ADD MODE — Version-Scoped) */}
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                <IconAttachment size={15} className="text-primary" />
-                Attachments & Supporting Documents for this Version
-                <span className="text-2xs font-normal text-text-muted ml-1">
-                  ({attachments.length})
-                </span>
-
-              </div>
-
-              {/* Copy Attachments Option for ADD Mode */}
-              {mode === 'ADD' && (
-                <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/[0.04] flex items-start sm:items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-semibold text-heading flex items-center gap-2">
-                      <IconAttachment size={14} className="text-primary" />
-                      Copy attachments from previous version
-                    </p>
-                    <p className="text-2xs text-text-muted">
-                      Include all documents and attachments from the older version in this new effective date revision.
-                    </p>
+                  <div>
+                    <Textarea
+                      id="notes"
+                      name="notes"
+                      label="Procurement & Quality Notes"
+                      rows={3}
+                      value={formData.notes}
+                      onChange={handleInputChange}
+                      placeholder="Summarize reasons for this effective date update or revision..."
+                    />
                   </div>
-                  <Checkbox
-                    id="copyAttachments"
-                    name="copyAttachments"
-                    checked={copyAttachments}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setCopyAttachments(checked);
-                      if (!checked) {
-                        setAttachments((prev) => prev.filter((a) => a.file || a.rawFile));
-                      } else {
-                        const latest = versions[0] || activeVersion || selectedVersion;
-                        const prevDetail = latest ? versionDetailsMap[latest.vendorDetailId || latest.id] : null;
-                        const baseAtts = prevDetail?.attachments || latest?.attachments || vendor?.attachments || [];
-                        setAttachments((prev) => {
-                          const rawOnly = prev.filter((a) => a.file || a.rawFile);
-                          return [...baseAtts, ...rawOnly];
-                        });
-                      }
-                    }}
-                    className="shrink-0 pt-0.5 sm:pt-0"
-                  />
-                </div>
-              )}
-
-              {/* Upload Header Controls */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <SearchableSelect
-                    id="docTypeSelector"
-                    label="Document Name / Type"
-                    placeholder="Select Document Name / Type..."
-                    searchPlaceholder="Search document types..."
-                    emptyText="No matching document types found"
-                    options={documentTypeOptions}
-                    value={selectedDocType}
-                    onChange={(e) => setSelectedDocType(e.target.value)}
-                  />
                 </div>
 
-                <div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-10 text-xs"
-                  >
-                    <IconUpload size={15} className="mr-1.5" />
-                    Browse Files
-                  </Button>
-                </div>
-              </div>
+                {/* Section 5: Attachments & Supporting Documents (EDIT/ADD MODE — Version-Scoped) */}
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
+                    <IconAttachment size={15} className="text-primary" />
+                    Attachments & Supporting Documents for this Version
+                    <span className="text-2xs font-normal text-text-muted ml-1">
+                      ({attachments.length})
+                    </span>
 
-              {/* Drag and Drop Zone */}
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-150 ${isDragging
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-primary/40 hover:bg-surface/50'
-                  }`}
-              >
-                {/* Native file input hidden for custom drag-drop styling */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept={acceptExtensions}
-                  onChange={handleFileInputChange}
-                  className="hidden"
-                />
-                <IconUpload
-                  size={28}
-                  className={`mx-auto mb-2 ${isDragging ? 'text-primary' : 'text-text-muted'
-                    }`}
-                />
-                <p className="text-xs font-semibold text-heading">
-                  Drag and drop files here, or <span className="text-primary">browse</span>
-                </p>
-                <p className="text-2xs text-text-muted mt-1">
-                  Supported formats: {acceptExtensions.replace(/,/g, ', ')} (Up to {maxFileSizeMB} MB per file)
-                </p>
-              </div>
+                  </div>
 
-              {attachmentError && (
-                <div className="p-2.5 rounded-lg bg-danger/10 border border-danger/20 text-xs text-danger flex items-center gap-2">
-                  <IconError size={14} className="shrink-0" />
-                  <span>{attachmentError}</span>
-                </div>
-              )}
+                  {/* Copy Attachments Option for ADD Mode */}
+                  {mode === 'ADD' && (
+                    <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/[0.04] flex items-start sm:items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-semibold text-heading flex items-center gap-2">
+                          <IconAttachment size={14} className="text-primary" />
+                          Copy attachments from previous version
+                        </p>
+                        <p className="text-2xs text-text-muted">
+                          Include all documents and attachments from the older version in this new effective date revision.
+                        </p>
+                      </div>
+                      <Checkbox
+                        id="copyAttachments"
+                        name="copyAttachments"
+                        checked={copyAttachments}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setCopyAttachments(checked);
+                          if (!checked) {
+                            setAttachments((prev) => prev.filter((a) => a.file || a.rawFile));
+                          } else {
+                            const latest = versions[0] || activeVersion || selectedVersion;
+                            const prevDetail = latest ? versionDetailsMap[latest.vendorDetailId || latest.id] : null;
+                            const baseAtts = prevDetail?.attachments || latest?.attachments || vendor?.attachments || [];
+                            setAttachments((prev) => {
+                              const rawOnly = prev.filter((a) => a.file || a.rawFile);
+                              return [...baseAtts, ...rawOnly];
+                            });
+                          }
+                        }}
+                        className="shrink-0 pt-0.5 sm:pt-0"
+                      />
+                    </div>
+                  )}
 
-              {/* Attachments List */}
-              {attachments.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
-                  {attachments.map((att) => (
-                    <div
-                      key={att.id}
-                      className="flex items-center justify-between p-3 rounded-xl border border-border bg-bg hover:border-primary/40 transition-colors"
-                    >
-                      <div
-  
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    {/* ── LEFT (5 Cols): Compact DocumentUploader ── */}
+                    <div className="lg:col-span-5 p-3.5 sm:p-4 rounded-xl border border-border bg-surface/40 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-heading">Add Attachment</span>
+                        <span className="text-3xs text-text-muted">Linked to this version</span>
+                      </div>
+                      <DocumentUploader
+                        label="Select File(s)"
+                        moduleFilter="VENDOR"
+                        options={apiDocTypes?.length > 0 ? apiDocTypes : null}
+                        multiple={true}
+                        onFilesAdded={handleFilesAdded}
+                        disabled={isSaving}
+                        compact={true}
+                      />
+                    </div>
 
-                        className="flex items-center gap-2.5 min-w-0 flex-1"
-                      >
-                        {getFileIcon(att.fileName, att.fileType)}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-heading truncate hover:text-primary transition-colors">
-                            {att.documentName || att.fileName}
-                          </p>
-                          <p className="text-2xs text-text-muted truncate">
-                            {att.fileName} {att.fileSize ? `• ${att.fileSize}` : ''}
+                    {/* ── RIGHT (7 Cols): Attachments List ── */}
+                    <div className="lg:col-span-7 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                          Attached Documents ({attachments.length})
+                        </h4>
+                        {pendingDeleteAttachmentIds.length > 0 && (
+                          <span className="text-2xs text-danger font-medium">
+                            ({pendingDeleteAttachmentIds.length} will be deleted on save)
+                          </span>
+                        )}
+                      </div>
+
+                      {attachments.length === 0 ? (
+                        <div className="h-full min-h-[160px] flex flex-col items-center justify-center p-5 text-center border border-dashed border-border rounded-xl bg-surface/10">
+                          <IconAttachment size={22} className="text-text-muted/60 mb-1.5" />
+                          <p className="text-xs font-medium text-heading">No documents attached yet</p>
+                          <p className="text-2xs text-text-muted mt-0.5 max-w-xs">
+                            Select a document type on the left and upload documents for this effective version.
                           </p>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="border border-border rounded-xl overflow-hidden divide-y divide-border bg-bg max-h-72 overflow-y-auto scrollbar-thin">
+                          {attachments.map((att) => (
+                            <div
+                              key={att.id}
+                              className="p-3 flex items-center justify-between gap-3 hover:bg-surface/40 transition-colors"
+                            >
+                              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                <div className="p-2 rounded-lg bg-surface border border-border shrink-0 mt-0.5">
+                                  {getFileIcon(att.fileName, att.fileType)}
+                                </div>
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                  <p className="text-xs font-semibold text-heading truncate" title={att.documentName || att.fileName}>
+                                    {att.documentName || att.fileName}
+                                  </p>
+                                  <p className="text-2xs text-text-muted flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-mono text-text truncate max-w-[160px]" title={att.fileName}>{att.fileName}</span>
+                                    {att.fileSize && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="font-mono">{att.fileSize}</span>
+                                      </>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
 
-                      <div className="flex items-center gap-1 shrink-0 ml-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-    
-                          style={{ display: 'none' }} className="hidden"
-
-                        >
-                          {null}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => handleDownloadAttachment(att, e)}
-                          className="h-7 w-7 text-text-muted hover:text-primary"
-
-                        >
-                          <IconDownload size={13} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRequestDeleteAttachment(att)}
-                          style={{ display: 'none' }} className="hidden"
-
-                        >
-                          {null}
-                        </Button>
-                      </div>
+                              <div className="flex items-center gap-1 shrink-0 ml-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => handleDownloadAttachment(att, e)}
+                                  className="h-8 w-8 text-text-muted hover:text-primary"
+                                  title="Download attachment"
+                                  aria-label="Download attachment"
+                                >
+                                  <IconDownload size={14} />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRequestDeleteAttachment(att)}
+                                  className="h-8 w-8 text-danger hover:text-danger hover:bg-danger/10"
+                                  title="Remove attachment (deletes on save)"
+                                  aria-label="Remove attachment"
+                                >
+                                  <IconDelete size={14} />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Submission Option for ADD Mode */}
-            {mode === 'ADD' && (
-              <div className="p-3.5 rounded-xl border border-border bg-surface/70 flex items-start sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <p className="text-xs font-semibold text-heading flex items-center gap-2">
-                    <IconShieldCheck size={14} className="text-primary" />
-                    Submit for approval immediately
-                  </p>
-                  <p className="text-2xs text-text-muted">
-                    Submit this new revision directly for approval upon saving (uncheck to save as draft).
-                  </p>
+                {/* Submission Option for ADD Mode */}
+                {mode === 'ADD' && (
+                  <div className="p-3.5 rounded-xl border border-border bg-surface/70 flex items-start sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-semibold text-heading flex items-center gap-2">
+                        <IconShieldCheck size={14} className="text-primary" />
+                        Submit for approval immediately
+                      </p>
+                      <p className="text-2xs text-text-muted">
+                        Submit this new revision directly for approval upon saving (uncheck to save as draft).
+                      </p>
+                    </div>
+                    <Checkbox
+                      id="submitForApproval"
+                      name="submitForApproval"
+                      checked={submitForApproval}
+                      onChange={(e) => setSubmitForApproval(e.target.checked)}
+                      className="shrink-0 pt-0.5 sm:pt-0"
+                    />
+                  </div>
+                )}
+
+                {/* Bottom Actions Bar */}
+                <div className="pt-4 border-t border-border flex items-center justify-end gap-2.5">
+                  <CancelButton
+                    size="sm"
+                    onClick={handleCancel}
+                    disabled={isSaving}
+                    className="shadow-2xs"
+                  />
+                  <SaveButton
+                    type="submit"
+                    size="sm"
+                    loading={isSaving}
+                    loadingText="Saving..."
+                    disabled={isSaving}
+                  >
+                    {mode === 'ADD' ? 'Add Effective Date' : 'Save Changes'}
+                  </SaveButton>
                 </div>
-                <Checkbox
-                  id="submitForApproval"
-                  name="submitForApproval"
-                  checked={submitForApproval}
-                  onChange={(e) => setSubmitForApproval(e.target.checked)}
-                  className="shrink-0 pt-0.5 sm:pt-0"
-                />
-              </div>
+              </form>
             )}
-
-            {/* Bottom Actions Bar */}
-            <div className="pt-4 border-t border-border flex items-center justify-end gap-2.5">
-              <CancelButton
-                size="sm"
-                onClick={handleCancel}
-                disabled={isSaving}
-                className="shadow-2xs"
-              />
-              <SaveButton
-                type="submit"
-                size="sm"
-                loading={isSaving}
-                loadingText="Saving..."
-                disabled={isSaving}
-              >
-                {mode === 'ADD' ? 'Add Effective Date' : 'Save Changes'}
-              </SaveButton>
-            </div>
-          </form>
-        )}
-      </CollapsibleCard>
-      </>
+          </CollapsibleCard>
+        </>
       )}
 
       {/* ── Tab 2: Bank Accounts ── */}
@@ -3728,7 +3734,7 @@ export default function VendorEffectiveDatesPage() {
                     <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-2xs font-bold bg-success/10 text-success border border-success/20">
                       <IconShieldCheck size={12} /> Verified Document
                     </span>
-    
+
                     <h4 className="text-base font-bold text-heading mt-2">
                       {previewItem.documentName || previewItem.fileName}
                     </h4>
@@ -3803,7 +3809,7 @@ export default function VendorEffectiveDatesPage() {
                   <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
                     {vendor.vendorCode}
                   </span>
-  
+
                 </div>
                 <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
                   {vendor.contactPersonName && (
@@ -3811,14 +3817,14 @@ export default function VendorEffectiveDatesPage() {
                       <IconUser size={12} className="text-text-muted/70" />
                       {vendor.contactPersonName}
                     </span>
-    
+
                   )}
                   {vendor.city && (
                     <span className="flex items-center gap-1">
                       <IconLocation size={12} className="text-text-muted/70" />
                       {vendor.city}, {getStateName(vendor.countryId, vendor.stateId)}
                     </span>
-    
+
                   )}
                 </div>
               </div>
@@ -3883,7 +3889,7 @@ export default function VendorEffectiveDatesPage() {
                   <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
                     {vendor.vendorCode}
                   </span>
-  
+
                 </div>
                 <div className="flex items-center gap-3 text-xs text-text-muted mt-1 flex-wrap">
                   {vendor.contactPersonName && (
@@ -3891,14 +3897,14 @@ export default function VendorEffectiveDatesPage() {
                       <IconUser size={12} className="text-text-muted/70" />
                       {vendor.contactPersonName}
                     </span>
-    
+
                   )}
                   {vendor.city && (
                     <span className="flex items-center gap-1">
                       <IconLocation size={12} className="text-text-muted/70" />
                       {vendor.city}, {getStateName(vendor.countryId, vendor.stateId)}
                     </span>
-    
+
                   )}
                 </div>
               </div>
@@ -3968,7 +3974,7 @@ export default function VendorEffectiveDatesPage() {
                   <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
                     {vendor.vendorCode}
                   </span>
-  
+
                 </div>
                 <p className="text-xs text-text-muted mt-1">
                   Deactivating this vendor will block purchase requisition and purchase order creation.
@@ -4046,7 +4052,7 @@ export default function VendorEffectiveDatesPage() {
                   <span className="font-mono text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md shrink-0">
                     {vendor.vendorCode}
                   </span>
-  
+
                 </div>
                 <p className="text-xs text-text-muted mt-1 leading-relaxed">
                   Are you sure you want to mark this vendor as <strong>Active</strong>? This will re-enable purchase order creation and new effective date revisions.
@@ -4116,6 +4122,27 @@ export default function VendorEffectiveDatesPage() {
         confirmText="Delete Version"
         cancelText="Cancel"
         variant="danger"
+        loading={isSaving}
+      />
+
+      {/* ── Submit Version for Approval Confirmation Modal ── */}
+      <ConfirmModal
+        isOpen={isSubmitConfirmOpen}
+        onClose={() => setIsSubmitConfirmOpen(false)}
+        onConfirm={handleSubmitVersionForApproval}
+        title="Submit for Approval"
+        message={
+          <span>
+            Are you sure you want to submit the version effective on{' '}
+            <strong className="text-heading font-semibold">
+              {formatDateDisplay(selectedVersion?.effectiveDate || selectedVersion?.effectiveFrom)}
+            </strong>{' '}
+            for approval? Once submitted, this version will enter the approval queue and be locked for review.
+          </span>
+        }
+        confirmText="Submit for Approval"
+        cancelText="Cancel"
+        variant="primary"
         loading={isSaving}
       />
     </div>
