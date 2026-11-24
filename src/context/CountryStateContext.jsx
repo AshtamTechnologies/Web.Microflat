@@ -12,6 +12,38 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useLocation } from 'react-router-dom';
 import { geographyService } from '../services';
 
+export const DEFAULT_FALLBACK_COUNTRIES = [
+  { id: 1, countryName: 'India', isActive: true, stateCount: 36 },
+  { id: 2, countryName: 'United States', isActive: true, stateCount: 50 },
+  { id: 3, countryName: 'Germany', isActive: true, stateCount: 16 },
+  { id: 4, countryName: 'United Kingdom', isActive: true, stateCount: 4 },
+  { id: 5, countryName: 'United Arab Emirates', isActive: true, stateCount: 7 },
+  { id: 6, countryName: 'Qatar', isActive: true, stateCount: 8 },
+  { id: 7, countryName: 'Saudi Arabia', isActive: true, stateCount: 13 },
+  { id: 8, countryName: 'Australia', isActive: true, stateCount: 8 },
+  { id: 9, countryName: 'Canada', isActive: true, stateCount: 13 },
+  { id: 10, countryName: 'Japan', isActive: true, stateCount: 47 },
+  { id: 11, countryName: 'Singapore', isActive: true, stateCount: 1 },
+];
+
+export const DEFAULT_INDIAN_STATES = [
+  { id: 1, countryId: 1, stateName: 'Gujarat', isActive: true },
+  { id: 2, countryId: 1, stateName: 'Maharashtra', isActive: true },
+  { id: 3, countryId: 1, stateName: 'Karnataka', isActive: true },
+  { id: 4, countryId: 1, stateName: 'Tamil Nadu', isActive: true },
+  { id: 5, countryId: 1, stateName: 'Delhi', isActive: true },
+  { id: 6, countryId: 1, stateName: 'Rajasthan', isActive: true },
+  { id: 7, countryId: 1, stateName: 'Uttar Pradesh', isActive: true },
+  { id: 8, countryId: 1, stateName: 'Haryana', isActive: true },
+  { id: 9, countryId: 1, stateName: 'Madhya Pradesh', isActive: true },
+  { id: 10, countryId: 1, stateName: 'Telangana', isActive: true },
+  { id: 11, countryId: 1, stateName: 'Andhra Pradesh', isActive: true },
+  { id: 12, countryId: 1, stateName: 'West Bengal', isActive: true },
+  { id: 13, countryId: 1, stateName: 'Punjab', isActive: true },
+  { id: 14, countryId: 1, stateName: 'Kerala', isActive: true },
+  { id: 15, countryId: 1, stateName: 'Odisha', isActive: true },
+];
+
 const CountryStateContext = createContext(null);
 
 export function CountryStateProvider({ children }) {
@@ -20,7 +52,11 @@ export function CountryStateProvider({ children }) {
   const isRelevantRoute = Boolean(
     location?.pathname?.startsWith('/clients') ||
     location?.pathname?.startsWith('/vendors') ||
-    location?.pathname?.startsWith('/company')
+    location?.pathname?.startsWith('/company') ||
+    location?.pathname?.startsWith('/inquiries') ||
+    location?.pathname?.startsWith('/quotations') ||
+    location?.pathname?.startsWith('/sales-orders') ||
+    location?.pathname?.startsWith('/deals')
   );
   const shouldFetch = isRelevantRoute || hasRequested;
 
@@ -38,9 +74,14 @@ export function CountryStateProvider({ children }) {
     setIsLoadingCountries(true);
     try {
       const data = await geographyService.listCountries({ isActive: true });
-      setCountries(Array.isArray(data) ? data : []);
+      if (Array.isArray(data) && data.length > 0) {
+        setCountries(data);
+      } else {
+        setCountries(DEFAULT_FALLBACK_COUNTRIES);
+      }
     } catch (err) {
-      console.warn('CountryStateProvider: Failed to load countries from API', err);
+      console.warn('CountryStateProvider: Failed to load countries from API, using default list', err);
+      setCountries(DEFAULT_FALLBACK_COUNTRIES);
     } finally {
       setIsLoadingCountries(false);
     }
@@ -86,7 +127,10 @@ export function CountryStateProvider({ children }) {
       setLoadingStatesMap((prev) => ({ ...prev, [key]: true }));
       try {
         const data = await geographyService.listStates(numericId, { isActive: true });
-        const statesList = Array.isArray(data) ? data : [];
+        let statesList = Array.isArray(data) && data.length > 0 ? data : [];
+        if (statesList.length === 0 && (numericId === 1 || String(countryId).toLowerCase() === 'india' || String(countryId) === '1')) {
+          statesList = DEFAULT_INDIAN_STATES;
+        }
         setStatesCache((prev) => ({
           ...prev,
           [key]: statesList,
@@ -95,7 +139,15 @@ export function CountryStateProvider({ children }) {
         return statesList;
       } catch (err) {
         console.warn(`CountryStateProvider: Failed to load states for country ${countryId}`, err);
-        return [];
+        const fallback = (numericId === 1 || String(countryId).toLowerCase() === 'india' || String(countryId) === '1')
+          ? DEFAULT_INDIAN_STATES
+          : [];
+        setStatesCache((prev) => ({
+          ...prev,
+          [key]: fallback,
+          [String(countryId)]: fallback,
+        }));
+        return fallback;
       } finally {
         setLoadingStatesMap((prev) => ({ ...prev, [key]: false }));
       }

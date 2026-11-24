@@ -181,7 +181,7 @@ export default function VendorEffectiveDatesPage() {
   }, [id, getBanksForVendor]);
 
   const [fetchedVendor, setFetchedVendor] = useState(null);
-  const [fetchingVendor, setFetchingVendor] = useState(Boolean(id && !getVendorById(id)));
+  const [fetchingVendor, setFetchingVendor] = useState(false);
   const [apiVersions, setApiVersions] = useState(null);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const lastLoadedVendorIdRef = useRef(null);

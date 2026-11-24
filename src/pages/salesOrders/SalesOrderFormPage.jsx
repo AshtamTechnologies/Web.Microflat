@@ -49,7 +49,7 @@ import {
 import { useSalesOrdersContext } from '../../context/SalesOrdersContext';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useClientsContext } from '../../context/ClientsContext';
-import { clientService, productService } from '../../services';
+import { clientService, productService, quotationService } from '../../services';
 import {
   calculateSalesOrderTotals,
   formatCurrency,
@@ -107,6 +107,24 @@ function buildPrefillFromQuotation(quotation) {
       ]
     : [];
 
+  const availableItems =
+    latestRev?.items && latestRev.items.length > 0
+      ? latestRev.items
+      : Array.isArray(quotation.items)
+      ? quotation.items
+      : [];
+
+  const resolvedAddressId =
+    quotation.clientAddressId ||
+    latestRev?.clientAddressId ||
+    quotation.addressId ||
+    null;
+  const resolvedContactId =
+    quotation.clientContactId ||
+    latestRev?.clientContactId ||
+    quotation.contactId ||
+    null;
+
   return {
     quotationId: quotation.id,
     quotationNo: quotation.quotationNo,
@@ -115,10 +133,12 @@ function buildPrefillFromQuotation(quotation) {
     inquiryNo: quotation.inquiryNo || '',
     clientId: quotation.clientId || '',
     clientName: quotation.clientName || '',
-    clientAddress: quotation.clientAddress || '',
-    contactPerson: quotation.contactPerson || '',
-    contactEmail: quotation.contactEmail || '',
-    contactPhone: quotation.contactPhone || '',
+    clientAddressId: resolvedAddressId,
+    clientAddress: quotation.clientAddress || latestRev?.clientAddress || '',
+    clientContactId: resolvedContactId,
+    contactPerson: quotation.contactPerson || latestRev?.contactPerson || '',
+    contactEmail: quotation.contactEmail || latestRev?.contactEmail || '',
+    contactPhone: quotation.contactPhone || latestRev?.contactPhone || '',
     clientPoNo: quotation.poDetails?.poNumber || '',
     clientPoDate: quotation.poDetails?.receivedOn || '',
     expectedDeliveryDate: quotation.poDetails?.expectedDeliveryDate || '',
@@ -133,7 +153,7 @@ function buildPrefillFromQuotation(quotation) {
       : [],
     taxes: latestRev?.taxes || quotation.taxes || [],
     termsAndConditions: quotation.termsAndConditions || '',
-    lineItems: (latestRev?.items || []).map((item, idx) => ({
+    lineItems: availableItems.map((item, idx) => ({
       ...item,
       id: `oc-it-${Date.now()}-${idx}`,
       quotationLineItemId: item.id,
@@ -309,9 +329,9 @@ export default function SalesOrderFormPage() {
       inquiryNo: prefill?.inquiryNo || '',
       clientId: prefill?.clientId || '',
       clientName: prefill?.clientName || '',
-      clientAddressId: null,
+      clientAddressId: prefill?.clientAddressId || null,
       clientAddress: prefill?.clientAddress || '',
-      clientContactId: null,
+      clientContactId: prefill?.clientContactId || null,
       contactPerson: prefill?.contactPerson || '',
       contactEmail: prefill?.contactEmail || '',
       contactPhone: prefill?.contactPhone || '',
@@ -365,6 +385,21 @@ export default function SalesOrderFormPage() {
         const detail = await clientService.getClientById(formData.clientId);
         if (isMounted && detail) {
           setClientDetailData(detail);
+          const addrs = (detail.currentDetail?.addresses || []).filter((a) => a.isActive !== false);
+          const contacts = (detail.currentDetail?.contacts || []).filter((c) => c.isActive !== false);
+          setFormData((prev) => {
+            const hasValidAddr = prev.clientAddressId && addrs.some((a) => String(a.clientAddressId || a.id) === String(prev.clientAddressId));
+            const hasValidContact = prev.clientContactId && contacts.some((c) => String(c.clientContactId || c.id) === String(prev.clientContactId));
+            const firstAddr = addrs[0];
+            const primaryContact = contacts.find((c) => c.isPrimary) || contacts[0];
+            return {
+              ...prev,
+              clientAddressId: hasValidAddr ? prev.clientAddressId : (firstAddr?.clientAddressId || firstAddr?.id || prev.clientAddressId || null),
+              clientAddress: hasValidAddr ? prev.clientAddress : (firstAddr ? [firstAddr.addressLabel, firstAddr.address1, firstAddr.city].filter(Boolean).join(', ') : prev.clientAddress),
+              clientContactId: hasValidContact ? prev.clientContactId : (primaryContact?.clientContactId || primaryContact?.id || prev.clientContactId || null),
+              contactPerson: hasValidContact ? prev.contactPerson : (primaryContact ? `${primaryContact.firstName || ''} ${primaryContact.lastName || ''}`.trim() : prev.contactPerson),
+            };
+          });
         }
       } catch (err) {
         console.warn('Failed to fetch client detail for clientId:', formData.clientId, err);
@@ -376,26 +411,52 @@ export default function SalesOrderFormPage() {
     };
   }, [formData.clientId]);
 
-  // Sync prefill if confirmedQuotations loaded after initial render
+  // Sync prefill if confirmedQuotations loaded after initial render or initialQuotationId provided
   useEffect(() => {
-    if (!isEditMode && initialQuotationId && !formData.quotationId && confirmedQuotations.length > 0) {
-      const quote = confirmedQuotations.find(
-        (q) =>
-          String(q.id).toLowerCase() === initialQuotationId.toLowerCase() ||
-          String(q.quotationNo).toLowerCase() === initialQuotationId.toLowerCase()
-      );
-      if (quote) {
-        const prefill = buildPrefillFromQuotation(quote);
-        if (prefill) {
-          setFormData((prev) => ({
-            ...prev,
-            ...prefill,
-            documents: prefill.documents?.length ? prefill.documents : prev.documents,
-          }));
+    if (!isEditMode && initialQuotationId && (!formData.quotationId || formData.lineItems.length === 0)) {
+      let isMounted = true;
+      async function loadInitialQuote() {
+        try {
+          const fullQuote = await quotationService.getQuotationById(initialQuotationId);
+          if (isMounted && fullQuote) {
+            const prefill = buildPrefillFromQuotation(fullQuote);
+            if (prefill) {
+              setFormData((prev) => ({
+                ...prev,
+                ...prefill,
+                documents: prefill.documents?.length ? prefill.documents : prev.documents,
+              }));
+            }
+            return;
+          }
+        } catch (e) {
+          console.warn('Could not fetch full initial quotation, falling back to list:', e);
+        }
+
+        if (confirmedQuotations.length > 0) {
+          const quote = confirmedQuotations.find(
+            (q) =>
+              String(q.id).toLowerCase() === initialQuotationId.toLowerCase() ||
+              String(q.quotationNo).toLowerCase() === initialQuotationId.toLowerCase()
+          );
+          if (isMounted && quote) {
+            const prefill = buildPrefillFromQuotation(quote);
+            if (prefill) {
+              setFormData((prev) => ({
+                ...prev,
+                ...prefill,
+                documents: prefill.documents?.length ? prefill.documents : prev.documents,
+              }));
+            }
+          }
         }
       }
+      loadInitialQuote();
+      return () => {
+        isMounted = false;
+      };
     }
-  }, [isEditMode, initialQuotationId, formData.quotationId, confirmedQuotations]);
+  }, [isEditMode, initialQuotationId, formData.quotationId, formData.lineItems.length, confirmedQuotations]);
 
   // Sync next order confirmation series number from API preview
   useEffect(() => {
@@ -755,10 +816,23 @@ export default function SalesOrderFormPage() {
     );
   }
 
-  function handleSelectQuotation(quotationId) {
-    const quote = confirmedQuotations.find((q) => String(q.id) === String(quotationId));
+  async function handleSelectQuotation(quotationId) {
+    const quote = confirmedQuotations.find(
+      (q) => String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId)
+    );
     if (!quote) return;
-    const prefill = buildPrefillFromQuotation(quote);
+
+    let fullQuote = quote;
+    try {
+      const fetched = await quotationService.getQuotationById(quote.id || quotationId);
+      if (fetched) {
+        fullQuote = fetched;
+      }
+    } catch (e) {
+      console.warn('Could not fetch full quotation details, using list summary:', e);
+    }
+
+    const prefill = buildPrefillFromQuotation(fullQuote);
     setFormData((prev) => ({
       ...prev,
       ...prefill,
@@ -815,26 +889,84 @@ export default function SalesOrderFormPage() {
     }));
   }
 
-  function handleProductPickerChange(idx, rawValue) {
+  async function handleProductPickerChange(idx, rawValue) {
     const selectedProductId =
       typeof rawValue === 'object' && rawValue !== null ? rawValue.target?.value : rawValue;
+    if (!selectedProductId) return;
+
     const matched = productsList.find((p) => String(p.id) === String(selectedProductId));
+    const prodIdNum = Number(selectedProductId);
+
+    // Initial immediate update from summary list to keep UI responsive
     setFormData((prev) => ({
       ...prev,
       lineItems: prev.lineItems.map((item, i) => {
         if (i !== idx) return item;
-        const baseRate =
-          Number(matched?.basePrice ?? matched?.rate ?? matched?.price ?? item.rate) || item.rate || 0;
         return {
           ...item,
-          productId: matched?.id ? Number(matched.id) : Number(selectedProductId) || selectedProductId,
+          productId: prodIdNum || selectedProductId,
           productName: matched?.productName || item.productName,
           itemCode: matched?.productCode || matched?.code || item.itemCode,
-          rate: baseRate > 0 ? baseRate : item.rate,
+          variantName: matched?.categoryName || item.variantName || '',
         };
       }),
     }));
     setErrors((prev) => ({ ...prev, lineItems: undefined }));
+
+    // Async deep fetch for full specifications and list price lookup
+    try {
+      const [fullProd, priceRes] = await Promise.all([
+        productService.getProductById(prodIdNum || selectedProductId).catch(() => null),
+        productService
+          .lookupProductPrice({
+            productId: prodIdNum || selectedProductId,
+            currencyId: formData.currencyId || 1,
+          })
+          .catch(() => null),
+      ]);
+
+      const resolvedRate =
+        priceRes?.suggestedRate !== undefined && priceRes?.suggestedRate !== null
+          ? Number(priceRes.suggestedRate)
+          : Number(fullProd?.basePrice ?? fullProd?.standardRate ?? fullProd?.rate) || 0;
+
+      const resolvedSpecs =
+        fullProd?.description ||
+        fullProd?.variants?.[0]?.variantName ||
+        matched?.categoryName ||
+        '';
+
+      const resolvedCode =
+        fullProd?.productCode ||
+        fullProd?.variants?.[0]?.variantCode ||
+        matched?.productCode ||
+        '';
+
+      setFormData((prev) => ({
+        ...prev,
+        lineItems: prev.lineItems.map((item, i) => {
+          if (i !== idx) return item;
+          return {
+            ...item,
+            productId: prodIdNum || selectedProductId,
+            productName: fullProd?.productName || matched?.productName || item.productName,
+            itemCode: resolvedCode || item.itemCode,
+            variantName: resolvedSpecs || item.variantName,
+            rate: resolvedRate > 0 ? resolvedRate : item.rate,
+          };
+        }),
+      }));
+
+      if (resolvedRate > 0) {
+        toast.success(
+          `Loaded ${fullProd?.productName || matched?.productName || 'product'} with list price: ${formatCurrency(resolvedRate, formData.currency)}`
+        );
+      } else {
+        toast.success(`Loaded details for ${fullProd?.productName || matched?.productName || 'product'}`);
+      }
+    } catch (err) {
+      console.warn('Could not fetch product detail or price lookup:', err);
+    }
   }
 
   function handleDownloadDocument(doc) {
@@ -887,9 +1019,9 @@ export default function SalesOrderFormPage() {
       if (!formData.clientId) {
         nextErrors.clientId = 'Please select a Client for this direct sales order.';
       }
-      if (!formData.clientAddressId) {
-        nextErrors.clientAddressId = 'Client address is required for a direct order.';
-      }
+    }
+    if (!formData.clientAddressId) {
+      nextErrors.clientAddressId = 'Client address is required.';
     }
     if (!formData.orderConfirmationDate) {
       nextErrors.orderConfirmationDate = 'Order confirmation date is required.';
@@ -907,24 +1039,33 @@ export default function SalesOrderFormPage() {
       nextErrors.lineItems = 'Please select a product for all line items.';
     }
     setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    const errList = Object.values(nextErrors);
+    return {
+      isValid: errList.length === 0,
+      firstError: errList[0] || null,
+    };
   }
 
   async function handleSave(targetStatus) {
-    if (!validate(targetStatus)) {
-      toast.error('Please fix the highlighted validation errors.');
+    const { isValid, firstError } = validate(targetStatus);
+    if (!isValid) {
+      toast.error(firstError || 'Please fix the highlighted validation errors.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
     const rawQuoteId = formData.quotationId;
-    const parsedQuoteId = rawQuoteId ? Number(rawQuoteId) : null;
-    const finalQuotationId = Number.isFinite(parsedQuoteId)
-      ? parsedQuoteId
-      : rawQuoteId && typeof rawQuoteId === 'string' && rawQuoteId.includes('-')
-      ? Number(rawQuoteId.split('-').pop())
-      : rawQuoteId
-      ? Number(rawQuoteId)
-      : null;
+    const selectedQuote = confirmedQuotations.find(
+      (q) =>
+        String(q.id).toLowerCase() === String(rawQuoteId).toLowerCase() ||
+        String(q.quotationNo).toLowerCase() === String(rawQuoteId).toLowerCase() ||
+        String(q.quotationNo).toLowerCase() === String(formData.quotationNo).toLowerCase()
+    );
+
+    const resolvedId = selectedQuote ? selectedQuote.id : rawQuoteId;
+    const finalQuotationId = /^\d+$/.test(String(resolvedId || '').trim())
+      ? Number(String(resolvedId).trim())
+      : (typeof resolvedId === 'number' && Number.isFinite(resolvedId) ? resolvedId : null);
 
     const isDirect = orderMode === 'DIRECT' || !formData.quotationId;
 
@@ -1225,7 +1366,7 @@ export default function SalesOrderFormPage() {
 
             <SearchableSelect
               label="Client Address"
-              required={orderMode === 'DIRECT'}
+              required
               placeholder="Select address..."
               options={clientAddressOptions}
               value={formData.clientAddressId ? String(formData.clientAddressId) : ''}
@@ -1436,6 +1577,7 @@ export default function SalesOrderFormPage() {
                               <Input
                                 size="sm"
                                 placeholder="Product Name"
+                                aria-label={`Line ${idx + 1} Product Name`}
                                 value={item.productName}
                                 onChange={(e) =>
                                   handleLineItemChange(idx, 'productName', e.target.value)
@@ -1446,6 +1588,7 @@ export default function SalesOrderFormPage() {
                               <Input
                                 size="sm"
                                 placeholder="Variant / Specs"
+                                aria-label={`Line ${idx + 1} Variant or Specification`}
                                 value={item.variantName}
                                 onChange={(e) =>
                                   handleLineItemChange(idx, 'variantName', e.target.value)
@@ -1454,6 +1597,7 @@ export default function SalesOrderFormPage() {
                               <Input
                                 size="sm"
                                 placeholder="Code"
+                                aria-label={`Line ${idx + 1} Item Code`}
                                 value={item.itemCode}
                                 onChange={(e) =>
                                   handleLineItemChange(idx, 'itemCode', e.target.value)
@@ -1483,6 +1627,7 @@ export default function SalesOrderFormPage() {
                           min="0.001"
                           step="any"
                           size="sm"
+                          aria-label={`Line ${idx + 1} Quantity`}
                           value={item.quantity}
                           onChange={(e) =>
                             handleLineItemChange(idx, 'quantity', e.target.value)
@@ -1495,6 +1640,7 @@ export default function SalesOrderFormPage() {
                           min="0"
                           step="any"
                           size="sm"
+                          aria-label={`Line ${idx + 1} Unit Rate`}
                           value={item.rate}
                           onChange={(e) =>
                             handleLineItemChange(idx, 'rate', e.target.value)
@@ -1507,6 +1653,7 @@ export default function SalesOrderFormPage() {
                           min="0"
                           step="any"
                           size="sm"
+                          aria-label={`Line ${idx + 1} Other Charges`}
                           value={item.otherCharges ?? 0}
                           onChange={(e) =>
                             handleLineItemChange(idx, 'otherCharges', e.target.value)

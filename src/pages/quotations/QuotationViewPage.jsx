@@ -41,6 +41,7 @@ import {
 } from '../../components/ui';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { TAX_TREATMENTS, calculateQuotationTotals, formatCurrency } from '../../mocks/quotations';
+import { formatAddressValue } from '../../models/quotations/quotationModel';
 import { formatDate } from '../../utils/dateUtils';
 import { isHtmlMarkup } from '../../utils/htmlUtils';
 import ChangeStatusModal from './components/ChangeStatusModal';
@@ -524,7 +525,7 @@ export default function QuotationViewPage() {
                 />
                 <DetailField
                   label="Billing / Shipping Address"
-                  value={quotation.clientAddress || '—'}
+                  value={formatAddressValue(quotation.clientAddress) || '—'}
                   className="sm:col-span-2"
                 />
               </div>

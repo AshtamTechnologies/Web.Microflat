@@ -25,15 +25,21 @@ const STORAGE_KEY = 'microflat_sales_orders_data';
 
 export function SalesOrdersProvider({ children }) {
   const [salesOrders, setSalesOrders] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        return JSON.parse(saved);
+    if (isMockApi) {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (e) {
+        console.error('Failed to load sales orders from localStorage:', e);
       }
-    } catch (e) {
-      console.error('Failed to load sales orders from localStorage:', e);
+      return INITIAL_SALES_ORDERS;
     }
-    return INITIAL_SALES_ORDERS;
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
+    return [];
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -48,8 +54,9 @@ export function SalesOrdersProvider({ children }) {
   });
   const [nextNumberPreview, setNextNumberPreview] = useState('');
 
-  // Keep all sales orders persisted in localStorage for offline/mock mode
+  // Persist to localStorage only in mock mode
   useEffect(() => {
+    if (!isMockApi) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(salesOrders));
     } catch (e) {
@@ -68,16 +75,16 @@ export function SalesOrdersProvider({ children }) {
     try {
       setIsLoading(true);
       const res = await orderConfirmationService.listOrderConfirmations(params);
-      const apiItems = Array.isArray(res?.items) ? res.items : [];
+      const apiItems = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
       setSalesOrders(apiItems);
       return apiItems;
     } catch (err) {
       console.warn('Could not refresh sales orders from API:', err?.message || err);
-      return salesOrders;
+      return [];
     } finally {
       setIsLoading(false);
     }
-  }, [salesOrders]);
+  }, []);
 
   /**
    * Load lookups and initial order list on mount when connected to backend API
@@ -495,6 +502,7 @@ export function SalesOrdersProvider({ children }) {
         } catch (apiErr) {
           console.error('Failed to change status via API:', apiErr);
           toast.error(apiErr?.message || `Failed to update status to ${newStatus}`);
+          return null;
         } finally {
           setIsLoading(false);
         }
@@ -579,6 +587,7 @@ export function SalesOrdersProvider({ children }) {
         } catch (apiErr) {
           console.error('Failed to upload document via API:', apiErr);
           toast.error(apiErr?.message || 'Failed to upload document to backend.');
+          return null;
         } finally {
           setIsLoading(false);
         }
