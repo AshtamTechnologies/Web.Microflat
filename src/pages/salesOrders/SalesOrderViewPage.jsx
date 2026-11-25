@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   IconBack,
   IconCheck,
@@ -49,6 +49,8 @@ import SendOrderMailModal from './components/SendOrderMailModal';
 export default function SalesOrderViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromPath = location.state?.from;
   const {
     getSalesOrderById,
     fetchSalesOrderById,
@@ -243,9 +245,9 @@ export default function SalesOrderViewPage() {
             variant="secondary"
             size="sm"
             icon={IconBack}
-            onClick={() => navigate('/sales-orders')}
+            onClick={() => navigate(fromPath || '/sales-orders')}
           >
-            Back to Sales Orders
+            {fromPath?.startsWith('/projects') ? 'Back to Project' : 'Back to Sales Orders'}
           </Button>
         }
         actions={
@@ -253,7 +255,7 @@ export default function SalesOrderViewPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => {}}
+              onClick={() => { }}
               icon={<IconDownload size={14} />}
             >
               Download PDF
@@ -604,8 +606,8 @@ export default function SalesOrderViewPage() {
                       {(Array.isArray(order.paymentTerms)
                         ? order.paymentTerms
                         : typeof order.paymentTerms === 'string'
-                        ? (order.paymentTerms.includes(',') ? order.paymentTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.paymentTerms.trim()])
-                        : [order.paymentTerms]
+                          ? (order.paymentTerms.includes(',') ? order.paymentTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.paymentTerms.trim()])
+                          : [order.paymentTerms]
                       ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
                         <Badge key={idx} variant="neutral" size="xs">
                           {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}
@@ -627,8 +629,8 @@ export default function SalesOrderViewPage() {
                       {(Array.isArray(order.deliveryTerms)
                         ? order.deliveryTerms
                         : typeof order.deliveryTerms === 'string'
-                        ? (order.deliveryTerms.includes(',') ? order.deliveryTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.deliveryTerms.trim()])
-                        : [order.deliveryTerms]
+                          ? (order.deliveryTerms.includes(',') ? order.deliveryTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.deliveryTerms.trim()])
+                          : [order.deliveryTerms]
                       ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
                         <Badge key={idx} variant="neutral" size="xs">
                           {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}

@@ -15,7 +15,7 @@
  *       4. Bank Proof Attachments & Supporting Documents with direct download
  */
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   IconAdd,
@@ -224,27 +224,39 @@ export default function VendorBankDetailsViewPage({
   }, [filteredBankAccounts, selectedBankId]);
 
   const [remoteAttachments, setRemoteAttachments] = useState({});
+  const inFlightAttachmentsRef = useRef(new Set());
 
   useEffect(() => {
     let isCancelled = false;
+    const bankId = selectedAccount?.bankDetailId || selectedAccount?.id;
+    if (
+      !bankId ||
+      String(bankId).startsWith('temp_') ||
+      String(bankId).startsWith('bd_') ||
+      remoteAttachments[bankId] ||
+      inFlightAttachmentsRef.current.has(bankId)
+    ) {
+      return;
+    }
+
     async function loadBankAttachments() {
-      const bankId = selectedAccount?.bankDetailId || selectedAccount?.id;
-      if (bankId && !String(bankId).startsWith('temp_') && !String(bankId).startsWith('bd_')) {
-        try {
-          const docs = await vendorService.getBankDetailAttachments(bankId);
-          if (!isCancelled && Array.isArray(docs)) {
-            setRemoteAttachments((prev) => ({ ...prev, [bankId]: docs }));
-          }
-        } catch (err) {
-          console.warn('Could not load attachments for bank account:', err);
+      inFlightAttachmentsRef.current.add(bankId);
+      try {
+        const docs = await vendorService.getBankDetailAttachments(bankId);
+        if (!isCancelled && Array.isArray(docs)) {
+          setRemoteAttachments((prev) => ({ ...prev, [bankId]: docs }));
         }
+      } catch (err) {
+        console.warn('Could not load attachments for bank account:', err);
+      } finally {
+        inFlightAttachmentsRef.current.delete(bankId);
       }
     }
     loadBankAttachments();
     return () => {
       isCancelled = true;
     };
-  }, [selectedAccount]);
+  }, [selectedAccount?.bankDetailId, selectedAccount?.id, remoteAttachments]);
 
   // Attachments for the currently selected bank account
   const selectedAttachments = useMemo(() => {
@@ -468,11 +480,10 @@ export default function VendorBankDetailsViewPage({
             <button
               type="button"
               onClick={() => setStatusFilter('ALL')}
-              className={`p-3 rounded-xl border flex flex-col justify-between shadow-2xs text-left cursor-pointer transition-all duration-150 ${
-                statusFilter === 'ALL'
+              className={`p-3 rounded-xl border flex flex-col justify-between shadow-2xs text-left cursor-pointer transition-all duration-150 ${statusFilter === 'ALL'
                   ? 'bg-primary/[0.08] border-primary ring-2 ring-primary/20'
                   : 'bg-surface/60 border-border hover:border-primary/40 hover:bg-surface'
-              }`}
+                }`}
               title="Click to view all bank accounts"
             >
               <div className="flex items-center justify-between w-full">
@@ -493,11 +504,10 @@ export default function VendorBankDetailsViewPage({
               onClick={() =>
                 setStatusFilter((prev) => (prev === 'ACTIVE' ? 'ALL' : 'ACTIVE'))
               }
-              className={`p-3 rounded-xl border flex flex-col justify-between shadow-2xs text-left cursor-pointer transition-all duration-150 ${
-                statusFilter === 'ACTIVE'
+              className={`p-3 rounded-xl border flex flex-col justify-between shadow-2xs text-left cursor-pointer transition-all duration-150 ${statusFilter === 'ACTIVE'
                   ? 'bg-success/15 border-success ring-2 ring-success/30'
                   : 'bg-success/5 border-success/20 hover:border-success/50 hover:bg-success/10'
-              }`}
+                }`}
               title={
                 statusFilter === 'ACTIVE'
                   ? 'Showing active accounts only. Click to show all.'
@@ -573,11 +583,10 @@ export default function VendorBankDetailsViewPage({
                     <div
                       key={accId}
                       onClick={() => handleSelectAccount(accId)}
-                      className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${
-                        isSelected
+                      className={`p-3.5 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${isSelected
                           ? 'bg-primary/[0.08] border-primary ring-1.5 ring-primary/30 shadow-xs'
                           : 'bg-surface/50 border-border hover:border-primary/40 hover:bg-surface'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">

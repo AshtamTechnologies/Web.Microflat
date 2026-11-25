@@ -51,6 +51,9 @@ export function useVendors() {
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(!isMockApi);
   const abortControllerRef = useRef(null);
+  const fetchedVendorIdsRef = useRef(new Set());
+  const inFlightVendorFetchesRef = useRef(new Map());
+  const vendorDetailsCacheRef = useRef(new Map());
 
   /* ── Debounce search input (450ms for optimal database performance) ── */
   useEffect(() => {
@@ -95,7 +98,21 @@ export function useVendors() {
         { signal }
       );
       if (res && Array.isArray(res.items)) {
-        setVendors(res.items);
+        setVendors(() => {
+          const items = [...res.items];
+          // Preserve any individually fetched vendor details in the context store
+          if (vendorDetailsCacheRef.current) {
+            vendorDetailsCacheRef.current.forEach((detail, cleanId) => {
+              const inList = items.some(
+                (v) => String(v.id) === String(cleanId) || String(v.vendorId) === String(cleanId)
+              );
+              if (!inList && detail) {
+                items.push(detail);
+              }
+            });
+          }
+          return items;
+        });
         setTotalCount(res.totalCount ?? res.items.length);
         setTotalPages(res.totalPages || (pageSize > 0 ? Math.ceil((res.totalCount ?? res.items.length) / pageSize) : 1));
       }
@@ -140,30 +157,30 @@ export function useVendors() {
         hasDefaultedFields: Boolean(v.hasDefaultedFields),
         ...(activeVersion
           ? {
-              effectiveDate: activeVersion.effectiveDate || v.effectiveDate,
-              contactPersonName: activeVersion.contactPersonName || v.contactPersonName,
-              phoneNo: activeVersion.phoneNo || v.phoneNo,
-              alternatePhoneNo: activeVersion.alternatePhoneNo || v.alternatePhoneNo,
-              gstNo: activeVersion.gstNo || v.gstNo,
-              panNo: activeVersion.panNo || v.panNo || '',
-              cin: activeVersion.cin || v.cin || '',
-              udhyamNo: activeVersion.udhyamNo || v.udhyamNo || '',
-              msmeType: activeVersion.msmeType || v.msmeType || '',
-              msmeActivity: activeVersion.msmeActivity || v.msmeActivity || '',
-              ccEmail: activeVersion.ccEmail || v.ccEmail || '',
-              website: activeVersion.website || v.website,
-              email: activeVersion.email || v.email,
-              countryId: activeVersion.countryId || v.countryId,
-              stateId: activeVersion.stateId || v.stateId,
-              city: activeVersion.city || v.city,
-              zipCode: activeVersion.zipCode || v.zipCode,
-              address1: activeVersion.address1 || v.address1,
-              address2: activeVersion.address2 || v.address2,
-              notes: activeVersion.notes || v.notes,
-              defaultedFields: activeVersion.defaultedFields || v.defaultedFields || '',
-              correctedFields: activeVersion.correctedFields || v.correctedFields || '',
-              attachments: activeVersion.attachments || v.attachments || [],
-            }
+            effectiveDate: activeVersion.effectiveDate || v.effectiveDate,
+            contactPersonName: activeVersion.contactPersonName || v.contactPersonName,
+            phoneNo: activeVersion.phoneNo || v.phoneNo,
+            alternatePhoneNo: activeVersion.alternatePhoneNo || v.alternatePhoneNo,
+            gstNo: activeVersion.gstNo || v.gstNo,
+            panNo: activeVersion.panNo || v.panNo || '',
+            cin: activeVersion.cin || v.cin || '',
+            udhyamNo: activeVersion.udhyamNo || v.udhyamNo || '',
+            msmeType: activeVersion.msmeType || v.msmeType || '',
+            msmeActivity: activeVersion.msmeActivity || v.msmeActivity || '',
+            ccEmail: activeVersion.ccEmail || v.ccEmail || '',
+            website: activeVersion.website || v.website,
+            email: activeVersion.email || v.email,
+            countryId: activeVersion.countryId || v.countryId,
+            stateId: activeVersion.stateId || v.stateId,
+            city: activeVersion.city || v.city,
+            zipCode: activeVersion.zipCode || v.zipCode,
+            address1: activeVersion.address1 || v.address1,
+            address2: activeVersion.address2 || v.address2,
+            notes: activeVersion.notes || v.notes,
+            defaultedFields: activeVersion.defaultedFields || v.defaultedFields || '',
+            correctedFields: activeVersion.correctedFields || v.correctedFields || '',
+            attachments: activeVersion.attachments || v.attachments || [],
+          }
           : {}),
         activeVersion,
         effectiveVersions: v.effectiveVersions || (activeVersion ? [activeVersion] : []),
@@ -258,32 +275,83 @@ export function useVendors() {
     setPageNumber(1);
   }, []);
 
+  const augmentedVendorsRef = useRef(augmentedVendors);
+  useEffect(() => {
+    augmentedVendorsRef.current = augmentedVendors;
+  }, [augmentedVendors]);
+
   /* ── Get single vendor by id ── */
   const getVendorById = useCallback(
     (id) => {
+      if (!id) return null;
       const cleanId = String(id).replace(/^ver_/, '').split('_')[0];
-      const match = augmentedVendors.find(
+      const match = (augmentedVendorsRef.current || []).find(
         (v) =>
           String(v.id) === String(id) ||
           String(v.vendorId) === String(id) ||
           String(v.id) === cleanId ||
           String(v.vendorId) === cleanId
       );
-      return match || null;
+      if (match) return match;
+      if (vendorDetailsCacheRef.current && vendorDetailsCacheRef.current.has(cleanId)) {
+        return vendorDetailsCacheRef.current.get(cleanId);
+      }
+      return null;
     },
-    [augmentedVendors]
+    []
   );
 
   /* ── Fetch single vendor from API asynchronously ── */
-  const fetchVendorDetail = useCallback(async (id) => {
-    try {
-      const detail = await vendorService.getVendor(id);
-      return detail;
-    } catch (err) {
-      console.warn('Failed to fetch vendor detail from API, using cached:', err);
-      return getVendorById(id);
-    }
-  }, [getVendorById]);
+  const fetchVendorDetail = useCallback(
+    async (id, force = false) => {
+      if (!id) return null;
+      const cleanId = String(id).replace(/^ver_/, '').split('_')[0];
+
+      // Return deduplicated in-flight promise if currently fetching
+      if (!force && inFlightVendorFetchesRef.current.has(cleanId)) {
+        return inFlightVendorFetchesRef.current.get(cleanId);
+      }
+
+      // If already fetched and in cache, return cached immediately
+      if (!force && vendorDetailsCacheRef.current.has(cleanId)) {
+        return vendorDetailsCacheRef.current.get(cleanId);
+      }
+
+      const fetchPromise = (async () => {
+        try {
+          const detail = await vendorService.getVendor(cleanId);
+          if (detail) {
+            fetchedVendorIdsRef.current.add(cleanId);
+            vendorDetailsCacheRef.current.set(cleanId, detail);
+            setVendors((prev) => {
+              const exists = prev.some(
+                (v) => String(v.id) === String(cleanId) || String(v.vendorId) === String(cleanId)
+              );
+              if (exists) {
+                return prev.map((v) =>
+                  String(v.id) === String(cleanId) || String(v.vendorId) === String(cleanId)
+                    ? { ...v, ...detail }
+                    : v
+                );
+              }
+              return [...prev, detail];
+            });
+            return detail;
+          }
+          return getVendorById(cleanId);
+        } catch (err) {
+          console.warn('Failed to fetch vendor detail from API, using cached:', err);
+          return vendorDetailsCacheRef.current.get(cleanId) || getVendorById(cleanId);
+        } finally {
+          inFlightVendorFetchesRef.current.delete(cleanId);
+        }
+      })();
+
+      inFlightVendorFetchesRef.current.set(cleanId, fetchPromise);
+      return fetchPromise;
+    },
+    [getVendorById]
+  );
 
   /* ── Auto-generate next vendor code ── */
   const getNextVendorCode = useCallback(() => {
@@ -402,24 +470,44 @@ export function useVendors() {
         });
       }
 
-      // If operational details changed on an existing vendor, start a new version
-      if (formData.contactPersonName || formData.phoneNo || formData.address1) {
+      // If operational details changed on an existing vendor:
+      const targetVersionId = formData.versionId || formData.targetVersionId;
+      if (targetVersionId) {
+        try {
+          await vendorService.editVendorVersion(targetVersionId, formData);
+        } catch (editErr) {
+          console.warn(`Failed to update vendor version ${targetVersionId}, fallback create version:`, editErr);
+          if (formData.contactPersonName || formData.phoneNo || formData.address1) {
+            await vendorService.createVendorVersion(id, formData, true, true);
+          }
+        }
+      } else if (formData.contactPersonName || formData.phoneNo || formData.address1) {
         await vendorService.createVendorVersion(id, formData, true, true);
       }
 
-      setVendors((prev) =>
-        prev.map((v) => {
-          if (String(v.id) !== String(id) && String(v.vendorId) !== String(id)) return v;
-          return {
-            ...v,
-            ...formData,
-            lastUpdatedOn: now,
-          };
-        })
-      );
+      // Refresh vendor in context
+      fetchedVendorIdsRef.current.delete(String(id));
+      const freshVendor = await vendorService.getVendor(id).catch(() => null);
+      if (freshVendor) {
+        vendorDetailsCacheRef.current.set(String(id), freshVendor);
+        setVendors((prev) =>
+          prev.map((v) => (String(v.id) === String(id) || String(v.vendorId) === String(id) ? freshVendor : v))
+        );
+      } else {
+        setVendors((prev) =>
+          prev.map((v) => {
+            if (String(v.id) !== String(id) && String(v.vendorId) !== String(id)) return v;
+            return {
+              ...v,
+              ...formData,
+              lastUpdatedOn: now,
+            };
+          })
+        );
+      }
 
       toast.success('Vendor updated successfully.');
-      return { ok: true };
+      return { ok: true, vendor: freshVendor };
     } catch (err) {
       const status = err?.status || err?.statusCode || (err?.response && err.response.status);
       const errorMsg = err?.message || err?.detail || 'Failed to update vendor on server.';

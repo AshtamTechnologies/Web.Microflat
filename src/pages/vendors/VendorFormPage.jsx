@@ -330,16 +330,23 @@ export default function VendorFormPage() {
 
   const [fetchedVendor, setFetchedVendor] = useState(null);
   const [fetchingVendor, setFetchingVendor] = useState(Boolean(isEdit));
+  const lastFetchedIdRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
     if (isEdit && id) {
+      if (lastFetchedIdRef.current === id && fetchedVendor) {
+        return;
+      }
+      lastFetchedIdRef.current = id;
       const cached = getVendorById(id);
       if (cached) {
         setFetchedVendor(cached);
+        setFetchingVendor(false);
+      } else {
+        setFetchingVendor(true);
       }
       if (fetchVendorDetail) {
-        setFetchingVendor(true);
         fetchVendorDetail(id)
           .then((v) => {
             if (isMounted && v) {
@@ -837,8 +844,36 @@ export default function VendorFormPage() {
           setPendingDeleteAttachmentIds([]);
         }
 
+        const targetVersionId =
+          existingVendor.openVersion?.vendorDetailId ||
+          existingVendor.openVersion?.id ||
+          existingVendor.vendorDetailId ||
+          existingVendor.currentDetail?.vendorDetailId ||
+          existingVendor.versions?.[0]?.vendorDetailId ||
+          existingVendor.versions?.[0]?.id;
+
+        // If new attachments were selected in edit mode, upload them
+        const rawFiles = (form.attachments || []).filter(
+          (a) => a.file || a.rawFile
+        );
+        if (targetVersionId && rawFiles.length > 0) {
+          for (const att of rawFiles) {
+            try {
+              await vendorService.uploadVersionAttachment(targetVersionId, {
+                documentTypeId: att.documentTypeId || 1,
+                documentName: att.documentName || att.fileName,
+                file: att.file || att.rawFile,
+              });
+            } catch (upErr) {
+              console.warn('Failed to upload attachment in edit mode:', att.fileName, upErr);
+            }
+          }
+        }
+
         const payload = {
           ...form,
+          targetVersionId,
+          versionId: targetVersionId,
           ledgerName: form.ledgerName.trim() === '' ? '' : form.ledgerName.trim(),
           group: form.group.trim() === '' ? '' : form.group.trim(),
           subGroup: form.subGroup.trim() === '' ? '' : form.subGroup.trim(),
@@ -1029,11 +1064,11 @@ export default function VendorFormPage() {
           {/* ── SECTION 1: VENDOR MASTER DETAILS ── */}
           <CollapsibleCard
             title="1. Vendor Master Details"
-            subtitle="Basic classification, effective date & active account status"
+            subtitle="Basic classification, accounting group, effective date & active account status"
             icon={<IconVendor size={18} />}
             className="bg-bg"
             defaultOpen={true}
-            hasError={Boolean(errors.vendorCode || errors.vendorName || errors.effectiveDate || errors.inactiveComment)}
+            hasError={Boolean(errors.vendorCode || errors.vendorName || errors.effectiveDate || errors.inactiveComment || errors.ledgerName || errors.group || errors.subGroup)}
             badge={
               form.vendorCode ? (
                 <div className="flex items-center gap-2 shrink-0">
@@ -1044,16 +1079,7 @@ export default function VendorFormPage() {
                     System Generated
                   </Badge>
                 </div>
-              ) : (
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="inline-flex items-center font-mono text-xs text-text-muted bg-surface border border-border px-2.5 py-1 rounded-lg">
-                    Auto Generated
-                  </span>
-                  <Badge variant="neutral" size="sm" className="font-medium text-2xs">
-                    Assigned on Save
-                  </Badge>
-                </div>
-              )
+              ) : null
             }
           >
 
@@ -1120,14 +1146,23 @@ export default function VendorFormPage() {
                     id="ledgerName"
                     name="ledgerName"
                     type="text"
-                    label="Ledger Name"
-                    placeholder="e.g. APEX PRECISION CASTINGS PVT LTD"
+                    label={
+                      <span className="flex items-center gap-1.5">
+                        <span>Ledger Name</span>
+                        <span className="text-3xs font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                          Auto-synced
+                        </span>
+                      </span>
+                    }
+                    placeholder="Auto-derived from Vendor Name"
                     value={form.ledgerName}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     error={errors.ledgerName}
                     maxLength={200}
-                    hint="Unique accounting ledger name (max 200 chars)"
+                    disabled
+                    className="!text-heading !opacity-100 !bg-surface/80 font-medium font-mono"
+                    hint="Auto-derived from Vendor Name"
                   />
                 </div>
 
@@ -1496,13 +1531,13 @@ export default function VendorFormPage() {
               />
 
               {/* Address Line 1 */}
-              <div className="md:col-span-3">
-                <Input
+              <div>
+                <Textarea
                   id="address1"
                   name="address1"
-                  type="text"
                   label="Address Line 1"
                   placeholder="e.g. Plot No. 42, GIDC Phase II"
+                  rows={2}
                   required
                   value={form.address1}
                   onChange={handleChange}
@@ -1513,13 +1548,13 @@ export default function VendorFormPage() {
               </div>
 
               {/* Address Line 2 */}
-              <div className="md:col-span-2">
-                <Input
+              <div>
+                <Textarea
                   id="address2"
                   name="address2"
-                  type="text"
                   label="Address Line 2 (Optional)"
                   placeholder="e.g. Near ABC Circle, Vatva Industrial Estate"
+                  rows={2}
                   value={form.address2}
                   onChange={handleChange}
                   onBlur={handleBlur}
@@ -1529,21 +1564,23 @@ export default function VendorFormPage() {
               </div>
 
               {/* Postal / Zip Code */}
-              <Input
-                id="zipCode"
-                name="zipCode"
-                type="text"
-                label="Postal / Zip Code"
-                placeholder="e.g. 380015"
-                required
-                maxLength={6}
-                value={form.zipCode}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                error={errors.zipCode}
-                className="font-mono tabular-nums"
-                autoComplete="postal-code"
-              />
+              <div>
+                <Input
+                  id="zipCode"
+                  name="zipCode"
+                  type="text"
+                  label="Postal / Zip Code"
+                  placeholder="e.g. 380015"
+                  required
+                  maxLength={6}
+                  value={form.zipCode}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  error={errors.zipCode}
+                  className="font-mono tabular-nums"
+                  autoComplete="postal-code"
+                />
+              </div>
             </div>
           </CollapsibleCard>
 
