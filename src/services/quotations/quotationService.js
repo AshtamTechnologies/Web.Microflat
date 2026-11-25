@@ -214,13 +214,18 @@ export async function listRevisions(id) {
  * 11. Submit Quotation for Approval
  * POST /api/quotations/{id}/submit-for-approval
  * @param {number|string} id
+ * @param {string} [comments]
  */
-export async function submitQuotationForApproval(id) {
+export async function submitQuotationForApproval(id, comments = '') {
   try {
     const validId = cleanId(id);
-    const response = await axiosInstance.post(QUOTATION_ENDPOINTS.SUBMIT_FOR_APPROVAL(validId));
+    const body = { comments: (comments || 'Submitted for approval').trim() };
+    console.log(`[QUOTATION_SUBMIT] Submitting quotation ${validId} for approval with body:`, body);
+    const response = await axiosInstance.post(QUOTATION_ENDPOINTS.SUBMIT_FOR_APPROVAL(validId), body);
+    console.log(`[QUOTATION_SUBMIT_SUCCESS] Backend response for quotation ${validId}:`, response.data);
     return response.data;
   } catch (err) {
+    console.error(`[QUOTATION_SUBMIT_ERROR] Failed for quotation ${id}:`, err);
     throw normalizeApiError(err);
   }
 }

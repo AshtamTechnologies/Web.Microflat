@@ -515,7 +515,8 @@ export default function VendorApprovalPage() {
         cell: (info) => {
           const row = info.row.original;
           const isOwnRequest = user?.id && String(row.initiatedBy) === String(user.id);
-          const canApprove = isAdmin && (!isOwnRequest || isSuperAdmin);
+          const isDesignatedUser = row?.approverUserId && user?.id && String(row.approverUserId) === String(user.id);
+          const canApprove = (isAdmin || Boolean(isDesignatedUser)) && (!isOwnRequest || isSuperAdmin);
 
           return (
             <div
@@ -591,10 +592,10 @@ export default function VendorApprovalPage() {
                     onClick={() => handleOpenApprove(row)}
                     className="text-xs font-semibold h-8 px-2.5 shadow-2xs flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-40"
                     title={
-                      !isAdmin
-                        ? 'Admin permissions required'
-                        : isOwnRequest && !isSuperAdmin
-                        ? 'You cannot approve a request you raised'
+                      !canApprove
+                        ? isOwnRequest && !isSuperAdmin
+                          ? 'You cannot approve a request you raised'
+                          : 'Admin or designated approver permissions required'
                         : `Approve ${row.vendorName}`
                     }
                   >
@@ -610,10 +611,10 @@ export default function VendorApprovalPage() {
                     onClick={() => handleOpenReject(row)}
                     className="text-xs font-semibold h-8 px-2.5 shadow-2xs flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-40"
                     title={
-                      !isAdmin
-                        ? 'Admin permissions required'
-                        : isOwnRequest && !isSuperAdmin
-                        ? 'You cannot reject a request you raised'
+                      !canApprove
+                        ? isOwnRequest && !isSuperAdmin
+                          ? 'You cannot reject a request you raised'
+                          : 'Admin or designated approver permissions required'
                         : `Reject ${row.vendorName}`
                     }
                   >

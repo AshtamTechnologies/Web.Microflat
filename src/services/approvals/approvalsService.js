@@ -45,22 +45,33 @@ export async function getAwaitingMeApprovals(params = {}) {
       query.ModuleCode = mod;
     }
     const approvalTypeId = params.approvalTypeId || params.ApprovalTypeId;
-    if (approvalTypeId) query.ApprovalTypeId = approvalTypeId;
+    if (approvalTypeId) {
+      query.ApprovalTypeId = approvalTypeId;
+    }
 
     const referenceId = params.referenceId || params.ReferenceId;
-    if (referenceId) query.ReferenceId = referenceId;
+    if (referenceId) {
+      query.ReferenceId = referenceId;
+    }
 
     const pageNumber = params.pageNumber || params.PageNumber;
-    if (pageNumber) query.PageNumber = pageNumber;
+    if (pageNumber) {
+      query.PageNumber = pageNumber;
+    }
 
     const pageSize = params.pageSize || params.PageSize;
-    if (pageSize) query.PageSize = pageSize;
+    if (pageSize) {
+      query.PageSize = pageSize;
+    }
 
+    console.log('[APPROVALS_SERVICE] GET /api/approval-requests/awaiting-me params:', query);
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.AWAITING_ME, {
       params: query,
     });
+    console.log('[APPROVALS_SERVICE] awaiting-me raw response:', response.data);
     return approvalRequestsFromApi(response.data);
   } catch (err) {
+    console.error('[APPROVALS_SERVICE] awaiting-me error:', err);
     throw normalizeApiError(err);
   }
 }
@@ -77,19 +88,30 @@ export async function getPendingApprovals(params = {}) {
     if (mod && mod !== 'ALL') {
       query.ModuleCode = mod;
     }
-    if (params.approvalTypeId) query.ApprovalTypeId = params.approvalTypeId;
-    if (params.referenceId) query.ReferenceId = params.referenceId;
+    if (params.approvalTypeId || params.ApprovalTypeId) {
+      query.ApprovalTypeId = params.approvalTypeId || params.ApprovalTypeId;
+    }
+    if (params.referenceId || params.ReferenceId) {
+      query.ReferenceId = params.referenceId || params.ReferenceId;
+    }
     if (params.mine !== undefined || params.Mine !== undefined) {
       query.Mine = params.mine !== undefined ? Boolean(params.mine) : Boolean(params.Mine);
     }
-    if (params.pageNumber) query.PageNumber = params.pageNumber;
-    if (params.pageSize) query.PageSize = params.pageSize;
+    if (params.pageNumber || params.PageNumber) {
+      query.PageNumber = params.pageNumber || params.PageNumber;
+    }
+    if (params.pageSize || params.PageSize) {
+      query.PageSize = params.pageSize || params.PageSize;
+    }
 
+    console.log('[APPROVALS_SERVICE] GET /api/approval-requests/pending params:', query);
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.PENDING, {
       params: query,
     });
+    console.log('[APPROVALS_SERVICE] pending raw response:', response.data);
     return approvalRequestsFromApi(response.data);
   } catch (err) {
+    console.error('[APPROVALS_SERVICE] pending error:', err);
     throw normalizeApiError(err);
   }
 }
@@ -109,19 +131,26 @@ export async function getApprovalHistory(params = {}) {
     if (params.status !== undefined && params.status !== null && params.status !== 'ALL') {
       query.Status = typeof params.status === 'number' ? params.status : normalizeApprovalStatus(params.status);
     }
-    if (params.approvalTypeId) query.ApprovalTypeId = params.approvalTypeId;
-    if (params.referenceId) query.ReferenceId = params.referenceId;
+    if (params.approvalTypeId || params.ApprovalTypeId) {
+      query.ApprovalTypeId = params.approvalTypeId || params.ApprovalTypeId;
+    }
+    if (params.referenceId || params.ReferenceId) {
+      query.ReferenceId = params.referenceId || params.ReferenceId;
+    }
     if (params.mine !== undefined || params.Mine !== undefined) {
       query.Mine = params.mine !== undefined ? Boolean(params.mine) : Boolean(params.Mine);
     }
-    if (params.pageNumber) query.PageNumber = params.pageNumber;
-    if (params.pageSize) query.PageSize = params.pageSize;
+    if (params.pageNumber || params.PageNumber) query.PageNumber = params.pageNumber || params.PageNumber;
+    if (params.pageSize || params.PageSize) query.PageSize = params.pageSize || params.PageSize;
 
+    console.log('[APPROVALS_SERVICE] GET /api/approval-requests/history params:', query);
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.HISTORY, {
       params: query,
     });
+    console.log('[APPROVALS_SERVICE] history raw response:', response.data);
     return approvalRequestsFromApi(response.data);
   } catch (err) {
+    console.error('[APPROVALS_SERVICE] history error:', err);
     throw normalizeApiError(err);
   }
 }
@@ -148,24 +177,31 @@ export async function getRequestTimeline(id) {
  */
 export async function listApprovalRequests(params = {}) {
   try {
-    const query = {
-      moduleCode: params.moduleCode || 'VENDOR',
-    };
+    const query = {};
+    const mod = params.moduleCode || params.ModuleCode;
+    if (mod && mod !== 'ALL') {
+      query.ModuleCode = mod;
+    }
 
     if (params.status !== undefined && params.status !== null && params.status !== 'ALL') {
-      query.status = typeof params.status === 'number' ? params.status : normalizeApprovalStatus(params.status);
+      query.Status = typeof params.status === 'number' ? params.status : normalizeApprovalStatus(params.status);
     }
-    if (params.approvalTypeId) query.approvalTypeId = params.approvalTypeId;
-    if (params.referenceId) query.referenceId = params.referenceId;
-    if (params.mine !== undefined) query.mine = Boolean(params.mine);
-    if (params.pageNumber) query.pageNumber = params.pageNumber;
-    if (params.pageSize) query.pageSize = params.pageSize;
+    if (params.approvalTypeId || params.ApprovalTypeId) query.ApprovalTypeId = params.approvalTypeId || params.ApprovalTypeId;
+    if (params.referenceId || params.ReferenceId) query.ReferenceId = params.referenceId || params.ReferenceId;
+    if (params.mine !== undefined || params.Mine !== undefined) {
+      query.Mine = params.mine !== undefined ? Boolean(params.mine) : Boolean(params.Mine);
+    }
+    if (params.pageNumber || params.PageNumber) query.PageNumber = params.pageNumber || params.PageNumber;
+    if (params.pageSize || params.PageSize) query.PageSize = params.pageSize || params.PageSize;
 
+    console.log('[APPROVALS_SERVICE] GET /api/approval-requests params:', query);
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.APPROVAL_REQUESTS, {
       params: query,
     });
+    console.log('[APPROVALS_SERVICE] listApprovalRequests raw response:', response.data);
     return approvalRequestsFromApi(response.data);
   } catch (err) {
+    console.error('[APPROVALS_SERVICE] listApprovalRequests error:', err);
     throw normalizeApiError(err);
   }
 }
@@ -177,11 +213,14 @@ export async function listApprovalRequests(params = {}) {
  */
 export async function getApprovalSummary({ mine = false } = {}) {
   try {
+    console.log('[APPROVALS_SERVICE] GET /api/approval-requests/summary?mine=' + Boolean(mine));
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.SUMMARY, {
       params: { mine: Boolean(mine) },
     });
+    console.log('[APPROVALS_SERVICE] summary raw response:', response.data);
     return approvalSummaryFromApi(response.data);
   } catch (err) {
+    console.error('[APPROVALS_SERVICE] summary error:', err);
     throw normalizeApiError(err);
   }
 }

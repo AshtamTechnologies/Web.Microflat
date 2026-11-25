@@ -15,6 +15,8 @@ export function ProductCategoriesProvider({ children }) {
   const isRelevantRoute = Boolean(
     location?.pathname?.startsWith('/configuration/product-categories') ||
     location?.pathname?.startsWith('/inquiries') ||
+    location?.pathname?.startsWith('/quotations') ||
+    location?.pathname?.startsWith('/sales-orders') ||
     location?.pathname?.startsWith('/products')
   );
   const shouldFetch = isRelevantRoute || hasRequested;

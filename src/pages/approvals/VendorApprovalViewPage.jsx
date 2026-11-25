@@ -118,6 +118,23 @@ export default function VendorApprovalViewPage() {
     try {
       const res = await approvalsService.getApprovalRequest(id);
       if (res) {
+        const req = res.request || res;
+        const mod = String(req?.moduleCode || '').toUpperCase().trim();
+
+        // If the approval request belongs to Quotation or PR, dispatch to the respective 360 review page
+        if (mod === 'QUOTATION') {
+          navigate(`/quotations/${req.referenceId || req.id}`, { replace: true });
+          return;
+        }
+        if (mod === 'PURCHASE_REQUISITION' || mod === 'PR') {
+          navigate(`/purchase-requisitions/${req.referenceId || req.id}`, { replace: true });
+          return;
+        }
+        if (mod === 'PRODUCT') {
+          navigate(`/products/${req.referenceId || req.id}`, { replace: true });
+          return;
+        }
+
         setData(res);
         if (res.vendorDetail?.countryId && fetchStatesForCountry) {
           fetchStatesForCountry(res.vendorDetail.countryId);
@@ -129,7 +146,7 @@ export default function VendorApprovalViewPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, fetchStatesForCountry]);
+  }, [id, fetchStatesForCountry, navigate]);
 
   useEffect(() => {
     loadRequestDetail();
@@ -165,7 +182,8 @@ export default function VendorApprovalViewPage() {
   const isAdmin = userRole.includes('admin') || userRole.includes('super');
   const isSuperAdmin = userRole.includes('super');
   const isOwnRequest = user?.id && String(request.initiatedBy) === String(user.id);
-  const canDecide = isAdmin && (!isOwnRequest || isSuperAdmin);
+  const isDesignatedUser = request?.approverUserId && user?.id && String(request.approverUserId) === String(user.id);
+  const canDecide = (isAdmin || Boolean(isDesignatedUser)) && (!isOwnRequest || isSuperAdmin);
 
   /* ── Confirm Approve ── */
   async function handleConfirmApprove(e, payload) {

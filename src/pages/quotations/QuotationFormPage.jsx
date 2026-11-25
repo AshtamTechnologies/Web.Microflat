@@ -50,6 +50,8 @@ import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useUsersContext } from '../../context/UsersContext';
+import { useStandardsContext } from '../../context/StandardsContext';
+import { calculateFlatnessTolerance, normalizeGradeCode } from '../../utils/flatnessFormula';
 import {
   TAX_SLABS,
   TAX_TREATMENTS,
@@ -62,6 +64,8 @@ import {
 import useColumnResize from '../../hooks/useColumnResize';
 import NegotiationStageFields from './components/NegotiationStageFields';
 import QuotationDocumentsSection from './components/QuotationDocumentsSection';
+import RegisterClientRequiredModal from './components/RegisterClientRequiredModal';
+import QuickClientOnboardDrawer from './components/QuickClientOnboardDrawer';
 import { isHtmlMarkup } from '../../utils/htmlUtils';
 
 const CATALOG_OPTIONS = [
@@ -84,6 +88,7 @@ export default function QuotationFormPage() {
   const {
     quotations,
     getQuotationById,
+    fetchQuotationDetail,
     getNextQuotationNo,
     createQuotation,
     createRevision,
@@ -92,15 +97,35 @@ export default function QuotationFormPage() {
     lookups,
   } = useQuotationsContext();
 
-  const { inquiries = [], fetchInquiries } = useInquiriesContext();
-  const { clients = [], ensureClientsLoaded } = useClientsContext();
+  const { inquiries = [], fetchInquiries, updateInquiry } = useInquiriesContext();
+  const { clients = [], ensureClientsLoaded, loadClients } = useClientsContext();
   const { allUsers = [], users = [] } = useUsersContext();
   const userList = allUsers.length > 0 ? allUsers : users;
 
   const isRevisionMode = Boolean(id);
-  const targetQuotation = useMemo(() => {
-    return isRevisionMode ? getQuotationById(id) : null;
-  }, [isRevisionMode, id, getQuotationById]);
+  const [isLoadingRevisionDetail, setIsLoadingRevisionDetail] = useState(isRevisionMode);
+  const [fetchedQuotation, setFetchedQuotation] = useState(null);
+  const targetQuotation = useMemo(() => isRevisionMode ? (fetchedQuotation || getQuotationById(id)) : null, [isRevisionMode, id, fetchedQuotation, getQuotationById]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isRevisionMode && id && fetchQuotationDetail) {
+      setIsLoadingRevisionDetail(true);
+      fetchQuotationDetail(id)
+        .then((res) => {
+          if (isMounted && res) {
+            setFetchedQuotation(res);
+          }
+          if (isMounted) setIsLoadingRevisionDetail(false);
+        })
+        .catch(() => {
+          if (isMounted) setIsLoadingRevisionDetail(false);
+        });
+    } else {
+      setIsLoadingRevisionDetail(false);
+    }
+    return () => { isMounted = false; };
+  }, [isRevisionMode, id, fetchQuotationDetail]);
 
   const userOptions = useMemo(() => {
     return userList.map((u) => {
@@ -166,8 +191,17 @@ export default function QuotationFormPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
 
+  const standardsContext = useStandardsContext?.() || {};
+  const { standardsList = [], gradeMapping = [], ensureStandardsLoaded } = standardsContext;
+
+  useEffect(() => {
+    ensureStandardsLoaded?.();
+  }, [ensureStandardsLoaded]);
+
   const [drawerCategory, setDrawerCategory] = useState('');
   const [drawerProduct, setDrawerProduct] = useState('');
+  const [drawerStandard, setDrawerStandard] = useState('');
+  const [drawerGrade, setDrawerGrade] = useState('');
   const [drawerVariant, setDrawerVariant] = useState('');
   const [drawerQty, setDrawerQty] = useState('1');
   const [drawerRate, setDrawerRate] = useState('');
@@ -179,6 +213,11 @@ export default function QuotationFormPage() {
   const [drawerDescription, setDrawerDescription] = useState('');
   const [isDescriptionEdited, setIsDescriptionEdited] = useState(false);
   const [inquiryPrefillError, setInquiryPrefillError] = useState(null);
+
+  // 409 Conflict Interception State: Prospect-to-Client Onboarding Bridge
+  const [conflictInquiry, setConflictInquiry] = useState(null);
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+  const [isQuickClientDrawerOpen, setIsQuickClientDrawerOpen] = useState(false);
 
   // Dynamic Client Addresses & Contacts State
   const [dynamicClientAddresses, setDynamicClientAddresses] = useState([]);
@@ -204,23 +243,30 @@ export default function QuotationFormPage() {
     return inquiries.map((inq) => ({
       value: inq.InquiryNo || inq.id,
       inquiryObj: inq,
-      label: `${inq.InquiryNo} · ${inq.CustomerName || inq.clientName || 'Client'} (${(inq.items || []).length} items)`,
+      label: `${inq.InquiryNo} · ${inq.CustomerName || inq.clientName || 'Client'} (${(inq.products || inq.items || inq.lines || inq.inquiryLines || []).length} items)`,
       isQuoted: quotedInquiryNos.has(String(inq.InquiryNo || '').toLowerCase()),
     }));
   }, [inquiries, quotations, id]);
 
   const inquirySelectOptions = useMemo(() => {
-    return [
+    const opts = [
       { value: '', label: '-- Select an Inquiry --' },
       ...availableInquiries.map((inq) => ({
         value: inq.value,
         label: inq.label,
       })),
     ];
-  }, [availableInquiries]);
+    if (formData.inquiryNo && !opts.some((o) => o.value === formData.inquiryNo)) {
+      opts.push({
+        value: formData.inquiryNo,
+        label: `${formData.inquiryNo} · ${formData.clientName || 'Client'}`,
+      });
+    }
+    return opts;
+  }, [availableInquiries, formData.inquiryNo, formData.clientName]);
 
-  // Handle Inquiry Selection (with dynamic API prefill)
-  async function handleSelectInquiry(inquiryNoOrId) {
+  // Handle Inquiry Selection (with dynamic API prefill & 409 Interception)
+  async function handleSelectInquiry(inquiryNoOrId, newClientOverride = null) {
     setInquiryPrefillError(null);
     if (!inquiryNoOrId) {
       setFormData((prev) => ({
@@ -247,6 +293,18 @@ export default function QuotationFormPage() {
 
     const inqId = matchedInq?.id || matchedInq?.InquiryId || inquiryNoOrId;
 
+    let inqDetail = matchedInq;
+    if (inqId) {
+      try {
+        const fetched = await inquiryService.getInquiryById(inqId);
+        if (fetched) {
+          inqDetail = fetched;
+        }
+      } catch (err) {
+        console.warn('Could not fetch inquiry detail fallback:', err);
+      }
+    }
+
     // Fetch dynamic prefill from API
     let prefill = null;
     let prefillFailed = false;
@@ -257,8 +315,28 @@ export default function QuotationFormPage() {
       } catch (e) {
         prefillFailed = true;
         console.warn('API fetchQuotationPrefill failed:', e);
+        const isNewClient409 =
+          e?.status === 409 ||
+          e?.response?.status === 409 ||
+          e?.message?.toLowerCase().includes('new client');
+
+        if (isNewClient409 && !newClientOverride) {
+          // Intercept 409 Conflict with Action Modal instead of a dead-end static error toast
+          let conflictObj = inqDetail || matchedInq;
+          if ((!conflictObj?.AddressLine1 && !conflictObj?.address1) && inqId) {
+            try {
+              const fullInq = await inquiryService.getInquiryById(inqId);
+              if (fullInq) conflictObj = fullInq;
+            } catch (_) {}
+          }
+          setConflictInquiry(conflictObj || { id: inqId, InquiryNo: inquiryNoOrId });
+          setIsConflictModalOpen(true);
+          setInquiryPrefillError(null);
+          return;
+        }
+
         const errMsg =
-          e?.status === 409 || e?.response?.status === 409 || e?.message?.toLowerCase().includes('new client')
+          isNewClient409
             ? 'This inquiry was received from a new prospect client. Please register the client in the Clients module before generating a quotation.'
             : e?.message || 'Failed to fetch quotation prefill';
         setInquiryPrefillError(errMsg);
@@ -267,13 +345,23 @@ export default function QuotationFormPage() {
     }
 
     // Resolve client
-    const inqClient = clients.find(
-      (c) =>
-        (c.companyName || '').toLowerCase() === (prefill?.client?.clientName || matchedInq?.CustomerName || '').toLowerCase() ||
-        (c.clientId || c.id) === (prefill?.clientId || prefill?.client?.id || matchedInq?.clientId)
-    );
+    const inqClient =
+      newClientOverride ||
+      clients.find(
+        (c) =>
+          (c.companyName || '').toLowerCase() === (prefill?.client?.clientName || inqDetail?.CustomerName || matchedInq?.CustomerName || inqDetail?.companyName || '').toLowerCase() ||
+          (c.clientId || c.id) === (prefill?.clientId || prefill?.client?.id || inqDetail?.clientId || matchedInq?.clientId)
+      );
 
-    const resolvedClientId = prefill?.clientId || prefill?.client?.id || inqClient?.clientId || inqClient?.id;
+    const resolvedClientId =
+      newClientOverride?.clientId ||
+      newClientOverride?.id ||
+      prefill?.clientId ||
+      prefill?.client?.id ||
+      inqClient?.clientId ||
+      inqClient?.id ||
+      inqDetail?.clientId ||
+      matchedInq?.clientId;
 
     // Load full client details from GET /api/clients/{id} to get dynamic addresses and contacts
     let clientDetailRes = null;
@@ -285,8 +373,18 @@ export default function QuotationFormPage() {
       }
     }
 
-    const availableAddrs = clientDetailRes?.currentDetail?.addresses || prefill?.client?.addresses || inqClient?.addresses || [];
-    const availableContacts = clientDetailRes?.currentDetail?.contacts || prefill?.client?.contacts || inqClient?.contacts || [];
+    const availableAddrs =
+      clientDetailRes?.currentDetail?.addresses ||
+      newClientOverride?.addresses ||
+      prefill?.client?.addresses ||
+      inqClient?.addresses ||
+      [];
+    const availableContacts =
+      clientDetailRes?.currentDetail?.contacts ||
+      newClientOverride?.contacts ||
+      prefill?.client?.contacts ||
+      inqClient?.contacts ||
+      [];
 
     setDynamicClientAddresses(availableAddrs);
     setDynamicClientContacts(availableContacts);
@@ -302,14 +400,14 @@ export default function QuotationFormPage() {
       prefill?.clientAddressId ||
       null;
     const defaultAddr = prefillAddrObj
-      ? `${prefillAddrObj.addressType ? `${prefillAddrObj.addressType} – ` : ''}${prefillAddrObj.addressLine1 || prefillAddrObj.address || ''}${prefillAddrObj.city ? `, ${prefillAddrObj.city}` : ''}${prefillAddrObj.pincode ? ` ${prefillAddrObj.pincode}` : ''}`.trim()
-      : inqClient?.addresses?.[0]?.addressLine1
-      ? `${inqClient.addresses[0].addressLine1}, ${inqClient.addresses[0].city || ''}`
-      : matchedInq?.AddressLine1
-      ? `${matchedInq.AddressLine1}, ${matchedInq.City || ''}`
+      ? `${prefillAddrObj.addressType ? `${prefillAddrObj.addressType} – ` : ''}${prefillAddrObj.addressLine1 || prefillAddrObj.address1 || prefillAddrObj.address || ''}${prefillAddrObj.city ? `, ${prefillAddrObj.city}` : ''}${prefillAddrObj.pincode || prefillAddrObj.zipCode ? ` ${prefillAddrObj.pincode || prefillAddrObj.zipCode}` : ''}`.trim()
+      : inqClient?.addresses?.[0]?.addressLine1 || inqClient?.addresses?.[0]?.address1
+      ? `${inqClient.addresses[0].addressLine1 || inqClient.addresses[0].address1}, ${inqClient.addresses[0].city || ''}`
+      : inqDetail?.AddressLine1 || matchedInq?.AddressLine1
+      ? `${inqDetail?.AddressLine1 || matchedInq?.AddressLine1}, ${inqDetail?.City || matchedInq?.City || ''}`
       : '';
 
-    // Prefer prefill active contact, then inqClient active contact, then matchedInq contact
+    // Prefer prefill active contact, then inqClient active contact, then matchedInq/inqDetail contact
     const activePrefillContacts = availableContacts.filter((c) => c.isActive !== false);
     const prefillContactObj =
       activePrefillContacts.find((c) => (c.clientContactId || c.id) === prefill?.clientContactId) ||
@@ -325,10 +423,23 @@ export default function QuotationFormPage() {
       ? `${prefillContactObj.firstName || ''} ${prefillContactObj.lastName || ''}`.trim() || prefillContactObj.name || ''
       : inqClient?.contacts?.[0]?.firstName
       ? `${inqClient.contacts[0].firstName} ${inqClient.contacts[0].lastName || ''}`.trim()
-      : matchedInq?.ContactPerson || '';
+      : inqDetail?.ContactPerson || matchedInq?.ContactPerson || '';
 
-    const defaultContactEmail = prefillContactObj?.email || matchedInq?.Email || inqClient?.email || '';
-    const defaultContactPhone = prefillContactObj?.mobile1 || prefillContactObj?.phoneNo || prefillContactObj?.phone || matchedInq?.Phone || inqClient?.phone || '';
+    const defaultContactEmail =
+      prefillContactObj?.email ||
+      inqDetail?.Email ||
+      matchedInq?.Email ||
+      inqClient?.officialEmail ||
+      inqClient?.email ||
+      '';
+    const defaultContactPhone =
+      prefillContactObj?.phoneNo ||
+      prefillContactObj?.mobile1 ||
+      prefillContactObj?.phone ||
+      inqDetail?.Phone ||
+      matchedInq?.Phone ||
+      inqClient?.phone ||
+      '';
 
     // Currency from prefill or lookups
     const prefillCurrencyId = prefill?.currencyId || lookups?.defaultCurrencyId || (lookups?.currencies?.find((c) => (c.code || c.currencyCode) === 'INR')?.id || 2);
@@ -342,7 +453,16 @@ export default function QuotationFormPage() {
 
     // Map items from prefill or fallback to inquiry items
     let mappedItems = [];
-    const rawItems = prefill?.lineItems || prefill?.items || matchedInq?.items || [];
+    const rawItems =
+      prefill?.lines ||
+      prefill?.lineItems ||
+      prefill?.items ||
+      prefill?.inquiryLines ||
+      inqDetail?.products ||
+      inqDetail?.items ||
+      matchedInq?.products ||
+      matchedInq?.items ||
+      [];
 
     if (Array.isArray(rawItems) && rawItems.length > 0) {
       mappedItems = rawItems.map((it, idx) => {
@@ -360,7 +480,10 @@ export default function QuotationFormPage() {
           variantName: it.variantName || catVar?.variantName || 'Standard Size',
           itemCode: it.itemCode || it.productCode || catVar?.variantCode || '—',
           technicalDetails: it.technicalDetails || it.specification || '',
-          description: it.description || it.specification || fallbackDesc || '',
+          description: (it.description || it.specification || fallbackDesc || '')
+            .replace(/,?\s*undefined\s*,?/g, ', ')
+            .replace(/^,\s*|,\s*$/g, '')
+            .trim(),
           quantity: Number(it.quantity) || 1,
           rate: Number(it.rate) || 0,
           rateSource: it.rateSource || 'None',
@@ -376,10 +499,22 @@ export default function QuotationFormPage() {
 
     setFormData((prev) => ({
       ...prev,
-      inquiryNo: matchedInq?.InquiryNo || prefill?.inquiryNo || inquiryNoOrId,
+      inquiryNo:
+        matchedInq?.InquiryNo ||
+        inqDetail?.InquiryNo ||
+        inqDetail?.inquiryNo ||
+        prefill?.inquiryNo ||
+        (typeof inquiryNoOrId === 'string' && inquiryNoOrId.startsWith('INQ') ? inquiryNoOrId : prev.inquiryNo),
       inquiryId: inqId,
-      clientName: prefill?.client?.clientName || matchedInq?.CustomerName || inqClient?.companyName || '',
-      clientId: prefill?.clientId || prefill?.client?.id || inqClient?.clientId || inqClient?.id || '',
+      clientName:
+        newClientOverride?.companyName ||
+        prefill?.client?.clientName ||
+        inqDetail?.CustomerName ||
+        inqDetail?.companyName ||
+        inqClient?.companyName ||
+        matchedInq?.CustomerName ||
+        '',
+      clientId: resolvedClientId || '',
       clientAddressId: defaultAddrId,
       clientAddress: defaultAddr,
       clientContactId: defaultContactId,
@@ -401,9 +536,81 @@ export default function QuotationFormPage() {
       toast(`${prefill.skippedCustomItems.length} custom line item(s) skipped from auto-pricing.`);
     }
 
-    if (!prefillFailed) {
-      toast.success(`Inquiry ${matchedInq?.InquiryNo || inquiryNoOrId} selected · Client & items loaded`);
+    if (!prefillFailed && !newClientOverride) {
+      toast.success(`Inquiry ${matchedInq?.InquiryNo || inqDetail?.InquiryNo || inquiryNoOrId} selected · Client & items loaded`);
     }
+  }
+
+  // Handlers for Prospect-to-Client Onboarding Bridge
+  const handleCancelConflictModal = () => {
+    setIsConflictModalOpen(false);
+    setConflictInquiry(null);
+    setInquiryPrefillError(null);
+    setFormData((prev) => ({
+      ...prev,
+      inquiryNo: '',
+      inquiryId: '',
+      clientName: '',
+      clientId: '',
+      clientAddress: '',
+      clientAddressId: null,
+      contactPerson: '',
+      clientContactId: null,
+      contactEmail: '',
+      contactPhone: '',
+    }));
+    // Clear URL query parameter cleanly if loaded via ?inquiryId=...
+    if (inquiryIdParam) {
+      navigate('/quotations/new', { replace: true });
+    }
+  };
+
+  const handleProceedToOnboard = () => {
+    setIsConflictModalOpen(false);
+    setIsQuickClientDrawerOpen(true);
+  };
+
+  const handleQuickClientSuccess = async (createdClient) => {
+    setIsQuickClientDrawerOpen(false);
+    const targetInquiry = conflictInquiry;
+    const newClientId = createdClient?.clientId || createdClient?.id;
+    const newClientName =
+      createdClient?.companyName ||
+      createdClient?.clientName ||
+      targetInquiry?.CustomerName ||
+      'Client';
+
+    // Link the newly created client to the inquiry
+    if (targetInquiry && targetInquiry.id && updateInquiry) {
+      try {
+        await updateInquiry(targetInquiry.id, {
+          ...targetInquiry,
+          isNewClient: false,
+          clientId: newClientId,
+        });
+      } catch (err) {
+        console.warn('Could not update inquiry with new clientId:', err);
+      }
+    }
+
+    // Refresh clients in context
+    if (loadClients) {
+      await loadClients();
+    } else if (ensureClientsLoaded) {
+      ensureClientsLoaded();
+    }
+
+    // Re-trigger prefill with newly registered client override
+    const inqKey = targetInquiry?.InquiryNo || targetInquiry?.id;
+    if (inqKey) {
+      await handleSelectInquiry(inqKey, createdClient);
+    }
+
+    toast.success(
+      `Client ${newClientName} registered successfully. Quotation form loaded.`,
+      { duration: 5000 }
+    );
+    setConflictInquiry(null);
   };
 
   // ── Column Resizing State for Product Grid (via shared hook) ──
@@ -444,6 +651,7 @@ export default function QuotationFormPage() {
   useEffect(() => {
     ensureClientsLoaded?.();
     fetchLookups?.();
+    fetchInquiries?.();
 
     // Dynamically load products catalog & categories from backend
     async function loadDynamicCatalog() {
@@ -470,19 +678,37 @@ export default function QuotationFormPage() {
         targetQuotation.revisions?.[targetQuotation.currentRevision] ||
         targetQuotation.revisions?.[targetQuotation.revisions.length - 1];
 
+      const revItems =
+        (latestRev?.items && latestRev.items.length > 0)
+          ? latestRev.items
+          : (targetQuotation.items || []);
+
+      const resolvedClientId = targetQuotation.clientId || targetQuotation.client?.id || targetQuotation.inquiry?.clientId || null;
+
+      if (resolvedClientId) {
+        clientService.getClientById(resolvedClientId).then((res) => {
+          const addrs = res?.currentDetail?.addresses || res?.addresses || res?.versions?.[0]?.addresses || [];
+          const contacts = res?.currentDetail?.contacts || res?.contacts || res?.versions?.[0]?.contacts || [];
+          if (addrs.length > 0) setDynamicClientAddresses(addrs);
+          if (contacts.length > 0) setDynamicClientContacts(contacts);
+        }).catch((e) => console.warn('Could not load client details for revision:', e));
+      }
+
       setFormData({
         quotationNo: targetQuotation.quotationNo,
         inquiryNo: targetQuotation.inquiryNo,
         inquiryId: targetQuotation.inquiryId,
-        revisionNo: (targetQuotation.revisions?.length || 1),
+        revisionNo: (targetQuotation.revisions?.length || (Number(targetQuotation.currentRevision) + 1) || 1),
         revisionDate: new Date().toISOString().split('T')[0],
         revisionReason: '',
-        clientName: targetQuotation.clientName,
-        clientId: targetQuotation.clientId,
-        clientAddress: targetQuotation.clientAddress,
-        contactPerson: targetQuotation.contactPerson,
-        contactEmail: targetQuotation.contactEmail,
-        contactPhone: targetQuotation.contactPhone,
+        clientName: targetQuotation.clientName || targetQuotation.client?.companyName || '',
+        clientId: resolvedClientId,
+        clientAddress: targetQuotation.clientAddress || '',
+        clientAddressId: targetQuotation.clientAddressId || null,
+        contactPerson: targetQuotation.contactPerson || '',
+        clientContactId: targetQuotation.clientContactId || null,
+        contactEmail: targetQuotation.contactEmail || '',
+        contactPhone: targetQuotation.contactPhone || '',
         currency: targetQuotation.currency || 'INR',
         currencyId: targetQuotation.currencyId || 2,
         validUntil: targetQuotation.validUntil || '',
@@ -500,7 +726,7 @@ export default function QuotationFormPage() {
           .map((t) => Number(t.taxConfigDetailId || t.id || t))
           .filter(Boolean),
         pricingNotes: targetQuotation.pricingNotes || targetQuotation.remarks || '',
-        items: latestRev?.items?.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })) || [],
+        items: revItems.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })),
       });
 
       setNegotiationStageData((prev) => ({
@@ -661,6 +887,112 @@ export default function QuotationFormPage() {
     if (!activeProductObj) return null;
     return (activeProductObj.variants || []).find((v) => String(v.id) === String(drawerVariant)) || null;
   }, [drawerProduct, productVariantsMap, activeProductObj, drawerVariant]);
+
+  // Standard Options for Quotation Drawer
+  const drawerStandardOptions = useMemo(() => {
+    if (activeProductObj?.supportedStandards && Array.isArray(activeProductObj.supportedStandards) && activeProductObj.supportedStandards.length > 0) {
+      return activeProductObj.supportedStandards.map((s) => ({ value: s, label: s }));
+    }
+    if (activeProductObj?.standards && Array.isArray(activeProductObj.standards) && activeProductObj.standards.length > 0) {
+      return activeProductObj.standards.map((s) => ({
+        value: s.standardCode || String(s.standardId || s.id),
+        label: s.standardCode || `Standard #${s.standardId || s.id}`,
+      }));
+    }
+    if (Array.isArray(standardsList) && standardsList.length > 0) {
+      return standardsList.filter((s) => s.isActive !== false).map((s) => ({
+        value: s.standardCode || String(s.id),
+        label: s.description ? `${s.standardCode} (${s.description})` : s.standardCode,
+      }));
+    }
+    return [
+      { value: 'IS-7327-2003', label: 'IS-7327-2003 (Indian Standard - Granite)' },
+      { value: 'DIN-876', label: 'DIN-876 (German Standard)' },
+      { value: 'BS-817', label: 'BS-817 (British Standard)' },
+      { value: 'US-Fed GGG-P-463c', label: 'US-Fed GGG-P-463c (Federal Specification)' },
+      { value: 'IS-2285', label: 'IS-2285 (Cast Iron Surface Plates)' },
+    ];
+  }, [activeProductObj, standardsList]);
+
+  // Grade Options filtered strictly by drawerStandard
+  const drawerGradeOptions = useMemo(() => {
+    const curStd = String(drawerStandard || '').trim();
+    if (!curStd) return [];
+
+    const matchedMapping = (gradeMapping || []).find((m) =>
+      String(m.standardCode || '').toLowerCase() === curStd.toLowerCase() ||
+      String(m.standardId || '') === curStd
+    );
+    if (matchedMapping && Array.isArray(matchedMapping.grades) && matchedMapping.grades.length > 0) {
+      return matchedMapping.grades
+        .filter((g) => g.isGradeActive !== false)
+        .map((g) => ({
+          value: g.gradeCode,
+          label: `${g.gradeCode}${g.description ? ` · ${g.description}` : ''}`,
+        }));
+    }
+
+    const stdUpper = curStd.toUpperCase();
+    if (stdUpper.includes('GGG') || stdUpper.includes('ASME') || stdUpper.includes('463')) {
+      return [
+        { value: 'Grade AA', label: 'Grade AA · Precision Laboratory' },
+        { value: 'Grade A', label: 'Grade A · Standard Inspection' },
+        { value: 'Grade B', label: 'Grade B · Tool Room / Shop' },
+      ];
+    }
+    if (stdUpper.includes('DIN')) {
+      return [
+        { value: 'Grade 00', label: 'Grade 00 · High Precision Laboratory' },
+        { value: 'Grade 0', label: 'Grade 0 · Metrology & Inspection' },
+        { value: 'Grade 1', label: 'Grade 1 · Workshop / Production' },
+        { value: 'Grade 2', label: 'Grade 2 · Toolroom General' },
+        { value: 'Grade 3', label: 'Grade 3 · Heavy Workshop' },
+      ];
+    }
+    return [
+      { value: 'Grade 00', label: 'Grade 00 · Calibration / Lab Grade' },
+      { value: 'Grade 0', label: 'Grade 0 · Inspection / Metrology Grade' },
+      { value: 'Grade 1', label: 'Grade 1 · Tool Room / Shop Floor' },
+      { value: 'Grade 2', label: 'Grade 2 · Workshop / Machining Grade' },
+      { value: 'Grade 3', label: 'Grade 3 · Rough Workshop Grade' },
+    ];
+  }, [drawerStandard, gradeMapping]);
+
+  // Parse dimensions from variant
+  const parseDimsFromQuotationVariant = useCallback((v) => {
+    if (!v) return { length: 0, width: 0 };
+    if (v.lengthMm && v.widthMm) return { length: Number(v.lengthMm), width: Number(v.widthMm) };
+    const str = v.size || v.variantName || '';
+    const m = String(str).match(/(\d+)\s*[x×*]\s*(\d+)/i);
+    return m ? { length: Number(m[1]), width: Number(m[2]) } : { length: 0, width: 0 };
+  }, []);
+
+  // Dynamically calculate flatness for drawer
+  const drawerCalculatedFlatness = useMemo(() => {
+    if (!activeVariantObj || !drawerStandard || !drawerGrade) return '—';
+    const dims = parseDimsFromQuotationVariant(activeVariantObj);
+    if (!dims.length || !dims.width) return '—';
+    try {
+      const res = calculateFlatnessTolerance(dims.length, dims.width, drawerStandard, drawerGrade);
+      if (res && res.isSupported && res.valueMicrons !== undefined) {
+        return `${res.valueMicrons} µm`;
+      }
+    } catch {
+      // ignore
+    }
+    return '—';
+  }, [activeVariantObj, drawerStandard, drawerGrade, parseDimsFromQuotationVariant]);
+
+  // Dynamically calculate item code
+  const drawerCalculatedItemCode = useMemo(() => {
+    if (!activeVariantObj && !activeProductObj) return 'Auto-generated';
+    const baseCode = activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'ITM';
+    if (drawerGrade) {
+      const normGrd = normalizeGradeCode(drawerGrade) || '0';
+      return `${baseCode}-GR${normGrd}`;
+    }
+    return baseCode;
+  }, [activeVariantObj, activeProductObj, drawerGrade]);
 
   // Dynamic Product Options & Accessories with pricing from backend
   const availableDrawerOptions = useMemo(() => {
@@ -860,9 +1192,9 @@ export default function QuotationFormPage() {
     async function loadClientData() {
       try {
         const detail = await clientService.getClientById(formData.clientId);
-        if (isMounted && detail?.currentDetail) {
-          const addrs = detail.currentDetail.addresses || [];
-          const cnts = detail.currentDetail.contacts || [];
+        if (isMounted && detail) {
+          const addrs = detail.currentDetail?.addresses || detail.addresses || detail.versions?.[0]?.addresses || [];
+          const cnts = detail.currentDetail?.contacts || detail.contacts || detail.versions?.[0]?.contacts || [];
           if (addrs.length > 0) setDynamicClientAddresses(addrs);
           if (cnts.length > 0) setDynamicClientContacts(cnts);
         }
@@ -1027,6 +1359,8 @@ export default function QuotationFormPage() {
     setEditingIndex(null);
     setDrawerCategory('');
     setDrawerProduct('');
+    setDrawerStandard('');
+    setDrawerGrade('');
     setDrawerVariant('');
     setDrawerQty('1');
     setDrawerRate('');
@@ -1046,6 +1380,8 @@ export default function QuotationFormPage() {
     setEditingIndex(index);
     setDrawerCategory(item.categoryId || '');
     setDrawerProduct(item.productId || '');
+    setDrawerStandard(item.standards || item.standardCode || '');
+    setDrawerGrade(item.grade || item.gradeCode || '');
     setDrawerVariant(item.variantId || '');
     setDrawerQty(String(item.quantity || 1));
     setDrawerRate(String(item.rate || 0));
@@ -1060,7 +1396,7 @@ export default function QuotationFormPage() {
     setIsDrawerOpen(true);
   };
 
-  // Handle Drawer Product / Variant Selection (auto-fetches product description)
+  // Handle Drawer Product / Standard / Grade / Variant Selection
   const handleDrawerProductChange = (prodId) => {
     setDrawerProduct(prodId);
     setDrawerVariant('');
@@ -1069,10 +1405,50 @@ export default function QuotationFormPage() {
     if (prod && !drawerCategory && prod.categoryId) {
       setDrawerCategory(String(prod.categoryId));
     }
+    const std = prod?.primaryStandard || (prod?.standards && prod.standards[0]?.standardCode) || prod?.primaryStandardCode || (prod?.supportedStandards && prod.supportedStandards[0]) || 'IS-7327-2003';
+    const grd = String(std).toUpperCase().includes('GGG') ? 'Grade AA' : 'Grade 0';
+    setDrawerStandard(std);
+    setDrawerGrade(grd);
     const details = productDetailsMap[prodId];
     const fullDesc = details?.description || prod?.description || (prod ? buildCatalogProductDescription(prod, null) : '');
     if (!isDescriptionEdited) {
       setDrawerDescription(fullDesc);
+    }
+  };
+
+  const handleDrawerStandardChange = (std) => {
+    setDrawerStandard(std);
+    let nextGrade = drawerGrade || 'Grade 0';
+    const stdUpper = String(std).toUpperCase();
+    if (stdUpper.includes('GGG') || stdUpper.includes('ASME')) {
+      if (!nextGrade.includes('AA') && !nextGrade.includes('A') && !nextGrade.includes('B')) {
+        nextGrade = 'Grade AA';
+      }
+    } else {
+      if (nextGrade.includes('AA') || nextGrade.includes('A') || nextGrade.includes('B')) {
+        nextGrade = 'Grade 0';
+      }
+    }
+    setDrawerGrade(nextGrade);
+    if (!isDescriptionEdited && activeProductObj) {
+      const baseDesc = activeProductObj.description || activeProductObj.productName || '';
+      const variantSpecs = [
+        activeVariantObj?.variantName || activeVariantObj?.size ? `Size: ${activeVariantObj?.variantName || activeVariantObj?.size}` : null,
+        `${nextGrade} (${std})`,
+      ].filter(Boolean).join(' · ');
+      setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
+    }
+  };
+
+  const handleDrawerGradeChange = (grd) => {
+    setDrawerGrade(grd);
+    if (!isDescriptionEdited && activeProductObj) {
+      const baseDesc = activeProductObj.description || activeProductObj.productName || '';
+      const variantSpecs = [
+        activeVariantObj?.variantName || activeVariantObj?.size ? `Size: ${activeVariantObj?.variantName || activeVariantObj?.size}` : null,
+        `${grd} (${drawerStandard || 'Standard'})`,
+      ].filter(Boolean).join(' · ');
+      setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
     }
   };
 
@@ -1083,7 +1459,7 @@ export default function QuotationFormPage() {
       const baseDesc = activeProductObj.description || activeProductObj.productName || '';
       const variantSpecs = [
         variant?.variantName || variant?.size ? `Size: ${variant?.variantName || variant?.size}` : null,
-        variant?.gradeCode || variant?.grade ? `Grade: ${variant?.gradeCode || variant?.grade}` : null,
+        drawerGrade ? `${drawerGrade} (${drawerStandard || 'Standard'})` : null,
       ].filter(Boolean).join(' · ');
       setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
     }
@@ -1094,7 +1470,7 @@ export default function QuotationFormPage() {
       const baseDesc = activeProductObj.description || activeProductObj.productName || '';
       const variantSpecs = [
         activeVariantObj?.variantName || activeVariantObj?.size ? `Size: ${activeVariantObj?.variantName || activeVariantObj?.size}` : null,
-        activeVariantObj?.gradeCode || activeVariantObj?.grade ? `Grade: ${activeVariantObj?.gradeCode || activeVariantObj?.grade}` : null,
+        drawerGrade ? `${drawerGrade} (${drawerStandard || 'Standard'})` : null,
       ].filter(Boolean).join(' · ');
       setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
     }
@@ -1230,7 +1606,12 @@ export default function QuotationFormPage() {
       productName: activeProductObj?.productName || 'Custom Product',
       variantId: activeVariantObj?.id || activeVariantObj?.productVariantId || '',
       variantName: activeVariantObj?.variantName || activeVariantObj?.name || 'Standard Variant',
-      itemCode: activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'ITM-01',
+      standards: drawerStandard,
+      standardCode: drawerStandard,
+      grade: drawerGrade,
+      gradeCode: drawerGrade,
+      flatness: drawerCalculatedFlatness,
+      itemCode: drawerCalculatedItemCode !== 'Auto-generated' ? drawerCalculatedItemCode : (activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'ITM-01'),
       technicalDetails: activeVariantObj?.technicalDetails || activeProductObj?.standardInfo || '',
       description: drawerDescription.trim() || defaultDesc,
       quantity: Math.max(1, Number(drawerQty) || 1),
@@ -1402,6 +1783,18 @@ export default function QuotationFormPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (isRevisionMode && isLoadingRevisionDetail) {
+    return (
+      <div className="p-16 max-w-xl mx-auto text-center space-y-4">
+        <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+        <h3 className="text-base font-bold text-heading">Loading Previous Revision Data...</h3>
+        <p className="text-xs text-text-muted">
+          Copying all products, line items, pricing, client address, and terms from previous revision.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-w-0 space-y-6 pb-24">
@@ -2181,7 +2574,28 @@ export default function QuotationFormPage() {
             />
           </div>
 
-          {/* Row 2: Variant & Item Code */}
+          {/* Row 2: Manufacturing Standard & Grade / Accuracy */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <SearchableSelect
+              label="Manufacturing Standard"
+              options={drawerStandardOptions}
+              value={drawerStandard}
+              placeholder={activeProductObj ? '-- Choose Standard --' : 'Select product first'}
+              disabled={!activeProductObj}
+              onChange={(e) => handleDrawerStandardChange(e.target.value)}
+            />
+
+            <SearchableSelect
+              label="Grade / Accuracy"
+              options={drawerGradeOptions}
+              value={drawerGrade}
+              placeholder={!activeProductObj ? 'Select product first' : !drawerStandard ? 'Select standard first' : '-- Choose Grade --'}
+              disabled={!activeProductObj || !drawerStandard}
+              onChange={(e) => handleDrawerGradeChange(e.target.value)}
+            />
+          </div>
+
+          {/* Row 3: Size / Variant & Item Code */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <SearchableSelect
               label="Size / Variant"
@@ -2196,12 +2610,12 @@ export default function QuotationFormPage() {
             <Input
               label="Item Code"
               disabled
-              value={activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'Auto-generated'}
-              hint="Automatically assigned from catalog variant"
+              value={drawerCalculatedItemCode}
+              hint="Automatically assigned from catalog variant & grade"
             />
           </div>
 
-          {/* Row 3: Quantity, Unit Rate, Other Charges, Tax % */}
+          {/* Row 4: Quantity, Unit Rate, Other Charges, Tax % */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <Input
               label="Quantity"
@@ -2286,15 +2700,15 @@ export default function QuotationFormPage() {
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Standard</div>
-                  <div className="font-semibold text-heading truncate">{activeProductObj?.primaryStandardCode || (activeProductObj?.standards?.[0]?.standardCode || activeProductObj?.standards?.[0]?.name) || activeVariantObj?.standardCode || '—'}</div>
+                  <div className="font-semibold text-heading truncate">{drawerStandard || activeProductObj?.primaryStandardCode || (activeProductObj?.standards?.[0]?.standardCode || activeProductObj?.standards?.[0]?.name) || activeVariantObj?.standardCode || '—'}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Grade</div>
-                  <div className="font-semibold text-heading truncate">{activeVariantObj?.gradeCode || activeVariantObj?.grade || lookups?.grades?.find((g) => g.id === activeVariantObj?.gradeId)?.gradeCode || '—'}</div>
+                  <div className="font-semibold text-heading truncate">{drawerGrade || activeVariantObj?.gradeCode || activeVariantObj?.grade || lookups?.grades?.find((g) => g.id === activeVariantObj?.gradeId)?.gradeCode || '—'}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Flatness</div>
-                  <div className="font-semibold text-heading truncate">{activeVariantObj?.flatness || '—'}</div>
+                  <div className="font-semibold text-heading truncate">{drawerCalculatedFlatness !== '—' ? drawerCalculatedFlatness : (activeVariantObj?.flatness || '—')}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Dimensions</div>
@@ -2429,6 +2843,24 @@ export default function QuotationFormPage() {
           </div>
         </Modal>
       )}
+
+      {/* ── PROSPECT-TO-CLIENT ONBOARDING BRIDGE (HTTP 409 Interception) ── */}
+      <RegisterClientRequiredModal
+        isOpen={isConflictModalOpen}
+        onClose={handleCancelConflictModal}
+        inquiry={conflictInquiry}
+        onProceed={handleProceedToOnboard}
+      />
+
+      <QuickClientOnboardDrawer
+        isOpen={isQuickClientDrawerOpen}
+        onClose={() => {
+          setIsQuickClientDrawerOpen(false);
+          handleCancelConflictModal();
+        }}
+        inquiry={conflictInquiry}
+        onSuccess={handleQuickClientSuccess}
+      />
 
       {/* ── STICKY BOTTOM ACTIONS BAR ── */}
       <FormActionsBar
