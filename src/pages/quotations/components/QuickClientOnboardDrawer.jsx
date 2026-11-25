@@ -29,6 +29,7 @@ import {
 import { useClientsContext } from '../../../context/ClientsContext';
 import { useCountryState } from '../../../context/CountryStateContext';
 import { useRegions } from '../../../context/RegionsContext';
+import { inquiryService } from '../../../services';
 import { getTodayIsoDate } from '../../../utils/effectiveDateUtils';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -45,11 +46,50 @@ export default function QuickClientOnboardDrawer({
     countryOptions = [],
     getStateOptions,
     fetchStatesForCountry,
+    ensureCountriesLoaded,
   } = useCountryState();
   const { regions = [] } = useRegions();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+  const [inquiryDetail, setInquiryDetail] = useState(null);
+
+  useEffect(() => {
+    ensureCountriesLoaded?.();
+  }, [ensureCountriesLoaded]);
+
+  // Deep fetch full inquiry details if only list summary was provided
+  useEffect(() => {
+    if (!isOpen || !inquiry) {
+      setInquiryDetail(null);
+      return;
+    }
+
+    const inqId = inquiry.id || inquiry.InquiryId;
+    let isMounted = true;
+
+    // If inquiry already has address1 or AddressLine1 or countryId, use it directly
+    if (inquiry.address1 || inquiry.AddressLine1 || inquiry.countryId || inquiry.Country || inquiry.stateId || inquiry.State) {
+      setInquiryDetail(inquiry);
+    } else if (inqId) {
+      inquiryService.getInquiryById(inqId)
+        .then((full) => {
+          if (isMounted && full) {
+            setInquiryDetail(full);
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not fetch full inquiry detail in drawer:', err);
+          if (isMounted) setInquiryDetail(inquiry);
+        });
+    } else {
+      setInquiryDetail(inquiry);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, inquiry]);
 
   const [form, setForm] = useState({
     effectiveDate: getTodayIsoDate(),
@@ -76,25 +116,27 @@ export default function QuickClientOnboardDrawer({
 
   // Populate form with 100% inquiry prospect details whenever drawer opens or inquiry changes
   useEffect(() => {
-    if (!isOpen || !inquiry) return;
+    if (!isOpen) return;
+    const activeInq = inquiryDetail || inquiry;
+    if (!activeInq) return;
 
-    const rawCustName = (inquiry.CustomerName || inquiry.companyName || '').trim();
-    const rawContact = (inquiry.ContactPerson || inquiry.contactPersonName || '').trim();
+    const rawCustName = (activeInq.CustomerName || activeInq.companyName || '').trim();
+    const rawContact = (activeInq.ContactPerson || activeInq.contactPersonName || '').trim();
     const contactParts = rawContact ? rawContact.split(' ') : [];
     const firstName = contactParts[0] || '';
     const lastName = contactParts.slice(1).join(' ') || '';
-    const rawEmail = (inquiry.Email || inquiry.email || '').trim().toLowerCase();
-    const rawPhone = String(inquiry.Phone || inquiry.mobileNo || '').trim();
-    const rawAddr1 = inquiry.AddressLine1 || inquiry.address1 || '';
-    const rawAddr2 = inquiry.AddressLine2 || inquiry.address2 || '';
-    const rawCity = inquiry.City || inquiry.city || '';
-    const rawZip = inquiry.pincode || inquiry.zipCode || '';
-    const rawRegion = inquiry.RegionId || inquiry.regionId || '';
+    const rawEmail = (activeInq.Email || activeInq.email || '').trim().toLowerCase();
+    const rawPhone = String(activeInq.Phone || activeInq.mobileNo || '').trim();
+    const rawAddr1 = activeInq.AddressLine1 || activeInq.address1 || '';
+    const rawAddr2 = activeInq.AddressLine2 || activeInq.address2 || '';
+    const rawCity = activeInq.City || activeInq.city || '';
+    const rawZip = activeInq.pincode || activeInq.zipCode || '';
+    const rawRegion = activeInq.RegionId || activeInq.regionId || '';
 
     // Resolve country
-    let initialCountryId = 1; // default to India
-    const rawCountry = String(inquiry.Country || inquiry.country || '').trim().toLowerCase();
-    if (rawCountry) {
+    let initialCountryId = activeInq.countryId ? Number(activeInq.countryId) : 1; // default to India
+    const rawCountry = String(activeInq.Country || activeInq.countryName || activeInq.country || '').trim().toLowerCase();
+    if (rawCountry && countries.length > 0) {
       const matchedCountry = countries.find(
         (c) =>
           String(c.id) === rawCountry ||
@@ -120,16 +162,16 @@ export default function QuickClientOnboardDrawer({
       addressLine2: rawAddr2,
       city: rawCity,
       countryId: initialCountryId,
-      stateId: inquiry.stateId || '',
+      stateId: activeInq.stateId ? String(activeInq.stateId) : '',
       zipCode: rawZip,
-      regionId: rawRegion,
+      regionId: rawRegion ? String(rawRegion) : '',
       contactFirstName: firstName || rawCustName,
       contactLastName: lastName,
       contactEmail: rawEmail,
       contactPhone: rawPhone,
     });
     setErrors({});
-  }, [isOpen, inquiry, countries]);
+  }, [isOpen, inquiryDetail, inquiry, countries]);
 
   // Load states when country changes
   useEffect(() => {
@@ -140,21 +182,22 @@ export default function QuickClientOnboardDrawer({
 
   // Try matching state by inquiry.State name if stateId was empty
   useEffect(() => {
-    if (isOpen && inquiry && !form.stateId && form.countryId) {
+    const activeInq = inquiryDetail || inquiry;
+    if (isOpen && activeInq && form.countryId) {
       const stateOptions = getStateOptions(form.countryId) || [];
-      const rawState = String(inquiry.State || inquiry.state || '').trim().toLowerCase();
-      if (rawState && stateOptions.length > 0) {
+      const rawState = String(activeInq.State || activeInq.stateName || activeInq.state || '').trim().toLowerCase();
+      if (!form.stateId && rawState && stateOptions.length > 0) {
         const found = stateOptions.find(
           (s) =>
             s.label.toLowerCase() === rawState ||
             String(s.value).toLowerCase() === rawState
         );
         if (found) {
-          setForm((prev) => ({ ...prev, stateId: found.value }));
+          setForm((prev) => ({ ...prev, stateId: String(found.value) }));
         }
       }
     }
-  }, [isOpen, inquiry, form.countryId, form.stateId, getStateOptions]);
+  }, [isOpen, inquiryDetail, inquiry, form.countryId, form.stateId, getStateOptions]);
 
   const stateOptions = useMemo(() => {
     return [
@@ -327,7 +370,7 @@ export default function QuickClientOnboardDrawer({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
               <Input
-                label="Company Name *"
+                label="Company Name"
                 placeholder="Enter client company name"
                 value={form.companyName}
                 onChange={(e) => handleFieldChange('companyName', e.target.value)}
@@ -420,7 +463,7 @@ export default function QuickClientOnboardDrawer({
             </div>
 
             <Input
-              label="City *"
+              label="City"
               placeholder="e.g. Ahmedabad, Pune"
               value={form.city}
               onChange={(e) => handleFieldChange('city', e.target.value)}
@@ -477,7 +520,7 @@ export default function QuickClientOnboardDrawer({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
-              label="First Name *"
+              label="First Name"
               placeholder="e.g. Rajesh"
               value={form.contactFirstName}
               onChange={(e) => handleFieldChange('contactFirstName', e.target.value)}

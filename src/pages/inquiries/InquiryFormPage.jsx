@@ -3856,10 +3856,9 @@ export default function InquiryFormPage() {
             defaultOpen={true}
             hasError={Boolean(errors.AssignedTo)}
           >
-
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                {/* Assigned To (SearchableSelect without "Leave unassigned") */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
+              {/* Left Column: Assignment (and Status if editing) */}
+              <div className="lg:col-span-5 space-y-4">
                 <SearchableSelect
                   id="AssignedTo"
                   name="AssignedTo"
@@ -3875,8 +3874,7 @@ export default function InquiryFormPage() {
                   hint="Select an internal team member responsible for technical review and quotation."
                 />
 
-                {/* Status */}
-                {isEdit ? (
+                {isEdit && (
                   <SearchableSelect
                     id="StatusId"
                     name="StatusId"
@@ -3885,26 +3883,16 @@ export default function InquiryFormPage() {
                     value={form.StatusId}
                     onChange={handleChange}
                   />
-                ) : (
-                  <div className="flex flex-col justify-center pt-2">
-                    <span className="text-xs font-medium text-text-muted block mb-1">
-                      Initial Pipeline Stage
-                    </span>
-                    <div className="p-2.5 rounded-lg border border-border bg-surface flex items-center gap-2 text-xs text-text">
-                      <IconClock size={15} className="text-primary shrink-0" />
-                      <span>New inquiry will start at stage <strong className="text-heading">"New"</strong> and progress through Quoting and Won/Lost.</span>
-                    </div>
-                  </div>
                 )}
               </div>
 
-              {/* Initial Handover Note / Comment Area */}
-              <div className="mt-4 pt-4 border-t border-border/70">
+              {/* Right Column: Initial Comment / Handover Note (placed where Initial Pipeline Stage was) */}
+              <div className="lg:col-span-7">
                 <Textarea
                   id="initialComment"
                   name="initialComment"
                   label="Initial Comment / Handover Note (Optional)"
-                  rows={3}
+                  rows={isEdit ? 5 : 3}
                   value={form.initialComment}
                   onChange={handleChange}
                   placeholder="Add internal notes, customer communication summary, or handover instructions for the assigned team member..."

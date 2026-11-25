@@ -12,6 +12,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
+  IconAdd,
   IconAttachment,
   IconBack,
   IconCheck,
@@ -54,6 +55,7 @@ import { useSalesOrdersContext } from '../../context/SalesOrdersContext';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useStandardsContext } from '../../context/StandardsContext';
+import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
 import { clientService, productService, quotationService } from '../../services';
 import { calculateFlatnessTolerance, normalizeGradeCode } from '../../utils/flatnessFormula';
 import {
@@ -220,10 +222,15 @@ export default function SalesOrderFormPage() {
   const { clients = [], ensureLoaded: ensureClientsLoaded } = useClientsContext();
   const standardsContext = useStandardsContext?.() || {};
   const { standardsList = [], gradeMapping = [], ensureStandardsLoaded } = standardsContext;
+  const { categories: productCategories = [], ensureProductCategoriesLoaded } = useProductCategoriesContext?.() || {};
 
   useEffect(() => {
     ensureStandardsLoaded?.();
   }, [ensureStandardsLoaded]);
+
+  useEffect(() => {
+    ensureProductCategoriesLoaded?.();
+  }, [ensureProductCategoriesLoaded]);
 
   const [activeClients, setActiveClients] = useState([]);
   const [clientDetailData, setClientDetailData] = useState(null);
@@ -859,27 +866,63 @@ export default function SalesOrderFormPage() {
   }, [productsList]);
 
   const categoryOptions = useMemo(() => {
-    return INQUIRY_CATALOG_CATEGORIES.map((c) => ({
-      value: String(c.id),
-      label: c.name,
-    }));
-  }, []);
+    const catMap = new Map();
+
+    // 1. Standard catalog categories from INQUIRY_CATALOG_CATEGORIES (which have { value, label })
+    INQUIRY_CATALOG_CATEGORIES.forEach((c) => {
+      if (c.value && c.label) {
+        catMap.set(String(c.value), c.label);
+      }
+    });
+
+    // 2. Real product categories from Product Categories Context / Master
+    if (Array.isArray(productCategories)) {
+      productCategories.forEach((c) => {
+        const id = String(c.categoryId || c.id || c.value || '');
+        const name = c.categoryName || c.name || c.label;
+        if (id && name) catMap.set(id, name);
+      });
+    }
+
+    // 3. Categories from products in productsList or mergedCatalogProducts
+    mergedCatalogProducts.forEach((p) => {
+      if (p.categoryId && p.categoryName && !catMap.has(String(p.categoryId))) {
+        catMap.set(String(p.categoryId), p.categoryName);
+      }
+    });
+
+    return [
+      { value: '', label: 'All Categories' },
+      ...Array.from(catMap.entries()).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    ];
+  }, [productCategories, mergedCatalogProducts]);
 
   const drawerProductOptions = useMemo(() => {
     let filtered = mergedCatalogProducts;
     if (drawerCategory) {
-      filtered = filtered.filter(
-        (p) =>
-          String(p.categoryId) === String(drawerCategory) ||
-          String(p.categoryName || '').toLowerCase() === String(drawerCategory).toLowerCase()
-      );
+      const selectedCat = categoryOptions.find((c) => String(c.value) === String(drawerCategory));
+      const selectedLabel = (selectedCat ? selectedCat.label : '').toLowerCase();
+      const filterVal = String(drawerCategory).toLowerCase();
+
+      filtered = filtered.filter((p) => {
+        const pCatId = String(p.categoryId || '').toLowerCase();
+        const pCatName = String(p.categoryName || '').toLowerCase();
+        return (
+          pCatId === filterVal ||
+          (selectedLabel && pCatName === selectedLabel) ||
+          pCatName === filterVal
+        );
+      });
     }
     return filtered.map((p) => ({
       value: String(p.id || p.productId),
-      label: p.productName || p.name,
+      label: p.productCode ? `${p.productCode} · ${p.productName || p.name}` : (p.productName || p.name),
       productObj: p,
     }));
-  }, [drawerCategory, mergedCatalogProducts]);
+  }, [drawerCategory, mergedCatalogProducts, categoryOptions]);
 
   const activeProductObj = useMemo(() => {
     const base = mergedCatalogProducts.find((p) => String(p.id || p.productId) === String(drawerProduct)) || null;
@@ -1942,9 +1985,9 @@ export default function SalesOrderFormPage() {
         </div>
       </CollapsibleCard>
 
-      {/* ── SECTION 3: ORDER LINE ITEMS & TOTALS ── */}
+      {/* ── SECTION 3: PRODUCTS & ORDER LINE ITEMS ── */}
       <CollapsibleCard
-        title="3. Order Line Items & Tax Summary"
+        title="3. Products & Pricing"
         subtitle={
           orderMode === 'DIRECT'
             ? 'Add and configure product line items, quantities, rates, and tax slabs'
@@ -1954,21 +1997,20 @@ export default function SalesOrderFormPage() {
         defaultOpen={true}
         padding="none"
         bodyClassName="p-0 space-y-0"
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              icon={IconAdd}
+              onClick={handleOpenAddDrawer}
+            >
+              Add Product
+            </Button>
+          </div>
+        }
       >
-        <div className="flex items-center justify-between p-3.5 border-b border-border bg-surface/30">
-          <span className="text-xs text-text-muted">
-            {formData.lineItems.length} line item(s) configured
-          </span>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={handleAddLineItem}
-          >
-            + Add Product Line
-          </Button>
-        </div>
-
         <div className="overflow-x-auto">
           <TableContainer>
             <colgroup>
@@ -2032,7 +2074,7 @@ export default function SalesOrderFormPage() {
               {formData.lineItems.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-xs text-text-muted">
-                    No line items added yet. Click &quot;+ Add Product Line&quot; above to add products.
+                    No products added to this order yet. Click &quot;Add Product&quot; above to select items.
                   </td>
                 </tr>
               ) : (
@@ -2366,7 +2408,7 @@ export default function SalesOrderFormPage() {
               icon={IconCheck}
               onClick={handleSaveProductFromDrawer}
             >
-              {editingIndex !== null ? 'Update Product Line' : 'Add to Order'}
+              {editingIndex !== null ? 'Update Product Line' : 'Add Product Line'}
             </Button>
           </div>
         }
@@ -2377,6 +2419,7 @@ export default function SalesOrderFormPage() {
             <SearchableSelect
               label="Category"
               placeholder="Select category..."
+              searchPlaceholder="Search categories..."
               options={categoryOptions}
               value={drawerCategory}
               onChange={(e) => {

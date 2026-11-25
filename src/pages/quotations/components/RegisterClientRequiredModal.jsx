@@ -48,21 +48,21 @@ export default function RegisterClientRequiredModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Client Registration Required"
+      title="Register Customer to Create Quotation"
       subtitle={inquiryNo ? `Source Inquiry: ${inquiryNo}` : undefined}
       maxWidth="max-w-xl"
     >
       <div className="space-y-4">
-        {/* Warning / Informational Callout */}
+        {/* Informational Callout */}
         <div className="p-3.5 bg-warning/10 border border-warning/30 rounded-xl flex items-start gap-3">
           <div className="w-8 h-8 rounded-lg bg-warning/20 text-warning flex items-center justify-center shrink-0 mt-0.5">
             <IconWarning size={18} />
           </div>
           <div className="text-xs space-y-1">
-            <p className="font-semibold text-heading">Commercial Master Requirement</p>
+            <p className="font-semibold text-heading">New Customer Onboarding</p>
             <p className="text-text-muted leading-relaxed">
-              This inquiry was created for a new prospect customer (<span className="font-semibold text-heading">{companyName}</span>).
-              To generate an official commercial quotation, the customer must first be registered in the Client Master.
+              This inquiry is for a new customer (<span className="font-semibold text-heading">{companyName}</span>).
+              Before creating a quotation, please save them to your Client directory. Their details from the inquiry are pre-filled below for quick registration.
             </p>
           </div>
         </div>
@@ -116,7 +116,7 @@ export default function RegisterClientRequiredModal({
         </div>
 
         <p className="text-2xs text-text-muted italic">
-          Clicking <strong>Register & Onboard Client</strong> will open the client onboarding drawer with all captured details automatically filled in.
+          Clicking <strong>Save Customer & Continue to Quotation</strong> will open the client onboarding drawer with all captured details automatically filled in.
         </p>
 
         {/* Action Buttons */}
@@ -129,7 +129,7 @@ export default function RegisterClientRequiredModal({
             onClick={onProceed}
             icon={<IconUserPlus size={16} />}
           >
-            Register & Onboard Client
+            Save Customer &amp; Continue to Quotation
           </Button>
         </div>
       </div>

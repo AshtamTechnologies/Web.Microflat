@@ -294,9 +294,12 @@ export default function QuotationFormPage() {
     const inqId = matchedInq?.id || matchedInq?.InquiryId || inquiryNoOrId;
 
     let inqDetail = matchedInq;
-    if (!inqDetail && inqId) {
+    if (inqId) {
       try {
-        inqDetail = await inquiryService.getInquiryById(inqId);
+        const fetched = await inquiryService.getInquiryById(inqId);
+        if (fetched) {
+          inqDetail = fetched;
+        }
       } catch (err) {
         console.warn('Could not fetch inquiry detail fallback:', err);
       }
@@ -320,9 +323,10 @@ export default function QuotationFormPage() {
         if (isNewClient409 && !newClientOverride) {
           // Intercept 409 Conflict with Action Modal instead of a dead-end static error toast
           let conflictObj = inqDetail || matchedInq;
-          if (!conflictObj && inqId) {
+          if ((!conflictObj?.AddressLine1 && !conflictObj?.address1) && inqId) {
             try {
-              conflictObj = await inquiryService.getInquiryById(inqId);
+              const fullInq = await inquiryService.getInquiryById(inqId);
+              if (fullInq) conflictObj = fullInq;
             } catch (_) {}
           }
           setConflictInquiry(conflictObj || { id: inqId, InquiryNo: inquiryNoOrId });
