@@ -27,6 +27,7 @@ import {
   Hash,
   FileCheck,
   FolderTree,
+  FolderKanban,
   Scale,
   MapPin,
   HandCoins,
@@ -178,6 +179,7 @@ export const IconInquiry = Inbox;
 export const IconDeal = HandCoins;
 export const IconQuotation = FileSpreadsheet;
 export const IconSalesOrder = ClipboardCheck;
+export const IconProject = FolderKanban;
 export const IconProduct = PackageCheck;
 export const IconDashboard = LayoutDashboard;
 export const IconDashboardImage = createImageIcon(DashboardIconImg, 'Dashboard');

@@ -21,6 +21,7 @@ import {
   IconDeal,
   IconQuotation,
   IconSalesOrder,
+  IconProject,
   IconProduct,
   IconDelegation,
   IconDashboard,
@@ -180,6 +181,17 @@ const navigation = [
         icon: IconSalesOrder,
         path: '/sales-orders',
         roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+      },
+      {
+        label: 'Projects',
+        icon: IconProject,
+        path: '/projects',
+        roles: ['ADMIN', 'MANAGER', 'USER', 'PROCUREMENT'],
+        quickAction: {
+          icon: IconAdd,
+          title: 'New Project',
+          path: '/projects/new',
+        },
       },
       {
         label: 'Products & Price',

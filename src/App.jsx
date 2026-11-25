@@ -53,6 +53,10 @@ import SalesOrderFormPage from './pages/salesOrders/SalesOrderFormPage';
 import SalesOrderViewPage from './pages/salesOrders/SalesOrderViewPage';
 import { SalesOrdersProvider } from './context/SalesOrdersContext';
 
+import ProjectsListPage from './pages/projects/ProjectsListPage';
+import ProjectFormPage from './pages/projects/ProjectFormPage';
+import ProjectDetailPage from './pages/projects/ProjectDetailPage';
+
 import SeriesSetupPage from './pages/configuration/SeriesSetupPage';
 import FinancialYearsPage from './pages/configuration/FinancialYearsPage';
 import { SeriesProvider } from './context/SeriesContext';
@@ -319,6 +323,12 @@ export default function App() {
               <Route path="/sales-orders/new" element={<SalesOrderFormPage />} />
               <Route path="/sales-orders/:id" element={<SalesOrderViewPage />} />
               <Route path="/sales-orders/:id/edit" element={<SalesOrderFormPage />} />
+
+              {/* Projects Routes */}
+              <Route path="/projects" element={<ProjectsListPage />} />
+              <Route path="/projects/new" element={<ProjectFormPage />} />
+              <Route path="/projects/:id" element={<ProjectDetailPage />} />
+              <Route path="/projects/:id/edit" element={<ProjectFormPage />} />
 
               {/* Product Routes */}
               <Route path="/products" element={<ProductsPage />} />
