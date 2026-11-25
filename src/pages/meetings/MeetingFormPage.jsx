@@ -87,15 +87,51 @@ export default function MeetingFormPage() {
   } = useMeetingForm(id);
 
   useEffect(() => {
-    if (isEdit || !inquiryIdParam || formData.inquiryId) return;
+    if (isEdit || !inquiryIdParam) return;
+    if (!formData.inquiryId) {
+      setField('inquiryId', String(inquiryIdParam));
+    }
     const matched = inquiriesList.find(
       (i) => String(i.id || i.InquiryId) === String(inquiryIdParam)
     );
-    setField('inquiryId', String(inquiryIdParam));
-    if (matched?.InquiryNo || matched?.inquiryNo) {
-      setField('inquiryNumber', matched.InquiryNo || matched.inquiryNo);
+    if (matched) {
+      if ((matched.InquiryNo || matched.inquiryNo) && !formData.inquiryNumber) {
+        setField('inquiryNumber', matched.InquiryNo || matched.inquiryNo);
+      }
+      const customerContactName = matched.ContactPerson || matched.contactPerson;
+      const customerEmail = matched.Email || matched.email || '';
+      if (customerContactName && !formData.attendees.some((a) => a.name === customerContactName)) {
+        setField('attendees', [
+          ...formData.attendees,
+          {
+            name: customerContactName,
+            externalName: customerContactName,
+            email: customerEmail,
+            externalEmail: customerEmail,
+            type: 'Customer',
+            isExternal: true,
+          },
+        ]);
+      }
+      const customerLocation = [
+        matched.AddressLine1 || matched.address1,
+        matched.City || matched.city,
+        matched.State || matched.state,
+      ].filter(Boolean).join(', ');
+      if (customerLocation && !formData.location) {
+        setField('location', customerLocation);
+      }
     }
-  }, [isEdit, inquiryIdParam, formData.inquiryId, setField, inquiriesList]);
+  }, [
+    isEdit,
+    inquiryIdParam,
+    formData.inquiryId,
+    formData.inquiryNumber,
+    formData.attendees,
+    formData.location,
+    setField,
+    inquiriesList,
+  ]);
 
   // Inquiry options for dropdown
   const inquiryOptions = useMemo(() => {

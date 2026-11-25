@@ -216,14 +216,8 @@ export default function ApprovalsPage() {
     pageSize: 10,
   });
 
-  // Live Diagnostics State
+  // Active Module Setting Rule
   const [moduleSetting, setModuleSetting] = useState(null);
-  const [diagnostics, setDiagnostics] = useState({
-    pendingCount: null,
-    listCount: null,
-    awaitingCount: null,
-    error: null,
-  });
 
   // Modal States - Approve
   const [itemToApprove, setItemToApprove] = useState(null);
@@ -265,10 +259,11 @@ export default function ApprovalsPage() {
       if (isSuperAdmin) return true;
       // Requester cannot approve their own request
       if (isOwnRequest(row)) return false;
-      // Admin or holding approver role
-      return isAdmin;
+      // Admin or explicitly designated approver user
+      const isDesignatedUser = row?.approverUserId && user?.id && String(row.approverUserId) === String(user.id);
+      return isAdmin || Boolean(isDesignatedUser);
     },
-    [isAdmin, isSuperAdmin, isOwnRequest]
+    [isAdmin, isSuperAdmin, isOwnRequest, user?.id]
   );
 
   /* ── 1. Load Summary Counters ── */
@@ -333,9 +328,6 @@ export default function ApprovalsPage() {
   const loadApprovalsData = useCallback(async () => {
     setIsLoading(true);
     console.log('[APPROVALS_PAGE] Loading approvals queue. activeTab:', activeTab, 'moduleFilter:', moduleFilter);
-    let pCount = null;
-    let lCount = null;
-    let aCount = null;
 
     try {
       // If module is specific, check its backend configuration rule
@@ -367,17 +359,14 @@ export default function ApprovalsPage() {
           if (Array.isArray(pendingRes?.items)) {
             combinedItems.push(...pendingRes.items);
           }
-          pCount = Array.isArray(pendingRes?.items) ? pendingRes.items.length : 0;
           console.log('[APPROVALS_PAGE] Pending approvals result:', pendingRes);
         } catch (pendingErr) {
-          pCount = 'ERR: ' + (pendingErr?.status || pendingErr?.message || 'Failed');
           console.warn('[APPROVALS_PAGE] getPendingApprovals threw, falling back:', pendingErr);
         }
 
         // 2. Try full list endpoint GET /api/approval-requests?Status=2 (includes self-submitted records for auditing)
         try {
           const listRes = await approvalsService.listApprovalRequests({ ...params, status: 2 });
-          lCount = Array.isArray(listRes?.items) ? listRes.items.length : 0;
           console.log('[APPROVALS_PAGE] listApprovalRequests (Status=2) result:', listRes);
           if (Array.isArray(listRes?.items)) {
             for (const item of listRes.items) {
@@ -388,14 +377,12 @@ export default function ApprovalsPage() {
             }
           }
         } catch (listErr) {
-          lCount = 'ERR: ' + (listErr?.status || listErr?.message || 'Failed');
           console.warn('[APPROVALS_PAGE] listApprovalRequests threw:', listErr);
         }
 
         // 3. Fallback: check awaiting-me
         try {
           const awaitingRes = await approvalsService.getAwaitingMeApprovals(params);
-          aCount = Array.isArray(awaitingRes?.items) ? awaitingRes.items.length : 0;
           console.log('[APPROVALS_PAGE] awaiting-me result:', awaitingRes);
           if (Array.isArray(awaitingRes?.items)) {
             for (const item of awaitingRes.items) {
@@ -406,7 +393,6 @@ export default function ApprovalsPage() {
             }
           }
         } catch (awaitingErr) {
-          aCount = 'ERR: ' + (awaitingErr?.status || awaitingErr?.message || 'Failed');
           console.warn('[APPROVALS_PAGE] awaiting-me threw:', awaitingErr);
         }
 
@@ -419,20 +405,12 @@ export default function ApprovalsPage() {
         console.log('[APPROVALS_PAGE] History approvals result:', res);
       }
 
-      setDiagnostics({
-        pendingCount: pCount,
-        listCount: lCount,
-        awaitingCount: aCount,
-        error: null,
-      });
-
       const finalItems = (res && Array.isArray(res.items)) ? res.items : [];
       console.log(`[APPROVALS_PAGE] Setting ${finalItems.length} items to table for module ${moduleFilter}`);
       setItems(finalItems);
       fetchSummary(moduleFilter);
     } catch (err) {
       console.error('[APPROVALS_PAGE] Failed to fetch approval requests:', err);
-      setDiagnostics((prev) => ({ ...prev, error: err?.message || 'Unknown error' }));
       toast.error(err?.detail || err?.message || 'Failed to load approvals queue.');
       setItems([]);
     } finally {
@@ -469,6 +447,7 @@ export default function ApprovalsPage() {
         item.typeName?.toLowerCase().includes(q) ||
         item.initiatedByName?.toLowerCase().includes(q) ||
         item.approverRoleName?.toLowerCase().includes(q) ||
+        item.approverUserName?.toLowerCase().includes(q) ||
         item.actionedByName?.toLowerCase().includes(q) ||
         item.comments?.toLowerCase().includes(q)
       );
@@ -748,16 +727,35 @@ export default function ApprovalsPage() {
         },
       }),
 
-      // Approver Role Column
-      columnHelper.accessor('approverRoleName', {
-        id: 'approverRole',
-        header: 'Approver Role',
-        size: 140,
-        cell: ({ getValue }) => (
-          <span className="text-xs font-mono bg-surface-subtle px-2 py-0.5 rounded text-text-muted border border-border">
-            {getValue() || 'Admin'}
-          </span>
-        ),
+      // Designated Approver Column
+      columnHelper.accessor((row) => (row.approverType === 2 ? row.approverUserName : row.approverRoleName), {
+        id: 'approver',
+        header: 'Designated Approver',
+        size: 170,
+        cell: ({ row }) => {
+          const item = row.original;
+          const isUser = item.approverType === 2 || (!item.approverRoleName && item.approverUserName);
+          if (isUser) {
+            return (
+              <span
+                className="text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 px-2 py-0.5 rounded inline-flex items-center gap-1.5 max-w-[160px] truncate"
+                title={item.approverUserName || `User #${item.approverUserId}`}
+              >
+                <IconUser size={12} className="shrink-0" />
+                <span className="truncate">{item.approverUserName || (item.approverUserId ? `User #${item.approverUserId}` : 'Assigned User')}</span>
+              </span>
+            );
+          }
+          return (
+            <span
+              className="text-xs font-mono bg-surface-subtle px-2 py-0.5 rounded text-text-muted border border-border inline-flex items-center gap-1 max-w-[160px] truncate"
+              title={item.approverRoleName || 'Admin'}
+            >
+              <IconShieldCheck size={12} className="shrink-0 text-primary" />
+              <span className="truncate">{item.approverRoleName || 'Admin'}</span>
+            </span>
+          );
+        },
       }),
 
       // Decision Column (History Tab Only)
@@ -1103,35 +1101,12 @@ export default function ApprovalsPage() {
         )}
       </TableToolbar>
 
-      {/* ── Diagnostic Hub for Live Backend Debugging ── */}
-      <div className="p-3.5 rounded-xl border border-primary/20 bg-primary/5 text-xs text-text-muted space-y-2">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-heading">Backend Live Diagnostics:</span>
-            <span>Module: <strong className="text-primary font-mono">{moduleFilter}</strong></span>
-            <span>·</span>
-            <span>Setting: <strong className={moduleSetting?.isApprovalRequired ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-red-500 font-semibold'}>
-              {moduleSetting
-                ? (moduleSetting.isApprovalRequired
-                    ? `Approval REQUIRED (${moduleSetting.approverRoleName || 'Role ID ' + moduleSetting.approverRoleId})`
-                    : 'Approval NOT REQUIRED')
-                : (moduleFilter === 'ALL' ? 'Multi-module Global Queue' : 'Fetching setting...')}
-            </strong></span>
-          </div>
-          <div className="flex items-center gap-2 font-mono">
-            <span>Pending API: <strong>{String(diagnostics.pendingCount ?? '—')}</strong></span>
-            <span>·</span>
-            <span>All Requests (Status 2): <strong>{String(diagnostics.listCount ?? '—')}</strong></span>
-            <span>·</span>
-            <span>Awaiting-Me: <strong>{String(diagnostics.awaitingCount ?? '—')}</strong></span>
-          </div>
+      {/* ── Quotation Approval Disabled Warning Banner (Only displayed if disabled) ── */}
+      {moduleSetting && !moduleSetting.isApprovalRequired && moduleFilter === 'QUOTATION' && (
+        <div className="p-3.5 text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded-xl border border-amber-500/20 text-xs leading-relaxed">
+          ⚠️ <strong>Quotation Approval is DISABLED on Backend:</strong> In the database, <code>isApprovalRequired</code> is currently <code>false</code> for Quotations. Per the Swagger API specification, submitting a quotation automatically marks it as <code>NotRequired</code> and does not create an approval request in this queue. You can turn Quotation approvals ON anytime in <button type="button" onClick={() => navigate('/approvals/settings')} className="underline font-bold hover:text-amber-800">Approval Settings (/approvals/settings)</button>.
         </div>
-        {moduleSetting && !moduleSetting.isApprovalRequired && moduleFilter === 'QUOTATION' && (
-          <div className="text-amber-700 dark:text-amber-400 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 text-xs leading-relaxed">
-            ⚠️ <strong>Quotation Approval is DISABLED on Backend:</strong> In the database, <code>isApprovalRequired</code> is currently <code>false</code> for Quotations. Per the Swagger API specification, submitting a quotation automatically marks it as <code>NotRequired</code> and does not create an approval request in this queue. You can turn Quotation approvals ON anytime in <button type="button" onClick={() => navigate('/approvals/settings')} className="underline font-bold hover:text-amber-800">Approval Settings (/approvals/settings)</button>.
-          </div>
-        )}
-      </div>
+      )}
 
       {/* ── 5. Main TanStack DataTable ── */}
       <DataTable
@@ -1147,7 +1122,7 @@ export default function ApprovalsPage() {
         }
         emptyDescription={
           activeTab === 'PENDING'
-            ? 'No actions are currently waiting for your role’s decision.'
+            ? 'No actions are currently waiting for your decision.'
             : 'Try adjusting your search criteria or clearing filters.'
         }
       />

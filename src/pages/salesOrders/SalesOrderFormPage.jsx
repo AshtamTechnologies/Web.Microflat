@@ -8,7 +8,7 @@
  * Aligned with Frontend-API-Guide.md §5.4g.
  */
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -16,9 +16,11 @@ import {
   IconBack,
   IconCheck,
   IconDownload,
+  IconEdit,
   IconFileText,
   IconInfo,
   IconPackage,
+  IconRotateCcw,
   IconSalesOrder,
   IconTrash,
   IconUploadCloud,
@@ -45,11 +47,20 @@ import {
   DocumentUploader,
   PaymentTermsSelect,
   DeliveryTermsSelect,
+  Drawer,
+  Checkbox,
 } from '../../components/ui';
 import { useSalesOrdersContext } from '../../context/SalesOrdersContext';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useClientsContext } from '../../context/ClientsContext';
+import { useStandardsContext } from '../../context/StandardsContext';
 import { clientService, productService, quotationService } from '../../services';
+import { calculateFlatnessTolerance, normalizeGradeCode } from '../../utils/flatnessFormula';
+import {
+  INQUIRY_CATALOG_CATEGORIES,
+  INQUIRY_CATALOG_PRODUCTS,
+  buildCatalogProductDescription,
+} from '../../mocks/inquiryCatalog';
 import {
   calculateSalesOrderTotals,
   formatCurrency,
@@ -61,6 +72,15 @@ import { formatDate } from '../../utils/dateUtils';
 import { triggerPdfDownload } from '../../utils/fileHelpers';
 import useColumnResize from '../../hooks/useColumnResize';
 import { isHtmlMarkup } from '../../utils/htmlUtils';
+
+const CATALOG_OPTIONS = [
+  'Rexine Cover (Standard)',
+  'Holes',
+  'Counter Bored Holes',
+  'Metallic Threaded Inserts',
+  'Metallic T-Slots',
+  'Notch',
+];
 
 function formatReadableFileSize(bytes = 0) {
   if (!bytes || bytes <= 0) return '—';
@@ -122,6 +142,8 @@ function buildPrefillFromQuotation(quotation) {
   const resolvedContactId =
     quotation.clientContactId ||
     latestRev?.clientContactId ||
+    quotation.client?.contacts?.[0]?.id ||
+    quotation.client?.contacts?.[0]?.clientContactId ||
     quotation.contactId ||
     null;
 
@@ -196,12 +218,40 @@ export default function SalesOrderFormPage() {
   } = useSalesOrdersContext();
   const { quotations = [] } = useQuotationsContext();
   const { clients = [], ensureLoaded: ensureClientsLoaded } = useClientsContext();
+  const standardsContext = useStandardsContext?.() || {};
+  const { standardsList = [], gradeMapping = [], ensureStandardsLoaded } = standardsContext;
+
+  useEffect(() => {
+    ensureStandardsLoaded?.();
+  }, [ensureStandardsLoaded]);
 
   const [activeClients, setActiveClients] = useState([]);
   const [clientDetailData, setClientDetailData] = useState(null);
   const [productsList, setProductsList] = useState([]);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+
+  // Drawer & Line Item Builder State
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [drawerCategory, setDrawerCategory] = useState('');
+  const [drawerProduct, setDrawerProduct] = useState('');
+  const [drawerStandard, setDrawerStandard] = useState('');
+  const [drawerGrade, setDrawerGrade] = useState('');
+  const [drawerVariant, setDrawerVariant] = useState('');
+  const [drawerQty, setDrawerQty] = useState('1');
+  const [drawerRate, setDrawerRate] = useState('');
+  const [drawerRateSource, setDrawerRateSource] = useState('Manual');
+  const [drawerTax, setDrawerTax] = useState(18);
+  const [drawerTaxConfigDetailId, setDrawerTaxConfigDetailId] = useState('');
+  const [drawerOtherCharges, setDrawerOtherCharges] = useState('0');
+  const [drawerOptions, setDrawerOptions] = useState(['Rexine Cover (Standard)']);
+  const [drawerDescription, setDrawerDescription] = useState('');
+  const [isDescriptionEdited, setIsDescriptionEdited] = useState(false);
+  const [isLoadingPriceLookup, setIsLoadingPriceLookup] = useState(false);
+  const [productVariantsMap, setProductVariantsMap] = useState({});
+  const [productDetailsMap, setProductDetailsMap] = useState({});
+  const [productOptionsMap, setProductOptionsMap] = useState({});
 
   useEffect(() => {
     ensureClientsLoaded?.();
@@ -401,22 +451,39 @@ export default function SalesOrderFormPage() {
         if (isMounted && detail) {
           setClientDetailData(detail);
           const addrs = (detail.currentDetail?.addresses || []).filter((a) => a.isActive !== false);
-          const contacts = (detail.currentDetail?.contacts || []).filter((c) => c.isActive !== false);
+          const contacts = (detail.currentDetail?.contacts || detail.contacts || detail.versions?.[0]?.contacts || []).filter((c) => c.isActive !== false);
           setFormData((prev) => {
             const hasValidAddr = prev.clientAddressId && addrs.some((a) => String(a.clientAddressId || a.id) === String(prev.clientAddressId));
-            const hasValidContact = prev.clientContactId && contacts.some((c) => String(c.clientContactId || c.id) === String(prev.clientContactId));
             const preferredAddr =
               addrs.find((a) => (a.addressType || '').toLowerCase() === 'billing') ||
               addrs.find((a) => (a.addressLabel || '').toLowerCase().includes('billing')) ||
               addrs.find((a) => a.isPrimary) ||
               addrs[0];
-            const primaryContact = contacts.find((c) => c.isPrimary) || contacts[0];
+
+            const matchById = prev.clientContactId
+              ? contacts.find((c) => String(c.clientContactId || c.id) === String(prev.clientContactId))
+              : null;
+
+            const matchByName = !matchById && prev.contactPerson
+              ? contacts.find((c) =>
+                  (c.fullName || `${c.firstName || ''} ${c.lastName || ''}`.trim())
+                    .toLowerCase() === prev.contactPerson.toLowerCase()
+                )
+              : null;
+
+            const resolvedContact = matchById || matchByName
+              || contacts.find((c) => c.isPrimary)
+              || contacts[0]
+              || null;
+
             return {
               ...prev,
               clientAddressId: hasValidAddr ? prev.clientAddressId : (preferredAddr?.clientAddressId || preferredAddr?.id || prev.clientAddressId || null),
               clientAddress: hasValidAddr ? prev.clientAddress : formatAddressForDisplay(preferredAddr),
-              clientContactId: hasValidContact ? prev.clientContactId : (primaryContact?.clientContactId || primaryContact?.id || prev.clientContactId || null),
-              contactPerson: hasValidContact ? prev.contactPerson : (primaryContact ? `${primaryContact.firstName || ''} ${primaryContact.lastName || ''}`.trim() : prev.contactPerson),
+              clientContactId: resolvedContact?.clientContactId || resolvedContact?.id || null,
+              contactPerson: resolvedContact
+                ? (resolvedContact.fullName || `${resolvedContact.firstName || ''} ${resolvedContact.lastName || ''}`.trim() || resolvedContact.name)
+                : prev.contactPerson,
             };
           });
         }
@@ -753,6 +820,267 @@ export default function SalesOrderFormPage() {
     }));
   }
 
+  const singleProductTaxOptions = useMemo(() => {
+    if (Array.isArray(lookups?.taxes) && lookups.taxes.length > 0) {
+      return [
+        { value: '0', label: 'None / 0% Tax (Exempt)', percent: 0, detailId: null },
+        ...lookups.taxes.map((t) => {
+          const detailId = t.taxConfigDetailId ?? t.id;
+          const pct = Number(t.taxPercent ?? t.taxRate ?? t.percent ?? 0);
+          const name = t.taxName || '';
+          return {
+            value: String(detailId ?? pct),
+            detailId: detailId ? Number(detailId) : null,
+            percent: pct,
+            label: `${pct}%${name && !name.includes(`${pct}%`) ? ` — ${name}` : ''}`,
+          };
+        }),
+      ];
+    }
+    return [
+      { value: '0', label: 'None / 0% Tax (Exempt)', percent: 0, detailId: null },
+      ...TAX_SLABS.map((t) => ({
+        value: String(t.value),
+        detailId: null,
+        percent: t.value,
+        label: `${t.value}%`,
+      })),
+    ];
+  }, [lookups?.taxes]);
+
+  const mergedCatalogProducts = useMemo(() => {
+    const list = Array.isArray(productsList) ? [...productsList] : [];
+    INQUIRY_CATALOG_PRODUCTS.forEach((mockP) => {
+      if (!list.some((p) => String(p.id) === String(mockP.id) || p.productName === mockP.productName)) {
+        list.push(mockP);
+      }
+    });
+    return list;
+  }, [productsList]);
+
+  const categoryOptions = useMemo(() => {
+    return INQUIRY_CATALOG_CATEGORIES.map((c) => ({
+      value: String(c.id),
+      label: c.name,
+    }));
+  }, []);
+
+  const drawerProductOptions = useMemo(() => {
+    let filtered = mergedCatalogProducts;
+    if (drawerCategory) {
+      filtered = filtered.filter(
+        (p) =>
+          String(p.categoryId) === String(drawerCategory) ||
+          String(p.categoryName || '').toLowerCase() === String(drawerCategory).toLowerCase()
+      );
+    }
+    return filtered.map((p) => ({
+      value: String(p.id || p.productId),
+      label: p.productName || p.name,
+      productObj: p,
+    }));
+  }, [drawerCategory, mergedCatalogProducts]);
+
+  const activeProductObj = useMemo(() => {
+    const base = mergedCatalogProducts.find((p) => String(p.id || p.productId) === String(drawerProduct)) || null;
+    const details = productDetailsMap[drawerProduct];
+    if (!base && !details) return null;
+    return {
+      ...(base || {}),
+      ...(details || {}),
+    };
+  }, [drawerProduct, mergedCatalogProducts, productDetailsMap]);
+
+  useEffect(() => {
+    if (!drawerProduct) return;
+    const prodIdNum = Number(drawerProduct);
+    if (isNaN(prodIdNum)) return;
+
+    let isMounted = true;
+    async function fetchDynamicDetails() {
+      try {
+        const [varRes, detailRes, optRes] = await Promise.all([
+          productService.listProductVariants(prodIdNum, { pageSize: 100 }).catch(() => null),
+          productService.getProductById(prodIdNum).catch(() => null),
+          productService.listProductOptions({ productId: prodIdNum, pageSize: 100 }).catch(() => null),
+        ]);
+
+        if (isMounted) {
+          if (Array.isArray(varRes?.items)) {
+            setProductVariantsMap((prev) => ({ ...prev, [drawerProduct]: varRes.items }));
+          }
+          if (detailRes) {
+            setProductDetailsMap((prev) => ({ ...prev, [drawerProduct]: detailRes }));
+            if (!isDescriptionEdited && detailRes.description) {
+              setDrawerDescription(detailRes.description);
+            }
+          }
+          const optionsList = (Array.isArray(optRes?.items) && optRes.items.length > 0)
+            ? optRes.items
+            : (Array.isArray(detailRes?.options) && detailRes.options.length > 0)
+            ? detailRes.options
+            : [];
+          if (optionsList.length > 0) {
+            setProductOptionsMap((prev) => ({ ...prev, [drawerProduct]: optionsList }));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load dynamic variants/options for product:', drawerProduct, err);
+      }
+    }
+
+    if (!productVariantsMap[drawerProduct] || !productDetailsMap[drawerProduct]) {
+      fetchDynamicDetails();
+    }
+
+    return () => { isMounted = false; };
+  }, [drawerProduct, productVariantsMap, productDetailsMap, isDescriptionEdited]);
+
+  const variantOptions = useMemo(() => {
+    const dynamicVars = productVariantsMap[drawerProduct];
+    if (Array.isArray(dynamicVars) && dynamicVars.length > 0) {
+      return dynamicVars.map((v) => ({
+        value: String(v.id || v.productVariantId),
+        label: `${v.variantName || v.name || v.variantCode || 'Variant'} (${v.variantCode || v.itemCode || 'ITM'})`,
+        variantObj: v,
+      }));
+    }
+    if (!activeProductObj) return [];
+    return (activeProductObj.variants || []).map((v) => ({
+      value: String(v.id),
+      label: `${v.variantName} (${v.itemCode})`,
+      variantObj: v,
+    }));
+  }, [drawerProduct, productVariantsMap, activeProductObj]);
+
+  const activeVariantObj = useMemo(() => {
+    const dynamicVars = productVariantsMap[drawerProduct];
+    if (Array.isArray(dynamicVars) && dynamicVars.length > 0) {
+      return dynamicVars.find((v) => String(v.id || v.productVariantId) === String(drawerVariant)) || null;
+    }
+    if (!activeProductObj) return null;
+    return (activeProductObj.variants || []).find((v) => String(v.id) === String(drawerVariant)) || null;
+  }, [drawerProduct, productVariantsMap, activeProductObj, drawerVariant]);
+
+  const drawerStandardOptions = useMemo(() => {
+    if (activeProductObj?.supportedStandards && Array.isArray(activeProductObj.supportedStandards) && activeProductObj.supportedStandards.length > 0) {
+      return activeProductObj.supportedStandards.map((s) => ({ value: s, label: s }));
+    }
+    if (activeProductObj?.standards && Array.isArray(activeProductObj.standards) && activeProductObj.standards.length > 0) {
+      return activeProductObj.standards.map((s) => ({
+        value: s.standardCode || String(s.standardId || s.id),
+        label: s.standardCode || `Standard #${s.standardId || s.id}`,
+      }));
+    }
+    if (Array.isArray(standardsList) && standardsList.length > 0) {
+      return standardsList.filter((s) => s.isActive !== false).map((s) => ({
+        value: s.standardCode || String(s.id),
+        label: s.description ? `${s.standardCode} (${s.description})` : s.standardCode,
+      }));
+    }
+    return [
+      { value: 'IS-7327-2003', label: 'IS-7327-2003 (Indian Standard - Granite)' },
+      { value: 'DIN-876', label: 'DIN-876 (German Standard)' },
+      { value: 'BS-817', label: 'BS-817 (British Standard)' },
+      { value: 'US-Fed GGG-P-463c', label: 'US-Fed GGG-P-463c (Federal Specification)' },
+      { value: 'IS-2285', label: 'IS-2285 (Cast Iron Surface Plates)' },
+    ];
+  }, [activeProductObj, standardsList]);
+
+  const drawerGradeOptions = useMemo(() => {
+    const curStd = String(drawerStandard || '').trim();
+    if (!curStd) return [];
+
+    const matchedMapping = (gradeMapping || []).find((m) =>
+      String(m.standardCode || '').toLowerCase() === curStd.toLowerCase() ||
+      String(m.standardId || '') === curStd
+    );
+    if (matchedMapping && Array.isArray(matchedMapping.grades) && matchedMapping.grades.length > 0) {
+      return matchedMapping.grades
+        .filter((g) => g.isGradeActive !== false)
+        .map((g) => ({
+          value: g.gradeCode,
+          label: `${g.gradeCode}${g.description ? ` · ${g.description}` : ''}`,
+        }));
+    }
+
+    const stdUpper = curStd.toUpperCase();
+    if (stdUpper.includes('GGG') || stdUpper.includes('ASME') || stdUpper.includes('463')) {
+      return [
+        { value: 'Grade AA', label: 'Grade AA · Precision Laboratory' },
+        { value: 'Grade A', label: 'Grade A · Standard Inspection' },
+        { value: 'Grade B', label: 'Grade B · Tool Room / Shop' },
+      ];
+    }
+    if (stdUpper.includes('DIN')) {
+      return [
+        { value: 'Grade 00', label: 'Grade 00 · High Precision Laboratory' },
+        { value: 'Grade 0', label: 'Grade 0 · Metrology & Inspection' },
+        { value: 'Grade 1', label: 'Grade 1 · Workshop / Production' },
+        { value: 'Grade 2', label: 'Grade 2 · Toolroom General' },
+        { value: 'Grade 3', label: 'Grade 3 · Heavy Workshop' },
+      ];
+    }
+    return [
+      { value: 'Grade 00', label: 'Grade 00 · Calibration / Lab Grade' },
+      { value: 'Grade 0', label: 'Grade 0 · Inspection / Metrology Grade' },
+      { value: 'Grade 1', label: 'Grade 1 · Tool Room / Shop Floor' },
+      { value: 'Grade 2', label: 'Grade 2 · Workshop / Machining Grade' },
+      { value: 'Grade 3', label: 'Grade 3 · Rough Workshop Grade' },
+    ];
+  }, [drawerStandard, gradeMapping]);
+
+  const parseDimsFromOrderVariant = useCallback((v) => {
+    if (!v) return { length: 0, width: 0 };
+    if (v.lengthMm && v.widthMm) return { length: Number(v.lengthMm), width: Number(v.widthMm) };
+    const str = v.size || v.variantName || '';
+    const m = String(str).match(/(\d+)\s*[x×*]\s*(\d+)/i);
+    return m ? { length: Number(m[1]), width: Number(m[2]) } : { length: 0, width: 0 };
+  }, []);
+
+  const drawerCalculatedFlatness = useMemo(() => {
+    if (!activeVariantObj || !drawerStandard || !drawerGrade) return '—';
+    const dims = parseDimsFromOrderVariant(activeVariantObj);
+    if (!dims.length || !dims.width) return '—';
+    try {
+      const res = calculateFlatnessTolerance(dims.length, dims.width, drawerStandard, drawerGrade);
+      if (res && res.isSupported && res.valueMicrons !== undefined) {
+        return `${res.valueMicrons} µm`;
+      }
+    } catch {
+      // ignore
+    }
+    return '—';
+  }, [activeVariantObj, drawerStandard, drawerGrade, parseDimsFromOrderVariant]);
+
+  const drawerCalculatedItemCode = useMemo(() => {
+    if (!activeVariantObj && !activeProductObj) return 'Auto-generated';
+    const baseCode = activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'ITM';
+    if (drawerGrade) {
+      const normGrd = normalizeGradeCode(drawerGrade) || '0';
+      return `${baseCode}-GR${normGrd}`;
+    }
+    return baseCode;
+  }, [activeVariantObj, activeProductObj, drawerGrade]);
+
+  const availableDrawerOptions = useMemo(() => {
+    const dynamicOpts = productOptionsMap[drawerProduct];
+    if (Array.isArray(dynamicOpts) && dynamicOpts.length > 0) {
+      return dynamicOpts.map((opt) => ({
+        id: opt.id || opt.productOptionId,
+        name: opt.optionName || opt.name,
+        isStandard: Boolean(opt.isStandard),
+        unitPrice: Number(opt.unitPrice || 0),
+      }));
+    }
+    return CATALOG_OPTIONS.map((name) => ({
+      id: null,
+      name,
+      isStandard: name.includes('Standard'),
+      unitPrice: 0,
+    }));
+  }, [drawerProduct, productOptionsMap]);
+
   const productOptions = useMemo(() => {
     return productsList.map((p) => ({
       value: String(p.id),
@@ -868,27 +1196,249 @@ export default function SalesOrderFormPage() {
     toast.success(`Loaded details from Confirmed Quotation ${quote.quotationNo}`);
   }
 
-  function handleAddLineItem() {
-    const defTax = taxOptions.find((t) => t.percent === 18) || taxOptions[0];
-    const newItem = {
-      id: `oc-it-${Date.now()}-${formData.lineItems.length}`,
-      productId: null,
-      productName: '',
-      itemCode: '',
-      variantName: '',
-      technicalDetails: '',
-      quantity: 1,
-      rate: 0,
-      otherCharges: 0,
-      taxPercent: defTax ? defTax.percent : 18,
-      taxConfigDetailId: defTax?.detailId || null,
+  // Open Drawer for Add Product Line
+  const handleOpenAddDrawer = () => {
+    setEditingIndex(null);
+    setDrawerCategory('');
+    setDrawerProduct('');
+    setDrawerStandard('');
+    setDrawerGrade('');
+    setDrawerVariant('');
+    setDrawerQty('1');
+    setDrawerRate('');
+    setDrawerRateSource('Manual');
+    const defaultTax = singleProductTaxOptions.find((t) => t.percent === 18) || singleProductTaxOptions[1] || singleProductTaxOptions[0];
+    setDrawerTax(defaultTax?.percent ?? 18);
+    setDrawerTaxConfigDetailId(defaultTax?.detailId ? String(defaultTax.detailId) : (defaultTax?.value || ''));
+    setDrawerOtherCharges('0');
+    setDrawerOptions(['Rexine Cover (Standard)']);
+    setDrawerDescription('');
+    setIsDescriptionEdited(false);
+    setIsDrawerOpen(true);
+  };
+
+  // Open Drawer for Edit Product Line
+  const handleStartEditItem = (item, index) => {
+    setEditingIndex(index);
+    setDrawerCategory(item.categoryId || '');
+    setDrawerProduct(String(item.productId || ''));
+    setDrawerStandard(item.standards || item.standardCode || '');
+    setDrawerGrade(item.grade || item.gradeCode || '');
+    setDrawerVariant(String(item.variantId || ''));
+    setDrawerQty(String(item.quantity || 1));
+    setDrawerRate(String(item.rate || 0));
+    setDrawerRateSource(item.rateSource || 'Manual');
+    setDrawerTax(item.taxPercent !== undefined ? Number(item.taxPercent) : 18);
+    setDrawerTaxConfigDetailId(item.taxConfigDetailId ? String(item.taxConfigDetailId) : (item.taxPercent === 0 ? '0' : ''));
+    setDrawerOtherCharges(String(item.otherCharges || 0));
+    setDrawerOptions(Array.isArray(item.options) ? item.options : ['Rexine Cover (Standard)']);
+    const existingDesc = item.description ?? item.technicalDetails ?? '';
+    setDrawerDescription(existingDesc);
+    setIsDescriptionEdited(Boolean(item.description));
+    setIsDrawerOpen(true);
+  };
+
+  const handleDrawerProductChange = (prodId) => {
+    setDrawerProduct(prodId);
+    setDrawerVariant('');
+    const prod =
+      mergedCatalogProducts.find((p) => String(p.id || p.productId) === String(prodId)) || null;
+    if (prod && !drawerCategory && prod.categoryId) {
+      setDrawerCategory(String(prod.categoryId));
+    }
+    const std = prod?.primaryStandard || (prod?.standards && prod.standards[0]?.standardCode) || prod?.primaryStandardCode || (prod?.supportedStandards && prod.supportedStandards[0]) || 'IS-7327-2003';
+    const grd = String(std).toUpperCase().includes('GGG') ? 'Grade AA' : 'Grade 0';
+    setDrawerStandard(std);
+    setDrawerGrade(grd);
+    const details = productDetailsMap[prodId];
+    const fullDesc = details?.description || prod?.description || (prod ? buildCatalogProductDescription(prod, null) : '');
+    if (!isDescriptionEdited) {
+      setDrawerDescription(fullDesc);
+    }
+  };
+
+  const handleDrawerStandardChange = (std) => {
+    setDrawerStandard(std);
+    let nextGrade = drawerGrade || 'Grade 0';
+    const stdUpper = String(std).toUpperCase();
+    if (stdUpper.includes('GGG') || stdUpper.includes('ASME')) {
+      if (!nextGrade.includes('AA') && !nextGrade.includes('A') && !nextGrade.includes('B')) {
+        nextGrade = 'Grade AA';
+      }
+    } else {
+      if (nextGrade.includes('AA') || nextGrade.includes('A') || nextGrade.includes('B')) {
+        nextGrade = 'Grade 0';
+      }
+    }
+    setDrawerGrade(nextGrade);
+    if (!isDescriptionEdited && activeProductObj) {
+      const baseDesc = activeProductObj.description || activeProductObj.productName || '';
+      const variantSpecs = [
+        activeVariantObj?.variantName || activeVariantObj?.size ? `Size: ${activeVariantObj?.variantName || activeVariantObj?.size}` : null,
+        `${nextGrade} (${std})`,
+      ].filter(Boolean).join(' · ');
+      setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
+    }
+  };
+
+  const handleDrawerGradeChange = (grd) => {
+    setDrawerGrade(grd);
+    if (!isDescriptionEdited && activeProductObj) {
+      const baseDesc = activeProductObj.description || activeProductObj.productName || '';
+      const variantSpecs = [
+        activeVariantObj?.variantName || activeVariantObj?.size ? `Size: ${activeVariantObj?.variantName || activeVariantObj?.size}` : null,
+        `${grd} (${drawerStandard || 'Standard'})`,
+      ].filter(Boolean).join(' · ');
+      setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
+    }
+  };
+
+  const handleDrawerVariantChange = (varId) => {
+    setDrawerVariant(varId);
+    const variant = variantOptions.find((v) => String(v.value) === String(varId))?.variantObj || null;
+    if (!isDescriptionEdited && activeProductObj) {
+      const baseDesc = activeProductObj.description || activeProductObj.productName || '';
+      const variantSpecs = [
+        variant?.variantName || variant?.size ? `Size: ${variant?.variantName || variant?.size}` : null,
+        drawerGrade ? `${drawerGrade} (${drawerStandard || 'Standard'})` : null,
+      ].filter(Boolean).join(' · ');
+      setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
+    }
+  };
+
+  const handleResetDrawerDescription = () => {
+    if (activeProductObj) {
+      const baseDesc = activeProductObj.description || activeProductObj.productName || '';
+      const variantSpecs = [
+        activeVariantObj?.variantName || activeVariantObj?.size ? `Size: ${activeVariantObj?.variantName || activeVariantObj?.size}` : null,
+        drawerGrade ? `${drawerGrade} (${drawerStandard || 'Standard'})` : null,
+      ].filter(Boolean).join(' · ');
+      setDrawerDescription(variantSpecs ? `${baseDesc}\nVariant Specs: ${variantSpecs}.` : baseDesc);
+    }
+    setIsDescriptionEdited(false);
+  };
+
+  const handleToggleOption = (opt) => {
+    setDrawerOptions((prev) =>
+      prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]
+    );
+  };
+
+  const handleLookupListPrice = async () => {
+    if (!drawerProduct) {
+      toast.error('Please select a product first.');
+      return;
+    }
+
+    setIsLoadingPriceLookup(true);
+    try {
+      const resolvedCurrencyId = formData.currencyId || 1;
+      const selectedOptIds = availableDrawerOptions
+        .filter((opt) => drawerOptions.includes(opt.name))
+        .map((opt) => opt.id)
+        .filter(Boolean);
+
+      const res = await productService.lookupProductPrice({
+        productId: activeProductObj?.productId || activeProductObj?.id || drawerProduct,
+        productVariantId: activeVariantObj?.productVariantId || activeVariantObj?.id || drawerVariant || undefined,
+        standardId: activeVariantObj?.standardId || activeProductObj?.primaryStandardId || undefined,
+        gradeId: activeVariantObj?.gradeId || undefined,
+        currencyId: resolvedCurrencyId,
+        productOptionIds: selectedOptIds.length > 0 ? selectedOptIds : undefined,
+      });
+
+      if (res?.suggestedRate !== undefined && res.suggestedRate !== null) {
+        setDrawerRate(String(res.suggestedRate));
+        setDrawerRateSource('ListPrice');
+        const extraNote = res.optionExtras ? ` (Includes ${formatCurrency(res.optionExtras, formData.currency)} option extras)` : '';
+        toast.success(`List price applied: ${formatCurrency(res.suggestedRate, formData.currency)}${extraNote}`);
+      } else if (Array.isArray(res?.candidates) && res.candidates.length > 0) {
+        const topCandidate = res.candidates[0];
+        const finalRate = (Number(topCandidate.unitPrice) || 0) + (Number(res.optionExtras) || 0);
+        setDrawerRate(String(finalRate));
+        setDrawerRateSource('ListPrice');
+        toast.success(`List price applied: ${formatCurrency(finalRate, formData.currency)}`);
+      } else {
+        toast.error('No active list price found for this configuration in the selected currency.');
+      }
+    } catch (err) {
+      console.warn('Price lookup failed:', err);
+      toast.error(err?.message || 'Price lookup failed.');
+    } finally {
+      setIsLoadingPriceLookup(false);
+    }
+  };
+
+  const handleSaveProductFromDrawer = () => {
+    if (!drawerProduct) {
+      toast.error('Please select a product first.');
+      return;
+    }
+
+    const parsedRate = Number(drawerRate);
+    if (!drawerRate || isNaN(parsedRate) || parsedRate <= 0) {
+      toast.error('Unit Rate is compulsory and must be greater than 0.');
+      return;
+    }
+
+    const defaultDesc = buildCatalogProductDescription(activeProductObj, activeVariantObj);
+    const matchedTaxObj = singleProductTaxOptions.find(
+      (o) => String(o.value) === String(drawerTaxConfigDetailId) || (o.detailId && String(o.detailId) === String(drawerTaxConfigDetailId))
+    );
+    const taxConfigDetailId = matchedTaxObj?.detailId || (drawerTaxConfigDetailId && drawerTaxConfigDetailId !== '0' ? Number(drawerTaxConfigDetailId) : null);
+    const taxPercent = matchedTaxObj ? matchedTaxObj.percent : (Number(drawerTax) || 0);
+
+    const payload = {
+      categoryId: drawerCategory || activeProductObj?.categoryId || 'cat-sp',
+      productId: activeProductObj?.productId || activeProductObj?.id || 'prod-custom',
+      productName: activeProductObj?.productName || 'Custom Product',
+      variantId: activeVariantObj?.id || activeVariantObj?.productVariantId || '',
+      variantName: activeVariantObj?.variantName || activeVariantObj?.name || 'Standard Variant',
+      standards: drawerStandard,
+      standardCode: drawerStandard,
+      grade: drawerGrade,
+      gradeCode: drawerGrade,
+      flatness: drawerCalculatedFlatness,
+      itemCode: drawerCalculatedItemCode !== 'Auto-generated' ? drawerCalculatedItemCode : (activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'ITM-01'),
+      technicalDetails: activeVariantObj?.technicalDetails || activeProductObj?.standardInfo || '',
+      description: drawerDescription.trim() || defaultDesc,
+      quantity: Math.max(1, Number(drawerQty) || 1),
+      rate: Number(drawerRate) || 0,
+      rateSource: drawerRateSource,
+      otherCharges: Number(drawerOtherCharges) || 0,
+      taxPercent,
+      taxConfigDetailId,
+      options: drawerOptions,
     };
-    setFormData((prev) => ({
-      ...prev,
-      lineItems: [...prev.lineItems, newItem],
-    }));
+
+    if (editingIndex !== null) {
+      setFormData((prev) => {
+        const nextItems = [...prev.lineItems];
+        nextItems[editingIndex] = {
+          ...nextItems[editingIndex],
+          ...payload,
+        };
+        return { ...prev, lineItems: nextItems };
+      });
+      toast.success('Product line updated');
+    } else {
+      const newItem = {
+        id: `oc-it-${Date.now()}-${formData.lineItems.length}`,
+        ...payload,
+      };
+      setFormData((prev) => ({
+        ...prev,
+        lineItems: [...prev.lineItems, newItem],
+      }));
+      toast.success('Product line added to sales order');
+    }
+
     setErrors((prev) => ({ ...prev, lineItems: undefined }));
-    toast.success('Added product line item');
+    setIsDrawerOpen(false);
+  };
+
+  function handleAddLineItem() {
+    handleOpenAddDrawer();
   }
 
   function handleRemoveLineItem(idx) {
@@ -897,95 +1447,6 @@ export default function SalesOrderFormPage() {
       lineItems: prev.lineItems.filter((_, i) => i !== idx),
     }));
     toast.success('Removed line item');
-  }
-
-  function handleLineItemChange(idx, field, value) {
-    setFormData((prev) => ({
-      ...prev,
-      lineItems: prev.lineItems.map((item, i) =>
-        i === idx ? { ...item, [field]: value } : item
-      ),
-    }));
-  }
-
-  async function handleProductPickerChange(idx, rawValue) {
-    const selectedProductId =
-      typeof rawValue === 'object' && rawValue !== null ? rawValue.target?.value : rawValue;
-    if (!selectedProductId) return;
-
-    const matched = productsList.find((p) => String(p.id) === String(selectedProductId));
-    const prodIdNum = Number(selectedProductId);
-
-    // Initial immediate update from summary list to keep UI responsive
-    setFormData((prev) => ({
-      ...prev,
-      lineItems: prev.lineItems.map((item, i) => {
-        if (i !== idx) return item;
-        return {
-          ...item,
-          productId: prodIdNum || selectedProductId,
-          productName: matched?.productName || item.productName,
-          itemCode: matched?.productCode || matched?.code || item.itemCode,
-          variantName: matched?.categoryName || item.variantName || '',
-        };
-      }),
-    }));
-    setErrors((prev) => ({ ...prev, lineItems: undefined }));
-
-    // Async deep fetch for full specifications and list price lookup
-    try {
-      const [fullProd, priceRes] = await Promise.all([
-        productService.getProductById(prodIdNum || selectedProductId).catch(() => null),
-        productService
-          .lookupProductPrice({
-            productId: prodIdNum || selectedProductId,
-            currencyId: formData.currencyId || 1,
-          })
-          .catch(() => null),
-      ]);
-
-      const resolvedRate =
-        priceRes?.suggestedRate !== undefined && priceRes?.suggestedRate !== null
-          ? Number(priceRes.suggestedRate)
-          : Number(fullProd?.basePrice ?? fullProd?.standardRate ?? fullProd?.rate) || 0;
-
-      const resolvedSpecs =
-        fullProd?.description ||
-        fullProd?.variants?.[0]?.variantName ||
-        matched?.categoryName ||
-        '';
-
-      const resolvedCode =
-        fullProd?.productCode ||
-        fullProd?.variants?.[0]?.variantCode ||
-        matched?.productCode ||
-        '';
-
-      setFormData((prev) => ({
-        ...prev,
-        lineItems: prev.lineItems.map((item, i) => {
-          if (i !== idx) return item;
-          return {
-            ...item,
-            productId: prodIdNum || selectedProductId,
-            productName: fullProd?.productName || matched?.productName || item.productName,
-            itemCode: resolvedCode || item.itemCode,
-            variantName: resolvedSpecs || item.variantName,
-            rate: resolvedRate > 0 ? resolvedRate : item.rate,
-          };
-        }),
-      }));
-
-      if (resolvedRate > 0) {
-        toast.success(
-          `Loaded ${fullProd?.productName || matched?.productName || 'product'} with list price: ${formatCurrency(resolvedRate, formData.currency)}`
-        );
-      } else {
-        toast.success(`Loaded details for ${fullProd?.productName || matched?.productName || 'product'}`);
-      }
-    } catch (err) {
-      console.warn('Could not fetch product detail or price lookup:', err);
-    }
   }
 
   function handleDownloadDocument(doc) {
@@ -1579,140 +2040,71 @@ export default function SalesOrderFormPage() {
                   const lineAmount =
                     (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
                     (Number(item.otherCharges) || 0);
+                  const stdGradeText = [
+                    item.standardCode || item.standards,
+                    item.gradeCode || item.grade,
+                    item.flatness,
+                  ].filter(Boolean).join(' · ');
+
                   return (
                     <tr key={item.id || idx} className="hover:bg-surface/40 transition-colors">
                       <Td className="text-center font-mono text-xs text-text-muted">
                         {idx + 1}
                       </Td>
                       <Td className="text-xs">
-                        {orderMode === 'DIRECT' || !item.productName ? (
-                          <div className="space-y-1.5 py-1">
-                            {productOptions.length > 0 ? (
-                              <SearchableSelect
-                                size="sm"
-                                placeholder={isLoadingProducts ? 'Loading products...' : '-- Select Product --'}
-                                options={productOptions}
-                                value={String(item.productId || '')}
-                                onChange={(e) => handleProductPickerChange(idx, e.target.value)}
-                              />
-                            ) : (
-                              <Input
-                                size="sm"
-                                placeholder="Product Name"
-                                aria-label={`Line ${idx + 1} Product Name`}
-                                value={item.productName}
-                                onChange={(e) =>
-                                  handleLineItemChange(idx, 'productName', e.target.value)
-                                }
-                              />
-                            )}
-                            <div className="flex gap-2">
-                              <Input
-                                size="sm"
-                                placeholder="Variant / Specs"
-                                aria-label={`Line ${idx + 1} Variant or Specification`}
-                                value={item.variantName}
-                                onChange={(e) =>
-                                  handleLineItemChange(idx, 'variantName', e.target.value)
-                                }
-                              />
-                              <Input
-                                size="sm"
-                                placeholder="Code"
-                                aria-label={`Line ${idx + 1} Item Code`}
-                                value={item.itemCode}
-                                onChange={(e) =>
-                                  handleLineItemChange(idx, 'itemCode', e.target.value)
-                                }
-                              />
-                            </div>
+                        <div className="font-bold text-heading truncate">
+                          {item.productName || 'Unnamed Product'}
+                        </div>
+                        <div className="font-mono text-2xs text-primary truncate flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span>{item.itemCode || 'ITM'} · {item.variantName || 'Standard'}</span>
+                          {stdGradeText && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-3xs font-medium bg-surface/80 border border-border/80 text-text-muted">
+                              {stdGradeText}
+                            </span>
+                          )}
+                        </div>
+                        {(item.description || item.technicalDetails) && (
+                          <div className="text-3xs text-text-muted truncate max-w-sm mt-0.5">
+                            {item.description || item.technicalDetails}
                           </div>
-                        ) : (
-                          <>
-                            <div className="font-bold text-heading truncate">
-                              {item.productName}
-                            </div>
-                            <div className="font-mono text-2xs text-primary truncate">
-                              {item.itemCode || 'ITM'} · {item.variantName}
-                            </div>
-                            {item.technicalDetails && (
-                              <div className="text-3xs text-text-muted truncate max-w-xs">
-                                {item.technicalDetails}
-                              </div>
-                            )}
-                          </>
                         )}
                       </Td>
-                      <Td>
-                        <Input
-                          type="number"
-                          min="0.001"
-                          step="any"
-                          size="sm"
-                          aria-label={`Line ${idx + 1} Quantity`}
-                          value={item.quantity}
-                          onChange={(e) =>
-                            handleLineItemChange(idx, 'quantity', e.target.value)
-                          }
-                        />
+                      <Td className="text-center font-mono text-xs font-semibold">
+                        {item.quantity}
                       </Td>
-                      <Td>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="any"
-                          size="sm"
-                          aria-label={`Line ${idx + 1} Unit Rate`}
-                          value={item.rate}
-                          onChange={(e) =>
-                            handleLineItemChange(idx, 'rate', e.target.value)
-                          }
-                        />
+                      <Td className="text-right font-mono text-xs">
+                        {formatCurrency(Number(item.rate) || 0, formData.currency)}
                       </Td>
-                      <Td>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="any"
-                          size="sm"
-                          aria-label={`Line ${idx + 1} Other Charges`}
-                          value={item.otherCharges ?? 0}
-                          onChange={(e) =>
-                            handleLineItemChange(idx, 'otherCharges', e.target.value)
-                          }
-                        />
+                      <Td className="text-right font-mono text-xs text-text-muted">
+                        {Number(item.otherCharges) > 0 ? formatCurrency(Number(item.otherCharges), formData.currency) : '—'}
                       </Td>
-                      <Td>
-                        {(() => {
-                          const matched = taxOptions.find(
-                            (o) =>
-                              (item.taxConfigDetailId && String(o.detailId) === String(item.taxConfigDetailId)) ||
-                              String(o.value) === String(item.taxConfigDetailId) ||
-                              String(o.percent) === String(item.taxPercent)
-                          );
-                          const taxVal = matched ? String(matched.value) : String(item.taxPercent ?? 18);
-                          return (
-                            <SearchableSelect
-                              size="sm"
-                              options={taxOptions}
-                              value={taxVal}
-                              onChange={(e) => handleLineItemTaxChange(idx, e.target.value)}
-                            />
-                          );
-                        })()}
+                      <Td className="text-center font-mono text-xs">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-3xs font-medium bg-surface border border-border">
+                          {item.taxPercent ?? 18}%
+                        </span>
                       </Td>
                       <Td className="text-right font-mono font-semibold text-xs text-heading">
                         {formatCurrency(lineAmount, formData.currency)}
                       </Td>
                       <Td className="text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLineItem(idx)}
-                          className="p-1.5 text-text-muted hover:text-red-500 rounded hover:bg-surface transition-colors"
-                          title="Remove line item"
-                        >
-                          <IconTrash size={14} />
-                        </button>
+                        <div className="inline-flex items-center gap-1 justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditItem(item, idx)}
+                            className="p-1.5 text-text-muted hover:text-primary rounded hover:bg-surface transition-colors cursor-pointer"
+                            title="Edit line item"
+                          >
+                            <IconEdit size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLineItem(idx)}
+                            className="p-1.5 text-text-muted hover:text-red-500 rounded hover:bg-surface transition-colors cursor-pointer"
+                            title="Remove line item"
+                          >
+                            <IconTrash size={14} />
+                          </button>
+                        </div>
                       </Td>
                     </tr>
                   );
@@ -1949,6 +2341,275 @@ export default function SalesOrderFormPage() {
           Save &amp; Confirm
         </SaveButton>
       </FormActionsBar>
+
+      {/* ── DRAWER: ADD / EDIT PRODUCT LINE ITEM ── */}
+      <Drawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        title={editingIndex !== null ? 'Edit Product Line' : 'Add Product to Sales Order'}
+        subtitle="Configure product, standard, grade, variant dimensions, and pricing."
+        size="lg"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsDrawerOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              icon={IconCheck}
+              onClick={handleSaveProductFromDrawer}
+            >
+              {editingIndex !== null ? 'Update Product Line' : 'Add to Order'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          {/* Row 1: Category & Product Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <SearchableSelect
+              label="Category"
+              placeholder="Select category..."
+              options={categoryOptions}
+              value={drawerCategory}
+              onChange={(e) => {
+                setDrawerCategory(e.target.value);
+                setDrawerProduct('');
+                setDrawerVariant('');
+                setDrawerDescription('');
+              }}
+            />
+            <SearchableSelect
+              label="Product Name"
+              required
+              placeholder={isLoadingProducts ? 'Loading products...' : 'Select product...'}
+              options={drawerProductOptions}
+              value={drawerProduct}
+              onChange={(e) => handleDrawerProductChange(e.target.value)}
+            />
+          </div>
+
+          {/* Row 2: Standard & Grade / Accuracy */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <SearchableSelect
+              label="Manufacturing Standard"
+              required
+              placeholder={drawerProduct ? 'Select standard...' : 'Select product first'}
+              disabled={!drawerProduct}
+              options={drawerStandardOptions}
+              value={drawerStandard}
+              onChange={(e) => handleDrawerStandardChange(e.target.value)}
+            />
+            <SearchableSelect
+              label="Grade / Accuracy"
+              required
+              placeholder={drawerStandard ? 'Select grade...' : 'Select standard first'}
+              disabled={!drawerStandard}
+              options={drawerGradeOptions}
+              value={drawerGrade}
+              onChange={(e) => handleDrawerGradeChange(e.target.value)}
+            />
+          </div>
+
+          {/* Row 3: Size / Variant & Item Code */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <SearchableSelect
+              label="Size / Variant"
+              required
+              placeholder={drawerProduct ? 'Select variant...' : 'Select product first'}
+              disabled={!drawerProduct}
+              options={variantOptions}
+              value={drawerVariant}
+              onChange={(e) => handleDrawerVariantChange(e.target.value)}
+            />
+            <div>
+              <label className="block text-2xs font-semibold text-text-muted mb-1 uppercase tracking-wider">
+                Item Code
+              </label>
+              <div className="h-9 px-3 rounded-lg border border-border bg-surface/50 flex items-center font-mono text-xs text-text-muted">
+                {drawerCalculatedItemCode}
+              </div>
+              <span className="text-3xs text-text-muted mt-0.5 block">
+                Auto-assigned from standard, grade &amp; variant
+              </span>
+            </div>
+          </div>
+
+          {/* Row 4: Quantity, Rate, Line Charges, Tax */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Input
+              label="Quantity"
+              type="number"
+              min="1"
+              required
+              value={drawerQty}
+              onChange={(e) => setDrawerQty(e.target.value)}
+            />
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-2xs font-semibold text-text-muted uppercase tracking-wider">
+                  Unit Rate ({formData.currency}) <span className="text-red-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleLookupListPrice}
+                  disabled={!drawerProduct || isLoadingPriceLookup}
+                  className="text-3xs font-medium text-primary hover:underline disabled:opacity-50 cursor-pointer"
+                >
+                  {isLoadingPriceLookup ? 'Looking up...' : 'Use list price'}
+                </button>
+              </div>
+              <Input
+                type="number"
+                min="0"
+                step="any"
+                required
+                value={drawerRate}
+                onChange={(e) => {
+                  setDrawerRate(e.target.value);
+                  setDrawerRateSource('Manual');
+                }}
+              />
+            </div>
+            <Input
+              label="Line Charges"
+              type="number"
+              min="0"
+              step="any"
+              value={drawerOtherCharges}
+              onChange={(e) => setDrawerOtherCharges(e.target.value)}
+            />
+            <SearchableSelect
+              label="Product Tax"
+              options={singleProductTaxOptions}
+              value={String(drawerTaxConfigDetailId || drawerTax)}
+              onChange={(e) => {
+                const val = e.target.value;
+                const matched = singleProductTaxOptions.find(
+                  (o) => String(o.value) === String(val) || String(o.detailId) === String(val)
+                );
+                setDrawerTaxConfigDetailId(matched?.detailId ? String(matched.detailId) : (val === '0' ? '0' : ''));
+                setDrawerTax(matched ? matched.percent : 0);
+              }}
+            />
+          </div>
+
+          {/* Read-Only Technical Details Card */}
+          {activeVariantObj && (
+            <div className="rounded-xl border border-border bg-surface/40 p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between border-b border-border/70 pb-1.5">
+                <span className="text-2xs font-bold text-heading uppercase tracking-wider">
+                  Technical Details
+                </span>
+                <span className="text-3xs text-text-muted italic">(Auto-populated)</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                <div>
+                  <div className="text-3xs text-text-muted">Material</div>
+                  <div className="font-semibold text-heading truncate">{activeProductObj?.materialName || activeProductObj?.material || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-3xs text-text-muted">Finish</div>
+                  <div className="font-semibold text-heading truncate">{activeProductObj?.finishType || activeProductObj?.finish || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-3xs text-text-muted">Standard</div>
+                  <div className="font-semibold text-heading truncate">{drawerStandard || activeProductObj?.primaryStandardCode || (activeProductObj?.standards?.[0]?.standardCode || activeProductObj?.standards?.[0]?.name) || activeVariantObj?.standardCode || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-3xs text-text-muted">Grade</div>
+                  <div className="font-semibold text-heading truncate">{drawerGrade || activeVariantObj?.gradeCode || activeVariantObj?.grade || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-3xs text-text-muted">Flatness</div>
+                  <div className="font-semibold text-heading truncate">{drawerCalculatedFlatness !== '—' ? drawerCalculatedFlatness : (activeVariantObj?.flatness || '—')}</div>
+                </div>
+                <div>
+                  <div className="text-3xs text-text-muted">Dimensions</div>
+                  <div className="font-semibold text-heading truncate">{activeVariantObj?.variantName || activeVariantObj?.size || activeVariantObj?.variantCode || 'Standard'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Product Description Section */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-heading uppercase tracking-wider">
+                Product Description
+              </label>
+              {isDescriptionEdited && activeProductObj && (
+                <button
+                  type="button"
+                  onClick={handleResetDrawerDescription}
+                  className="inline-flex items-center gap-1 text-3xs font-semibold text-primary hover:underline cursor-pointer"
+                >
+                  <IconRotateCcw size={11} />
+                  Reset to Default
+                </button>
+              )}
+            </div>
+            <Textarea
+              rows={3}
+              placeholder="Select a product to auto-fetch its description, or enter a custom order description..."
+              value={drawerDescription}
+              onChange={(e) => {
+                setDrawerDescription(e.target.value);
+                setIsDescriptionEdited(true);
+              }}
+              hint="Auto-populated from the selected product & variant; you can customize it for this sales order."
+            />
+          </div>
+
+          {/* Catalog Options Checkboxes */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-heading uppercase tracking-wider">
+                Catalog Options
+              </label>
+              <span className="text-3xs text-text-muted">Select all applicable accessories / machining</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl border border-border bg-surface/30">
+              {availableDrawerOptions.map((opt) => {
+                const optName = opt.name || opt;
+                const isChecked = drawerOptions.includes(optName);
+                const hasPrice = Number(opt.unitPrice) > 0;
+                return (
+                  <label
+                    key={optName}
+                    className={`flex items-center justify-between gap-2 p-2 rounded-lg border transition-all cursor-pointer text-xs select-none ${
+                      isChecked
+                        ? 'border-primary/50 bg-primary/5 text-heading font-medium'
+                        : 'border-border/60 hover:bg-surface/80 text-text-muted'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Checkbox
+                        checked={isChecked}
+                        onChange={() => handleToggleOption(optName)}
+                        aria-label={optName}
+                      />
+                      <span className="truncate">{optName}</span>
+                    </div>
+                    {hasPrice && (
+                      <span className="text-3xs font-mono font-semibold text-primary shrink-0">
+                        +{formatCurrency(opt.unitPrice, formData.currency)}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </Drawer>
     </div>
   );
 }

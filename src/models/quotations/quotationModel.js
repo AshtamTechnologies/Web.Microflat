@@ -138,7 +138,7 @@ export function quotationListItemFromApi(dto = {}) {
     status: dto.status || 'Draft',
     inquiryId: dto.inquiryId,
     inquiryNo: dto.inquiryNo || '',
-    clientId: dto.clientId,
+    clientId: dto.clientId || dto.client?.id || null,
     clientCode: dto.clientCode || '',
     clientName,
     contactPerson: dto.contactPerson || '',
@@ -224,6 +224,16 @@ export function quotationDetailFromApi(dto = {}) {
     latestRev.clientAddressId ||
     (typeof rawAddress === 'object' ? rawAddress?.clientAddressId || rawAddress?.id : null);
 
+  const clientId =
+    dto.clientId ||
+    latestRev.clientId ||
+    dto.client?.id ||
+    dto.client?.clientId ||
+    dto.inquiry?.clientId ||
+    null;
+
+  const clientContacts = dto.client?.contacts || latestRev.client?.contacts || [];
+
   const rawContact =
     dto.contactPerson ||
     latestRev.contactPerson ||
@@ -238,11 +248,15 @@ export function quotationDetailFromApi(dto = {}) {
   const clientContactId =
     dto.clientContactId ||
     latestRev.clientContactId ||
-    (typeof rawContact === 'object' ? rawContact?.clientContactId || rawContact?.id : null);
+    (typeof rawContact === 'object' ? rawContact?.clientContactId || rawContact?.id : null) ||
+    clientContacts[0]?.clientContactId ||
+    clientContacts[0]?.id ||
+    null;
   const contactEmail =
     dto.contactEmail ||
     latestRev.contactEmail ||
     (typeof rawContact === 'object' ? rawContact?.email || rawContact?.contactEmail || rawContact?.officialEmail : '') ||
+    clientContacts[0]?.email ||
     dto.client?.officialEmail ||
     dto.inquiry?.contactEmail ||
     '';
@@ -250,6 +264,10 @@ export function quotationDetailFromApi(dto = {}) {
     dto.contactPhone ||
     latestRev.contactPhone ||
     (typeof rawContact === 'object' ? rawContact?.phone || rawContact?.mobile || rawContact?.phoneNo || rawContact?.contactPhone : '') ||
+    clientContacts[0]?.phoneNo ||
+    clientContacts[0]?.mobile1 ||
+    clientContacts[0]?.phone ||
+    dto.client?.officialMobile ||
     dto.inquiry?.contactPhone ||
     '';
 
@@ -323,7 +341,7 @@ export function quotationDetailFromApi(dto = {}) {
     quotationNo: dto.quotationNo || '',
     inquiryId: dto.inquiryId,
     inquiryNo: dto.inquiryNo || '',
-    clientId: dto.clientId,
+    clientId: clientId || dto.clientId || dto.client?.id || null,
     clientCode: dto.clientCode || '',
     clientName,
     clientAddressId,

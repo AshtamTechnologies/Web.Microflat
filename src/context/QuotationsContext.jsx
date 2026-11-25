@@ -195,9 +195,13 @@ export function QuotationsProvider({ children }) {
     try {
       const data = await quotationService.getQuotationById(id);
       if (data) {
-        setQuotations((prev) =>
-          prev.map((q) => (String(q.id) === String(id) || String(q.quotationNo) === String(id) ? { ...q, ...data } : q))
-        );
+        setQuotations((prev) => {
+          const exists = prev.some((q) => String(q.id) === String(id) || String(q.quotationNo) === String(id));
+          if (exists) {
+            return prev.map((q) => (String(q.id) === String(id) || String(q.quotationNo) === String(id) ? { ...q, ...data } : q));
+          }
+          return [...prev, data];
+        });
         return data;
       }
     } catch (err) {
