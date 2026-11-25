@@ -150,7 +150,7 @@ export default function VendorBankDetailsViewPage({
     let isCancelled = false;
     async function loadVendorBanks() {
       if (vendorId) {
-        const banks = await fetchBanksForVendor(vendorId);
+        const banks = await fetchBanksForVendor(vendorId, true);
         if (!isCancelled && Array.isArray(banks)) {
           setBankAccounts(banks);
         }
@@ -170,6 +170,13 @@ export default function VendorBankDetailsViewPage({
   // Selected account for view detail panel (initialized cleanly from query param or null)
   const [selectedBankId, setSelectedBankId] = useState(() => bankQueryId || null);
 
+  // Keep selectedBankId in sync if bankQueryId changes in the URL (e.g. from redirect)
+  useEffect(() => {
+    if (bankQueryId && bankQueryId !== selectedBankId) {
+      setSelectedBankId(bankQueryId);
+    }
+  }, [bankQueryId, selectedBankId]);
+
   // Status Filter for Master Bank Accounts list: 'ALL' | 'ACTIVE'
   const [statusFilter, setStatusFilter] = useState('ALL');
 
@@ -184,12 +191,12 @@ export default function VendorBankDetailsViewPage({
   useEffect(() => {
     if (filteredBankAccounts.length > 0) {
       const exists = filteredBankAccounts.some(
-        (b) => (b.bankDetailId === selectedBankId || b.id === selectedBankId)
+        (b) => String(b.bankDetailId || b.id) === String(selectedBankId)
       );
       if (!exists) {
         const queryBank = new URLSearchParams(window.location.search).get('bank');
         const matchQuery = filteredBankAccounts.find(
-          (b) => (b.bankDetailId === queryBank || b.id === queryBank)
+          (b) => String(b.bankDetailId || b.id) === String(queryBank)
         );
         if (matchQuery) {
           setSelectedBankId(matchQuery.bankDetailId || matchQuery.id);
@@ -218,8 +225,9 @@ export default function VendorBankDetailsViewPage({
   const selectedAccount = useMemo(() => {
     if (!filteredBankAccounts.length) return null;
     return (
-      filteredBankAccounts.find((b) => b.bankDetailId === selectedBankId || b.id === selectedBankId) ||
-      filteredBankAccounts[0]
+      filteredBankAccounts.find(
+        (b) => String(b.bankDetailId || b.id) === String(selectedBankId)
+      ) || filteredBankAccounts[0]
     );
   }, [filteredBankAccounts, selectedBankId]);
 
@@ -227,42 +235,53 @@ export default function VendorBankDetailsViewPage({
   const inFlightAttachmentsRef = useRef(new Set());
 
   useEffect(() => {
-    let isCancelled = false;
-    const bankId = selectedAccount?.bankDetailId || selectedAccount?.id;
+    const rawBankId = selectedAccount?.bankDetailId || selectedAccount?.id;
     if (
-      !bankId ||
-      String(bankId).startsWith('temp_') ||
-      String(bankId).startsWith('bd_') ||
-      remoteAttachments[bankId] ||
-      inFlightAttachmentsRef.current.has(bankId)
+      !rawBankId ||
+      String(rawBankId).startsWith('temp_') ||
+      String(rawBankId).startsWith('bd_')
     ) {
       return;
     }
 
-    async function loadBankAttachments() {
-      inFlightAttachmentsRef.current.add(bankId);
-      try {
-        const docs = await vendorService.getBankDetailAttachments(bankId);
-        if (!isCancelled && Array.isArray(docs)) {
-          setRemoteAttachments((prev) => ({ ...prev, [bankId]: docs }));
-        }
-      } catch (err) {
-        console.warn('Could not load attachments for bank account:', err);
-      } finally {
-        inFlightAttachmentsRef.current.delete(bankId);
-      }
+    const bankIdStr = String(rawBankId);
+    const currentCached = remoteAttachments[bankIdStr] || remoteAttachments[rawBankId];
+
+    // If cached already has attachments, skip refetch
+    if (Array.isArray(currentCached) && currentCached.length > 0) {
+      return;
     }
-    loadBankAttachments();
-    return () => {
-      isCancelled = true;
-    };
+
+    // Skip if already in flight
+    if (inFlightAttachmentsRef.current.has(bankIdStr)) {
+      return;
+    }
+    inFlightAttachmentsRef.current.add(bankIdStr);
+
+    vendorService
+      .getBankDetailAttachments(rawBankId)
+      .then((docs) => {
+        if (Array.isArray(docs)) {
+          setRemoteAttachments((prev) => ({
+            ...prev,
+            [bankIdStr]: docs,
+            [rawBankId]: docs,
+          }));
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load attachments for bank account:', err);
+      })
+      .finally(() => {
+        inFlightAttachmentsRef.current.delete(bankIdStr);
+      });
   }, [selectedAccount?.bankDetailId, selectedAccount?.id, remoteAttachments]);
 
   // Attachments for the currently selected bank account
   const selectedAttachments = useMemo(() => {
     if (!selectedAccount) return [];
     const bankId = selectedAccount.bankDetailId || selectedAccount.id;
-    const remote = remoteAttachments[bankId];
+    const remote = remoteAttachments[String(bankId)] || remoteAttachments[bankId];
     if (Array.isArray(remote) && remote.length > 0) return remote;
     return Array.isArray(selectedAccount.attachments) ? selectedAccount.attachments : [];
   }, [selectedAccount, remoteAttachments]);
@@ -275,7 +294,10 @@ export default function VendorBankDetailsViewPage({
   const totalAttachments = useMemo(
     () =>
       bankAccounts.reduce(
-        (sum, b) => sum + (Array.isArray(b.attachments) ? b.attachments.length : 0),
+        (sum, b) => {
+          const count = b.attachmentCount ?? (Array.isArray(b.attachments) ? b.attachments.length : 0);
+          return sum + count;
+        },
         0
       ),
     [bankAccounts]

@@ -17,8 +17,8 @@ import {
   Modal,
   Input,
   Textarea,
-  SearchableSelect,
   ConfirmModal,
+  DocumentUploader,
 } from '../../../components/ui';
 import {
   IconAttachment,
@@ -53,64 +53,9 @@ export default function MeetingAttachmentManager({
   const [attachmentToDelete, setAttachmentToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Document types for dropdown
-  const docTypeOptions = useMemo(() => {
-    return (documentTypes || []).map((dt) => ({
-      value: String(dt.id || dt.documentTypeId),
-      label: dt.documentTypeName || dt.name || 'Document',
-      raw: dt,
-    }));
-  }, [documentTypes]);
-
-  const selectedDocType = useMemo(() => {
-    return (documentTypes || []).find(
-      (dt) => String(dt.id || dt.documentTypeId) === String(selectedTypeId)
-    );
-  }, [documentTypes, selectedTypeId]);
-
-  const allowedExtensionsAccept = useMemo(() => {
-    if (!selectedDocType) return '*';
-    if (selectedDocType.allowedExtensions) {
-      return selectedDocType.allowedExtensions;
-    }
-    if (Array.isArray(selectedDocType.allowedExtensionList)) {
-      return selectedDocType.allowedExtensionList.join(',');
-    }
-    return '*';
-  }, [selectedDocType]);
-
-  function validateFile(file, docType) {
-    if (!file) return 'Please select a file to upload.';
-    if (!docType) return 'Please select a document type.';
-
-    const maxMB = docType.maxFileSizeMB || 10;
-    const maxBytes = maxMB * 1024 * 1024;
-    if (file.size > maxBytes) {
-      const actualMB = (file.size / (1024 * 1024)).toFixed(1);
-      return `File size (${actualMB} MB) exceeds maximum allowed size of ${maxMB} MB.`;
-    }
-
-    const rawExts =
-      docType.allowedExtensions ||
-      (Array.isArray(docType.allowedExtensionList)
-        ? docType.allowedExtensionList.join(',')
-        : '');
-    if (rawExts) {
-      const allowedList = rawExts
-        .split(',')
-        .map((ext) => ext.trim().toLowerCase())
-        .filter(Boolean);
-      const fileExt = '.' + file.name.split('.').pop().toLowerCase();
-      if (!allowedList.includes(fileExt)) {
-        return `File type "${fileExt}" is not allowed for ${docType.documentTypeName || 'this document type'}. Allowed: ${rawExts}`;
-      }
-    }
-
-    return '';
-  }
-
   function handleOpenUploadModal() {
-    setSelectedTypeId(docTypeOptions[0]?.value || '');
+    const firstId = documentTypes?.[0]?.id || documentTypes?.[0]?.documentTypeId;
+    setSelectedTypeId(firstId ? String(firstId) : '');
     setDocumentTitle('');
     setRemarks('');
     setSelectedFile(null);
@@ -118,40 +63,15 @@ export default function MeetingAttachmentManager({
     setIsModalOpen(true);
   }
 
-  function handleTypeChange(val) {
-    setSelectedTypeId(val);
-    const newDocType = (documentTypes || []).find(
-      (dt) => String(dt.id || dt.documentTypeId) === String(val)
-    );
-    if (selectedFile) {
-      const err = validateFile(selectedFile, newDocType);
-      if (err) {
-        setUploadError(err);
-        setSelectedFile(null);
-      } else {
-        setUploadError('');
+  function handleUploaderChange(val) {
+    if (val?.file) {
+      setSelectedFile(val.file);
+      setUploadError('');
+      if (!documentTitle) {
+        setDocumentTitle(val.file.name.replace(/\.[^/.]+$/, ''));
       }
     } else {
-      setUploadError('');
-    }
-  }
-
-  function handleFileChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const err = validateFile(file, selectedDocType);
-    if (err) {
-      setUploadError(err);
       setSelectedFile(null);
-      e.target.value = '';
-      return;
-    }
-
-    setUploadError('');
-    setSelectedFile(file);
-    if (!documentTitle) {
-      setDocumentTitle(file.name.replace(/\.[^/.]+$/, ''));
     }
   }
 
@@ -168,12 +88,6 @@ export default function MeetingAttachmentManager({
 
     if (!selectedFile) {
       setUploadError('Please select a file to upload.');
-      return;
-    }
-
-    const err = validateFile(selectedFile, selectedDocType);
-    if (err) {
-      setUploadError(err);
       return;
     }
 
@@ -392,7 +306,7 @@ export default function MeetingAttachmentManager({
         title="Upload Meeting Document"
         maxWidth="max-w-lg"
       >
-        <div className="space-y-4">
+        <form onSubmit={handleConfirmUpload} className="space-y-4">
           {uploadError && (
             <div className="p-3 rounded-lg border border-danger/30 bg-danger/10 text-xs text-danger flex items-center gap-2">
               <IconError className="w-4 h-4 shrink-0" />
@@ -400,29 +314,7 @@ export default function MeetingAttachmentManager({
             </div>
           )}
 
-          {/* Document Type */}
-          <div>
-            <label className="block text-2xs font-semibold text-text-muted mb-1 uppercase tracking-wide">
-              Document Type <span className="text-danger">*</span>
-            </label>
-            <SearchableSelect
-              value={selectedTypeId}
-              onChange={(e) => {
-                const val = e?.target?.value !== undefined ? e.target.value : e;
-                handleTypeChange(val);
-              }}
-              options={docTypeOptions}
-              placeholder="Select document category..."
-            />
-            {selectedDocType && (
-              <p className="text-2xs text-text-muted mt-1">
-                Max size: {selectedDocType.maxFileSizeMB || 10} MB
-                {selectedDocType.allowedExtensions ? ` • Allowed: ${selectedDocType.allowedExtensions}` : ''}
-              </p>
-            )}
-          </div>
-
-          {/* Document Title */}
+          {/* Document Title (1st Field) */}
           <div>
             <label className="block text-2xs font-semibold text-text-muted mb-1 uppercase tracking-wide">
               Document Title
@@ -431,8 +323,33 @@ export default function MeetingAttachmentManager({
               value={documentTitle}
               onChange={(e) => setDocumentTitle(e.target.value)}
               placeholder="e.g., Client Minutes of Meeting - Signed"
+              disabled={uploading}
             />
           </div>
+
+          <DocumentUploader
+            required
+            docTypeLabel="Document Type"
+            options={documentTypes?.length > 0 ? documentTypes : null}
+            moduleFilter="MEETING"
+            selectedDocTypeId={selectedTypeId}
+            onDocTypeChange={(val) => {
+              setSelectedTypeId(val);
+              setUploadError('');
+            }}
+            value={
+              selectedFile
+                ? {
+                    fileName: selectedFile.name,
+                    fileSize: selectedFile.size,
+                    file: selectedFile,
+                  }
+                : null
+            }
+            onChange={handleUploaderChange}
+            error={uploadError}
+            disabled={uploading}
+          />
 
           {/* Remarks (Matches Swagger) */}
           <div>
@@ -444,43 +361,8 @@ export default function MeetingAttachmentManager({
               onChange={(e) => setRemarks(e.target.value)}
               placeholder="Add optional notes, version details, or context regarding this file..."
               rows={2}
+              disabled={uploading}
             />
-          </div>
-
-          {/* File Picker */}
-          <div>
-            <label className="block text-2xs font-semibold text-text-muted mb-1 uppercase tracking-wide">
-              File <span className="text-danger">*</span>
-            </label>
-            <div className="border border-dashed border-border rounded-xl p-4 text-center hover:border-primary/50 transition-colors bg-surface-hover/30">
-              <input
-                type="file"
-                id="meeting-file-input"
-                className="hidden"
-                accept={allowedExtensionsAccept}
-                onChange={handleFileChange}
-              />
-              <label
-                htmlFor="meeting-file-input"
-                className="cursor-pointer flex flex-col items-center justify-center space-y-1.5"
-              >
-                <IconUpload className="w-6 h-6 text-primary" />
-                <span className="text-xs font-semibold text-primary hover:underline">
-                  {selectedFile ? selectedFile.name : 'Click to select or browse file'}
-                </span>
-                {selectedFile && (
-                  <span className="text-2xs text-text-muted font-mono">
-                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                  </span>
-                )}
-              </label>
-            </div>
-            {selectedDocType && (
-              <div className="flex items-center justify-between text-2xs text-text-muted mt-1.5 px-0.5">
-                <span>Allowed: {selectedDocType.allowedExtensions || 'All files'}</span>
-                <span>Max: {selectedDocType.maxFileSizeMB || 10} MB</span>
-              </div>
-            )}
           </div>
 
           {/* Modal Actions */}
@@ -494,17 +376,16 @@ export default function MeetingAttachmentManager({
               Cancel
             </Button>
             <Button
-              type="button"
+              type="submit"
               variant="primary"
-              onClick={handleConfirmUpload}
-              disabled={uploading || !selectedFile}
+              disabled={uploading || !selectedFile || !selectedTypeId}
               className="gap-2"
             >
               <IconUpload className="w-4 h-4" />
               {uploading ? 'Uploading...' : 'Attach Document'}
             </Button>
           </div>
-        </div>
+        </form>
       </Modal>
 
       {/* Delete Confirmation Modal */}

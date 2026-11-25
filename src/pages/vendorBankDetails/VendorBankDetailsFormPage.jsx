@@ -548,11 +548,12 @@ export default function VendorBankDetailsFormPage({
         // Re-fetch vendor bank list in context
         await fetchBanksForVendor(selectedVendorId, true);
 
+        const newBankId = created?.id ?? created?.bankDetailId;
         toast.success(`Bank account for ${formState.bankName || 'vendor'} added successfully`);
         if (embedded) {
-          navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+          navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank${newBankId ? `&bank=${newBankId}` : ''}`);
         } else {
-          navigate('/vendor-bank-details');
+          navigate(selectedVendorId || vendorId ? `/vendor-bank-details/${selectedVendorId || vendorId}${newBankId ? `?bank=${newBankId}` : ''}` : '/vendor-bank-details');
         }
       } catch (err) {
         toast.error(err?.message || 'Failed to save bank account');
@@ -687,9 +688,9 @@ export default function VendorBankDetailsFormPage({
 
       toast.success(`Bank details for ${formState.bankName || 'account'} updated successfully`);
       if (embedded) {
-        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank${targetId ? `&bank=${targetId}` : ''}`);
       } else {
-        navigate('/vendor-bank-details');
+        navigate(selectedVendorId || vendorId ? `/vendor-bank-details/${selectedVendorId || vendorId}${targetId ? `?bank=${targetId}` : ''}` : '/vendor-bank-details');
       }
     } else if (authModalState.action === 'delete') {
       const targetRow = authModalState.targetData;
@@ -1140,10 +1141,11 @@ export default function VendorBankDetailsFormPage({
     if (hasUnsavedInput && !isEditMode) {
       setIsDiscardModalOpen(true);
     } else {
+      const activeBankId = editingId || bankParamId;
       if (embedded) {
-        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank${activeBankId ? `&bank=${activeBankId}` : ''}`);
       } else {
-        navigate('/vendor-bank-details');
+        navigate(selectedVendorId || vendorId ? `/vendor-bank-details/${selectedVendorId || vendorId}${activeBankId ? `?bank=${activeBankId}` : ''}` : '/vendor-bank-details');
       }
     }
   };
@@ -2106,10 +2108,11 @@ export default function VendorBankDetailsFormPage({
         onClose={() => setIsDiscardModalOpen(false)}
         onConfirm={() => {
           setIsDiscardModalOpen(false);
+          const activeBankId = editingId || bankParamId;
           if (embedded) {
-            navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+            navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank${activeBankId ? `&bank=${activeBankId}` : ''}`);
           } else {
-            navigate('/vendor-bank-details');
+            navigate(selectedVendorId || vendorId ? `/vendor-bank-details/${selectedVendorId || vendorId}${activeBankId ? `?bank=${activeBankId}` : ''}` : '/vendor-bank-details');
           }
         }}
         title="Discard Unsaved Changes?"

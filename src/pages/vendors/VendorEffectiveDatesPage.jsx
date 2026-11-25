@@ -175,11 +175,11 @@ export default function VendorEffectiveDatesPage() {
   const activeTab = searchParams.get('tab') === 'bank' ? 'bank' : 'profile';
 
   const { getVendorById, updateVendorVersions, updateVendor, toggleStatus, fetchVendorDetail } = useVendorsContext();
-  const { getBanksForVendor } = useVendorBankDetails();
+  const { getBanksForVendor, bankDetails } = useVendorBankDetails();
 
   const bankAccounts = useMemo(() => {
     return (id && getBanksForVendor ? getBanksForVendor(id) : []) || [];
-  }, [id, getBanksForVendor]);
+  }, [id, getBanksForVendor, bankDetails]);
 
   const [fetchedVendor, setFetchedVendor] = useState(null);
   const [fetchingVendor, setFetchingVendor] = useState(false);

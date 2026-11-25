@@ -271,15 +271,17 @@ export default function ProjectFormPage() {
         projectTypeId: customerType ? String(customerType.id) : prev.projectTypeId,
       }));
     } else {
-      // In-House mode
+      // In-House mode (Without Sales Order)
       const inHouseType = lookups.projectTypes.find(
         (t) => t.typeName?.toLowerCase() === 'in-house'
       );
       setSelectedOrderDetails(null);
       setExistingProjectsForOrder([]);
+      setIsProjectNameCustomized(false);
       setForm((prev) => ({
         ...prev,
         orderConfirmationId: null,
+        projectName: '',
         projectTypeId: inHouseType ? String(inHouseType.id) : prev.projectTypeId,
       }));
     }

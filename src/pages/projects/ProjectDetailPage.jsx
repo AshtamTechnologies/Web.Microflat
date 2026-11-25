@@ -34,6 +34,8 @@ import {
   CancelButton,
   DataTable,
   TableActions,
+  ScrollableTabs,
+  DocumentUploader,
 } from '../../components/ui';
 import {
   IconProject,
@@ -73,6 +75,7 @@ import { formatDate, formatDateTime } from '../../utils/dateUtils';
 const phaseColumnHelper = createColumnHelper();
 const milestoneColumnHelper = createColumnHelper();
 const costingColumnHelper = createColumnHelper();
+const documentColumnHelper = createColumnHelper();
 
 const CURRENCY_SYMBOL_MAP = {
   INR: '₹',
@@ -216,6 +219,7 @@ export default function ProjectDetailPage() {
   // 4. Document Upload Modal
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [docFile, setDocFile] = useState(null);
+  const [uploadedDocValue, setUploadedDocValue] = useState(null);
   const [docForm, setDocForm] = useState({
     documentTypeId: '',
     documentName: '',
@@ -546,6 +550,7 @@ export default function ProjectDetailPage() {
       toast.success('Document uploaded successfully');
       setIsDocModalOpen(false);
       setDocFile(null);
+      setUploadedDocValue(null);
       setDocForm({ documentTypeId: '', documentName: '', documentTitle: '', remarks: '' });
       loadProject();
     } catch (err) {
@@ -634,21 +639,13 @@ export default function ProjectDetailPage() {
       }),
       phaseColumnHelper.accessor('phaseName', {
         header: 'PHASE NAME',
-        size: 220,
+        size: 240,
         minSize: 140,
-        cell: (info) => {
-          const ph = info.row.original;
-          return (
-            <div>
-              <span className="font-medium text-xs text-heading block">{info.getValue()}</span>
-              {ph.remarks && (
-                <span className="text-3xs text-text-muted block truncate max-w-[260px]" title={ph.remarks}>
-                  {ph.remarks}
-                </span>
-              )}
-            </div>
-          );
-        },
+        cell: (info) => (
+          <span className="font-medium text-xs text-heading block">
+            {info.getValue()}
+          </span>
+        ),
       }),
       phaseColumnHelper.display({
         id: 'plannedDates',
@@ -739,19 +736,11 @@ export default function ProjectDetailPage() {
         header: 'MILESTONE TITLE',
         size: 240,
         minSize: 150,
-        cell: (info) => {
-          const ms = info.row.original;
-          return (
-            <div>
-              <span className="font-medium text-xs text-heading block">{info.getValue()}</span>
-              {ms.remarks && (
-                <span className="text-3xs text-text-muted block truncate max-w-[260px]" title={ms.remarks}>
-                  {ms.remarks}
-                </span>
-              )}
-            </div>
-          );
-        },
+        cell: (info) => (
+          <span className="font-medium text-xs text-heading block">
+            {info.getValue()}
+          </span>
+        ),
       }),
       milestoneColumnHelper.accessor('phaseName', {
         header: 'LINKED PHASE',
@@ -858,20 +847,10 @@ export default function ProjectDetailPage() {
       }),
       costingColumnHelper.accessor('costCategory', {
         header: 'CATEGORY',
-        size: 130,
-        minSize: 100,
+        size: 140,
+        minSize: 110,
         cell: (info) => (
           <span className="font-medium text-xs text-heading">
-            {info.getValue()}
-          </span>
-        ),
-      }),
-      costingColumnHelper.accessor('description', {
-        header: 'DESCRIPTION',
-        size: 240,
-        minSize: 150,
-        cell: (info) => (
-          <span className="text-xs text-text truncate block max-w-[260px]" title={info.getValue()}>
             {info.getValue()}
           </span>
         ),
@@ -891,8 +870,8 @@ export default function ProjectDetailPage() {
       }),
       costingColumnHelper.accessor('amount', {
         header: 'AMOUNT',
-        size: 140,
-        minSize: 110,
+        size: 150,
+        minSize: 120,
         cell: (info) => {
           const c = info.row.original;
           const val = Number(info.getValue() || 0);
@@ -934,11 +913,138 @@ export default function ProjectDetailPage() {
         },
       }),
     ];
-  }, [isEditable]);
+  }, [isEditable, lookups.currencies]);
 
   const costingsTable = useReactTable({
     data: project?.costings || [],
     columns: costingColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // TANSTACK TABLE COLUMNS: DOCUMENTS
+  // ─────────────────────────────────────────────────────────────
+  const documentColumns = useMemo(() => {
+    return [
+      documentColumnHelper.accessor('fileName', {
+        header: 'FILE NAME',
+        size: 260,
+        minSize: 160,
+        cell: (info) => {
+          const doc = info.row.original;
+          const displayName = doc.documentName || doc.fileName;
+          return (
+            <div className="flex items-center gap-2 min-w-0">
+              <FileText size={15} className="text-primary shrink-0" />
+              <div className="min-w-0">
+                <span className="font-semibold text-xs text-heading truncate block" title={displayName}>
+                  {displayName}
+                </span>
+                {doc.documentTitle && doc.documentTitle !== displayName && (
+                  <span className="text-3xs text-text-muted truncate block" title={doc.documentTitle}>
+                    {doc.documentTitle}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        },
+      }),
+      documentColumnHelper.accessor('documentTypeName', {
+        header: 'DOCUMENT TYPE',
+        size: 160,
+        minSize: 120,
+        cell: (info) => (
+          <Badge variant="neutral" size="sm">
+            {info.getValue() || 'Document'}
+          </Badge>
+        ),
+      }),
+      documentColumnHelper.accessor('remarks', {
+        header: 'REMARKS',
+        size: 180,
+        minSize: 120,
+        cell: (info) => (
+          <span className="text-xs text-text-muted truncate block max-w-[180px]" title={info.getValue()}>
+            {info.getValue() || '—'}
+          </span>
+        ),
+      }),
+      documentColumnHelper.accessor('uploadedByName', {
+        header: 'UPLOADED BY',
+        size: 180,
+        minSize: 130,
+        cell: (info) => {
+          const doc = info.row.original;
+          return (
+            <div className="text-xs">
+              <span className="font-medium text-heading block">
+                {info.getValue() || (doc.uploadedBy ? `User #${doc.uploadedBy}` : '—')}
+              </span>
+              {doc.uploadedOn && (
+                <span className="font-mono text-3xs text-text-muted block">
+                  {formatDate(doc.uploadedOn)}
+                </span>
+              )}
+            </div>
+          );
+        },
+      }),
+      documentColumnHelper.display({
+        id: 'actions',
+        header: 'ACTIONS',
+        size: 110,
+        minSize: 90,
+        cell: (info) => {
+          const doc = info.row.original;
+          const isDownloading = downloadingDocId === doc.id;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => handleDownloadDocument(doc)}
+                disabled={isDownloading}
+                title="Download document"
+                className="h-7 w-7 p-0"
+              >
+                {isDownloading ? (
+                  <Loader2 size={13} className="animate-spin text-primary" />
+                ) : (
+                  <Download size={13} className="text-primary hover:text-primary-dark" />
+                )}
+              </Button>
+              {isEditable && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setItemToDelete({ type: 'document', id: doc.id, name: doc.documentName || doc.fileName })}
+                  title="Delete document"
+                  className="h-7 w-7 p-0 text-danger hover:text-danger hover:bg-danger/10"
+                >
+                  <Trash2 size={13} />
+                </Button>
+              )}
+            </div>
+          );
+        },
+      }),
+    ];
+  }, [isEditable, downloadingDocId]);
+
+  const documentsTable = useReactTable({
+    data: project?.documents || [],
+    columns: documentColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: {
@@ -1062,35 +1168,19 @@ export default function ProjectDetailPage() {
         )}
       </div>
 
-      {/* ── Tab Navigation ── */}
-      <div className="flex items-center gap-1 border-b border-border text-sm overflow-x-auto">
-        {[
-          { key: 'overview', label: 'Overview', icon: FileText },
-          { key: 'phases', label: `Phases (${project.phases?.length || 0})`, icon: Layers },
-          { key: 'milestones', label: `Milestones (${project.milestones?.length || 0})`, icon: Calendar },
-          { key: 'costings', label: `Costings & Summary (${project.costings?.length || 0})`, icon: IndianRupee },
-          { key: 'documents', label: `Documents (${project.documents?.length || 0})`, icon: Upload },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={[
-                'flex items-center gap-2 px-4 py-2.5 font-medium border-b-2 cursor-pointer transition-colors whitespace-nowrap text-xs',
-                isActive
-                  ? 'border-primary text-primary font-semibold'
-                  : 'border-transparent text-text-muted hover:text-heading',
-              ].join(' ')}
-            >
-              <Icon size={14} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* ── Tab Navigation (Mobile-optimized with momentum scrolling & edge arrows) ── */}
+      <ScrollableTabs
+        variant="underline"
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        tabs={[
+          { id: 'overview', label: 'Overview', icon: FileText },
+          { id: 'phases', label: `Phases (${project.phases?.length || 0})`, icon: Layers },
+          { id: 'milestones', label: `Milestones (${project.milestones?.length || 0})`, icon: Calendar },
+          { id: 'costings', label: `Costings & Summary (${project.costings?.length || 0})`, icon: IndianRupee },
+          { id: 'documents', label: `Documents (${project.documents?.length || 0})`, icon: Upload },
+        ]}
+      />
 
       {/* ── Tab 1: Overview ── */}
       {activeTab === 'overview' && (
@@ -1187,11 +1277,6 @@ export default function ProjectDetailPage() {
                           {ph.phaseName}
                         </span>
                       </div>
-                      {ph.remarks && (
-                        <p className="text-3xs text-text-muted mt-0.5 line-clamp-2">
-                          {ph.remarks}
-                        </p>
-                      )}
                     </div>
                     <Badge variant={getPhaseStatusBadgeVariant(ph.status)} size="sm">
                       {ph.status}
@@ -1276,11 +1361,6 @@ export default function ProjectDetailPage() {
                       <span className="text-3xs text-text-muted block mt-0.5">
                         Phase: {ms.phaseName || '— (Project Level)'}
                       </span>
-                      {ms.remarks && (
-                        <p className="text-3xs text-text-muted mt-0.5 line-clamp-2">
-                          {ms.remarks}
-                        </p>
-                      )}
                     </div>
                     <Badge variant={ms.status === 'Completed' ? 'approved' : 'warning'} size="sm">
                       {ms.status}
@@ -1368,9 +1448,6 @@ export default function ProjectDetailPage() {
                           {c.costType}
                         </Badge>
                       </div>
-                      <p className="text-xs text-text mt-1 break-words">
-                        {c.description}
-                      </p>
                     </div>
                     <span className="font-mono text-xs font-bold text-heading whitespace-nowrap">
                       {symbol} {val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -1435,74 +1512,78 @@ export default function ProjectDetailPage() {
             )}
           </div>
 
-          {project.documents?.length === 0 ? (
-            <div className="py-12 text-center text-xs text-text-muted border border-dashed border-border rounded-xl">
-              No documents uploaded yet. Click "Upload Document" to attach files.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {project.documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="p-3.5 rounded-xl border border-border bg-surface flex items-center justify-between gap-3 shadow-2xs hover:border-primary/40 transition-colors"
-                >
-                  <div className="min-w-0">
-                    <span
-                      className="font-semibold text-xs text-heading truncate block"
-                      title={doc.documentName || doc.fileName}
-                    >
-                      {doc.documentName || doc.fileName}
+          <DataTable
+            table={documentsTable}
+            columns={documentColumns}
+            showPagination={(project.documents?.length || 0) > 10}
+            entityName="documents"
+            emptyTitle="No documents uploaded yet"
+            emptyDescription="Click 'Upload Document' to attach drawings, inspection sheets, or sign-offs."
+            renderMobileCard={(row) => {
+              const doc = row.original || row;
+              const displayName = doc.documentName || doc.fileName;
+              const isDownloading = downloadingDocId === doc.id;
+              return (
+                <div className="p-3 bg-surface border border-border rounded-lg space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <FileText size={14} className="text-primary shrink-0" />
+                        <span className="font-semibold text-xs text-heading truncate block" title={displayName}>
+                          {displayName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <Badge variant="neutral" size="xs">
+                          {doc.documentTypeName || 'Document'}
+                        </Badge>
+                        {doc.uploadedByName && (
+                          <span className="text-3xs text-text-muted">
+                            by {doc.uploadedByName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {doc.remarks && (
+                    <p className="text-3xs text-text-muted bg-surface-subtle p-2 rounded border border-border/50 line-clamp-2">
+                      {doc.remarks}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1.5 border-t border-border/60 text-2xs">
+                    <span className="font-mono text-text-muted text-3xs">
+                      {doc.uploadedOn ? formatDate(doc.uploadedOn) : '—'}
                     </span>
-                    <div className="flex items-center gap-2 text-3xs text-text-muted mt-0.5">
-                      <span className="font-medium text-primary">{doc.documentTypeName || 'Document'}</span>
-                      {doc.fileSize > 0 && (
-                        <>
-                          <span>•</span>
-                          <span>{(Number(doc.fileSize) / 1024).toFixed(1)} KB</span>
-                        </>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="xs"
+                        icon={isDownloading ? Loader2 : Download}
+                        onClick={() => handleDownloadDocument(doc)}
+                        disabled={isDownloading}
+                        className="h-7 px-2 text-2xs"
+                      >
+                        {isDownloading ? 'Downloading...' : 'Download'}
+                      </Button>
+                      {isEditable && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          icon={Trash2}
+                          onClick={() => setItemToDelete({ type: 'document', id: doc.id, name: displayName })}
+                          className="h-7 w-7 p-0 text-danger hover:text-danger hover:bg-danger/10"
+                        />
                       )}
                     </div>
-                    {doc.uploadedByName && (
-                      <span className="text-3xs text-text-muted mt-1 block">
-                        Uploaded by {doc.uploadedByName}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadDocument(doc)}
-                      disabled={downloadingDocId === doc.id}
-                      className="p-1.5 rounded-lg border border-border hover:bg-surface-subtle text-primary transition-colors cursor-pointer disabled:opacity-50"
-                      title="Download document"
-                    >
-                      {downloadingDocId === doc.id ? (
-                        <Loader2 size={14} className="animate-spin text-primary" />
-                      ) : (
-                        <Download size={14} />
-                      )}
-                    </button>
-                    {isEditable && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setItemToDelete({
-                            type: 'document',
-                            id: doc.id,
-                            name: doc.documentName || doc.fileName,
-                          })
-                        }
-                        className="p-1.5 rounded-lg border border-border hover:bg-danger/10 hover:border-danger/30 text-danger transition-colors cursor-pointer"
-                        title="Delete document"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            }}
+          />
         </Card>
       )}
 
@@ -1770,17 +1851,27 @@ export default function ProjectDetailPage() {
         </Modal>
       )}
 
-      {/* ── Modal: Upload Document (Aligned with Swagger Image 8) ── */}
+      {/* ── Modal: Upload Document (Using Enterprise DocumentUploader) ── */}
       {isDocModalOpen && (
         <Modal
           isOpen={isDocModalOpen}
-          onClose={() => setIsDocModalOpen(false)}
+          onClose={() => {
+            setIsDocModalOpen(false);
+            setDocFile(null);
+            setUploadedDocValue(null);
+          }}
           title="Upload Project Document"
           subtitle={`Attach files to ${project.projectCode}`}
-          size="sm"
+          size="md"
           footer={
             <div className="flex items-center justify-end gap-2 w-full">
-              <CancelButton onClick={() => setIsDocModalOpen(false)} />
+              <CancelButton
+                onClick={() => {
+                  setIsDocModalOpen(false);
+                  setDocFile(null);
+                  setUploadedDocValue(null);
+                }}
+              />
               <SaveButton onClick={handleUploadDocument} loading={isSubmittingChild}>
                 Upload
               </SaveButton>
@@ -1788,29 +1879,43 @@ export default function ProjectDetailPage() {
           }
         >
           <form onSubmit={handleUploadDocument} className="space-y-3.5 text-xs">
-            <SearchableSelect
-              label="Document Type"
+            <DocumentUploader
               required
-              options={(lookups.documentTypes || []).map((dt) => ({
-                value: String(dt.id),
-                label: dt.documentTypeName || dt.typeName || 'Document',
-              }))}
-              value={docForm.documentTypeId}
-              onChange={(e) => setDocForm((d) => ({ ...d, documentTypeId: e?.target?.value ?? e }))}
-              placeholder="Select document category..."
+              docTypeLabel="Document Type"
+              options={lookups.documentTypes}
+              selectedDocTypeId={docForm.documentTypeId}
+              onDocTypeChange={(typeId, docTypeObj) => {
+                setDocForm((d) => ({
+                  ...d,
+                  documentTypeId: typeId,
+                  documentName: d.documentName || docTypeObj?.label || '',
+                }));
+              }}
+              value={uploadedDocValue}
+              onChange={(fileData) => {
+                setUploadedDocValue(fileData);
+                setDocFile(fileData?.file || null);
+                if (fileData?.fileName && !docForm.documentTitle) {
+                  setDocForm((d) => ({ ...d, documentTitle: fileData.fileName }));
+                }
+              }}
             />
-            <Input
-              label="Document Name (Optional)"
-              value={docForm.documentName}
-              onChange={(e) => setDocForm((d) => ({ ...d, documentName: e.target.value }))}
-              placeholder="Defaults to document type name"
-            />
-            <Input
-              label="Document Title (Optional)"
-              value={docForm.documentTitle}
-              onChange={(e) => setDocForm((d) => ({ ...d, documentTitle: e.target.value }))}
-              placeholder="File title"
-            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <Input
+                label="Document Name (Optional)"
+                value={docForm.documentName}
+                onChange={(e) => setDocForm((d) => ({ ...d, documentName: e.target.value }))}
+                placeholder="Defaults to document type name"
+              />
+              <Input
+                label="Document Title (Optional)"
+                value={docForm.documentTitle}
+                onChange={(e) => setDocForm((d) => ({ ...d, documentTitle: e.target.value }))}
+                placeholder="File title"
+              />
+            </div>
+
             <Textarea
               label="Remarks (Optional)"
               rows={2}
@@ -1818,17 +1923,6 @@ export default function ProjectDetailPage() {
               onChange={(e) => setDocForm((d) => ({ ...d, remarks: e.target.value }))}
               placeholder="Optional notes or scope description..."
             />
-            <div>
-              <label className="mf-label">
-                Select File <span className="mf-required">*</span>
-              </label>
-              <input
-                type="file"
-                required
-                onChange={(e) => setDocFile(e.target.files?.[0] || null)}
-                className="w-full text-xs text-text file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-              />
-            </div>
           </form>
         </Modal>
       )}
