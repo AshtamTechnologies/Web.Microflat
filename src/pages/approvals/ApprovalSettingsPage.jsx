@@ -49,7 +49,7 @@ import {
   DetailField,
 } from '../../components/ui';
 
-import { approvalsService, roleService } from '../../services';
+import { approvalsService, roleService, userService } from '../../services';
 import { useAuthContext } from '../../context/AuthContext';
 import { formatDate } from '../../utils/dateUtils';
 import { ApproverType } from '../../constants/approvalStatus';
@@ -129,10 +129,11 @@ export default function ApprovalSettingsPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [modulesRes, lookupsRes, rolesFallbackRes] = await Promise.allSettled([
+      const [modulesRes, lookupsRes, rolesFallbackRes, usersFallbackRes] = await Promise.allSettled([
         approvalsService.getApprovalSettingsModules({ isModuleActive: true }),
         approvalsService.getApprovalSettingsLookups(),
         roleService.getRoles({ isActive: true }),
+        userService.getUsers({ isActive: true, pageSize: 100 }),
       ]);
 
       if (modulesRes.status === 'fulfilled' && Array.isArray(modulesRes.value)) {
@@ -163,6 +164,12 @@ export default function ApprovalSettingsPage() {
       // Fallback roles if lookups didn't return them
       if (fetchedRoles.length === 0 && rolesFallbackRes.status === 'fulfilled' && Array.isArray(rolesFallbackRes.value)) {
         fetchedRoles = rolesFallbackRes.value;
+      }
+
+      // Fallback users if lookups didn't return them
+      if (fetchedUsers.length === 0 && usersFallbackRes.status === 'fulfilled') {
+        const uItems = usersFallbackRes.value?.items || (Array.isArray(usersFallbackRes.value) ? usersFallbackRes.value : []);
+        fetchedUsers = uItems;
       }
 
       setLookups({

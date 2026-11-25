@@ -14,7 +14,7 @@
  *     - 5. Documents & Attachments (RFQ, Drawings, Specs, Quotations with real-time extension & size validation)
  */
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   IconAdd,
   IconArrowRight,
@@ -78,6 +78,8 @@ import { useProductCategoriesContext } from '../../context/ProductCategoriesCont
 import { useRegions } from '../../context/RegionsContext';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useCountryState } from '../../context/CountryStateContext';
+import { useStandardsContext } from '../../context/StandardsContext';
+import { calculateFlatnessTolerance, normalizeGradeCode } from '../../utils/flatnessFormula';
 import { inquiryService, productService } from '../../services';
 import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/treeUtils';
 import { getTodayISO } from '../../utils/dateUtils';
@@ -342,6 +344,12 @@ export default function InquiryFormPage() {
   const { categories = [] } = useProductCategoriesContext();
   const { regions = [], fetchRegions } = useRegions();
   const { clients = [], ensureClientsLoaded } = useClientsContext();
+  const standardsContext = useStandardsContext?.() || {};
+  const { standardsList = [], gradeMapping = [], ensureStandardsLoaded } = standardsContext;
+
+  useEffect(() => {
+    ensureStandardsLoaded?.();
+  }, [ensureStandardsLoaded]);
 
   useEffect(() => {
     if (clients.length === 0 && ensureClientsLoaded) {
@@ -578,8 +586,8 @@ export default function InquiryFormPage() {
           const optionsList = Array.isArray(optRes?.items) && optRes.items.length > 0
             ? optRes.items
             : Array.isArray(detailRes?.options) && detailRes.options.length > 0
-            ? detailRes.options
-            : [];
+              ? detailRes.options
+              : [];
           if (optionsList.length > 0) {
             setProductOptionsMap((prev) => ({ ...prev, [itemFormState.productId]: optionsList }));
           }
@@ -705,7 +713,56 @@ export default function InquiryFormPage() {
     ];
   }, [itemFormState.categoryId, mergedCatalogProducts, catalogCategoryOptions]);
 
+  // Helper: parse dimensions (length, width) from variant object
+  const parseDimensionsFromVariant = useCallback((variant) => {
+    if (!variant) return { length: 0, width: 0 };
+    if (variant.lengthMm && variant.widthMm) {
+      return { length: Number(variant.lengthMm), width: Number(variant.widthMm) };
+    }
+    const str = variant.size || variant.variantName || variant.dimensions || '';
+    const match = String(str).match(/(\d+)\s*[x×*]\s*(\d+)/i);
+    if (match) {
+      return { length: Number(match[1]), width: Number(match[2]) };
+    }
+    return { length: 0, width: 0 };
+  }, []);
+
+  // Helper: calculate flatness tolerance using metrology formula
+  const resolveFlatnessTolerance = useCallback((length, width, standard, grade) => {
+    if (!length || !width || !standard || !grade) return '—';
+    try {
+      const res = calculateFlatnessTolerance(length, width, standard, grade);
+      if (res && res.isSupported && res.valueMicrons !== undefined) {
+        return `${res.valueMicrons} µm`;
+      }
+    } catch {
+      // ignore
+    }
+    return '—';
+  }, []);
+
   const standardOptions = useMemo(() => {
+    const prod = itemFormState.productId
+      ? (mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId)) ||
+        INQUIRY_CATALOG_PRODUCTS.find((p) => String(p.id) === String(itemFormState.productId)))
+      : null;
+
+    if (prod?.supportedStandards && Array.isArray(prod.supportedStandards) && prod.supportedStandards.length > 0) {
+      return prod.supportedStandards.map((std) => ({
+        value: std,
+        label: std,
+      }));
+    }
+
+    if (Array.isArray(standardsList) && standardsList.length > 0) {
+      return standardsList
+        .filter((s) => s.isActive !== false)
+        .map((s) => ({
+          value: s.standardCode || String(s.id),
+          label: s.description ? `${s.standardCode} (${s.description})` : s.standardCode,
+        }));
+    }
+
     return [
       { value: 'IS-7327-2003', label: 'IS-7327-2003 (Indian Standard - Granite)' },
       { value: 'DIN-876', label: 'DIN-876 (German Standard)' },
@@ -716,9 +773,46 @@ export default function InquiryFormPage() {
       { value: 'IS-5268', label: 'IS-5268 (Straight Edges)' },
       { value: 'IS-6985', label: 'IS-6985 (Angle Plates & Box Squares)' },
     ];
-  }, []);
+  }, [itemFormState.productId, mergedCatalogProducts, standardsList]);
 
   const gradeOptions = useMemo(() => {
+    const curStd = String(itemFormState.standards || '').trim();
+    if (!curStd) return [];
+
+    // 1. Try gradeMapping from StandardsContext
+    const matchedMapping = (gradeMapping || []).find((m) =>
+      String(m.standardCode || '').toLowerCase() === curStd.toLowerCase() ||
+      String(m.standardId || '') === curStd
+    );
+    if (matchedMapping && Array.isArray(matchedMapping.grades) && matchedMapping.grades.length > 0) {
+      return matchedMapping.grades
+        .filter((g) => g.isGradeActive !== false)
+        .map((g) => ({
+          value: g.gradeCode,
+          label: `${g.gradeCode}${g.description ? ` · ${g.description}` : ''}`,
+        }));
+    }
+
+    // 2. Standardized domain fallbacks based on standard family
+    const stdUpper = curStd.toUpperCase();
+    if (stdUpper.includes('GGG') || stdUpper.includes('ASME') || stdUpper.includes('463')) {
+      return [
+        { value: 'Grade AA', label: 'Grade AA · Precision Laboratory' },
+        { value: 'Grade A', label: 'Grade A · Standard Inspection' },
+        { value: 'Grade B', label: 'Grade B · Tool Room / Shop' },
+      ];
+    }
+
+    if (stdUpper.includes('DIN')) {
+      return [
+        { value: 'Grade 00', label: 'Grade 00 · High Precision Laboratory' },
+        { value: 'Grade 0', label: 'Grade 0 · Metrology & Inspection' },
+        { value: 'Grade 1', label: 'Grade 1 · Workshop / Production' },
+        { value: 'Grade 2', label: 'Grade 2 · Toolroom General' },
+        { value: 'Grade 3', label: 'Grade 3 · Heavy Workshop' },
+      ];
+    }
+
     return [
       { value: 'Grade 00', label: 'Grade 00 · Calibration / Lab Grade' },
       { value: 'Grade 0', label: 'Grade 0 · Inspection / Metrology Grade' },
@@ -726,7 +820,7 @@ export default function InquiryFormPage() {
       { value: 'Grade 2', label: 'Grade 2 · Workshop / Machining Grade' },
       { value: 'Grade 3', label: 'Grade 3 · Rough Workshop Grade' },
     ];
-  }, []);
+  }, [itemFormState.standards, gradeMapping]);
 
   const catalogVariantOptions = useMemo(() => {
     if (!itemFormState.productId) return [];
@@ -736,12 +830,10 @@ export default function InquiryFormPage() {
         { value: '', label: 'Select Size / Variant...' },
         ...dynamicVars.map((v) => {
           const sizePart = v.variantName || v.name || v.size || 'Standard Size';
-          const gradePart = v.gradeName || v.grade ? ` · Grade: ${v.gradeName || v.grade}` : '';
-          const stdPart = v.standardName || v.standard ? ` · Std: ${v.standardName || v.standard}` : '';
           const codePart = v.variantCode || v.itemCode ? ` (${v.variantCode || v.itemCode})` : '';
           return {
             value: String(v.id || v.productVariantId),
-            label: `${sizePart}${gradePart}${stdPart}${codePart}`,
+            label: `${sizePart}${codePart}`,
             variantObj: v,
           };
         }),
@@ -754,7 +846,7 @@ export default function InquiryFormPage() {
       { value: '', label: 'Select Size / Variant...' },
       ...prod.variants.map((v) => ({
         value: String(v.id),
-        label: `${v.variantName || v.size}${v.grade ? ' · ' + v.grade : ''} (${v.itemCode || v.variantCode || 'ITM'})`,
+        label: `${v.variantName || v.size} (${v.itemCode || v.variantCode || 'ITM'})`,
         variantObj: v,
       })),
     ];
@@ -849,24 +941,24 @@ export default function InquiryFormPage() {
 
   const _UNUSED_OLD_WIDTHS_WRAPPER = () => {
     const _UNUSED_OLD_WIDTHS = useMemo(() => ({
-    select: 40,
-    index: 40,
-    product: 120,
-    variant: 100,
-    quantity: 60,
-    notes: 100,
-    actions: 84,
-  }), []);
+      select: 40,
+      index: 40,
+      product: 120,
+      variant: 100,
+      quantity: 60,
+      notes: 100,
+      actions: 84,
+    }), []);
 
-  const [colWidths, setColWidths] = useState({
-    select: 48,
-    index: 48,
-    product: 220,
-    variant: 180,
-    quantity: 80,
-    notes: 220,
-    actions: 96,
-  });
+    const [colWidths, setColWidths] = useState({
+      select: 48,
+      index: 48,
+      product: 220,
+      variant: 180,
+      quantity: 80,
+      notes: 220,
+      actions: 96,
+    });
   };
 
   const [resizingCol, setResizingCol] = useState(null);
@@ -980,10 +1072,10 @@ export default function InquiryFormPage() {
 
       let mat = prod?.materialName || 'Indian Black Granite';
       let fin = prod?.finishType || 'Hand Lapped';
-      let std = prod?.standardInfo || 'IS-7327-2003';
+      let std = prod?.primaryStandard || (prod?.standards && prod.standards[0]?.standardCode) || prod?.primaryStandardCode || (prod?.supportedStandards && prod.supportedStandards[0]) || 'IS-7327-2003';
       if (!prod?.materialName) {
         if (prod?.productName?.toLowerCase().includes('cast iron')) {
-          mat = 'Close-grained Cast Iron';
+          mat = 'Close-grained FG-220 Cast Iron';
           fin = 'Hand Scraped';
           std = 'IS-2285';
         } else if (prod?.productName?.toLowerCase().includes('straight edge')) {
@@ -997,9 +1089,11 @@ export default function InquiryFormPage() {
         } else if (prod?.productName?.toLowerCase().includes('comparator')) {
           mat = 'Indian Black Granite';
           fin = 'Hard Chrome Column';
-          std = 'ISO / IS Standards';
+          std = 'IS-7327-2003';
         }
       }
+
+      const defaultGrade = String(std).toUpperCase().includes('GGG') ? 'Grade AA' : 'Grade 0';
 
       setItemFormState((prev) => ({
         ...prev,
@@ -1007,19 +1101,100 @@ export default function InquiryFormPage() {
         productName: prod ? prod.productName : '',
         categoryId: prod?.categoryId ? String(prod.categoryId) : prev.categoryId,
         categoryName: catObj ? catObj.label : prev.categoryName,
+        standards: std,
+        grade: defaultGrade,
         variantId: '',
         variantName: '',
+        dimensions: '',
+        flatness: '—',
         itemCode: prod ? (prod.productCode || prod.itemCodePrefix || '') : '',
         material: mat,
         finish: fin,
-        standards: std,
-        dimensions: '',
-        grade: '',
-        flatness: '',
         options: [],
         selectedOptionIds: [],
         technicalDetails: prod ? (prod.description || prod.standardInfo || '') : '',
         specification: prod ? `${prod.productName}. Standard configuration.` : '',
+      }));
+    } else if (field === 'standards') {
+      const nextStandards = value || 'IS-7327-2003';
+      let nextGrade = itemFormState.grade || 'Grade 0';
+      const stdUpper = String(nextStandards).toUpperCase();
+      if (stdUpper.includes('GGG') || stdUpper.includes('ASME')) {
+        if (!nextGrade.includes('AA') && !nextGrade.includes('A') && !nextGrade.includes('B')) {
+          nextGrade = 'Grade AA';
+        }
+      } else {
+        if (nextGrade.includes('AA') || nextGrade.includes('A') || nextGrade.includes('B')) {
+          nextGrade = 'Grade 0';
+        }
+      }
+
+      const prod =
+        mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId)) ||
+        INQUIRY_CATALOG_PRODUCTS.find((p) => String(p.id) === String(itemFormState.productId));
+      const dynamicVars = productVariantsMap[itemFormState.productId] || [];
+      const variant =
+        dynamicVars.find((v) => String(v.id || v.productVariantId) === String(itemFormState.variantId)) ||
+        prod?.variants?.find((v) => String(v.id) === String(itemFormState.variantId)) ||
+        null;
+
+      let nextFlatness = itemFormState.flatness || '—';
+      let nextItemCode = itemFormState.itemCode;
+      if (variant) {
+        const dims = parseDimensionsFromVariant(variant);
+        nextFlatness = resolveFlatnessTolerance(dims.length, dims.width, nextStandards, nextGrade);
+        const normGrd = normalizeGradeCode(nextGrade) || '0';
+        const baseCode = variant.itemCode || variant.variantCode || prod?.productCode || prod?.itemCodePrefix || 'ITM';
+        nextItemCode = `${baseCode}-GR${normGrd}`;
+      }
+
+      const dimPart = itemFormState.dimensions || variant?.variantName || '';
+      const optsText = (itemFormState.options || []).length > 0 ? ` Options: ${itemFormState.options.join(', ')}.` : '';
+      const specParts = [prod?.productName, dimPart, `${nextGrade} (${nextStandards})`, nextFlatness !== '—' ? `Flatness: ${nextFlatness}` : ''].filter(Boolean);
+      const generatedSpec = prod ? `${specParts.join(', ')}.${optsText}` : itemFormState.specification;
+
+      setItemFormState((prev) => ({
+        ...prev,
+        standards: nextStandards,
+        grade: nextGrade,
+        flatness: nextFlatness,
+        itemCode: nextItemCode,
+        specification: generatedSpec,
+      }));
+    } else if (field === 'grade') {
+      const nextGrade = value || 'Grade 0';
+      const curStd = itemFormState.standards || 'IS-7327-2003';
+
+      const prod =
+        mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId)) ||
+        INQUIRY_CATALOG_PRODUCTS.find((p) => String(p.id) === String(itemFormState.productId));
+      const dynamicVars = productVariantsMap[itemFormState.productId] || [];
+      const variant =
+        dynamicVars.find((v) => String(v.id || v.productVariantId) === String(itemFormState.variantId)) ||
+        prod?.variants?.find((v) => String(v.id) === String(itemFormState.variantId)) ||
+        null;
+
+      let nextFlatness = itemFormState.flatness || '—';
+      let nextItemCode = itemFormState.itemCode;
+      if (variant) {
+        const dims = parseDimensionsFromVariant(variant);
+        nextFlatness = resolveFlatnessTolerance(dims.length, dims.width, curStd, nextGrade);
+        const normGrd = normalizeGradeCode(nextGrade) || '0';
+        const baseCode = variant.itemCode || variant.variantCode || prod?.productCode || prod?.itemCodePrefix || 'ITM';
+        nextItemCode = `${baseCode}-GR${normGrd}`;
+      }
+
+      const dimPart = itemFormState.dimensions || variant?.variantName || '';
+      const optsText = (itemFormState.options || []).length > 0 ? ` Options: ${itemFormState.options.join(', ')}.` : '';
+      const specParts = [prod?.productName, dimPart, `${nextGrade} (${curStd})`, nextFlatness !== '—' ? `Flatness: ${nextFlatness}` : ''].filter(Boolean);
+      const generatedSpec = prod ? `${specParts.join(', ')}.${optsText}` : itemFormState.specification;
+
+      setItemFormState((prev) => ({
+        ...prev,
+        grade: nextGrade,
+        flatness: nextFlatness,
+        itemCode: nextItemCode,
+        specification: generatedSpec,
       }));
     } else if (field === 'variantId') {
       const prod =
@@ -1033,18 +1208,25 @@ export default function InquiryFormPage() {
 
       const variantName = variant ? (variant.variantName || variant.name || variant.size || '') : '';
       const dimensions = variant ? (variant.dimensions || variant.size || variant.variantName || '') : '';
-      const grade = variant ? (variant.gradeName || variant.grade || 'Grade 0') : '';
-      const std = variant?.standardName || variant?.standard || itemFormState.standards || 'IS-7327-2003';
-      const flatness = variant ? (variant.flatness || variant.tolerance || '—') : '';
-      const itemCode = variant ? (variant.variantCode || variant.itemCode || prod?.productCode || '') : (prod?.productCode || '');
+      const curStd = itemFormState.standards || 'IS-7327-2003';
+      const curGrade = itemFormState.grade || 'Grade 0';
+
+      const dims = parseDimensionsFromVariant(variant);
+      const calculatedFlatness = variant ? resolveFlatnessTolerance(dims.length, dims.width, curStd, curGrade) : '—';
+      const normGrd = normalizeGradeCode(curGrade) || '0';
+      const baseCode = variant ? (variant.itemCode || variant.variantCode || prod?.productCode || prod?.itemCodePrefix || 'ITM') : (prod?.productCode || '');
+      const itemCode = variant ? `${baseCode}-GR${normGrd}` : baseCode;
+
       const mat = variant?.materialName || prod?.materialName || itemFormState.material || 'Indian Black Granite';
       const fin = variant?.finishType || prod?.finishType || itemFormState.finish || 'Hand Lapped';
 
       const optsText = (itemFormState.options || []).length > 0
         ? ` Options: ${itemFormState.options.join(', ')}.`
         : '';
+      const dimPart = dimensions || variantName;
+      const specParts = [prod?.productName, dimPart, `${curGrade} (${curStd})`, calculatedFlatness !== '—' ? `Flatness: ${calculatedFlatness}` : ''].filter(Boolean);
       const generatedSpec = variant && prod
-        ? `${prod.productName}, ${dimensions || variantName}, ${grade} (${std}).${optsText}`
+        ? `${specParts.join(', ')}.${optsText}`
         : itemFormState.specification;
 
       setItemFormState((prev) => ({
@@ -1052,41 +1234,11 @@ export default function InquiryFormPage() {
         variantId: value,
         variantName: variantName,
         dimensions: dimensions,
-        grade: grade,
-        flatness: flatness,
-        standards: std,
+        flatness: calculatedFlatness,
         material: mat,
         finish: fin,
         technicalDetails: variant ? (variant.technicalDetails || variant.description || prod?.standardInfo || '') : (prod?.standardInfo || ''),
         itemCode: itemCode,
-        specification: generatedSpec,
-      }));
-    } else if (field === 'standards' || field === 'grade') {
-      const nextStandards = field === 'standards' ? value : (itemFormState.standards || 'IS-7327-2003');
-      const nextGrade = field === 'grade' ? value : (itemFormState.grade || 'Grade 0');
-
-      const prod =
-        mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId)) ||
-        INQUIRY_CATALOG_PRODUCTS.find((p) => String(p.id) === String(itemFormState.productId));
-      const dynamicVars = productVariantsMap[itemFormState.productId] || [];
-      const variant =
-        dynamicVars.find((v) => String(v.id || v.productVariantId) === String(itemFormState.variantId)) ||
-        prod?.variants?.find((v) => String(v.id) === String(itemFormState.variantId)) ||
-        null;
-
-      const variantName = variant ? (variant.variantName || variant.name || variant.size || '') : '';
-      const dimensions = variant ? (variant.dimensions || variant.size || variant.variantName || '') : (itemFormState.dimensions || '');
-      const optsText = (itemFormState.options || []).length > 0 ? ` Options: ${itemFormState.options.join(', ')}.` : '';
-
-      const generatedSpec = prod
-        ? `${prod.productName}${dimensions ? `, ${dimensions}` : ''}, ${nextGrade} (${nextStandards}).${optsText}`
-        : itemFormState.specification;
-
-      setItemFormState((prev) => ({
-        ...prev,
-        [field]: value,
-        standards: nextStandards,
-        grade: nextGrade,
         specification: generatedSpec,
       }));
     } else if (field === 'options') {
@@ -1103,8 +1255,10 @@ export default function InquiryFormPage() {
       const grade = variant ? (variant.gradeName || variant.grade || 'Grade 0') : '';
       const std = variant?.standardName || variant?.standard || itemFormState.standards || 'IS-7327-2003';
       const optsText = (value || []).length > 0 ? ` Options: ${value.join(', ')}.` : '';
+      const dimPart = dimensions || variant?.variantName;
+      const specParts = [prod?.productName, dimPart, grade ? `${grade} (${std})` : ''].filter(Boolean);
       const generatedSpec = variant && prod
-        ? `${prod.productName}, ${dimensions || variant.variantName}, ${grade} (${std}).${optsText}`
+        ? `${specParts.join(', ')}.${optsText}`
         : itemFormState.specification;
 
       setItemFormState((prev) => ({
@@ -1264,12 +1418,282 @@ export default function InquiryFormPage() {
 
   const _UNUSED_LEGACY_FUNCTIONS = () => {
     const _UNUSED_PREV_handleItemFieldChange = (field, value) => {
-    if (field === 'categoryId') {
-      const catObj = INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === value);
-      setItemFormState((prev) => ({
-        ...prev,
-        categoryId: value,
-        categoryName: catObj ? catObj.label : '',
+      if (field === 'categoryId') {
+        const catObj = INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === value);
+        setItemFormState((prev) => ({
+          ...prev,
+          categoryId: value,
+          categoryName: catObj ? catObj.label : '',
+          productId: '',
+          productName: '',
+          variantId: '',
+          variantName: '',
+          isCustomSize: false,
+          customSize: '',
+          technicalDetails: '',
+          itemCode: '',
+        }));
+      } else if (field === 'productId') {
+        const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === value);
+        setItemFormState((prev) => ({
+          ...prev,
+          productId: value,
+          productName: prod ? prod.productName : '',
+          categoryId: prod ? prod.categoryId : prev.categoryId,
+          categoryName: prod ? (INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === prod.categoryId)?.label || prev.categoryName) : prev.categoryName,
+          variantId: '',
+          variantName: '',
+          isCustomSize: false,
+          customSize: '',
+          technicalDetails: prod ? prod.standardInfo : '',
+          itemCode: prod ? prod.itemCodePrefix : '',
+          uom: prod ? prod.defaultUom : 'Nos',
+        }));
+      } else if (field === 'variantId') {
+        if (value === CUSTOM_SIZE_VARIANT_VALUE) {
+          setItemFormState((prev) => ({
+            ...prev,
+            variantId: CUSTOM_SIZE_VARIANT_VALUE,
+            variantName: 'Custom Size',
+            isCustomSize: true,
+            technicalDetails: 'Custom size · Technical specs can be detailed in Notes',
+          }));
+        } else {
+          const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === itemFormState.productId);
+          const variant = prod ? prod.variants.find((v) => v.id === value) : null;
+          setItemFormState((prev) => ({
+            ...prev,
+            variantId: value,
+            variantName: variant ? variant.variantName : '',
+            isCustomSize: false,
+            customSize: '',
+            technicalDetails: variant ? variant.technicalDetails : (prod ? prod.standardInfo : ''),
+            itemCode: variant ? variant.itemCode : (prod ? prod.itemCodePrefix : ''),
+          }));
+        }
+      } else {
+        setItemFormState((prev) => ({
+          ...prev,
+          [field]: value,
+        }));
+      }
+
+      if (itemFieldErrors[field]) {
+        setItemFieldErrors((prev) => ({ ...prev, [field]: null }));
+      }
+      inquiryItemErrorCountRef.current = 0;
+    };
+
+    const validateItemForm = () => {
+      const errs = {};
+      if (!itemFormState.productName || !itemFormState.productName.trim()) {
+        errs.productName = 'Please select a product';
+      }
+      if (!itemFormState.variantId) {
+        errs.variantId = 'Please select a size / variant';
+      }
+      if (itemFormState.isCustomSize && (!itemFormState.customSize || !itemFormState.customSize.trim())) {
+        errs.customSize = 'Please enter custom size / dimensions';
+      }
+      if (
+        itemFormState.quantity === '' ||
+        itemFormState.quantity === null ||
+        itemFormState.quantity === undefined ||
+        Number(itemFormState.quantity) <= 0 ||
+        isNaN(Number(itemFormState.quantity))
+      ) {
+        errs.quantity = 'Quantity must be greater than 0';
+      }
+
+      setItemFieldErrors(errs);
+      return Object.keys(errs).length === 0;
+    };
+
+    const resetItemForm = () => {
+      setEditingItemId(null);
+      setItemFieldErrors({});
+      setItemFormState({ ...INITIAL_ITEM_ENTRY });
+      inquiryItemErrorCountRef.current = 0;
+    };
+
+    const handleAddOrUpdateItem = (e) => {
+      if (e && e.preventDefault) e.preventDefault();
+
+      if (!validateItemForm()) {
+        inquiryItemErrorCountRef.current += 1;
+        toast.error('Please select product, size/variant and enter valid quantity', {
+          id: 'inquiry-item-validation-error',
+        });
+        return;
+      }
+
+      inquiryItemErrorCountRef.current = 0;
+
+      const resolvedQty = Number(itemFormState.quantity) || 1;
+      const resolvedUom = itemFormState.uom || 'Nos';
+      const resolvedNotes = itemFormState.notes?.trim() || '';
+
+      const itemPayload = {
+        prItemId: isEditingItem
+          ? (form.items[editingItemIndex]?.prItemId || Date.now())
+          : (Date.now() + Math.floor(Math.random() * 1000)),
+        categoryId: itemFormState.categoryId || '',
+        categoryName: itemFormState.categoryName || '',
+        productId: itemFormState.productId || '',
+        productVariantId: Number(itemFormState.variantId) || null,
+        productOptionIds: (itemFormState.selectedOptionIds || []).filter((id) => typeof id === 'number' && !isNaN(id) && id > 0),
+        productName: itemFormState.productName || '',
+        itemName: itemFormState.itemName || itemFormState.productName || itemFormState.displayName || 'Product',
+        variantId: itemFormState.variantId || '',
+        variantName: itemFormState.isCustomSize
+          ? (itemFormState.customSize ? `${itemFormState.customSize} (Custom)` : 'Custom Size')
+          : (itemFormState.variantName || '—'),
+        isCustomSize: Boolean(itemFormState.isCustomSize),
+        customSize: itemFormState.customSize || '',
+        technicalDetails: itemFormState.technicalDetails || '',
+        itemCode: itemFormState.itemCode || '—',
+        quantity: resolvedQty,
+        uom: resolvedUom,
+        notes: resolvedNotes,
+        specification: resolvedNotes || itemFormState.technicalDetails || '',
+      };
+
+      if (isEditingItem) {
+        const updated = (form.items || []).map((it, idx) => {
+          if (idx === editingItemIndex) {
+            return {
+              ...it,
+              ...itemPayload,
+            };
+          }
+          return it;
+        });
+        const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+        setForm((prev) => ({
+          ...prev,
+          items: updated,
+          Quantity: String(totalQty || 1),
+          UOM: updated[0]?.uom || prev.UOM || 'Nos',
+        }));
+        toast.success('Item updated');
+        resetItemForm();
+      } else {
+        const nextItems = [...(form.items || []), itemPayload];
+        const totalQty = nextItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+        setForm((prev) => ({
+          ...prev,
+          items: nextItems,
+          Quantity: String(totalQty || 1),
+          UOM: nextItems[0]?.uom || prev.UOM || 'Nos',
+        }));
+        toast.success('Item added to inquiry');
+        resetItemForm();
+      }
+    };
+
+    const handleStartEditItem = (item, index) => {
+      const id = item.prItemId !== undefined && item.prItemId !== null
+        ? item.prItemId
+        : item.id !== undefined && item.id !== null
+          ? item.id
+          : index;
+
+      setEditingItemId(id);
+      setItemFieldErrors({});
+      setItemFormState({
+        prItemId: id,
+        categoryId: item.categoryId || '',
+        categoryName: item.categoryName || '',
+        productId: item.productId || '',
+        productName: item.productName || item.itemName || '',
+        variantId: item.variantId || (item.isCustomSize ? CUSTOM_SIZE_VARIANT_VALUE : ''),
+        variantName: item.variantName || '',
+        isCustomSize: Boolean(item.isCustomSize),
+        customSize: item.customSize || '',
+        technicalDetails: item.technicalDetails || '',
+        itemCode: item.itemCode || '',
+        quantity: item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? String(item.quantity) : '1',
+        uom: item.uom || 'Nos',
+        notes: item.notes || item.specification || '',
+        specification: item.specification || item.notes || '',
+      });
+    };
+
+    const _OLD_handleItemFieldChange = (field, value) => {
+      if (field === 'parentCategoryId') {
+        const subs = categories.filter((c) => c.parentCategoryId === value);
+        setItemFormState((prev) => ({
+          ...prev,
+          parentCategoryId: value,
+          categoryId: subs.length > 0 ? '' : value,
+        }));
+      } else if (field === 'itemId') {
+        const selectedMat = MOCK_MATERIALS.find(
+          (m) => String(m.itemId) === String(value)
+        );
+        if (selectedMat) {
+          setItemFormState((prev) => ({
+            ...prev,
+            itemId: String(selectedMat.itemId),
+            itemCode: selectedMat.itemCode,
+            itemName: selectedMat.itemName,
+            specification: selectedMat.specification,
+            uom: normalizeUom(selectedMat.uom || prev.uom),
+          }));
+        } else {
+          setItemFormState((prev) => ({
+            ...prev,
+            productId: '',
+            itemCode: '',
+
+            specification: '',
+          }));
+        }
+      } else {
+        setItemFormState((prev) => ({
+          ...prev,
+          [field]: value,
+        }));
+      }
+
+      if (itemFieldErrors[field]) {
+        setItemFieldErrors((prev) => ({ ...prev, [field]: null }));
+      }
+      inquiryItemErrorCountRef.current = 0;
+    };
+
+    const _OLD_validateItemForm = () => {
+      const errs = {};
+      if (!itemFormState.itemCode || !itemFormState.itemCode.trim()) {
+        errs.itemCode = 'Please select a product from the catalog';
+      }
+      if (
+        itemFormState.quantity === '' ||
+        itemFormState.quantity === null ||
+        itemFormState.quantity === undefined ||
+        Number(itemFormState.quantity) <= 0 ||
+        isNaN(Number(itemFormState.quantity))
+      ) {
+        errs.quantity = 'Quantity must be greater than 0';
+      }
+
+      setItemFieldErrors(errs);
+      return Object.keys(errs).length === 0;
+    };
+
+    const _OLD_resetItemForm = () => {
+      setEditingItemId(null);
+      setItemFieldErrors({});
+      setItemFormState({
+        prItemId: null,
+        productId: '',
+        itemCode: '',
+
+        specification: '',
+        quantity: '',
+        uom: 'NOS',
+        categoryId: '',
+        categoryName: '',
         productId: '',
         productName: '',
         variantId: '',
@@ -1277,401 +1701,131 @@ export default function InquiryFormPage() {
         isCustomSize: false,
         customSize: '',
         technicalDetails: '',
-        itemCode: '',
-      }));
-    } else if (field === 'productId') {
-      const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === value);
-      setItemFormState((prev) => ({
-        ...prev,
-        productId: value,
-        productName: prod ? prod.productName : '',
-        categoryId: prod ? prod.categoryId : prev.categoryId,
-        categoryName: prod ? (INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === prod.categoryId)?.label || prev.categoryName) : prev.categoryName,
-        variantId: '',
-        variantName: '',
-        isCustomSize: false,
-        customSize: '',
-        technicalDetails: prod ? prod.standardInfo : '',
-        itemCode: prod ? prod.itemCodePrefix : '',
-        uom: prod ? prod.defaultUom : 'Nos',
-      }));
-    } else if (field === 'variantId') {
-      if (value === CUSTOM_SIZE_VARIANT_VALUE) {
-        setItemFormState((prev) => ({
-          ...prev,
-          variantId: CUSTOM_SIZE_VARIANT_VALUE,
-          variantName: 'Custom Size',
-          isCustomSize: true,
-          technicalDetails: 'Custom size · Technical specs can be detailed in Notes',
-        }));
-      } else {
-        const prod = INQUIRY_CATALOG_PRODUCTS.find((p) => p.id === itemFormState.productId);
-        const variant = prod ? prod.variants.find((v) => v.id === value) : null;
-        setItemFormState((prev) => ({
-          ...prev,
-          variantId: value,
-          variantName: variant ? variant.variantName : '',
-          isCustomSize: false,
-          customSize: '',
-          technicalDetails: variant ? variant.technicalDetails : (prod ? prod.standardInfo : ''),
-          itemCode: variant ? variant.itemCode : (prod ? prod.itemCodePrefix : ''),
-        }));
-      }
-    } else {
-      setItemFormState((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-    }
-
-    if (itemFieldErrors[field]) {
-      setItemFieldErrors((prev) => ({ ...prev, [field]: null }));
-    }
-    inquiryItemErrorCountRef.current = 0;
-  };
-
-  const validateItemForm = () => {
-    const errs = {};
-    if (!itemFormState.productName || !itemFormState.productName.trim()) {
-      errs.productName = 'Please select a product';
-    }
-    if (!itemFormState.variantId) {
-      errs.variantId = 'Please select a size / variant';
-    }
-    if (itemFormState.isCustomSize && (!itemFormState.customSize || !itemFormState.customSize.trim())) {
-      errs.customSize = 'Please enter custom size / dimensions';
-    }
-    if (
-      itemFormState.quantity === '' ||
-      itemFormState.quantity === null ||
-      itemFormState.quantity === undefined ||
-      Number(itemFormState.quantity) <= 0 ||
-      isNaN(Number(itemFormState.quantity))
-    ) {
-      errs.quantity = 'Quantity must be greater than 0';
-    }
-
-    setItemFieldErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const resetItemForm = () => {
-    setEditingItemId(null);
-    setItemFieldErrors({});
-    setItemFormState({ ...INITIAL_ITEM_ENTRY });
-    inquiryItemErrorCountRef.current = 0;
-  };
-
-  const handleAddOrUpdateItem = (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-
-    if (!validateItemForm()) {
-      inquiryItemErrorCountRef.current += 1;
-      toast.error('Please select product, size/variant and enter valid quantity', {
-        id: 'inquiry-item-validation-error',
+        notes: '',
+        categoryId: '',
+        categoryName: '',
       });
-      return;
-    }
-
-    inquiryItemErrorCountRef.current = 0;
-
-    const resolvedQty = Number(itemFormState.quantity) || 1;
-    const resolvedUom = itemFormState.uom || 'Nos';
-    const resolvedNotes = itemFormState.notes?.trim() || '';
-
-    const itemPayload = {
-      prItemId: isEditingItem
-        ? (form.items[editingItemIndex]?.prItemId || Date.now())
-        : (Date.now() + Math.floor(Math.random() * 1000)),
-      categoryId: itemFormState.categoryId || '',
-      categoryName: itemFormState.categoryName || '',
-      productId: itemFormState.productId || '',
-      productVariantId: Number(itemFormState.variantId) || null,
-      productOptionIds: (itemFormState.selectedOptionIds || []).filter((id) => typeof id === 'number' && !isNaN(id) && id > 0),
-      productName: itemFormState.productName || '',
-      itemName: itemFormState.itemName || itemFormState.productName || itemFormState.displayName || 'Product',
-      variantId: itemFormState.variantId || '',
-      variantName: itemFormState.isCustomSize
-        ? (itemFormState.customSize ? `${itemFormState.customSize} (Custom)` : 'Custom Size')
-        : (itemFormState.variantName || '—'),
-      isCustomSize: Boolean(itemFormState.isCustomSize),
-      customSize: itemFormState.customSize || '',
-      technicalDetails: itemFormState.technicalDetails || '',
-      itemCode: itemFormState.itemCode || '—',
-      quantity: resolvedQty,
-      uom: resolvedUom,
-      notes: resolvedNotes,
-      specification: resolvedNotes || itemFormState.technicalDetails || '',
+      inquiryItemErrorCountRef.current = 0;
     };
 
-    if (isEditingItem) {
-      const updated = (form.items || []).map((it, idx) => {
-        if (idx === editingItemIndex) {
-          return {
-            ...it,
-            ...itemPayload,
-          };
-        }
-        return it;
-      });
-      const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-      setForm((prev) => ({
-        ...prev,
-        items: updated,
-        Quantity: String(totalQty || 1),
-        UOM: updated[0]?.uom || prev.UOM || 'Nos',
-      }));
-      toast.success('Item updated');
-      resetItemForm();
-    } else {
-      const nextItems = [...(form.items || []), itemPayload];
-      const totalQty = nextItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-      setForm((prev) => ({
-        ...prev,
-        items: nextItems,
-        Quantity: String(totalQty || 1),
-        UOM: nextItems[0]?.uom || prev.UOM || 'Nos',
-      }));
-      toast.success('Item added to inquiry');
-      resetItemForm();
-    }
-  };
+    const _OLD_handleAddOrUpdateItem = (e) => {
+      if (e && e.preventDefault) e.preventDefault();
 
-  const handleStartEditItem = (item, index) => {
-    const id = item.prItemId !== undefined && item.prItemId !== null
-      ? item.prItemId
-      : item.id !== undefined && item.id !== null
-        ? item.id
-        : index;
+      if (!validateItemForm()) {
+        inquiryItemErrorCountRef.current += 1;
+        const count = inquiryItemErrorCountRef.current;
+        toast.error(
+          `Please select a product and enter a valid quantity (${count})`,
+          { id: 'inquiry-item-validation-error' }
+        );
+        return;
+      }
 
-    setEditingItemId(id);
-    setItemFieldErrors({});
-    setItemFormState({
-      prItemId: id,
-      categoryId: item.categoryId || '',
-      categoryName: item.categoryName || '',
-      productId: item.productId || '',
-      productName: item.productName || item.itemName || '',
-      variantId: item.variantId || (item.isCustomSize ? CUSTOM_SIZE_VARIANT_VALUE : ''),
-      variantName: item.variantName || '',
-      isCustomSize: Boolean(item.isCustomSize),
-      customSize: item.customSize || '',
-      technicalDetails: item.technicalDetails || '',
-      itemCode: item.itemCode || '',
-      quantity: item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? String(item.quantity) : '1',
-      uom: item.uom || 'Nos',
-      notes: item.notes || item.specification || '',
-      specification: item.specification || item.notes || '',
-    });
-  };
+      inquiryItemErrorCountRef.current = 0;
 
-  const _OLD_handleItemFieldChange = (field, value) => {
-    if (field === 'parentCategoryId') {
-      const subs = categories.filter((c) => c.parentCategoryId === value);
-      setItemFormState((prev) => ({
-        ...prev,
-        parentCategoryId: value,
-        categoryId: subs.length > 0 ? '' : value,
-      }));
-    } else if (field === 'itemId') {
+      const selectedCatId = itemFormState.categoryId || itemFormState.parentCategoryId || '';
+      const currentCatName = selectedCatId ? getCategoryPathName(selectedCatId, categories) : '';
       const selectedMat = MOCK_MATERIALS.find(
-        (m) => String(m.itemId) === String(value)
+        (m) => String(m.itemId) === String(itemFormState.itemId)
       );
-      if (selectedMat) {
-        setItemFormState((prev) => ({
+      const resolvedItemCode = itemFormState.itemCode?.trim() || (selectedMat ? selectedMat.itemCode : '') || '—';
+      const resolvedItemName = itemFormState.itemName?.trim() || (selectedMat ? selectedMat.itemName : '') || resolvedItemCode;
+      const resolvedQty = Number(itemFormState.quantity) || 1;
+      const resolvedUom = normalizeUom(itemFormState.uom);
+      const resolvedSpec = itemFormState.specification?.trim() || (selectedMat ? selectedMat.specification : '') || '';
+
+      if (isEditingItem) {
+        const updated = (form.items || []).map((it, idx) => {
+          if (idx === editingItemIndex) {
+            return {
+              ...it,
+              itemId: itemFormState.itemId ? String(itemFormState.itemId) : '',
+              itemCode: resolvedItemCode,
+              itemName: resolvedItemName,
+              specification: resolvedSpec,
+              quantity: resolvedQty,
+              uom: resolvedUom,
+              categoryId: selectedCatId || it.categoryId || '',
+              categoryName: currentCatName && currentCatName !== '—' ? currentCatName : (it.categoryName || '—'),
+            };
+          }
+          return it;
+        });
+        const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+        setForm((prev) => ({
           ...prev,
-          itemId: String(selectedMat.itemId),
-          itemCode: selectedMat.itemCode,
-          itemName: selectedMat.itemName,
-          specification: selectedMat.specification,
-          uom: normalizeUom(selectedMat.uom || prev.uom),
+          items: updated,
+          CategoryId: selectedCatId || prev.CategoryId,
+          Quantity: String(totalQty || 1),
+          UOM: updated[0]?.uom || prev.UOM || 'PCS',
         }));
+        toast.success('Item updated');
+        resetItemForm();
       } else {
-        setItemFormState((prev) => ({
+        const newItem = {
+          prItemId: Date.now() + Math.floor(Math.random() * 1000),
+          itemId: itemFormState.itemId ? String(itemFormState.itemId) : '',
+          itemCode: resolvedItemCode,
+          itemName: resolvedItemName,
+          specification: resolvedSpec,
+          quantity: resolvedQty,
+          uom: resolvedUom,
+          categoryId: selectedCatId,
+          categoryName: currentCatName && currentCatName !== '—' ? currentCatName : '—',
+        };
+        const nextItems = [...(form.items || []), newItem];
+        const totalQty = nextItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+        setForm((prev) => ({
           ...prev,
-          productId: '',
-          itemCode: '',
-        
-          specification: '',
+          items: nextItems,
+          CategoryId: selectedCatId || prev.CategoryId,
+          Quantity: String(totalQty || 1),
+          UOM: nextItems[0]?.uom || prev.UOM || 'PCS',
         }));
+        toast.success('Item added to inquiry');
+        resetItemForm();
       }
-    } else {
-      setItemFormState((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-    }
+    };
 
-    if (itemFieldErrors[field]) {
-      setItemFieldErrors((prev) => ({ ...prev, [field]: null }));
-    }
-    inquiryItemErrorCountRef.current = 0;
-  };
+    const _OLD_handleStartEditItem = (item, index) => {
+      const id = item.prItemId !== undefined && item.prItemId !== null
+        ? item.prItemId
+        : item.id !== undefined && item.id !== null
+          ? item.id
+          : index;
 
-  const _OLD_validateItemForm = () => {
-    const errs = {};
-    if (!itemFormState.itemCode || !itemFormState.itemCode.trim()) {
-      errs.itemCode = 'Please select a product from the catalog';
-    }
-    if (
-      itemFormState.quantity === '' ||
-      itemFormState.quantity === null ||
-      itemFormState.quantity === undefined ||
-      Number(itemFormState.quantity) <= 0 ||
-      isNaN(Number(itemFormState.quantity))
-    ) {
-      errs.quantity = 'Quantity must be greater than 0';
-    }
+      const foundCat = item.categoryId ? categories.find((c) => c.categoryId === item.categoryId) : null;
+      let parentCatId = '';
+      let subCatId = '';
 
-    setItemFieldErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const _OLD_resetItemForm = () => {
-    setEditingItemId(null);
-    setItemFieldErrors({});
-    setItemFormState({
-      prItemId: null,
-      productId: '',
-      itemCode: '',
-    
-      specification: '',
-      quantity: '',
-      uom: 'NOS',
-      categoryId: '',
-  categoryName: '',
-  productId: '',
-  productName: '',
-  variantId: '',
-  variantName: '',
-  isCustomSize: false,
-  customSize: '',
-  technicalDetails: '',
-  notes: '',
-      categoryId: '',
-      categoryName: '',
-    });
-    inquiryItemErrorCountRef.current = 0;
-  };
-
-  const _OLD_handleAddOrUpdateItem = (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-
-    if (!validateItemForm()) {
-      inquiryItemErrorCountRef.current += 1;
-      const count = inquiryItemErrorCountRef.current;
-      toast.error(
-        `Please select a product and enter a valid quantity (${count})`,
-        { id: 'inquiry-item-validation-error' }
-      );
-      return;
-    }
-
-    inquiryItemErrorCountRef.current = 0;
-
-    const selectedCatId = itemFormState.categoryId || itemFormState.parentCategoryId || '';
-    const currentCatName = selectedCatId ? getCategoryPathName(selectedCatId, categories) : '';
-    const selectedMat = MOCK_MATERIALS.find(
-      (m) => String(m.itemId) === String(itemFormState.itemId)
-    );
-    const resolvedItemCode = itemFormState.itemCode?.trim() || (selectedMat ? selectedMat.itemCode : '') || '—';
-    const resolvedItemName = itemFormState.itemName?.trim() || (selectedMat ? selectedMat.itemName : '') || resolvedItemCode;
-    const resolvedQty = Number(itemFormState.quantity) || 1;
-    const resolvedUom = normalizeUom(itemFormState.uom);
-    const resolvedSpec = itemFormState.specification?.trim() || (selectedMat ? selectedMat.specification : '') || '';
-
-    if (isEditingItem) {
-      const updated = (form.items || []).map((it, idx) => {
-        if (idx === editingItemIndex) {
-          return {
-            ...it,
-            itemId: itemFormState.itemId ? String(itemFormState.itemId) : '',
-            itemCode: resolvedItemCode,
-            itemName: resolvedItemName,
-            specification: resolvedSpec,
-            quantity: resolvedQty,
-            uom: resolvedUom,
-            categoryId: selectedCatId || it.categoryId || '',
-            categoryName: currentCatName && currentCatName !== '—' ? currentCatName : (it.categoryName || '—'),
-          };
+      if (foundCat) {
+        if (foundCat.parentCategoryId) {
+          parentCatId = foundCat.parentCategoryId;
+          subCatId = foundCat.categoryId;
+        } else {
+          parentCatId = foundCat.categoryId;
+          subCatId = '';
         }
-        return it;
-      });
-      const totalQty = updated.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-      setForm((prev) => ({
-        ...prev,
-        items: updated,
-        CategoryId: selectedCatId || prev.CategoryId,
-        Quantity: String(totalQty || 1),
-        UOM: updated[0]?.uom || prev.UOM || 'PCS',
-      }));
-      toast.success('Item updated');
-      resetItemForm();
-    } else {
-      const newItem = {
-        prItemId: Date.now() + Math.floor(Math.random() * 1000),
-        itemId: itemFormState.itemId ? String(itemFormState.itemId) : '',
-        itemCode: resolvedItemCode,
-        itemName: resolvedItemName,
-        specification: resolvedSpec,
-        quantity: resolvedQty,
-        uom: resolvedUom,
-        categoryId: selectedCatId,
-        categoryName: currentCatName && currentCatName !== '—' ? currentCatName : '—',
-      };
-      const nextItems = [...(form.items || []), newItem];
-      const totalQty = nextItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-      setForm((prev) => ({
-        ...prev,
-        items: nextItems,
-        CategoryId: selectedCatId || prev.CategoryId,
-        Quantity: String(totalQty || 1),
-        UOM: nextItems[0]?.uom || prev.UOM || 'PCS',
-      }));
-      toast.success('Item added to inquiry');
-      resetItemForm();
-    }
-  };
-
-  const _OLD_handleStartEditItem = (item, index) => {
-    const id = item.prItemId !== undefined && item.prItemId !== null
-      ? item.prItemId
-      : item.id !== undefined && item.id !== null
-        ? item.id
-        : index;
-
-    const foundCat = item.categoryId ? categories.find((c) => c.categoryId === item.categoryId) : null;
-    let parentCatId = '';
-    let subCatId = '';
-
-    if (foundCat) {
-      if (foundCat.parentCategoryId) {
-        parentCatId = foundCat.parentCategoryId;
-        subCatId = foundCat.categoryId;
       } else {
-        parentCatId = foundCat.categoryId;
-        subCatId = '';
+        parentCatId = item.parentCategoryId || '';
+        subCatId = item.categoryId || '';
       }
-    } else {
-      parentCatId = item.parentCategoryId || '';
-      subCatId = item.categoryId || '';
-    }
 
-    setEditingItemId(id);
-    setItemFieldErrors({});
-    setItemFormState({
-      prItemId: id,
-      itemId: item.itemId ? String(item.itemId) : '',
-      itemCode: item.itemCode && item.itemCode !== '—' ? item.itemCode : '',
-      itemName: item.itemName || '',
-      specification: item.specification || '',
-      quantity: item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? String(item.quantity) : '1',
-      uom: normalizeUom(item.uom),
-      parentCategoryId: parentCatId,
-      categoryId: subCatId,
-      categoryName: item.categoryName || (item.categoryId ? getCategoryPathName(item.categoryId, categories) : '') || '—',
-    });
-  };
+      setEditingItemId(id);
+      setItemFieldErrors({});
+      setItemFormState({
+        prItemId: id,
+        itemId: item.itemId ? String(item.itemId) : '',
+        itemCode: item.itemCode && item.itemCode !== '—' ? item.itemCode : '',
+        itemName: item.itemName || '',
+        specification: item.specification || '',
+        quantity: item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? String(item.quantity) : '1',
+        uom: normalizeUom(item.uom),
+        parentCategoryId: parentCatId,
+        categoryId: subCatId,
+        categoryName: item.categoryName || (item.categoryId ? getCategoryPathName(item.categoryId, categories) : '') || '—',
+      });
+    };
 
   };
 
@@ -2622,10 +2776,10 @@ export default function InquiryFormPage() {
                     !form.Country
                       ? 'Select country first...'
                       : selectedCountryObj && loadingStatesMap[selectedCountryObj.id]
-                      ? 'Loading states...'
-                      : stateDropdownOptions.length === 0
-                      ? 'No states available'
-                      : 'Select state...'
+                        ? 'Loading states...'
+                        : stateDropdownOptions.length === 0
+                          ? 'No states available'
+                          : 'Select state...'
                   }
                   searchPlaceholder="Search states..."
                   emptyText="No states found"
@@ -2811,9 +2965,8 @@ export default function InquiryFormPage() {
                           return (
                             <tr
                               key={itemId}
-                              className={`hover:bg-surface/50 transition-colors ${
-                                isRowSelected ? 'bg-primary/[0.04]' : ''
-                              }`}
+                              className={`hover:bg-surface/50 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : ''
+                                }`}
                             >
                               <Td className="text-center">
                                 <Checkbox
@@ -2888,9 +3041,8 @@ export default function InquiryFormPage() {
                       return (
                         <div
                           key={itemId}
-                          className={`p-3.5 space-y-2.5 transition-colors ${
-                            isRowSelected ? 'bg-primary/[0.04]' : 'hover:bg-surface/40'
-                          }`}
+                          className={`p-3.5 space-y-2.5 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : 'hover:bg-surface/40'
+                            }`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -3050,21 +3202,7 @@ export default function InquiryFormPage() {
                   onChange={(e) => handleItemFieldChange('productId', e.target.value)}
                 />
 
-                {/* Size / Variant */}
-                <SearchableSelect
-                  id="drawer-item-variant"
-                  label="Size / Variant"
-                  required
-                  options={catalogVariantOptions}
-                  value={itemFormState.variantId || ''}
-                  placeholder={!itemFormState.productId ? 'Select product first' : 'Select size / variant...'}
-                  searchPlaceholder="Search size / variant..."
-                  disabled={!itemFormState.productId}
-                  error={itemFieldErrors.variantId}
-                  onChange={(e) => handleItemFieldChange('variantId', e.target.value)}
-                />
-
-                {/* Standard */}
+                {/* Manufacturing Standard */}
                 <SearchableSelect
                   id="drawer-item-standard"
                   label="Manufacturing Standard"
@@ -3082,10 +3220,24 @@ export default function InquiryFormPage() {
                   label="Grade / Accuracy"
                   options={gradeOptions}
                   value={itemFormState.grade || ''}
-                  placeholder={!itemFormState.productId ? 'Select product first' : 'Select grade...'}
+                  placeholder={!itemFormState.productId ? 'Select product first' : !itemFormState.standards ? 'Select standard first' : 'Select grade...'}
                   searchPlaceholder="Search grade..."
-                  disabled={!itemFormState.productId}
+                  disabled={!itemFormState.productId || !itemFormState.standards}
                   onChange={(e) => handleItemFieldChange('grade', e.target.value)}
+                />
+
+                {/* Size / Variant */}
+                <SearchableSelect
+                  id="drawer-item-variant"
+                  label="Size / Variant"
+                  required
+                  options={catalogVariantOptions}
+                  value={itemFormState.variantId || ''}
+                  placeholder={!itemFormState.productId ? 'Select product first' : 'Select size / variant...'}
+                  searchPlaceholder="Search size / variant..."
+                  disabled={!itemFormState.productId}
+                  error={itemFieldErrors.variantId}
+                  onChange={(e) => handleItemFieldChange('variantId', e.target.value)}
                 />
 
                 {/* Quantity */}
@@ -3171,11 +3323,10 @@ export default function InquiryFormPage() {
                     return (
                       <label
                         key={optId}
-                        className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer text-xs select-none ${
-                          isChecked
+                        className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer text-xs select-none ${isChecked
                             ? 'border-primary/50 bg-primary/5 text-heading font-medium'
                             : 'border-border/60 hover:bg-surface/80 text-text-muted'
-                        }`}
+                          }`}
                       >
                         <Checkbox
                           checked={isChecked}
@@ -3214,339 +3365,338 @@ export default function InquiryFormPage() {
 
           {false && (
 
-          <CollapsibleCard
-            title="3. Product Selection"
-            subtitle="Pick a product and size, enter the quantity. Can be specified later."
-            icon={<IconPackage size={18} />}
-            className="bg-bg"
-            bodyClassName="space-y-6"
-            defaultOpen={true}
-            badge={
-              <span className="text-2xs font-medium text-text-muted bg-surface border border-border px-2 py-0.5 rounded-full">
-                Optional
-              </span>
-            }
-          >
-
-            {/* ── Product Selection Form (Matching Mockup & Image) ── */}
-            <div
-              className={`p-4 sm:p-5 rounded-xl border bg-surface/50 space-y-3.5 transition-all duration-200 ${
-                editingItemId
-                  ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
-                  : 'border-border'
-              }`}
+            <CollapsibleCard
+              title="3. Product Selection"
+              subtitle="Pick a product and size, enter the quantity. Can be specified later."
+              icon={<IconPackage size={18} />}
+              className="bg-bg"
+              bodyClassName="space-y-6"
+              defaultOpen={true}
+              badge={
+                <span className="text-2xs font-medium text-text-muted bg-surface border border-border px-2 py-0.5 rounded-full">
+                  Optional
+                </span>
+              }
             >
-              {/* Row 1: Category, Product Name *, Size / Variant *, (Custom Size if chosen), Qty * */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3.5 items-end">
-                {/* Category */}
-                <div className={itemFormState.isCustomSize ? 'lg:col-span-3' : 'lg:col-span-3'}>
-                  <SearchableSelect
-                    id="item-catalog-category"
-                    label="Category"
-                    options={catalogCategoryOptions}
-                    value={itemFormState.categoryId || ''}
-                    placeholder="Surface Plates"
-                    searchPlaceholder="Search categories..."
-                    onChange={(e) => handleItemFieldChange('categoryId', e.target.value)}
-                  />
-                </div>
 
-                {/* Product Name * */}
-                <div className={itemFormState.isCustomSize ? 'lg:col-span-3' : 'lg:col-span-4'}>
-                  <SearchableSelect
-                    id="item-catalog-product"
-                    label="Product Name"
-                    required
-                    options={catalogProductOptions}
-                    value={itemFormState.productId || ''}
-                    placeholder="Select product..."
-                    searchPlaceholder="Search products..."
-                    error={itemFieldErrors.productName}
-                    onChange={(e) => handleItemFieldChange('productId', e.target.value)}
-                  />
-                </div>
-
-                {/* Size / Variant * */}
-                <div className={itemFormState.isCustomSize ? 'lg:col-span-2' : 'lg:col-span-3'}>
-                  <SearchableSelect
-                    id="item-catalog-variant"
-                    label="Size / Variant"
-                    required
-                    options={catalogVariantOptions}
-                    value={itemFormState.variantId || ''}
-                    placeholder={!itemFormState.productId ? 'Select product first' : 'Select size / variant...'}
-                    searchPlaceholder="Search size / variant..."
-                    disabled={!itemFormState.productId}
-                    error={itemFieldErrors.variantId}
-                    onChange={(e) => handleItemFieldChange('variantId', e.target.value)}
-                  />
-                </div>
-
-                {/* Custom Size / Dimensions * (Dynamic text box shown when Custom Size is chosen) */}
-                {itemFormState.isCustomSize && (
-                  <div className="lg:col-span-2 animate-in fade-in duration-150">
-                    <Input
-                      id="item-custom-size-input"
-                      label="Custom Size *"
-                      placeholder="e.g. 350 × 280 mm"
-                      value={itemFormState.customSize || ''}
-                      error={itemFieldErrors.customSize}
-                      onChange={(e) => handleItemFieldChange('customSize', e.target.value)}
+              {/* ── Product Selection Form (Matching Mockup & Image) ── */}
+              <div
+                className={`p-4 sm:p-5 rounded-xl border bg-surface/50 space-y-3.5 transition-all duration-200 ${editingItemId
+                    ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/[0.02]'
+                    : 'border-border'
+                  }`}
+              >
+                {/* Row 1: Category, Product Name *, Size / Variant *, (Custom Size if chosen), Qty * */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3.5 items-end">
+                  {/* Category */}
+                  <div className={itemFormState.isCustomSize ? 'lg:col-span-3' : 'lg:col-span-3'}>
+                    <SearchableSelect
+                      id="item-catalog-category"
+                      label="Category"
+                      options={catalogCategoryOptions}
+                      value={itemFormState.categoryId || ''}
+                      placeholder="Surface Plates"
+                      searchPlaceholder="Search categories..."
+                      onChange={(e) => handleItemFieldChange('categoryId', e.target.value)}
                     />
                   </div>
-                )}
 
-                {/* Qty * */}
-                <div className="lg:col-span-2">
-                  <Input
-                    id="item-catalog-qty"
-                    label="Qty *"
-                    type="number"
-                    min="1"
-                    placeholder="1"
-                    value={itemFormState.quantity !== undefined && itemFormState.quantity !== null ? itemFormState.quantity : ''}
-                    error={itemFieldErrors.quantity}
-                    onChange={(e) => handleItemFieldChange('quantity', e.target.value)}
-                  />
-                </div>
-              </div>
+                  {/* Product Name * */}
+                  <div className={itemFormState.isCustomSize ? 'lg:col-span-3' : 'lg:col-span-4'}>
+                    <SearchableSelect
+                      id="item-catalog-product"
+                      label="Product Name"
+                      required
+                      options={catalogProductOptions}
+                      value={itemFormState.productId || ''}
+                      placeholder="Select product..."
+                      searchPlaceholder="Search products..."
+                      error={itemFieldErrors.productName}
+                      onChange={(e) => handleItemFieldChange('productId', e.target.value)}
+                    />
+                  </div>
 
-              {/* Row 2: Auto-Filled Technical Strip */}
-              <div className="w-full px-3.5 py-2.5 rounded-lg bg-surface/80 border border-border/80 text-xs text-text-muted flex items-center justify-between overflow-hidden">
-                <span className="truncate">
-                  {itemFormState.technicalDetails || 'Indian Black Granite · Hand Lapped · IS-7327-2003 · Flatness 3.5 µm'}
-                </span>
-                <span className="text-2xs text-text-muted/60 italic shrink-0 ml-2">(filled automatically)</span>
-              </div>
+                  {/* Size / Variant * */}
+                  <div className={itemFormState.isCustomSize ? 'lg:col-span-2' : 'lg:col-span-3'}>
+                    <SearchableSelect
+                      id="item-catalog-variant"
+                      label="Size / Variant"
+                      required
+                      options={catalogVariantOptions}
+                      value={itemFormState.variantId || ''}
+                      placeholder={!itemFormState.productId ? 'Select product first' : 'Select size / variant...'}
+                      searchPlaceholder="Search size / variant..."
+                      disabled={!itemFormState.productId}
+                      error={itemFieldErrors.variantId}
+                      onChange={(e) => handleItemFieldChange('variantId', e.target.value)}
+                    />
+                  </div>
 
-              {/* Row 3: Notes & + Add Item button */}
-              <div className="flex flex-col sm:flex-row items-end gap-3 pt-0.5">
-                <div className="flex-1 w-full">
-                  <Input
-                    id="item-catalog-notes"
-                    label="Notes"
-                    placeholder="Optional: options, drawing no. or special requirement"
-                    value={itemFormState.notes || ''}
-                    onChange={(e) => handleItemFieldChange('notes', e.target.value)}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0 self-end">
-                  {editingItemId && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="md"
-                      onClick={resetItemForm}
-                      className="h-10 text-xs px-3"
-                    >
-                      <IconClose size={14} className="mr-1" />
-                      Cancel
-                    </Button>
-                  )}
-
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="md"
-                    onClick={handleAddOrUpdateItem}
-                    className="h-10 font-semibold shadow-xs text-xs px-5 whitespace-nowrap"
-                  >
-                    {editingItemId ? (
-                      <>
-                        <IconCheck size={14} className="mr-1.5" />
-                        Update Item
-                      </>
-                    ) : (
-                      <>
-                        <IconAdd size={14} className="mr-1.5" />
-                        Add Item
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Sub-Card: Items Grid Table ── */}
-            <div className="rounded-xl border border-border overflow-hidden bg-bg">
-              <div className="p-3.5 bg-surface/80 border-b border-border flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-heading uppercase tracking-wider">
-                    Selected Inquiry Products
-                  </span>
-                  <Badge variant="role" className="text-2xs px-2 py-0.5 font-mono">
-                    {(form.items || []).length} {(form.items || []).length === 1 ? 'Item' : 'Items'}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  {selectedItemIds.size > 0 && (
-                    <Button
-                      type="button"
-                      variant="danger"
-                      size="sm"
-                      onClick={() => setShowBulkDeleteConfirm(true)}
-                      className="text-xs h-7 px-2.5 shadow-xs cursor-pointer"
-                    >
-                      <IconDelete size={13} className="mr-1.5" />
-                      Delete Selected ({selectedItemIds.size})
-                    </Button>
-                  )}
-
-                  {(form.items || []).length > 0 && (
-                    <div className="text-xs text-text-muted font-mono flex items-center gap-1.5">
-                      <span>Total Qty:</span>
-                      <strong className="text-heading font-semibold">
-                        {(form.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)}
-                      </strong>
+                  {/* Custom Size / Dimensions * (Dynamic text box shown when Custom Size is chosen) */}
+                  {itemFormState.isCustomSize && (
+                    <div className="lg:col-span-2 animate-in fade-in duration-150">
+                      <Input
+                        id="item-custom-size-input"
+                        label="Custom Size *"
+                        placeholder="e.g. 350 × 280 mm"
+                        value={itemFormState.customSize || ''}
+                        error={itemFieldErrors.customSize}
+                        onChange={(e) => handleItemFieldChange('customSize', e.target.value)}
+                      />
                     </div>
                   )}
+
+                  {/* Qty * */}
+                  <div className="lg:col-span-2">
+                    <Input
+                      id="item-catalog-qty"
+                      label="Qty *"
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={itemFormState.quantity !== undefined && itemFormState.quantity !== null ? itemFormState.quantity : ''}
+                      error={itemFieldErrors.quantity}
+                      onChange={(e) => handleItemFieldChange('quantity', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: Auto-Filled Technical Strip */}
+                <div className="w-full px-3.5 py-2.5 rounded-lg bg-surface/80 border border-border/80 text-xs text-text-muted flex items-center justify-between overflow-hidden">
+                  <span className="truncate">
+                    {itemFormState.technicalDetails || 'Indian Black Granite · Hand Lapped · IS-7327-2003 · Flatness 3.5 µm'}
+                  </span>
+                  <span className="text-2xs text-text-muted/60 italic shrink-0 ml-2">(filled automatically)</span>
+                </div>
+
+                {/* Row 3: Notes & + Add Item button */}
+                <div className="flex flex-col sm:flex-row items-end gap-3 pt-0.5">
+                  <div className="flex-1 w-full">
+                    <Input
+                      id="item-catalog-notes"
+                      label="Notes"
+                      placeholder="Optional: options, drawing no. or special requirement"
+                      value={itemFormState.notes || ''}
+                      onChange={(e) => handleItemFieldChange('notes', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-end">
+                    {editingItemId && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="md"
+                        onClick={resetItemForm}
+                        className="h-10 text-xs px-3"
+                      >
+                        <IconClose size={14} className="mr-1" />
+                        Cancel
+                      </Button>
+                    )}
+
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="md"
+                      onClick={handleAddOrUpdateItem}
+                      className="h-10 font-semibold shadow-xs text-xs px-5 whitespace-nowrap"
+                    >
+                      {editingItemId ? (
+                        <>
+                          <IconCheck size={14} className="mr-1.5" />
+                          Update Item
+                        </>
+                      ) : (
+                        <>
+                          <IconAdd size={14} className="mr-1.5" />
+                          Add Item
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
 
-              {(form.items || []).length > 0 ? (
-                <>
-                  {/* Desktop / Tablet Table View (md+) */}
-                  <div className="hidden md:block">
-                    <TableContainer
-                      tableStyle={{ width: `${totalTableWidth}px`, minWidth: '100%' }}
-                      tableClassName="w-full text-left border-collapse text-xs table-fixed"
-                    >
-                      <colgroup>
-                        <col style={{ width: `${colWidths.select}px` }} />
-                        <col style={{ width: `${colWidths.index}px` }} />
-                        <col style={{ width: `${colWidths.product}px` }} />
-                        <col style={{ width: `${colWidths.variant}px` }} />
-                        <col style={{ width: `${colWidths.quantity}px` }} />
-                        <col style={{ width: `${colWidths.notes}px` }} />
-                        <col style={{ width: `${colWidths.actions}px` }} />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <Th style={{ width: `${colWidths.select}px` }} className="text-center px-2">
-                            <Checkbox
-                              checked={
-                                (form.items || []).length > 0 &&
-                                selectedItemIds.size === (form.items || []).length
-                              }
-                              onChange={handleToggleSelectAllItems}
-                              aria-label="Select all products"
-                            />
-                          </Th>
-                          <Th style={{ width: `${colWidths.index}px` }} className="text-center px-2">#</Th>
-                          <Th
-                            style={{ width: `${colWidths.product}px` }}
-                            isResizing={resizingCol === 'product'}
-                            resizeHandler={(e) => handleStartResize(e, 'product')}
-                          >
-                            PRODUCT
-                          </Th>
-                          <Th
-                            style={{ width: `${colWidths.variant}px` }}
-                            isResizing={resizingCol === 'variant'}
-                            resizeHandler={(e) => handleStartResize(e, 'variant')}
-                          >
-                            SIZE / VARIANT
-                          </Th>
+              {/* ── Sub-Card: Items Grid Table ── */}
+              <div className="rounded-xl border border-border overflow-hidden bg-bg">
+                <div className="p-3.5 bg-surface/80 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-heading uppercase tracking-wider">
+                      Selected Inquiry Products
+                    </span>
+                    <Badge variant="role" className="text-2xs px-2 py-0.5 font-mono">
+                      {(form.items || []).length} {(form.items || []).length === 1 ? 'Item' : 'Items'}
+                    </Badge>
+                  </div>
 
+                  <div className="flex items-center gap-3">
+                    {selectedItemIds.size > 0 && (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        onClick={() => setShowBulkDeleteConfirm(true)}
+                        className="text-xs h-7 px-2.5 shadow-xs cursor-pointer"
+                      >
+                        <IconDelete size={13} className="mr-1.5" />
+                        Delete Selected ({selectedItemIds.size})
+                      </Button>
+                    )}
 
-                          <Th
-                            style={{ width: `${colWidths.quantity}px` }}
-                            isResizing={resizingCol === 'quantity'}
-                            resizeHandler={(e) => handleStartResize(e, 'quantity')}
-                            className="text-center"
-                          >
-                            QTY
-                          </Th>
+                    {(form.items || []).length > 0 && (
+                      <div className="text-xs text-text-muted font-mono flex items-center gap-1.5">
+                        <span>Total Qty:</span>
+                        <strong className="text-heading font-semibold">
+                          {(form.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0)}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-                          <Th
-                            style={{ width: `${colWidths.notes}px` }}
-                            isResizing={resizingCol === 'notes'}
-                            resizeHandler={(e) => handleStartResize(e, 'notes')}
-                          >
-                            NOTES
-                          </Th>
-                          <Th
-                            style={{ width: `${colWidths.actions}px` }}
-                            isResizing={resizingCol === 'actions'}
-                            resizeHandler={(e) => handleStartResize(e, 'actions')}
-                            className="text-right"
-                          >
-                            ACTIONS
-                          </Th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {(form.items || []).map((item, idx) => {
-                          const itemId = item.prItemId || item.id || idx;
-                          const isRowSelected = selectedItemIds.has(itemId);
-                          return (
-                            <tr
-                              key={itemId}
-                              className={`hover:bg-surface/50 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : ''
-                                }`}
+                {(form.items || []).length > 0 ? (
+                  <>
+                    {/* Desktop / Tablet Table View (md+) */}
+                    <div className="hidden md:block">
+                      <TableContainer
+                        tableStyle={{ width: `${totalTableWidth}px`, minWidth: '100%' }}
+                        tableClassName="w-full text-left border-collapse text-xs table-fixed"
+                      >
+                        <colgroup>
+                          <col style={{ width: `${colWidths.select}px` }} />
+                          <col style={{ width: `${colWidths.index}px` }} />
+                          <col style={{ width: `${colWidths.product}px` }} />
+                          <col style={{ width: `${colWidths.variant}px` }} />
+                          <col style={{ width: `${colWidths.quantity}px` }} />
+                          <col style={{ width: `${colWidths.notes}px` }} />
+                          <col style={{ width: `${colWidths.actions}px` }} />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <Th style={{ width: `${colWidths.select}px` }} className="text-center px-2">
+                              <Checkbox
+                                checked={
+                                  (form.items || []).length > 0 &&
+                                  selectedItemIds.size === (form.items || []).length
+                                }
+                                onChange={handleToggleSelectAllItems}
+                                aria-label="Select all products"
+                              />
+                            </Th>
+                            <Th style={{ width: `${colWidths.index}px` }} className="text-center px-2">#</Th>
+                            <Th
+                              style={{ width: `${colWidths.product}px` }}
+                              isResizing={resizingCol === 'product'}
+                              resizeHandler={(e) => handleStartResize(e, 'product')}
                             >
-                              <Td className="text-center">
-                                <Checkbox
-                                  checked={isRowSelected}
-                                  onChange={() => handleToggleSelectItem(itemId)}
-                                  aria-label={`Select item ${idx + 1}`}
-                                />
-                              </Td>
-                              <Td className="text-center font-mono text-xs text-text-muted">
-                                {idx + 1}
-                              </Td>
-                              <Td className="text-xs font-bold text-heading truncate" title={item.productName || item.itemName || ''}>
-                                {item.productName || item.itemName || '—'}
-                              </Td>
-                              <Td className="text-xs text-text truncate" title={item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '')}>
-                                {item.isCustomSize
-                                  ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size')
-                                  : (item.variantName || '—')}
-                              </Td>
-                              <Td className="text-center font-mono tabular-nums text-xs font-bold text-heading">
-                                {item.quantity}
-                              </Td>
+                              PRODUCT
+                            </Th>
+                            <Th
+                              style={{ width: `${colWidths.variant}px` }}
+                              isResizing={resizingCol === 'variant'}
+                              resizeHandler={(e) => handleStartResize(e, 'variant')}
+                            >
+                              SIZE / VARIANT
+                            </Th>
 
-                              <Td className="hidden">
-                              </Td>
-                              <Td className="text-xs text-text-muted truncate" title={item.notes || item.specification || ''}>
-                                {item.notes || item.specification || '—'}
-                              </Td>
-                              <Td className="text-right whitespace-nowrap">
-                                <TableActions
-                                  onEdit={() => handleStartEditItem(item, idx)}
-                                  onDelete={() => setItemToDelete({ item, index: idx })}
-                                  editTooltip="Edit Product"
-                                  deleteTooltip="Remove Product"
-                                  className="justify-end shrink-0"
-                                />
-                              </Td>
 
-                              <Td className="hidden">
+                            <Th
+                              style={{ width: `${colWidths.quantity}px` }}
+                              isResizing={resizingCol === 'quantity'}
+                              resizeHandler={(e) => handleStartResize(e, 'quantity')}
+                              className="text-center"
+                            >
+                              QTY
+                            </Th>
 
-                              </Td>
-                              <Td className="hidden">
+                            <Th
+                              style={{ width: `${colWidths.notes}px` }}
+                              isResizing={resizingCol === 'notes'}
+                              resizeHandler={(e) => handleStartResize(e, 'notes')}
+                            >
+                              NOTES
+                            </Th>
+                            <Th
+                              style={{ width: `${colWidths.actions}px` }}
+                              isResizing={resizingCol === 'actions'}
+                              resizeHandler={(e) => handleStartResize(e, 'actions')}
+                              className="text-right"
+                            >
+                              ACTIONS
+                            </Th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {(form.items || []).map((item, idx) => {
+                            const itemId = item.prItemId || item.id || idx;
+                            const isRowSelected = selectedItemIds.has(itemId);
+                            return (
+                              <tr
+                                key={itemId}
+                                className={`hover:bg-surface/50 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : ''
+                                  }`}
+                              >
+                                <Td className="text-center">
+                                  <Checkbox
+                                    checked={isRowSelected}
+                                    onChange={() => handleToggleSelectItem(itemId)}
+                                    aria-label={`Select item ${idx + 1}`}
+                                  />
+                                </Td>
+                                <Td className="text-center font-mono text-xs text-text-muted">
+                                  {idx + 1}
+                                </Td>
+                                <Td className="text-xs font-bold text-heading truncate" title={item.productName || item.itemName || ''}>
+                                  {item.productName || item.itemName || '—'}
+                                </Td>
+                                <Td className="text-xs text-text truncate" title={item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '')}>
+                                  {item.isCustomSize
+                                    ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size')
+                                    : (item.variantName || '—')}
+                                </Td>
+                                <Td className="text-center font-mono tabular-nums text-xs font-bold text-heading">
+                                  {item.quantity}
+                                </Td>
+
+                                <Td className="hidden">
+                                </Td>
+                                <Td className="text-xs text-text-muted truncate" title={item.notes || item.specification || ''}>
+                                  {item.notes || item.specification || '—'}
+                                </Td>
+                                <Td className="text-right whitespace-nowrap">
+                                  <TableActions
+                                    onEdit={() => handleStartEditItem(item, idx)}
+                                    onDelete={() => setItemToDelete({ item, index: idx })}
+                                    editTooltip="Edit Product"
+                                    deleteTooltip="Remove Product"
+                                    className="justify-end shrink-0"
+                                  />
+                                </Td>
+
+                                <Td className="hidden">
+
+                                </Td>
+                                <Td className="hidden">
 
                                   {item.productName || item.itemName || '—'}
-                              <Td className="hidden">
-                              <Td className="hidden">
+                                  <Td className="hidden">
+                                    <Td className="hidden">
 
-                              </Td>
-
-
-                              </Td>
-
-                                {item.quantity}
-                              </Td>
-
-                              <Td className="hidden">
-                                {item.uom}
-                              </Td>
+                                    </Td>
 
 
-                              <Td className="hidden">
+                                  </Td>
+
+                                  {item.quantity}
+                                </Td>
+
+                                <Td className="hidden">
+                                  {item.uom}
+                                </Td>
+
+
+                                <Td className="hidden">
 
                                   <IconButton
                                     icon={IconEdit}
@@ -3566,89 +3716,89 @@ export default function InquiryFormPage() {
                                     className="hover:text-danger hover:bg-danger/10"
                                   />
 
-                              </Td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </TableContainer>
-                  </div>
+                                </Td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </TableContainer>
+                    </div>
 
-                  {/* Mobile Stacked Card View (< md) */}
-                  <div className="block md:hidden divide-y divide-border">
-                    {(form.items || []).map((item, idx) => {
-                      const itemId = item.prItemId || item.id || idx;
-                      const isRowSelected = selectedItemIds.has(itemId);
-                      return (
-                        <div
-                          key={itemId}
-                          className={`p-3.5 space-y-2.5 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : 'hover:bg-surface/40'
-                            }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <Checkbox
-                                checked={isRowSelected}
-                                onChange={() => handleToggleSelectItem(itemId)}
-                                aria-label={`Select item ${idx + 1}`}
-                              />
-                              <span className="font-mono text-2xs text-text-muted">#{idx + 1}</span>
-                              <span className="font-mono text-xs font-bold text-heading bg-surface border border-border px-2 py-0.5 rounded-md truncate">
-                                {item.productName || item.itemName || '—'}
+                    {/* Mobile Stacked Card View (< md) */}
+                    <div className="block md:hidden divide-y divide-border">
+                      {(form.items || []).map((item, idx) => {
+                        const itemId = item.prItemId || item.id || idx;
+                        const isRowSelected = selectedItemIds.has(itemId);
+                        return (
+                          <div
+                            key={itemId}
+                            className={`p-3.5 space-y-2.5 transition-colors ${isRowSelected ? 'bg-primary/[0.04]' : 'hover:bg-surface/40'
+                              }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Checkbox
+                                  checked={isRowSelected}
+                                  onChange={() => handleToggleSelectItem(itemId)}
+                                  aria-label={`Select item ${idx + 1}`}
+                                />
+                                <span className="font-mono text-2xs text-text-muted">#{idx + 1}</span>
+                                <span className="font-mono text-xs font-bold text-heading bg-surface border border-border px-2 py-0.5 rounded-md truncate">
+                                  {item.productName || item.itemName || '—'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <IconButton
+                                  icon={IconEdit}
+                                  size="sm"
+                                  variant="ghost"
+                                  title="Edit Item"
+                                  aria-label="Edit Item"
+                                  onClick={() => handleStartEditItem(item, idx)}
+                                />
+                                <IconButton
+                                  icon={IconDelete}
+                                  size="sm"
+                                  variant="ghost"
+                                  title="Remove Item"
+                                  aria-label="Remove Item"
+                                  onClick={() => setItemToDelete({ item, index: idx })}
+                                  className="hover:text-danger hover:bg-danger/10"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="text-xs space-y-1">
+                              <div className="text-text-muted">
+                                Size / Variant: <span className="font-medium text-heading">{item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '—')}</span>
+                              </div>
+                              {item.specification && (
+                                <div className="text-text-muted text-2xs bg-surface/60 p-2 rounded border border-border/60 break-words">
+                                  Notes: {item.notes || item.specification}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs pt-1 border-t border-border/60 font-mono">
+                              <span className="text-text-muted">Quantity:</span>
+                              <span className="font-bold text-heading text-sm">
+                                {item.quantity}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <IconButton
-                                icon={IconEdit}
-                                size="sm"
-                                variant="ghost"
-                                title="Edit Item"
-                                aria-label="Edit Item"
-                                onClick={() => handleStartEditItem(item, idx)}
-                              />
-                              <IconButton
-                                icon={IconDelete}
-                                size="sm"
-                                variant="ghost"
-                                title="Remove Item"
-                                aria-label="Remove Item"
-                                onClick={() => setItemToDelete({ item, index: idx })}
-                                className="hover:text-danger hover:bg-danger/10"
-                              />
-                            </div>
                           </div>
-
-                          <div className="text-xs space-y-1">
-                            <div className="text-text-muted">
-                              Size / Variant: <span className="font-medium text-heading">{item.isCustomSize ? (item.customSize ? `${item.customSize} (Custom)` : 'Custom Size') : (item.variantName || '—')}</span>
-                            </div>
-                            {item.specification && (
-                              <div className="text-text-muted text-2xs bg-surface/60 p-2 rounded border border-border/60 break-words">
-                                Notes: {item.notes || item.specification}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between text-xs pt-1 border-t border-border/60 font-mono">
-                            <span className="text-text-muted">Quantity:</span>
-                            <span className="font-bold text-heading text-sm">
-                              {item.quantity}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-8 text-center text-text-muted text-xs space-y-1">
+                    <IconPackage size={24} className="mx-auto text-text-muted/40 mb-1" />
+                    <p className="font-medium text-heading">No items added to inquiry yet</p>
+                    <p>Fill in the item details above and click &quot;+ Add Item&quot; to include products.</p>
                   </div>
-                </>
-              ) : (
-                <div className="py-8 text-center text-text-muted text-xs space-y-1">
-                  <IconPackage size={24} className="mx-auto text-text-muted/40 mb-1" />
-                  <p className="font-medium text-heading">No items added to inquiry yet</p>
-                  <p>Fill in the item details above and click &quot;+ Add Item&quot; to include products.</p>
-                </div>
-              )}
-            </div>
-          </CollapsibleCard>
+                )}
+              </div>
+            </CollapsibleCard>
 
           )}
 
@@ -3706,10 +3856,9 @@ export default function InquiryFormPage() {
             defaultOpen={true}
             hasError={Boolean(errors.AssignedTo)}
           >
-
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                {/* Assigned To (SearchableSelect without "Leave unassigned") */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
+              {/* Left Column: Assignment (and Status if editing) */}
+              <div className="lg:col-span-5 space-y-4">
                 <SearchableSelect
                   id="AssignedTo"
                   name="AssignedTo"
@@ -3725,8 +3874,7 @@ export default function InquiryFormPage() {
                   hint="Select an internal team member responsible for technical review and quotation."
                 />
 
-                {/* Status */}
-                {isEdit ? (
+                {isEdit && (
                   <SearchableSelect
                     id="StatusId"
                     name="StatusId"
@@ -3735,26 +3883,16 @@ export default function InquiryFormPage() {
                     value={form.StatusId}
                     onChange={handleChange}
                   />
-                ) : (
-                  <div className="flex flex-col justify-center pt-2">
-                    <span className="text-xs font-medium text-text-muted block mb-1">
-                      Initial Pipeline Stage
-                    </span>
-                    <div className="p-2.5 rounded-lg border border-border bg-surface flex items-center gap-2 text-xs text-text">
-                      <IconClock size={15} className="text-primary shrink-0" />
-                      <span>New inquiry will start at stage <strong className="text-heading">"New"</strong> and progress through Quoting and Won/Lost.</span>
-                    </div>
-                  </div>
                 )}
               </div>
 
-              {/* Initial Handover Note / Comment Area */}
-              <div className="mt-4 pt-4 border-t border-border/70">
+              {/* Right Column: Initial Comment / Handover Note (placed where Initial Pipeline Stage was) */}
+              <div className="lg:col-span-7">
                 <Textarea
                   id="initialComment"
                   name="initialComment"
                   label="Initial Comment / Handover Note (Optional)"
-                  rows={3}
+                  rows={isEdit ? 5 : 3}
                   value={form.initialComment}
                   onChange={handleChange}
                   placeholder="Add internal notes, customer communication summary, or handover instructions for the assigned team member..."

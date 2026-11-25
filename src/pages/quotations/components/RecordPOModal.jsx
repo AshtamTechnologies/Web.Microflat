@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import {
   Modal,
@@ -64,36 +64,43 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
     };
   }, [isOpen, lookups, selectedDocTypeId]);
 
-  // Initialize or reset form state when modal opens or quotation changes
+  const initializedQuotationIdRef = useRef(null);
+
+  // Initialize or reset form state only once when modal opens (or when switching quotations)
   useEffect(() => {
     if (quotation && isOpen) {
-      setPoNumber(quotation.poDetails?.poNumber || '');
-      setReceivedOn(
-        quotation.poDetails?.receivedOn ||
-        quotation.confirmedOn ||
-        new Date().toISOString().split('T')[0]
-      );
-      setExpectedDeliveryDate(quotation.poDetails?.expectedDeliveryDate || '');
-      setRemarks(quotation.poDetails?.remarks || '');
-      setError('');
+      if (initializedQuotationIdRef.current !== quotation.id) {
+        initializedQuotationIdRef.current = quotation.id;
+        setPoNumber(quotation.poDetails?.poNumber || '');
+        setReceivedOn(
+          quotation.poDetails?.receivedOn ||
+          quotation.confirmedOn ||
+          new Date().toISOString().split('T')[0]
+        );
+        setExpectedDeliveryDate(quotation.poDetails?.expectedDeliveryDate || '');
+        setRemarks(quotation.poDetails?.remarks || '');
+        setError('');
 
-      if (quotation.poDetails?.fileName) {
-        setFileData({
-          fileName: quotation.poDetails.fileName,
-          fileSize: quotation.poDetails.fileSize || '350 KB',
-          documentTypeName: quotation.poDetails.documentTypeName || 'PO Document',
-          file: quotation.poDetails.file || null,
-        });
-      } else {
-        setFileData(null);
-      }
+        if (quotation.poDetails?.fileName) {
+          setFileData({
+            fileName: quotation.poDetails.fileName,
+            fileSize: quotation.poDetails.fileSize || '350 KB',
+            documentTypeName: quotation.poDetails.documentTypeName || 'PO Document',
+            file: quotation.poDetails.file || null,
+          });
+        } else {
+          setFileData(null);
+        }
 
-      const existingDocTypeId = quotation.poDetails?.documentTypeId;
-      if (existingDocTypeId) {
-        setSelectedDocTypeId(String(existingDocTypeId));
+        const existingDocTypeId = quotation.poDetails?.documentTypeId;
+        if (existingDocTypeId) {
+          setSelectedDocTypeId(String(existingDocTypeId));
+        }
       }
+    } else if (!isOpen) {
+      initializedQuotationIdRef.current = null;
     }
-  }, [quotation, isOpen]);
+  }, [isOpen, quotation?.id]);
 
   async function handleSave() {
     if (!quotation) return;
@@ -141,20 +148,20 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
     >
       <div className="space-y-4">
         {/* Quotation Details Chip */}
-        <div className="p-3 bg-surface rounded-xl border border-border text-xs flex items-center justify-between">
-          <div>
+        <div className="p-3 bg-surface rounded-xl border border-border text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <div className="text-2xs text-text-muted uppercase tracking-wider font-semibold">
               Quotation Reference
             </div>
-            <div className="font-bold text-heading font-mono text-sm">{quotation?.quotationNo}</div>
-            <div className="text-text-muted">{quotation?.clientName}</div>
+            <div className="font-bold text-heading font-mono text-sm truncate">{quotation?.quotationNo}</div>
+            <div className="text-text-muted truncate">{quotation?.clientName}</div>
           </div>
-          <div className="text-right space-y-1">
-            <span className="text-2xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+          <div className="text-right flex flex-col items-end gap-1.5 shrink-0 ml-auto">
+            <span className="inline-flex items-center text-2xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
               Rev {quotation?.currentRevision ?? (quotation?.revisions?.length ? quotation.revisions.length - 1 : 0)} (Latest Agreed)
             </span>
             {Number(quotation?.grandTotal || quotation?.totalAmount || 0) > 0 && (
-              <div className="font-mono font-bold text-xs text-heading">
+              <div className="font-mono font-bold text-xs text-heading whitespace-nowrap mt-0.5">
                 {quotation?.currency || 'INR'} {Number(quotation?.grandTotal || quotation?.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </div>
             )}

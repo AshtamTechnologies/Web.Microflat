@@ -216,6 +216,9 @@ export default function ApprovalsPage() {
     pageSize: 10,
   });
 
+  // Active Module Setting Rule
+  const [moduleSetting, setModuleSetting] = useState(null);
+
   // Modal States - Approve
   const [itemToApprove, setItemToApprove] = useState(null);
   const [approveComments, setApproveComments] = useState('');
@@ -256,10 +259,11 @@ export default function ApprovalsPage() {
       if (isSuperAdmin) return true;
       // Requester cannot approve their own request
       if (isOwnRequest(row)) return false;
-      // Admin or holding approver role
-      return isAdmin;
+      // Admin or explicitly designated approver user
+      const isDesignatedUser = row?.approverUserId && user?.id && String(row.approverUserId) === String(user.id);
+      return isAdmin || Boolean(isDesignatedUser);
     },
-    [isAdmin, isSuperAdmin, isOwnRequest]
+    [isAdmin, isSuperAdmin, isOwnRequest, user?.id]
   );
 
   /* ── 1. Load Summary Counters ── */
@@ -267,25 +271,35 @@ export default function ApprovalsPage() {
     async (targetModule = moduleFilter) => {
       try {
         if (!targetModule || targetModule === 'ALL') {
-          const summary = await approvalsService.getApprovalSummary({ mine: false });
-          if (summary) {
-            setSummaryCounts({
-              pending: summary.pending || 0,
-              approved: summary.approved || 0,
-              rejected: summary.rejected || 0,
-              cancelled: summary.cancelled || 0,
-            });
-          }
+          const [summaryRes, pendingRes] = await Promise.allSettled([
+            approvalsService.getApprovalSummary({ mine: false }),
+            approvalsService.getPendingApprovals({ mine: false }),
+          ]);
+          const summary = summaryRes.status === 'fulfilled' ? summaryRes.value : null;
+          const pendingCount =
+            pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.items)
+              ? pendingRes.value.items.length
+              : (summary?.pending || 0);
+
+          setSummaryCounts({
+            pending: Math.max(summary?.pending || 0, pendingCount),
+            approved: summary?.approved || 0,
+            rejected: summary?.rejected || 0,
+            cancelled: summary?.cancelled || 0,
+          });
         } else {
           // Module-specific counts for targetModule
-          const [pendingRes, historyRes] = await Promise.allSettled([
-            approvalsService.getAwaitingMeApprovals({ moduleCode: targetModule }),
+          const [pendingRes, listPendingRes, historyRes] = await Promise.allSettled([
+            approvalsService.getPendingApprovals({ moduleCode: targetModule, mine: false }),
+            approvalsService.listApprovalRequests({ moduleCode: targetModule, status: 2, mine: false }),
             approvalsService.getApprovalHistory({ moduleCode: targetModule, mine: false, pageSize: 100 }),
           ]);
 
           const pendingItems =
-            pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.items)
+            (pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.items) && pendingRes.value.items.length > 0)
               ? pendingRes.value.items
+              : (listPendingRes.status === 'fulfilled' && Array.isArray(listPendingRes.value?.items))
+              ? listPendingRes.value.items
               : [];
           const historyItems =
             historyRes.status === 'fulfilled' && Array.isArray(historyRes.value?.items)
@@ -313,7 +327,23 @@ export default function ApprovalsPage() {
   /* ── 2. Load Approvals Queue ── */
   const loadApprovalsData = useCallback(async () => {
     setIsLoading(true);
+    console.log('[APPROVALS_PAGE] Loading approvals queue. activeTab:', activeTab, 'moduleFilter:', moduleFilter);
+
     try {
+      // If module is specific, check its backend configuration rule
+      if (moduleFilter && moduleFilter !== 'ALL') {
+        try {
+          const setting = await approvalsService.getApprovalSettingByModule(moduleFilter);
+          setModuleSetting(setting);
+          console.log(`[APPROVALS_PAGE] Backend setting for ${moduleFilter}:`, setting);
+        } catch (sErr) {
+          console.warn('[APPROVALS_PAGE] Failed to get module setting:', sErr);
+          setModuleSetting(null);
+        }
+      } else {
+        setModuleSetting(null);
+      }
+
       const params = {};
       if (moduleFilter && moduleFilter !== 'ALL') {
         params.moduleCode = moduleFilter;
@@ -321,22 +351,66 @@ export default function ApprovalsPage() {
 
       let res;
       if (activeTab === 'PENDING') {
-        res = await approvalsService.getAwaitingMeApprovals(params);
+        const combinedItems = [];
+
+        // 1. Try GET /api/approval-requests/pending?Mine=false
+        try {
+          const pendingRes = await approvalsService.getPendingApprovals({ ...params, mine: false });
+          if (Array.isArray(pendingRes?.items)) {
+            combinedItems.push(...pendingRes.items);
+          }
+          console.log('[APPROVALS_PAGE] Pending approvals result:', pendingRes);
+        } catch (pendingErr) {
+          console.warn('[APPROVALS_PAGE] getPendingApprovals threw, falling back:', pendingErr);
+        }
+
+        // 2. Try full list endpoint GET /api/approval-requests?Status=2 (includes self-submitted records for auditing)
+        try {
+          const listRes = await approvalsService.listApprovalRequests({ ...params, status: 2 });
+          console.log('[APPROVALS_PAGE] listApprovalRequests (Status=2) result:', listRes);
+          if (Array.isArray(listRes?.items)) {
+            for (const item of listRes.items) {
+              const itemId = item.id || item.approvalRequestId;
+              if (!combinedItems.some((existing) => (existing.id || existing.approvalRequestId) === itemId)) {
+                combinedItems.push(item);
+              }
+            }
+          }
+        } catch (listErr) {
+          console.warn('[APPROVALS_PAGE] listApprovalRequests threw:', listErr);
+        }
+
+        // 3. Fallback: check awaiting-me
+        try {
+          const awaitingRes = await approvalsService.getAwaitingMeApprovals(params);
+          console.log('[APPROVALS_PAGE] awaiting-me result:', awaitingRes);
+          if (Array.isArray(awaitingRes?.items)) {
+            for (const item of awaitingRes.items) {
+              const itemId = item.id || item.approvalRequestId;
+              if (!combinedItems.some((existing) => (existing.id || existing.approvalRequestId) === itemId)) {
+                combinedItems.push(item);
+              }
+            }
+          }
+        } catch (awaitingErr) {
+          console.warn('[APPROVALS_PAGE] awaiting-me threw:', awaitingErr);
+        }
+
+        res = { items: combinedItems };
       } else {
         if (historyStatusFilter !== 'ALL') {
           params.status = historyStatusFilter;
         }
         res = await approvalsService.getApprovalHistory({ ...params, mine: false });
+        console.log('[APPROVALS_PAGE] History approvals result:', res);
       }
 
-      if (res && Array.isArray(res.items)) {
-        setItems(res.items);
-      } else {
-        setItems([]);
-      }
+      const finalItems = (res && Array.isArray(res.items)) ? res.items : [];
+      console.log(`[APPROVALS_PAGE] Setting ${finalItems.length} items to table for module ${moduleFilter}`);
+      setItems(finalItems);
       fetchSummary(moduleFilter);
     } catch (err) {
-      console.error('Failed to fetch approval requests:', err);
+      console.error('[APPROVALS_PAGE] Failed to fetch approval requests:', err);
       toast.error(err?.detail || err?.message || 'Failed to load approvals queue.');
       setItems([]);
     } finally {
@@ -373,6 +447,7 @@ export default function ApprovalsPage() {
         item.typeName?.toLowerCase().includes(q) ||
         item.initiatedByName?.toLowerCase().includes(q) ||
         item.approverRoleName?.toLowerCase().includes(q) ||
+        item.approverUserName?.toLowerCase().includes(q) ||
         item.actionedByName?.toLowerCase().includes(q) ||
         item.comments?.toLowerCase().includes(q)
       );
@@ -652,16 +727,35 @@ export default function ApprovalsPage() {
         },
       }),
 
-      // Approver Role Column
-      columnHelper.accessor('approverRoleName', {
-        id: 'approverRole',
-        header: 'Approver Role',
-        size: 140,
-        cell: ({ getValue }) => (
-          <span className="text-xs font-mono bg-surface-subtle px-2 py-0.5 rounded text-text-muted border border-border">
-            {getValue() || 'Admin'}
-          </span>
-        ),
+      // Designated Approver Column
+      columnHelper.accessor((row) => (row.approverType === 2 ? row.approverUserName : row.approverRoleName), {
+        id: 'approver',
+        header: 'Designated Approver',
+        size: 170,
+        cell: ({ row }) => {
+          const item = row.original;
+          const isUser = item.approverType === 2 || (!item.approverRoleName && item.approverUserName);
+          if (isUser) {
+            return (
+              <span
+                className="text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 px-2 py-0.5 rounded inline-flex items-center gap-1.5 max-w-[160px] truncate"
+                title={item.approverUserName || `User #${item.approverUserId}`}
+              >
+                <IconUser size={12} className="shrink-0" />
+                <span className="truncate">{item.approverUserName || (item.approverUserId ? `User #${item.approverUserId}` : 'Assigned User')}</span>
+              </span>
+            );
+          }
+          return (
+            <span
+              className="text-xs font-mono bg-surface-subtle px-2 py-0.5 rounded text-text-muted border border-border inline-flex items-center gap-1 max-w-[160px] truncate"
+              title={item.approverRoleName || 'Admin'}
+            >
+              <IconShieldCheck size={12} className="shrink-0 text-primary" />
+              <span className="truncate">{item.approverRoleName || 'Admin'}</span>
+            </span>
+          );
+        },
       }),
 
       // Decision Column (History Tab Only)
@@ -1007,6 +1101,13 @@ export default function ApprovalsPage() {
         )}
       </TableToolbar>
 
+      {/* ── Quotation Approval Disabled Warning Banner (Only displayed if disabled) ── */}
+      {moduleSetting && !moduleSetting.isApprovalRequired && moduleFilter === 'QUOTATION' && (
+        <div className="p-3.5 text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded-xl border border-amber-500/20 text-xs leading-relaxed">
+          ⚠️ <strong>Quotation Approval is DISABLED on Backend:</strong> In the database, <code>isApprovalRequired</code> is currently <code>false</code> for Quotations. Per the Swagger API specification, submitting a quotation automatically marks it as <code>NotRequired</code> and does not create an approval request in this queue. You can turn Quotation approvals ON anytime in <button type="button" onClick={() => navigate('/approvals/settings')} className="underline font-bold hover:text-amber-800">Approval Settings (/approvals/settings)</button>.
+        </div>
+      )}
+
       {/* ── 5. Main TanStack DataTable ── */}
       <DataTable
         table={table}
@@ -1021,7 +1122,7 @@ export default function ApprovalsPage() {
         }
         emptyDescription={
           activeTab === 'PENDING'
-            ? 'No actions are currently waiting for your role’s decision.'
+            ? 'No actions are currently waiting for your decision.'
             : 'Try adjusting your search criteria or clearing filters.'
         }
       />

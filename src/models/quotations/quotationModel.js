@@ -115,8 +115,19 @@ export function quotationDocumentFromApi(dto = {}) {
  */
 export function quotationListItemFromApi(dto = {}) {
   if (!dto) return null;
-  const grandTotal = Number(dto.totalAmount ?? dto.grandTotal) || 0;
-  const subtotal = Number(dto.subTotal ?? dto.subtotal) || 0;
+  const grandTotal = Number(
+    dto.totalAmount ??
+    dto.grandTotal ??
+    dto.latestRevision?.grandTotal ??
+    dto.latestRevision?.totalAmount ??
+    dto.netAmount ??
+    dto.finalAmount ??
+    dto.latestRevisionTotal ??
+    dto.total ??
+    dto.amount
+  ) || 0;
+  const subtotal = Number(dto.subTotal ?? dto.subtotal ?? dto.latestRevision?.subTotal) || 0;
+  const clientName = dto.clientName || dto.client?.companyName || dto.client?.clientName || dto.customerName || '';
 
   return {
     id: dto.id,
@@ -127,9 +138,9 @@ export function quotationListItemFromApi(dto = {}) {
     status: dto.status || 'Draft',
     inquiryId: dto.inquiryId,
     inquiryNo: dto.inquiryNo || '',
-    clientId: dto.clientId,
+    clientId: dto.clientId || dto.client?.id || null,
     clientCode: dto.clientCode || '',
-    clientName: dto.clientName || '',
+    clientName,
     contactPerson: dto.contactPerson || '',
     contactEmail: dto.contactEmail || '',
     currency: dto.currencyCode || dto.currency || 'INR',
@@ -188,33 +199,80 @@ export function quotationDetailFromApi(dto = {}) {
   const otherCharges = Number(latestRev.otherCharges ?? dto.otherCharges) || 0;
   const totalTax = Number(latestRev.taxAmount ?? dto.taxAmount) || 0;
 
+  // Client Name Resolution
+  const clientName =
+    dto.clientName ||
+    dto.client?.companyName ||
+    dto.client?.clientName ||
+    dto.customerName ||
+    latestRev.clientName ||
+    latestRev.client?.companyName ||
+    '';
+
   // Address & Contact Resolution (Handles object vs string responses from backend)
-  const rawAddress = dto.clientAddress || latestRev.clientAddress || dto.address || latestRev.address;
+  const rawAddress =
+    dto.clientAddress ||
+    latestRev.clientAddress ||
+    dto.address ||
+    latestRev.address ||
+    dto.client?.addresses?.[0] ||
+    dto.inquiry?.clientAddress ||
+    dto.inquiry?.address;
   const clientAddress = formatAddressValue(rawAddress);
   const clientAddressId =
     dto.clientAddressId ||
     latestRev.clientAddressId ||
     (typeof rawAddress === 'object' ? rawAddress?.clientAddressId || rawAddress?.id : null);
 
-  const rawContact = dto.contactPerson || latestRev.contactPerson || dto.clientContact || latestRev.clientContact;
+  const clientId =
+    dto.clientId ||
+    latestRev.clientId ||
+    dto.client?.id ||
+    dto.client?.clientId ||
+    dto.inquiry?.clientId ||
+    null;
+
+  const clientContacts = dto.client?.contacts || latestRev.client?.contacts || [];
+
+  const rawContact =
+    dto.contactPerson ||
+    latestRev.contactPerson ||
+    dto.clientContact ||
+    latestRev.clientContact ||
+    dto.contact ||
+    dto.client?.contacts?.[0] ||
+    dto.inquiry?.contactPerson ||
+    dto.inquiry?.clientContact ||
+    null;
   const contactPerson = formatContactPersonValue(rawContact);
   const clientContactId =
     dto.clientContactId ||
     latestRev.clientContactId ||
-    (typeof rawContact === 'object' ? rawContact?.clientContactId || rawContact?.id : null);
+    (typeof rawContact === 'object' ? rawContact?.clientContactId || rawContact?.id : null) ||
+    clientContacts[0]?.clientContactId ||
+    clientContacts[0]?.id ||
+    null;
   const contactEmail =
     dto.contactEmail ||
     latestRev.contactEmail ||
-    (typeof rawContact === 'object' ? rawContact?.email || rawContact?.contactEmail : '') ||
+    (typeof rawContact === 'object' ? rawContact?.email || rawContact?.contactEmail || rawContact?.officialEmail : '') ||
+    clientContacts[0]?.email ||
+    dto.client?.officialEmail ||
+    dto.inquiry?.contactEmail ||
     '';
   const contactPhone =
     dto.contactPhone ||
     latestRev.contactPhone ||
-    (typeof rawContact === 'object' ? rawContact?.phone || rawContact?.mobile || rawContact?.contactPhone : '') ||
+    (typeof rawContact === 'object' ? rawContact?.phone || rawContact?.mobile || rawContact?.phoneNo || rawContact?.contactPhone : '') ||
+    clientContacts[0]?.phoneNo ||
+    clientContacts[0]?.mobile1 ||
+    clientContacts[0]?.phone ||
+    dto.client?.officialMobile ||
+    dto.inquiry?.contactPhone ||
     '';
 
-  // Normalize line items
-  const rawItems = latestRev.lineItems || dto.lineItems || [];
+  // Normalize line items (supports latestRevision.lines, latestRevision.lineItems, dto.lines, dto.lineItems)
+  const rawItems = latestRev.lines || latestRev.lineItems || dto.lines || dto.lineItems || latestRev.items || dto.items || [];
   const items = rawItems.map(quotationLineItemFromApi).filter(Boolean);
 
   // Normalize taxes
@@ -229,22 +287,42 @@ export function quotationDetailFromApi(dto = {}) {
   const rawDocs = latestRev.documents || dto.documents || [];
   const documents = rawDocs.map(quotationDocumentFromApi).filter(Boolean);
 
-  // Normalize historical revisions list
-  const revisions = Array.isArray(dto.revisions)
-    ? dto.revisions.map((rev) => ({
-        id: rev.id,
-        revisionId: rev.id,
-        revisionNo: rev.revisionNo ?? 0,
-        revisionDate: rev.revisionDate ? String(rev.revisionDate).slice(0, 10) : '',
-        revisionReason: rev.revisionReason || 'Revision',
-        status: rev.status || 'Draft',
-        subtotal: Number(rev.subTotal ?? rev.subtotal) || 0,
-        totalTax: Number(rev.taxAmount) || 0,
-        grandTotal: Number(rev.totalAmount ?? rev.grandTotal) || 0,
-        currency: rev.currencyCode || rev.currency || 'INR',
-        items: Array.isArray(rev.lineItems) ? rev.lineItems.map(quotationLineItemFromApi).filter(Boolean) : [],
-      }))
-    : [];
+  // Normalize historical revisions list (ensure latest revision holds the line items)
+  const revisions = Array.isArray(dto.revisions) && dto.revisions.length > 0
+    ? dto.revisions.map((rev, revIdx) => {
+        const revLines = rev.lines || rev.lineItems || rev.items || (revIdx === 0 ? rawItems : []);
+        return {
+          id: rev.id,
+          revisionId: rev.id,
+          revisionNo: rev.revisionNo ?? revIdx,
+          revisionDate: rev.revisionDate ? String(rev.revisionDate).slice(0, 10) : '',
+          revisionReason: rev.revisionReason || 'Revision',
+          status: rev.status || 'Draft',
+          subtotal: Number(rev.subTotal ?? rev.subtotal) || 0,
+          totalTax: Number(rev.taxAmount) || 0,
+          grandTotal: Number(rev.totalAmount ?? rev.grandTotal) || 0,
+          currency: rev.currencyCode || rev.currency || 'INR',
+          items: Array.isArray(revLines) ? revLines.map(quotationLineItemFromApi).filter(Boolean) : [],
+        };
+      })
+    : [{
+        id: latestRev.id || 'rev-0',
+        revisionId: latestRev.id || 'rev-0',
+        revisionNo: dto.currentRevision ?? latestRev.revisionNo ?? 0,
+        revisionDate: (latestRev.revisionDate || dto.createdOn ? String(latestRev.revisionDate || dto.createdOn).slice(0, 10) : ''),
+        revisionReason: latestRev.revisionReason || 'Initial quotation',
+        status,
+        subtotal,
+        totalTax,
+        grandTotal,
+        currency: dto.currencyCode || latestRev.currencyCode || 'INR',
+        items,
+      }];
+
+  // If revision 0 items were empty, fallback to items
+  if (revisions.length > 0 && (!revisions[0].items || revisions[0].items.length === 0)) {
+    revisions[0].items = items;
+  }
 
   // Client PO Information (Task 61)
   const poDetails = dto.poDetails || (dto.poNumber ? {
@@ -263,9 +341,9 @@ export function quotationDetailFromApi(dto = {}) {
     quotationNo: dto.quotationNo || '',
     inquiryId: dto.inquiryId,
     inquiryNo: dto.inquiryNo || '',
-    clientId: dto.clientId,
+    clientId: clientId || dto.clientId || dto.client?.id || null,
     clientCode: dto.clientCode || '',
-    clientName: dto.clientName || '',
+    clientName,
     clientAddressId,
     clientAddress,
     clientContactId,

@@ -5,7 +5,7 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { triggerPdfDownload } from '../../utils/fileHelpers';
 import {
   IconBack,
@@ -40,6 +40,7 @@ import {
   FormattedHtmlBlock,
 } from '../../components/ui';
 import { useQuotationsContext } from '../../context/QuotationsContext';
+import { clientService } from '../../services';
 import { TAX_TREATMENTS, calculateQuotationTotals, formatCurrency } from '../../mocks/quotations';
 import { formatAddressValue } from '../../models/quotations/quotationModel';
 import { formatDate } from '../../utils/dateUtils';
@@ -56,18 +57,179 @@ export default function QuotationViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { getQuotationById, fetchQuotationDetail, fetchLookups, submitForApproval, deleteNegotiationStage, lookups } = useQuotationsContext();
-
-  const quotation = getQuotationById(id);
+  const [quotationDetail, setQuotationDetail] = useState(null);
+  const [clientDetail, setClientDetail] = useState(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (id && fetchQuotationDetail) {
-      fetchQuotationDetail(id);
+      setIsLoadingDetail(true);
+      fetchQuotationDetail(id)
+        .then((res) => {
+          if (isMounted && res) {
+            setQuotationDetail(res);
+          }
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingDetail(false);
+        });
     }
+    return () => {
+      isMounted = false;
+    };
   }, [id, fetchQuotationDetail]);
+
+  const cachedQuotation = getQuotationById(id);
+  const quotation = quotationDetail || cachedQuotation;
+
+  const resolvedClientId =
+    quotation?.clientId ||
+    quotation?.client?.id ||
+    quotation?.client?.clientId ||
+    quotation?.inquiry?.clientId ||
+    null;
+
+  useEffect(() => {
+    if (!resolvedClientId) return;
+    let isMounted = true;
+    clientService
+      .getClientById(resolvedClientId)
+      .then((detail) => {
+        if (isMounted && detail) {
+          setClientDetail(detail);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load client detail for quotation view:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [resolvedClientId]);
+
+  const clientContacts = useMemo(() => {
+    if (!clientDetail) return quotation?.client?.contacts || [];
+    return (
+      clientDetail.currentDetail?.contacts ||
+      clientDetail.contacts ||
+      clientDetail.versions?.[0]?.contacts ||
+      clientDetail.activeVersion?.contacts ||
+      quotation?.client?.contacts ||
+      []
+    );
+  }, [clientDetail, quotation?.client?.contacts]);
+
+  const resolvedClientContact = useMemo(() => {
+    if (!clientContacts || clientContacts.length === 0) return null;
+    if (quotation?.clientContactId) {
+      const byId = clientContacts.find(
+        (c) => String(c.clientContactId || c.id) === String(quotation.clientContactId)
+      );
+      if (byId) return byId;
+    }
+    if (quotation?.contactPerson && quotation.contactPerson !== '—') {
+      const byName = clientContacts.find(
+        (c) =>
+          (c.fullName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || '')
+            .toLowerCase() === quotation.contactPerson.toLowerCase()
+      );
+      if (byName) return byName;
+    }
+    return clientContacts.find((c) => c.isPrimary) || clientContacts[0] || null;
+  }, [clientContacts, quotation?.clientContactId, quotation?.contactPerson]);
+
+  const resolvedContactPerson = useMemo(() => {
+    if (quotation?.contactPerson && quotation.contactPerson !== '—') return quotation.contactPerson;
+    if (resolvedClientContact) {
+      return (
+        resolvedClientContact.fullName ||
+        `${resolvedClientContact.firstName || ''} ${resolvedClientContact.lastName || ''}`.trim() ||
+        resolvedClientContact.name ||
+        '—'
+      );
+    }
+    return (
+      clientDetail?.currentDetail?.contactPerson ||
+      clientDetail?.contactPerson ||
+      quotation?.client?.primaryContact ||
+      quotation?.inquiry?.contactPerson ||
+      '—'
+    );
+  }, [quotation?.contactPerson, quotation?.client, quotation?.inquiry, resolvedClientContact, clientDetail]);
+
+  const resolvedContactPhone = useMemo(() => {
+    if (quotation?.contactPhone) return quotation.contactPhone;
+    if (resolvedClientContact) {
+      return (
+        resolvedClientContact.phoneNo ||
+        resolvedClientContact.mobile1 ||
+        resolvedClientContact.phone ||
+        resolvedClientContact.contactPhone ||
+        ''
+      );
+    }
+    return (
+      clientDetail?.currentDetail?.officialMobile ||
+      clientDetail?.phone ||
+      quotation?.client?.officialMobile ||
+      quotation?.inquiry?.contactPhone ||
+      ''
+    );
+  }, [quotation?.contactPhone, quotation?.client, quotation?.inquiry, resolvedClientContact, clientDetail]);
+
+  const resolvedContactEmail = useMemo(() => {
+    if (quotation?.contactEmail) return quotation.contactEmail;
+    if (resolvedClientContact) {
+      return (
+        resolvedClientContact.email ||
+        resolvedClientContact.officialEmail ||
+        resolvedClientContact.contactEmail ||
+        ''
+      );
+    }
+    return (
+      clientDetail?.currentDetail?.officialEmail ||
+      clientDetail?.email ||
+      quotation?.client?.officialEmail ||
+      quotation?.inquiry?.contactEmail ||
+      ''
+    );
+  }, [quotation?.contactEmail, quotation?.client, quotation?.inquiry, resolvedClientContact, clientDetail]);
+
+  const resolvedClientAddress = useMemo(() => {
+    const rawAddr = formatAddressValue(quotation?.clientAddress);
+    if (rawAddr && rawAddr !== '—') return rawAddr;
+    if (clientDetail) {
+      const addrs =
+        clientDetail.currentDetail?.addresses ||
+        clientDetail.addresses ||
+        clientDetail.versions?.[0]?.addresses ||
+        [];
+      if (quotation?.clientAddressId) {
+        const matched = addrs.find((a) => String(a.clientAddressId || a.id) === String(quotation.clientAddressId));
+        if (matched) return formatAddressValue(matched);
+      }
+      if (addrs[0]) return formatAddressValue(addrs[0]);
+    }
+    return formatAddressValue(quotation?.client?.addresses?.[0]) || '—';
+  }, [quotation?.clientAddress, quotation?.clientAddressId, quotation?.client, clientDetail]);
+
+  const enhancedQuotation = useMemo(() => {
+    if (!quotation) return null;
+    return {
+      ...quotation,
+      contactPerson: resolvedContactPerson && resolvedContactPerson !== '—' ? resolvedContactPerson : quotation.contactPerson,
+      contactPhone: resolvedContactPhone || quotation.contactPhone,
+      contactEmail: resolvedContactEmail || quotation.contactEmail,
+      clientAddress: resolvedClientAddress && resolvedClientAddress !== '—' ? resolvedClientAddress : quotation.clientAddress,
+      clientContactId: resolvedClientContact?.clientContactId || resolvedClientContact?.id || quotation.clientContactId,
+    };
+  }, [quotation, resolvedContactPerson, resolvedContactPhone, resolvedContactEmail, resolvedClientAddress, resolvedClientContact]);
 
   useEffect(() => {
     fetchLookups?.();
-  }, []);
+  }, [fetchLookups]);
 
   // Modals state
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -99,6 +261,13 @@ export default function QuotationViewPage() {
     return quotation.revisions[selectedRevIndex] || quotation.revisions[latestRevIndex];
   }, [quotation, selectedRevIndex, latestRevIndex]);
 
+  const displayedItems = useMemo(() => {
+    if (activeRevision?.items && activeRevision.items.length > 0) {
+      return activeRevision.items;
+    }
+    return quotation?.items || [];
+  }, [activeRevision?.items, quotation?.items]);
+
   const activeTaxTreatment = activeRevision?.taxTreatment || quotation?.taxTreatment || 'INTRA_STATE';
   const activeTaxTreatmentLabel = useMemo(() => {
     return TAX_TREATMENTS.find((t) => t.value === activeTaxTreatment)?.label || activeTaxTreatment;
@@ -123,27 +292,27 @@ export default function QuotationViewPage() {
 
   const activeTotalsBreakdown = useMemo(() => {
     return calculateQuotationTotals(
-      activeRevision?.items || [],
+      displayedItems,
       activeTaxTreatment,
       activeTaxes,
       activeRevision?.otherCharges || quotation?.otherCharges || 0
     );
-  }, [activeRevision?.items, activeTaxTreatment, activeTaxes, activeRevision?.otherCharges, quotation?.otherCharges]);
+  }, [displayedItems, activeTaxTreatment, activeTaxes, activeRevision?.otherCharges, quotation?.otherCharges]);
 
   const itemsWithDescription = useMemo(() => {
-    return (activeRevision?.items || []).filter((it) => Boolean(it.description?.trim()));
-  }, [activeRevision?.items]);
+    return displayedItems.filter((it) => Boolean(it.description?.trim()));
+  }, [displayedItems]);
 
   const totalItemQuantity = useMemo(() => {
-    return (activeRevision?.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
-  }, [activeRevision?.items]);
+    return displayedItems.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+  }, [displayedItems]);
 
   const allDescriptionsExpanded = useMemo(() => {
     if (itemsWithDescription.length === 0) return false;
-    return (activeRevision?.items || []).every((it, idx) =>
+    return displayedItems.every((it, idx) =>
       !it.description?.trim() || expandedDescIds.has(it.id || `row-${idx}`)
     );
-  }, [activeRevision?.items, itemsWithDescription.length, expandedDescIds]);
+  }, [displayedItems, itemsWithDescription.length, expandedDescIds]);
 
   const handleToggleDescription = (key) => {
     setExpandedDescIds((prev) => {
@@ -208,6 +377,14 @@ export default function QuotationViewPage() {
     handleStartResize: handleStartProductResize,
   } = useColumnResize(INITIAL_PRODUCT_COL_WIDTHS, MIN_PRODUCT_COL_WIDTHS);
 
+  if (!quotation && isLoadingDetail) {
+    return (
+      <div className="p-12 text-center text-text-muted text-sm animate-pulse">
+        Loading quotation details...
+      </div>
+    );
+  }
+
   if (!quotation) {
     return (
       <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
@@ -257,6 +434,25 @@ export default function QuotationViewPage() {
                 PO Received
               </Badge>
             )}
+
+            {quotation.approvalStatus === 2 || quotation.pendingApprovalRequestId ? (
+              <Link
+                to="/approvals?module=QUOTATION"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
+                title="Click to view in Approvals Queue"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                Approval Pending
+              </Link>
+            ) : quotation.approvalStatus === 3 ? (
+              <Badge variant="success" size="md">
+                Approved
+              </Badge>
+            ) : quotation.approvalStatus === 4 ? (
+              <Badge variant="danger" size="md">
+                Approval Rejected
+              </Badge>
+            ) : null}
           </div>
         }
         subtitle={
@@ -509,23 +705,26 @@ export default function QuotationViewPage() {
             <Card title="Client & Contact Details" className="lg:col-span-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <DetailField label="Client Company" value={quotation.clientName} />
-                <DetailField label="Contact Person" value={quotation.contactPerson || '—'} />
+                <DetailField
+                  label="Contact Person"
+                  value={resolvedContactPerson || '—'}
+                />
                 <DetailField
                   label="Phone"
-                  value={quotation.contactPhone}
+                  value={resolvedContactPhone || ''}
                   icon={IconPhone}
-                  isPhone={Boolean(quotation.contactPhone)}
+                  isPhone={Boolean(resolvedContactPhone)}
                   mono
                 />
                 <DetailField
                   label="Email"
-                  value={quotation.contactEmail}
+                  value={resolvedContactEmail || ''}
                   icon={IconMail}
-                  isEmail={Boolean(quotation.contactEmail)}
+                  isEmail={Boolean(resolvedContactEmail)}
                 />
                 <DetailField
                   label="Billing / Shipping Address"
-                  value={formatAddressValue(quotation.clientAddress) || '—'}
+                  value={resolvedClientAddress || '—'}
                   className="sm:col-span-2"
                 />
               </div>
@@ -658,7 +857,7 @@ export default function QuotationViewPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {(activeRevision?.items || []).map((item, idx) => {
+                  {displayedItems.map((item, idx) => {
                     const lineAmount =
                       (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
                       (Number(item.otherCharges) || 0);
@@ -1262,7 +1461,7 @@ export default function QuotationViewPage() {
       <AddNegotiationModal
         isOpen={isNegModalOpen}
         onClose={() => setIsNegModalOpen(false)}
-        quotation={quotation}
+        quotation={enhancedQuotation || quotation}
       />
 
       <EditNegotiationModal
@@ -1272,7 +1471,7 @@ export default function QuotationViewPage() {
           setEditingStage(null);
         }}
         stage={editingStage}
-        quotation={quotation}
+        quotation={enhancedQuotation || quotation}
       />
 
       <ConfirmModal
@@ -1303,7 +1502,7 @@ export default function QuotationViewPage() {
       <SendQuotationMailModal
         isOpen={isMailModalOpen}
         onClose={() => setIsMailModalOpen(false)}
-        quotation={quotation}
+        quotation={enhancedQuotation || quotation}
       />
     </div>
   );
