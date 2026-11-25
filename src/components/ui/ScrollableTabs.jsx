@@ -145,12 +145,12 @@ export default function ScrollableTabs({
 
   return (
     <div className={`relative flex items-center w-full min-w-0 ${className}`}>
-      {/* Left Scroll Button */}
+      {/* Left Scroll Button (hidden on small touch screens where momentum swipe is standard) */}
       {canScrollLeft && (
         <button
           type="button"
           onClick={() => handleScroll('left')}
-          className="absolute left-0 z-20 flex items-center justify-center w-7 h-7 -ml-2 rounded-full bg-surface border border-border shadow-xs text-text-muted hover:text-primary transition-colors cursor-pointer"
+          className="hidden sm:flex absolute left-0 z-20 items-center justify-center w-7 h-7 -ml-2 rounded-full bg-surface border border-border shadow-xs text-text-muted hover:text-primary transition-colors cursor-pointer"
           aria-label="Scroll left"
         >
           <ChevronLeft size={16} />
@@ -265,12 +265,12 @@ export default function ScrollableTabs({
         <div className="absolute right-0 top-0 bottom-1.5 w-6 bg-gradient-to-l from-surface to-transparent pointer-events-none z-10" />
       )}
 
-      {/* Right Scroll Button */}
+      {/* Right Scroll Button (hidden on small touch screens where momentum swipe is standard) */}
       {canScrollRight && (
         <button
           type="button"
           onClick={() => handleScroll('right')}
-          className="absolute right-0 z-20 flex items-center justify-center w-7 h-7 -mr-2 rounded-full bg-surface border border-border shadow-xs text-text-muted hover:text-primary transition-colors cursor-pointer"
+          className="hidden sm:flex absolute right-0 z-20 items-center justify-center w-7 h-7 -mr-2 rounded-full bg-surface border border-border shadow-xs text-text-muted hover:text-primary transition-colors cursor-pointer"
           aria-label="Scroll right"
         >
           <ChevronRight size={16} />

@@ -162,6 +162,8 @@ export default function VendorBankDetailsFormPage({
     }
   }, [vendorId]);
 
+  const lastFetchedVendorIdRef = useRef(null);
+
   // Load vendor detail fallback if not provided via props or cache
   useEffect(() => {
     let isMounted = true;
@@ -171,9 +173,14 @@ export default function VendorBankDetailsFormPage({
     }
     if (!selectedVendorId) return;
 
+    if (lastFetchedVendorIdRef.current === String(selectedVendorId) && fetchedVendor) {
+      return;
+    }
+    lastFetchedVendorIdRef.current = String(selectedVendorId);
+
     const cached =
       (getVendorById && getVendorById(selectedVendorId)) ||
-      allVendors.find(
+      (allVendors || []).find(
         (v) => String(v.id) === String(selectedVendorId) || String(v.vendorId) === String(selectedVendorId)
       );
 
@@ -190,7 +197,7 @@ export default function VendorBankDetailsFormPage({
     return () => {
       isMounted = false;
     };
-  }, [propVendor, selectedVendorId, getVendorById, allVendors, fetchVendorDetail]);
+  }, [propVendor, selectedVendorId, getVendorById, fetchVendorDetail]);
 
   // Fetch dropdown lookups (bankAccountTypes and documentTypes) from API
   useEffect(() => {
@@ -541,11 +548,12 @@ export default function VendorBankDetailsFormPage({
         // Re-fetch vendor bank list in context
         await fetchBanksForVendor(selectedVendorId, true);
 
+        const newBankId = created?.id ?? created?.bankDetailId;
         toast.success(`Bank account for ${formState.bankName || 'vendor'} added successfully`);
         if (embedded) {
-          navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+          navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank${newBankId ? `&bank=${newBankId}` : ''}`);
         } else {
-          navigate('/vendor-bank-details');
+          navigate(selectedVendorId || vendorId ? `/vendor-bank-details/${selectedVendorId || vendorId}${newBankId ? `?bank=${newBankId}` : ''}` : '/vendor-bank-details');
         }
       } catch (err) {
         toast.error(err?.message || 'Failed to save bank account');
@@ -680,9 +688,9 @@ export default function VendorBankDetailsFormPage({
 
       toast.success(`Bank details for ${formState.bankName || 'account'} updated successfully`);
       if (embedded) {
-        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank${targetId ? `&bank=${targetId}` : ''}`);
       } else {
-        navigate('/vendor-bank-details');
+        navigate(selectedVendorId || vendorId ? `/vendor-bank-details/${selectedVendorId || vendorId}${targetId ? `?bank=${targetId}` : ''}` : '/vendor-bank-details');
       }
     } else if (authModalState.action === 'delete') {
       const targetRow = authModalState.targetData;
@@ -729,9 +737,12 @@ export default function VendorBankDetailsFormPage({
 
   // Preload account once when draftRows are loaded or when bank query param changes
   const preloadedBankRef = useRef(null);
+  const addActionHandledRef = useRef(false);
+
   useEffect(() => {
     if (selectedVendorId) {
       preloadedBankRef.current = null;
+      addActionHandledRef.current = false;
     }
   }, [selectedVendorId]);
 
@@ -739,8 +750,11 @@ export default function VendorBankDetailsFormPage({
     if (draftRows.length === 0) return;
 
     if (isAddAction) {
-      // Explicitly adding a new account — leave form empty for new entry
-      handleCancelEdit();
+      // Explicitly adding a new account — leave form empty for new entry (once)
+      if (!addActionHandledRef.current) {
+        addActionHandledRef.current = true;
+        handleCancelEdit();
+      }
       return;
     }
 
@@ -787,15 +801,15 @@ export default function VendorBankDetailsFormPage({
       }
 
       // Avoid duplicate network calls if already fetched for this bankId
-      if (lastFetchedBankIdRef.current === bankId && Array.isArray(formState.attachments) && formState.attachments.length > 0) {
+      if (lastFetchedBankIdRef.current === String(bankId)) {
         return;
       }
+      lastFetchedBankIdRef.current = String(bankId);
 
       setLoadingAttachments(true);
       try {
         const docs = await vendorService.getBankDetailAttachments(bankId);
         if (isCancelled) return;
-        lastFetchedBankIdRef.current = bankId;
         if (Array.isArray(docs)) {
           const normalizedDocs = docs.map((att) => ({
             id: att.id || att.attachmentId || `att_${Date.now()}_${Math.random()}`,
@@ -820,9 +834,13 @@ export default function VendorBankDetailsFormPage({
             };
           });
 
-          // Also update draftRows so that the grid row reflects the fetched attachments
-          setDraftRows((prevRows) =>
-            prevRows.map((r) => {
+          // Also update draftRows only if attachment data changed
+          setDraftRows((prevRows) => {
+            const row = prevRows.find((r) => String(r.bankDetailId || r.id) === String(bankId));
+            if (row && (row.attachments?.length || 0) === normalizedDocs.length && row.attachmentCount === normalizedDocs.length) {
+              return prevRows;
+            }
+            return prevRows.map((r) => {
               const id = r.bankDetailId || r.id;
               if (String(id) === String(bankId)) {
                 return {
@@ -832,8 +850,8 @@ export default function VendorBankDetailsFormPage({
                 };
               }
               return r;
-            })
-          );
+            });
+          });
         }
       } catch (err) {
         console.warn('Failed to load bank attachments for edit:', err);
@@ -1123,10 +1141,11 @@ export default function VendorBankDetailsFormPage({
     if (hasUnsavedInput && !isEditMode) {
       setIsDiscardModalOpen(true);
     } else {
+      const activeBankId = editingId || bankParamId;
       if (embedded) {
-        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+        navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank${activeBankId ? `&bank=${activeBankId}` : ''}`);
       } else {
-        navigate('/vendor-bank-details');
+        navigate(selectedVendorId || vendorId ? `/vendor-bank-details/${selectedVendorId || vendorId}${activeBankId ? `?bank=${activeBankId}` : ''}` : '/vendor-bank-details');
       }
     }
   };
@@ -2072,11 +2091,11 @@ export default function VendorBankDetailsFormPage({
         onConfirm={handleConfirmRemoveAttachment}
         title="Remove Attachment?"
         message={`Are you sure you want to remove "${attachmentToDelete?.documentName || attachmentToDelete?.fileName || 'this attachment'}"? ${attachmentToDelete &&
-            (attachmentToDelete.attachmentId || typeof attachmentToDelete.id === 'number') &&
-            !String(attachmentToDelete.id).startsWith('att_') &&
-            !String(attachmentToDelete.id).startsWith('temp_')
-            ? 'This file will be permanently deleted from the server when you save changes.'
-            : 'This file will be removed from the upload list.'
+          (attachmentToDelete.attachmentId || typeof attachmentToDelete.id === 'number') &&
+          !String(attachmentToDelete.id).startsWith('att_') &&
+          !String(attachmentToDelete.id).startsWith('temp_')
+          ? 'This file will be permanently deleted from the server when you save changes.'
+          : 'This file will be removed from the upload list.'
           }`}
         confirmText="Remove"
         cancelText="Cancel"
@@ -2089,10 +2108,11 @@ export default function VendorBankDetailsFormPage({
         onClose={() => setIsDiscardModalOpen(false)}
         onConfirm={() => {
           setIsDiscardModalOpen(false);
+          const activeBankId = editingId || bankParamId;
           if (embedded) {
-            navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank`);
+            navigate(`/vendors/${selectedVendorId || vendorId}?tab=bank${activeBankId ? `&bank=${activeBankId}` : ''}`);
           } else {
-            navigate('/vendor-bank-details');
+            navigate(selectedVendorId || vendorId ? `/vendor-bank-details/${selectedVendorId || vendorId}${activeBankId ? `?bank=${activeBankId}` : ''}` : '/vendor-bank-details');
           }
         }}
         title="Discard Unsaved Changes?"

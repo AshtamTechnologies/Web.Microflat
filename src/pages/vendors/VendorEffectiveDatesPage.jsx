@@ -175,11 +175,11 @@ export default function VendorEffectiveDatesPage() {
   const activeTab = searchParams.get('tab') === 'bank' ? 'bank' : 'profile';
 
   const { getVendorById, updateVendorVersions, updateVendor, toggleStatus, fetchVendorDetail } = useVendorsContext();
-  const { getBanksForVendor } = useVendorBankDetails();
+  const { getBanksForVendor, bankDetails } = useVendorBankDetails();
 
   const bankAccounts = useMemo(() => {
     return (id && getBanksForVendor ? getBanksForVendor(id) : []) || [];
-  }, [id, getBanksForVendor]);
+  }, [id, getBanksForVendor, bankDetails]);
 
   const [fetchedVendor, setFetchedVendor] = useState(null);
   const [fetchingVendor, setFetchingVendor] = useState(false);
@@ -208,12 +208,11 @@ export default function VendorEffectiveDatesPage() {
     let isMounted = true;
     if (id) {
       const isNewVendor = String(lastLoadedVendorIdRef.current) !== String(id);
+      lastLoadedVendorIdRef.current = id;
       if (isNewVendor) {
-        lastLoadedVendorIdRef.current = id;
         // Only clear previous vendor's versions & selected version state when switching to a DIFFERENT vendor
         setSelectedVersionId(null);
         setApiVersions(null);
-        setVersionDetailsMap({});
         modeInitializedRef.current = false;
         setPendingDeleteAttachmentIds([]);
         setAttachmentToDelete(null);
@@ -223,6 +222,9 @@ export default function VendorEffectiveDatesPage() {
           setFetchedVendor(cached);
         }
       }
+
+      // Always clear version details cache on mount so fresh data is loaded
+      setVersionDetailsMap({});
 
       if (fetchVendorDetail) {
         const cached = getVendorById(id);
@@ -245,7 +247,7 @@ export default function VendorEffectiveDatesPage() {
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, location.key]);
 
   const vendor = fetchedVendor || getVendorById(id);
 
@@ -675,13 +677,16 @@ export default function VendorEffectiveDatesPage() {
   versionDetailsMapRef.current = versionDetailsMap;
   const [isLoadingVersion, setIsLoadingVersion] = useState(false);
 
-  // Pre-seed version details cache with currentDetail from GET /api/vendors/{id}
+  // Pre-seed version details cache with currentDetail only if it contains operational data
   useEffect(() => {
-    if (vendor?.currentDetail?.vendorDetailId) {
+    if (
+      vendor?.currentDetail?.vendorDetailId &&
+      (vendor.currentDetail.contactPersonName || vendor.currentDetail.address1 || vendor.currentDetail.phoneNo)
+    ) {
       const cur = vendor.currentDetail;
       const curId = cur.vendorDetailId;
       setVersionDetailsMap((prev) => {
-        if (!prev[curId]) {
+        if (!prev[curId] || !prev[curId].contactPersonName) {
           return {
             ...prev,
             [curId]: {
@@ -710,7 +715,15 @@ export default function VendorEffectiveDatesPage() {
       versions[0]?.vendorDetailId ||
       versions[0]?.id;
     if (targetVerId) {
-      if (!versionDetailsMapRef.current[targetVerId]) {
+      const cached = versionDetailsMapRef.current[targetVerId];
+      // Only treat as loaded if it has full detailed fields
+      const hasFullDetail =
+        cached &&
+        (cached.contactPersonName !== undefined ||
+          cached.address1 !== undefined ||
+          cached.phoneNo !== undefined);
+
+      if (!hasFullDetail) {
         setIsLoadingVersion(true);
         vendorService
           .getVendorVersion(targetVerId)
@@ -2619,9 +2632,9 @@ export default function VendorEffectiveDatesPage() {
             icon={<IconVendor size={17} />}
             defaultOpen={true}
             className="overflow-hidden shadow-xs border-border"
-            headerClassName="flex-col xl:flex-row xl:items-center items-start"
+            headerClassName="flex-col xl:flex-row xl:items-center items-start gap-3"
             actions={
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap w-full xl:w-auto justify-start xl:justify-end">
                 {!isReadOnly && mode === 'VIEW' && selectedVersion && isDraftOrRejected && (
                   <>
                     {isDraftOrRejected && (
@@ -2712,11 +2725,11 @@ export default function VendorEffectiveDatesPage() {
             {/* ── Mode 1: VIEW MODE ── */}
             {!loadingVersions && mode === 'VIEW' && selectedVersion && (
               <div className="p-4 sm:p-5 space-y-3.5 divide-y divide-border/60">
-                {/* 1. Contact Information */}
+                {/* 1. Master & Contact Information */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                     <IconContact size={15} className="text-primary" />
-                    Contact Information
+                    Master & Contact Information
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2 pt-1">
                     <DetailField
@@ -2755,6 +2768,26 @@ export default function VendorEffectiveDatesPage() {
                       value={selectedVersion.website}
                       isLink
                       href={selectedVersion.website}
+                    />
+                    <DetailField
+                      label={
+                        <span className="flex items-center gap-1.5">
+                          <span>Ledger Name</span>
+                          <span className="text-3xs font-semibold px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">
+                            Auto-synced
+                          </span>
+                        </span>
+                      }
+                      value={vendor?.ledgerName || vendor?.tallyLedgerName || (vendor?.vendorName ? vendor.vendorName.toUpperCase() : '')}
+                      mono
+                    />
+                    <DetailField
+                      label="Accounting Group"
+                      value={vendor?.group || vendor?.tallyGroup}
+                    />
+                    <DetailField
+                      label="Sub-Group"
+                      value={vendor?.subGroup || vendor?.tallySubGroup}
                     />
                   </div>
                 </div>
@@ -2797,32 +2830,7 @@ export default function VendorEffectiveDatesPage() {
                   </div>
                 </div>
 
-                {/* 3. Accounting & Ledger Details */}
-                {(vendor?.ledgerName || vendor?.tallyLedgerName || vendor?.group || vendor?.tallyGroup || vendor?.subGroup || vendor?.tallySubGroup) && (
-                  <div className="space-y-2 pt-3.5">
-                    <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
-                      <IconBuilding2 size={15} className="text-primary" />
-                      Accounting & Ledger Details
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pt-1">
-                      <DetailField
-                        label="Ledger Name"
-                        value={vendor.ledgerName || vendor.tallyLedgerName}
-                        mono
-                      />
-                      <DetailField
-                        label="Accounting Group"
-                        value={vendor.group || vendor.tallyGroup}
-                      />
-                      <DetailField
-                        label="Sub-Group"
-                        value={vendor.subGroup || vendor.tallySubGroup}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. Registered Business Address */}
+                {/* 3. Registered Business Address */}
                 <div className="space-y-2 pt-3.5">
                   <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                     <IconLocation size={15} className="text-primary" />
@@ -2863,7 +2871,7 @@ export default function VendorEffectiveDatesPage() {
                   </div>
                 </div>
 
-                {/* 5. Procurement & Operational Notes */}
+                {/* 4. Procurement & Operational Notes */}
                 <div className="space-y-2 pt-3.5">
                   <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
                     <IconFileText size={15} className="text-primary" />
@@ -2940,7 +2948,7 @@ export default function VendorEffectiveDatesPage() {
                   </div>
                 </div>
 
-                {/* 6. Attachments & Supporting Documents (VIEW MODE — Click opens Screen Popup) */}
+                {/* 5. Attachments & Supporting Documents (VIEW MODE — Click opens Screen Popup) */}
                 <div className="space-y-2 pt-3.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider">
@@ -3048,11 +3056,11 @@ export default function VendorEffectiveDatesPage() {
                   </div>
                 )}
 
-                {/* Section 1: Effective Date & Contact Information */}
+                {/* Section 1: Master Details & Contact Information */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
                     <IconContact size={15} className="text-primary" />
-                    Contact Information
+                    Master Details & Contact Information
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -3149,7 +3157,7 @@ export default function VendorEffectiveDatesPage() {
                     </div>
 
                     {/* Website */}
-                    <div className="sm:col-span-2 lg:col-span-3">
+                    <div>
                       <Input
                         id="website"
                         name="website"
@@ -3158,6 +3166,62 @@ export default function VendorEffectiveDatesPage() {
                         placeholder="e.g. https://www.apexcastings.com"
                         value={formData.website}
                         onChange={handleInputChange}
+                      />
+                    </div>
+
+                    {/* Ledger Name (Disabled, Auto-synced) */}
+                    <div>
+                      <Input
+                        id="form-ledgerName"
+                        name="ledgerName"
+                        label={
+                          <span className="flex items-center gap-1.5">
+                            <span>Ledger Name</span>
+                            <span className="text-3xs font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                              Auto-synced
+                            </span>
+                          </span>
+                        }
+                        placeholder="Auto-derived from Vendor Name"
+                        value={formData.ledgerName || vendor?.ledgerName || vendor?.tallyLedgerName || (vendor?.vendorName ? vendor.vendorName.toUpperCase() : '')}
+                        onChange={handleInputChange}
+                        error={formErrors.ledgerName}
+                        maxLength={200}
+                        disabled
+                        className="!text-heading !opacity-100 !bg-surface/80 font-medium font-mono"
+                        hint="Auto-derived from Vendor Name"
+                      />
+                    </div>
+
+                    {/* Accounting Group */}
+                    <div>
+                      <SearchableSelect
+                        id="form-group"
+                        name="group"
+                        label="Accounting Group"
+                        placeholder="Select group..."
+                        searchPlaceholder="Search group..."
+                        options={ACCOUNTING_GROUP_OPTIONS}
+                        value={formData.group || ''}
+                        onChange={handleInputChange}
+                        error={formErrors.group}
+                      />
+                    </div>
+
+                    {/* Sub-Group */}
+                    <div>
+                      <SearchableSelect
+                        id="form-subGroup"
+                        name="subGroup"
+                        label="Sub-Group"
+                        placeholder={!formData.group ? 'Select Accounting Group first...' : 'Select sub-group...'}
+                        searchPlaceholder="Search sub-group..."
+                        options={formData.group ? formSubGroupOptions : []}
+                        value={formData.subGroup || ''}
+                        onChange={handleInputChange}
+                        disabled={!formData.group}
+                        error={formErrors.subGroup}
+                        hint={!formData.group ? 'Requires Accounting Group selection' : undefined}
                       />
                     </div>
                   </div>
@@ -3259,63 +3323,6 @@ export default function VendorEffectiveDatesPage() {
                   </div>
                 </div>
 
-                {/* Section 2.5: Accounting & Ledger Details */}
-                <div className="space-y-4 pt-2">
-                  <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
-                    <IconBuilding2 size={15} className="text-primary" />
-                    Accounting & Ledger Details
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {/* Ledger Name */}
-                    <div>
-                      <Input
-                        id="form-ledgerName"
-                        name="ledgerName"
-                        label="Ledger Name"
-                        placeholder="e.g. APEX PRECISION CASTINGS PVT LTD"
-                        value={formData.ledgerName || ''}
-                        onChange={handleInputChange}
-                        error={formErrors.ledgerName}
-                        maxLength={200}
-                        hint="Unique accounting ledger name (max 200 chars)"
-                      />
-                    </div>
-
-                    {/* Accounting Group */}
-                    <div>
-                      <SearchableSelect
-                        id="form-group"
-                        name="group"
-                        label="Accounting Group"
-                        placeholder="Select group..."
-                        searchPlaceholder="Search group..."
-                        options={ACCOUNTING_GROUP_OPTIONS}
-                        value={formData.group || ''}
-                        onChange={handleInputChange}
-                        error={formErrors.group}
-                      />
-                    </div>
-
-                    {/* Sub-Group */}
-                    <div>
-                      <SearchableSelect
-                        id="form-subGroup"
-                        name="subGroup"
-                        label="Sub-Group"
-                        placeholder={!formData.group ? 'Select Accounting Group first...' : 'Select sub-group...'}
-                        searchPlaceholder="Search sub-group..."
-                        options={formData.group ? formSubGroupOptions : []}
-                        value={formData.subGroup || ''}
-                        onChange={handleInputChange}
-                        disabled={!formData.group}
-                        error={formErrors.subGroup}
-                        hint={!formData.group ? 'Requires Accounting Group selection' : undefined}
-                      />
-                    </div>
-                  </div>
-                </div>
-
                 {/* Section 3: Address Details */}
                 <div className="space-y-4 pt-2">
                   <div className="flex items-center gap-2 text-heading font-semibold text-xs uppercase tracking-wider pb-2 border-b border-border/60">
@@ -3377,12 +3384,13 @@ export default function VendorEffectiveDatesPage() {
                     </div>
 
                     {/* Address Line 1 */}
-                    <div className="sm:col-span-2 lg:col-span-3">
-                      <Input
+                    <div>
+                      <Textarea
                         id="address1"
                         name="address1"
                         label="Address Line 1"
                         placeholder="e.g. Plot 45, GIDC Industrial Estate Phase II"
+                        rows={2}
                         value={formData.address1}
                         onChange={handleInputChange}
                         error={formErrors.address1}
@@ -3391,12 +3399,13 @@ export default function VendorEffectiveDatesPage() {
                     </div>
 
                     {/* Address Line 2 */}
-                    <div className="sm:col-span-2 lg:col-span-2">
-                      <Input
+                    <div>
+                      <Textarea
                         id="address2"
                         name="address2"
-                        label="Address Line 2"
+                        label="Address Line 2 (Optional)"
                         placeholder="e.g. Near Anand Cross Road"
+                        rows={2}
                         value={formData.address2}
                         onChange={handleInputChange}
                       />

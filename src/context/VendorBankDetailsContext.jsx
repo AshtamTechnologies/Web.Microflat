@@ -6,12 +6,12 @@ import { createContext, useContext, useState, useCallback, useMemo, useRef, useE
 import toast from 'react-hot-toast';
 import { INITIAL_VENDOR_BANK_DETAILS } from '../mocks/vendorBankDetails';
 import { useVendorsContext } from './VendorsContext';
-import { vendorService } from '../services';
+import { vendorService, isMockApi } from '../services';
 
 const VendorBankDetailsContext = createContext(null);
 
 export function VendorBankDetailsProvider({ children }) {
-  const [bankDetails, setBankDetails] = useState(INITIAL_VENDOR_BANK_DETAILS);
+  const [bankDetails, setBankDetails] = useState(isMockApi ? INITIAL_VENDOR_BANK_DETAILS : []);
   const [loading, setLoading] = useState(false);
   const { allVendors = [], getVendorById } = useVendorsContext();
 

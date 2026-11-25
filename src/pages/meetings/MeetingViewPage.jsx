@@ -269,8 +269,8 @@ export default function MeetingViewPage() {
 
       {/* 2-Column Responsive Workspace Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* LEFT COLUMN: Agenda, Outcomes & Attendees (lg:col-span-7 xl:col-span-7) */}
-        <div className="lg:col-span-7 xl:col-span-7 space-y-5">
+        {/* LEFT COLUMN: Agenda, Outcomes, Attendees & Attachments (lg:col-span-7 xl:col-span-8) */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-5">
           {/* Section: Minutes of Meeting (MoM) & Outcomes Card (if Completed) */}
           {isCompleted && meeting.remarks && (
             <Card padding="md" className="border-l-4 border-l-success shadow-sm">
@@ -386,10 +386,23 @@ export default function MeetingViewPage() {
               readOnly={true}
             />
           </Card>
+
+          {/* Section 3: Attachments & Documents Card */}
+          <Card padding="md">
+            <MeetingAttachmentManager
+              attachments={meeting.attachments || []}
+              onUploadDirect={handleUploadAttachment}
+              onDelete={handleDeleteAttachment}
+              onDownload={handleDownloadAttachment}
+              documentTypes={documentTypes}
+              canUpload={!isCancelled}
+              readOnly={isCancelled}
+            />
+          </Card>
         </div>
 
-        {/* RIGHT COLUMN / SIDEBAR: Schedule, Logistics, Context & Attachments (lg:col-span-5 xl:col-span-5) */}
-        <div className="lg:col-span-5 xl:col-span-5 space-y-5">
+        {/* RIGHT COLUMN / SIDEBAR: Schedule, Logistics & Context (lg:col-span-5 xl:col-span-4) */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-5">
           {/* Card 1: Schedule & Logistics */}
           <Card padding="md">
             <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-border">
@@ -506,19 +519,6 @@ export default function MeetingViewPage() {
                 }
               />
             </div>
-          </Card>
-
-          {/* Card 3: Attachments Card */}
-          <Card padding="md">
-            <MeetingAttachmentManager
-              attachments={meeting.attachments || []}
-              onUploadDirect={handleUploadAttachment}
-              onDelete={handleDeleteAttachment}
-              onDownload={handleDownloadAttachment}
-              documentTypes={documentTypes}
-              canUpload={!isCancelled}
-              readOnly={isCancelled}
-            />
           </Card>
         </div>
       </div>

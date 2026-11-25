@@ -65,6 +65,7 @@ import * as realTaxConfigs from './taxConfigs/taxConfigsService';
 import * as mockTaxConfigs from './taxConfigs/taxConfigsService.mock';
 
 import * as realProducts from './products/productService';
+import { projectService } from './projects/projectService';
 
 import * as delegationService from './delegation/delegationService';
 
@@ -135,4 +136,5 @@ export const inquiryService = useMock ? mockInquiries : realInquiries;
 export { delegationService };
 export { geographyService };
 export { meetingsService };
+export { projectService };
 export const isMockApi = useMock;

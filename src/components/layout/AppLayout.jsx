@@ -179,26 +179,12 @@ export default function AppLayout() {
           {/* ── Top bar ── */}
           <header
             className={[
-              'sticky top-0 z-20 flex items-center gap-3 sm:gap-4',
-              'h-14 px-4 sm:px-6',
+              'sticky top-0 z-20 flex items-center gap-2.5 sm:gap-4',
+              'h-14 px-3 sm:px-6',
               'bg-bg/90 backdrop-blur-md border-b border-border',
             ].join(' ')}
           >
-            {/* Mobile Brand Logo — shown first on mobile */}
-            <Link
-              to="/dashboard"
-              title="Go to Dashboard"
-              className="lg:hidden flex items-center shrink-0 pr-0.5"
-            >
-              <img
-                src="/microsidelogo.png"
-                alt="Micro-Flat Datums"
-                className="w-7 h-7 object-contain"
-                draggable={false}
-              />
-            </Link>
-
-            {/* Hamburger — mobile/tablet only */}
+            {/* Hamburger — mobile/tablet only (placed first for standard mobile ergonomics) */}
             <button
               type="button"
               id="mobile-menu-button"
@@ -206,7 +192,7 @@ export default function AppLayout() {
               aria-expanded={mobileOpen}
               onClick={() => setMobileOpen((v) => !v)}
               className={[
-                'lg:hidden p-1.5 rounded-lg text-text-muted',
+                'lg:hidden p-1.5 rounded-lg text-text-muted shrink-0',
                 'hover:bg-surface hover:text-text transition-colors duration-150',
                 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary',
               ].join(' ')}
@@ -217,6 +203,20 @@ export default function AppLayout() {
                 <IconMenu size={20} aria-hidden="true" />
               )}
             </button>
+
+            {/* Mobile Brand Logo */}
+            <Link
+              to="/dashboard"
+              title="Go to Dashboard"
+              className="lg:hidden flex items-center shrink-0 pr-1"
+            >
+              <img
+                src="/microsidelogo.png"
+                alt="Micro-Flat Datums"
+                className="w-6 h-6 object-contain"
+                draggable={false}
+              />
+            </Link>
 
             {/* Desktop Expand Sidebar Button — shown in top bar when collapsed */}
             {collapsed && (
@@ -232,7 +232,7 @@ export default function AppLayout() {
             )}
 
             {/* Page title */}
-            <h1 className="text-base font-semibold text-heading truncate">{title}</h1>
+            <h1 className="text-sm sm:text-base font-semibold text-heading truncate min-w-0">{title}</h1>
 
             {/* Header Right Actions: My Queue shortcut + Notifications Bell */}
             <div className="ml-auto flex items-center gap-2 sm:gap-3">
