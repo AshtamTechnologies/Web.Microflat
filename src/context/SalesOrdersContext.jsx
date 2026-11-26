@@ -12,35 +12,14 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import {
-  INITIAL_SALES_ORDERS,
-  calculateSalesOrderTotals,
-  getNextOrderStatuses,
-} from '../mocks/salesOrders';
 import { orderConfirmationService, isMockApi } from '../services';
+import { getNextOrderStatuses, calculateSalesOrderTotals } from '../models/salesOrders/orderConfirmationModel';
 import { triggerPdfDownload } from '../utils/fileHelpers';
 
 const SalesOrdersContext = createContext(null);
-const STORAGE_KEY = 'microflat_sales_orders_data';
 
 export function SalesOrdersProvider({ children }) {
-  const [salesOrders, setSalesOrders] = useState(() => {
-    if (isMockApi) {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          return JSON.parse(saved);
-        }
-      } catch (e) {
-        console.error('Failed to load sales orders from localStorage:', e);
-      }
-      return INITIAL_SALES_ORDERS;
-    }
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {}
-    return [];
-  });
+  const [salesOrders, setSalesOrders] = useState([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [lookups, setLookups] = useState({
@@ -53,16 +32,6 @@ export function SalesOrdersProvider({ children }) {
     orderSources: [],
   });
   const [nextNumberPreview, setNextNumberPreview] = useState('');
-
-  // Persist to localStorage only in mock mode
-  useEffect(() => {
-    if (!isMockApi) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(salesOrders));
-    } catch (e) {
-      console.error('Failed to save sales orders to localStorage:', e);
-    }
-  }, [salesOrders]);
 
   /**
    * Refreshes sales orders list from backend API (or mock).
@@ -105,8 +74,11 @@ export function SalesOrdersProvider({ children }) {
           setLookups(lookupData.value);
         }
 
-        if (listRes.status === 'fulfilled' && listRes.value?.items) {
-          setSalesOrders(listRes.value.items);
+        if (listRes.status === 'fulfilled' && listRes.value) {
+          const rawItems = Array.isArray(listRes.value?.items)
+            ? listRes.value.items
+            : (Array.isArray(listRes.value) ? listRes.value : []);
+          setSalesOrders(rawItems);
         }
       } catch (err) {
         console.warn('API initialization for sales orders encountered an error:', err);
@@ -135,6 +107,27 @@ export function SalesOrdersProvider({ children }) {
   );
 
   /**
+   * Resolves a numeric database ID whether given a number, numeric string, or document series number.
+   */
+  const resolveNumericId = useCallback(
+    (input) => {
+      if (!input) return null;
+      if (typeof input === 'number' && Number.isFinite(input)) return input;
+      if (typeof input === 'string' && /^\d+$/.test(input.trim())) return Number(input.trim());
+      const matched = salesOrders.find(
+        (o) =>
+          String(o.id).toLowerCase() === String(input).toLowerCase() ||
+          String(o.orderConfirmationNo).toLowerCase() === String(input).toLowerCase()
+      );
+      if (matched?.id && (typeof matched.id === 'number' || /^\d+$/.test(String(matched.id)))) {
+        return Number(matched.id);
+      }
+      return null;
+    },
+    [salesOrders]
+  );
+
+  /**
    * Asynchronous fetch from API for full order detail (including lines, documents, and email logs).
    */
   const fetchSalesOrderById = useCallback(
@@ -146,7 +139,19 @@ export function SalesOrdersProvider({ children }) {
       }
 
       try {
-        const detail = await orderConfirmationService.getOrderConfirmationById(id);
+        let targetId = resolveNumericId(id);
+        if (!targetId && typeof id === 'string') {
+          // If id is a non-numeric document series string (e.g. OC-2026-000001) not found in state, resolve it
+          const searchResult = await orderConfirmationService.listOrderConfirmations({ search: id.trim() });
+          const foundItem = searchResult?.items?.find(
+            (item) => String(item.orderConfirmationNo).toLowerCase() === id.trim().toLowerCase()
+          ) || searchResult?.items?.[0];
+          if (foundItem?.id) {
+            targetId = foundItem.id;
+          }
+        }
+        targetId = targetId || id;
+        const detail = await orderConfirmationService.getOrderConfirmationById(targetId);
         if (detail) {
           setSalesOrders((prev) => {
             const idx = prev.findIndex(
@@ -246,6 +251,34 @@ export function SalesOrdersProvider({ children }) {
           setIsLoading(true);
           const createdApiOrder = await orderConfirmationService.createOrderConfirmation(payload);
 
+          // Upload any attached documents with files
+          let uploadedDocs = [];
+          if (Array.isArray(payload.documents) && payload.documents.length > 0 && createdApiOrder?.id) {
+            const uploadPromises = payload.documents
+              .filter((doc) => doc?.file instanceof Blob || doc?.file instanceof File)
+              .map(async (doc) => {
+                try {
+                  const uploaded = await orderConfirmationService.uploadOrderConfirmationDocument(
+                    createdApiOrder.id,
+                    doc.file,
+                    doc.documentTypeId || 1,
+                    doc.remarks || ''
+                  );
+                  return uploaded;
+                } catch (docErr) {
+                  console.warn(`Failed to upload attached document "${doc.fileName || doc.file?.name}":`, docErr);
+                  return null;
+                }
+              });
+
+            if (uploadPromises.length > 0) {
+              const uploadResults = await Promise.allSettled(uploadPromises);
+              uploadedDocs = uploadResults
+                .filter((r) => r.status === 'fulfilled' && r.value)
+                .map((r) => r.value);
+            }
+          }
+
           // If user requested initial status as 'Confirmed', move status
           let finalOrder = createdApiOrder;
           if (status === 'Confirmed' && createdApiOrder?.id) {
@@ -257,6 +290,13 @@ export function SalesOrdersProvider({ children }) {
             } catch (statusErr) {
               console.warn('Order created as Draft, but confirming it failed:', statusErr);
             }
+          }
+
+          if (uploadedDocs.length > 0) {
+            finalOrder = {
+              ...finalOrder,
+              documents: [...uploadedDocs, ...(finalOrder.documents || [])],
+            };
           }
 
           // Prepend to state
@@ -353,16 +393,45 @@ export function SalesOrdersProvider({ children }) {
    */
   const updateSalesOrder = useCallback(
     async (id, payload) => {
-      const isNumericBackendId = typeof id === 'number' || /^\d+$/.test(String(id));
+      const targetNumericId = resolveNumericId(id);
 
-      if (!isMockApi && isNumericBackendId) {
+      if (!isMockApi && targetNumericId) {
         try {
           setIsLoading(true);
-          let updatedApiOrder = await orderConfirmationService.updateOrderConfirmation(id, payload);
+          let updatedApiOrder = await orderConfirmationService.updateOrderConfirmation(targetNumericId, payload);
+
+          // Upload any newly attached documents with files in edit mode
+          if (Array.isArray(payload.documents) && payload.documents.length > 0) {
+            const newDocUploads = payload.documents
+              .filter((doc) => doc?.file instanceof Blob || doc?.file instanceof File)
+              .map(async (doc) => {
+                try {
+                  return await orderConfirmationService.uploadOrderConfirmationDocument(
+                    targetNumericId,
+                    doc.file,
+                    doc.documentTypeId || 1,
+                    doc.remarks || ''
+                  );
+                } catch (docErr) {
+                  console.warn(`Failed to upload attached document "${doc.fileName || doc.file?.name}":`, docErr);
+                  return null;
+                }
+              });
+
+            if (newDocUploads.length > 0) {
+              await Promise.allSettled(newDocUploads);
+              try {
+                const refreshedDocs = await orderConfirmationService.getOrderConfirmationDocuments(targetNumericId);
+                if (Array.isArray(refreshedDocs)) {
+                  updatedApiOrder = { ...updatedApiOrder, documents: refreshedDocs };
+                }
+              } catch (e) {}
+            }
+          }
 
           if (payload.status === 'Confirmed' && updatedApiOrder.status !== 'Confirmed') {
             updatedApiOrder = await orderConfirmationService.updateOrderConfirmationStatus(
-              id,
+              targetNumericId,
               'Confirmed'
             );
           }
@@ -483,12 +552,12 @@ export function SalesOrdersProvider({ children }) {
    */
   const changeSalesOrderStatus = useCallback(
     async (id, newStatus, remarks = '') => {
-      const isNumericBackendId = typeof id === 'number' || /^\d+$/.test(String(id));
+      const targetNumericId = resolveNumericId(id);
 
-      if (!isMockApi && isNumericBackendId) {
+      if (!isMockApi && targetNumericId) {
         try {
           setIsLoading(true);
-          const updated = await orderConfirmationService.updateOrderConfirmationStatus(id, newStatus);
+          const updated = await orderConfirmationService.updateOrderConfirmationStatus(targetNumericId, newStatus);
           setSalesOrders((prev) =>
             prev.map((o) =>
               String(o.id).toLowerCase() === String(id).toLowerCase() ||
@@ -543,13 +612,13 @@ export function SalesOrdersProvider({ children }) {
    */
   const uploadSalesOrderDocument = useCallback(
     async (id, docPayload) => {
-      const isNumericBackendId = typeof id === 'number' || /^\d+$/.test(String(id));
+      const targetNumericId = resolveNumericId(id);
 
-      if (!isMockApi && isNumericBackendId && docPayload?.file) {
+      if (!isMockApi && targetNumericId && docPayload?.file) {
         try {
           setIsLoading(true);
           const uploaded = await orderConfirmationService.uploadOrderConfirmationDocument(
-            id,
+            targetNumericId,
             docPayload.file,
             docPayload.documentTypeId || 1,
             docPayload.remarks || ''
@@ -634,6 +703,7 @@ export function SalesOrdersProvider({ children }) {
         } catch (err) {
           console.error('Failed to download document from API:', err);
           toast.error('Failed to download document from server.');
+          return;
         }
       }
       toast(`Downloading document "${fileName}"`, { icon: '📄' });
@@ -686,13 +756,15 @@ export function SalesOrdersProvider({ children }) {
    */
   const sendSalesOrderMail = useCallback(
     async (id, mailPayload) => {
-      const isNumericBackendId = typeof id === 'number' || /^\d+$/.test(String(id));
+      const targetNumericId = resolveNumericId(id);
 
-      if (!isMockApi && isNumericBackendId) {
+      if (!isMockApi && targetNumericId) {
         try {
           setIsLoading(true);
-          await orderConfirmationService.sendOrderConfirmationEmail(id, {
+          await orderConfirmationService.sendOrderConfirmationEmail(targetNumericId, {
+            toAddress: mailPayload.to,
             toEmail: mailPayload.to,
+            ccAddress: mailPayload.cc || '',
             ccEmail: mailPayload.cc || '',
             subject: mailPayload.subject,
             body: mailPayload.body,
@@ -700,6 +772,7 @@ export function SalesOrdersProvider({ children }) {
         } catch (apiErr) {
           console.error('Failed to send email via API:', apiErr);
           toast.error(apiErr?.message || 'Failed to send email through server.');
+          return false;
         } finally {
           setIsLoading(false);
         }
@@ -733,6 +806,7 @@ export function SalesOrdersProvider({ children }) {
         })
       );
       toast.success(`Email sent to ${mailPayload.to}`);
+      return true;
     },
     []
   );

@@ -5,7 +5,7 @@
  * Aligned with Frontend-API-Guide.md §5.4g.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   IconBack,
@@ -38,13 +38,29 @@ import {
   formatCurrency,
   getOrderStatusBadgeVariant,
   TAX_TREATMENTS,
-} from '../../mocks/salesOrders';
+} from '../../models/salesOrders/orderConfirmationModel';
 import { formatDate } from '../../utils/dateUtils';
 import { isHtmlMarkup } from '../../utils/htmlUtils';
+import { triggerPdfDownload } from '../../utils/fileHelpers';
 import useColumnResize from '../../hooks/useColumnResize';
 import ChangeOrderStatusModal from './components/ChangeOrderStatusModal';
 import UploadOrderDocumentModal from './components/UploadOrderDocumentModal';
 import SendOrderMailModal from './components/SendOrderMailModal';
+
+function formatAddressForDisplay(a) {
+  if (!a) return '—';
+  if (typeof a === 'string') return a || '—';
+  const parts = [
+    a.address1 || a.addressLine1 || a.address,
+    a.address2 || a.addressLine2,
+    a.city,
+    a.stateName || a.state,
+    a.zipCode || a.pincode,
+  ].filter(Boolean);
+  const typeTag = a.addressType ? `${a.addressType}: ` : '';
+  const labelTag = a.addressLabel && a.addressLabel !== a.addressType ? `(${a.addressLabel}) ` : '';
+  return `${typeTag}${labelTag}${parts.join(', ')}`.trim() || parts.join(', ') || '—';
+}
 
 export default function SalesOrderViewPage() {
   const { id } = useParams();
@@ -83,13 +99,31 @@ export default function SalesOrderViewPage() {
   const cachedOrder = getSalesOrderById(id);
   const order = orderDetail || cachedOrder;
 
+  const reloadOrderDetail = useCallback(async () => {
+    if (!id || !fetchSalesOrderById) return;
+    try {
+      const res = await fetchSalesOrderById(id);
+      if (res) {
+        setOrderDetail(res);
+      }
+    } catch (err) {
+      console.warn('Failed to reload order detail:', err);
+    }
+  }, [id, fetchSalesOrderById]);
+
+  async function handleDeleteDocument(docId) {
+    if (!order?.id) return;
+    await deleteSalesOrderDocument?.(order.id, docId);
+    reloadOrderDetail();
+  }
+
   const [activeTab, setActiveTab] = useState('overview');
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [isMailModalOpen, setIsMailModalOpen] = useState(false);
 
   function handleDownloadDocument(doc) {
-    if (doc?.downloadUrl) {
+    if (doc?.downloadUrl && (doc.downloadUrl.startsWith('blob:') || doc.downloadUrl.startsWith('data:'))) {
       const link = document.createElement('a');
       link.href = doc.downloadUrl;
       link.target = '_blank';
@@ -174,9 +208,10 @@ export default function SalesOrderViewPage() {
   ];
 
   const canUploadDocs = order.status !== 'Cancelled';
-  const canChangeStatus = Array.isArray(order.nextStatuses)
-    ? order.nextStatuses.length > 0
-    : Boolean(order.nextStatuses?.length);
+  const canChangeStatus =
+    (Array.isArray(order.nextStatuses) && order.nextStatuses.length > 0) ||
+    order.status === 'Draft' ||
+    order.status === 'Confirmed';
 
   const isDirect = Boolean(order.orderSource === true || order.isDirectOrder || !order.quotationId);
   const sourceLabel = order.orderSourceName || (isDirect ? 'Direct' : 'Quotation');
@@ -255,7 +290,22 @@ export default function SalesOrderViewPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => { }}
+              onClick={() => {
+                triggerPdfDownload(
+                  `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                  {
+                    title: 'Order Confirmation',
+                    documentType: 'Sales Order Confirmation',
+                    fileName: `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                    quotationNo: order.quotationNo,
+                    clientName: order.clientName,
+                    poNumber: order.clientPoNo,
+                    expectedDeliveryDate: order.expectedDeliveryDate,
+                    totalAmount: `${order.currency} ${order.grandTotal}`,
+                    remarks: `Status: ${order.status} | Source: ${order.orderSourceName}`,
+                  }
+                );
+              }}
               icon={<IconDownload size={14} />}
             >
               Download PDF
@@ -420,7 +470,7 @@ export default function SalesOrderViewPage() {
                 <DetailField
                   label="Billing / Shipping Address"
                   className="sm:col-span-2"
-                  value={order.clientAddress || '—'}
+                  value={formatAddressForDisplay(order.clientAddress)}
                 />
               </div>
             </Card>
@@ -526,7 +576,7 @@ export default function SalesOrderViewPage() {
                         </Td>
                         <Td className="text-center">
                           <Badge variant="neutral" size="sm">
-                            {item.taxPercent ?? 18}%
+                            {item.taxPercent !== undefined && item.taxPercent !== null ? `${item.taxPercent}%` : '0%'}
                           </Badge>
                         </Td>
                         <Td className="text-right font-mono font-bold text-xs text-heading">
@@ -560,7 +610,16 @@ export default function SalesOrderViewPage() {
                     </span>
                   </div>
                 )}
-                {order.taxTreatment === 'INTRA_STATE' ? (
+                {Array.isArray(order.taxes) && order.taxes.length > 0 ? (
+                  order.taxes.map((t, idx) => (
+                    <div key={t.id || idx} className="flex justify-between text-text-muted">
+                      <span>{t.taxName}{t.taxPercent !== undefined && t.taxPercent !== null ? ` (${t.taxPercent}%)` : ''}</span>
+                      <span className="font-mono">
+                        {formatCurrency(t.taxAmount, order.currency)}
+                      </span>
+                    </div>
+                  ))
+                ) : order.taxTreatment === 'INTRA_STATE' ? (
                   <>
                     <div className="flex justify-between text-text-muted">
                       <span>CGST</span>
@@ -578,7 +637,7 @@ export default function SalesOrderViewPage() {
                 ) : (
                   <div className="flex justify-between text-text-muted">
                     <span>
-                      {order.taxTreatment === 'INTER_STATE' ? 'IGST' : 'Tax (0%)'}
+                      {order.taxTreatment === 'INTER_STATE' || order.totalTax > 0 ? 'IGST' : 'Tax (0%)'}
                     </span>
                     <span className="font-mono">
                       {formatCurrency(order.totalTax, order.currency)}
@@ -608,9 +667,9 @@ export default function SalesOrderViewPage() {
                         : typeof order.paymentTerms === 'string'
                           ? (order.paymentTerms.includes(',') ? order.paymentTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.paymentTerms.trim()])
                           : [order.paymentTerms]
-                      ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
+                      ).filter((t) => t && !isHtmlMarkup(t)).map((t, idx) => (
                         <Badge key={idx} variant="neutral" size="xs">
-                          {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}
+                          {t && typeof t === 'object' ? (t.termCode || t.termName || t.name || JSON.stringify(t)) : String(t || '—')}
                         </Badge>
                       ))}
                     </div>
@@ -631,9 +690,9 @@ export default function SalesOrderViewPage() {
                         : typeof order.deliveryTerms === 'string'
                           ? (order.deliveryTerms.includes(',') ? order.deliveryTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.deliveryTerms.trim()])
                           : [order.deliveryTerms]
-                      ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
+                      ).filter((t) => t && !isHtmlMarkup(t)).map((t, idx) => (
                         <Badge key={idx} variant="neutral" size="xs">
-                          {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}
+                          {t && typeof t === 'object' ? (t.termCode || t.termName || t.name || JSON.stringify(t)) : String(t || '—')}
                         </Badge>
                       ))}
                     </div>
@@ -761,7 +820,7 @@ export default function SalesOrderViewPage() {
                         {canUploadDocs && (
                           <button
                             type="button"
-                            onClick={() => deleteSalesOrderDocument(order.id, doc.id)}
+                            onClick={() => handleDeleteDocument(doc.id)}
                             className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
                             title="Delete document"
                           >
@@ -853,18 +912,21 @@ export default function SalesOrderViewPage() {
         isOpen={isStatusModalOpen}
         onClose={() => setIsStatusModalOpen(false)}
         order={order}
+        onSuccess={reloadOrderDetail}
       />
 
       <UploadOrderDocumentModal
         isOpen={isDocModalOpen}
         onClose={() => setIsDocModalOpen(false)}
         order={order}
+        onSuccess={reloadOrderDetail}
       />
 
       <SendOrderMailModal
         isOpen={isMailModalOpen}
         onClose={() => setIsMailModalOpen(false)}
         order={order}
+        onSuccess={reloadOrderDetail}
       />
     </div>
   );

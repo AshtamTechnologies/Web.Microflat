@@ -27,13 +27,27 @@ export function quotationLineItemFromApi(dto = {}) {
   const lineTotal = Number(dto.lineTotal) || amount + otherCharges + taxAmount;
 
   return {
+    ...dto,
     id: dto.id || `line-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     quotationLineItemId: dto.id,
-    productId: dto.productId || null,
-    productCode: dto.productCode || dto.itemCode || '',
-    productName: dto.productName || dto.itemName || '',
+    productId: dto.productId || dto.ProductId || null,
+    productCode: dto.productCode || dto.itemCode || dto.ProductCode || dto.ItemCode || '',
+    productName: dto.productName || dto.itemName || dto.ProductName || dto.ItemName || '',
+    categoryId: dto.categoryId || dto.CategoryId || null,
+    categoryName: dto.categoryName || dto.CategoryName || '',
+    variantId: dto.variantId || dto.productVariantId || dto.VariantId || null,
+    variantName: dto.variantName || dto.VariantName || '',
+    standardCode: dto.standardCode || dto.standards || dto.StandardCode || '',
+    standards: dto.standards || dto.standardCode || dto.StandardCode || '',
+    standardId: dto.standardId || dto.StandardId || null,
+    gradeCode: dto.gradeCode || dto.grade || dto.GradeCode || '',
+    grade: dto.grade || dto.gradeCode || dto.GradeCode || '',
+    gradeId: dto.gradeId || dto.GradeId || null,
+    flatness: dto.flatness || dto.Flatness || '',
+    itemCode: dto.itemCode || dto.productCode || dto.ItemCode || '',
     description: dto.description || dto.specification || '',
     specification: dto.specification || dto.description || '',
+    technicalDetails: dto.technicalDetails || dto.specification || '',
     uom: dto.uom || dto.unit || 'Nos',
     quantity,
     rate,
@@ -45,6 +59,8 @@ export function quotationLineItemFromApi(dto = {}) {
     taxAmount,
     lineTotal,
     remarks: dto.remarks || '',
+    options: Array.isArray(dto.options) ? dto.options : (dto.options ? [dto.options] : []),
+    rateSource: dto.rateSource || 'Manual',
   };
 }
 
@@ -129,13 +145,17 @@ export function quotationListItemFromApi(dto = {}) {
   const subtotal = Number(dto.subTotal ?? dto.subtotal ?? dto.latestRevision?.subTotal) || 0;
   const clientName = dto.clientName || dto.client?.companyName || dto.client?.clientName || dto.customerName || '';
 
+  const isPoStatus = String(dto.status || '').toLowerCase().replace(/[\s_-]/g, '') === 'poreceived';
+  const poReceived = Boolean(dto.poReceived || dto.isPoReceived || dto.hasPo || dto.poNumber || isPoStatus);
+  const status = isPoStatus ? 'PO Received' : (dto.status || 'Draft');
+
   return {
     id: dto.id,
     quotationNo: dto.quotationNo || '',
     quotationDate: dto.revisionDate || dto.quotationDate ? String(dto.revisionDate || dto.quotationDate).slice(0, 10) : '',
     currentRevision: dto.currentRevision ?? dto.revisionNo ?? 0,
     revisionNo: dto.currentRevision ?? dto.revisionNo ?? 0,
-    status: dto.status || 'Draft',
+    status,
     inquiryId: dto.inquiryId,
     inquiryNo: dto.inquiryNo || '',
     clientId: dto.clientId || dto.client?.id || null,
@@ -147,12 +167,12 @@ export function quotationListItemFromApi(dto = {}) {
     subtotal,
     grandTotal,
     totalAmount: grandTotal,
-    poReceived: Boolean(dto.poReceived || dto.poNumber),
+    poReceived,
     poNumber: dto.poNumber || '',
     poReceivedDate: dto.poReceivedDate ? String(dto.poReceivedDate).slice(0, 10) : '',
     orderConfirmationCount: Number(dto.orderConfirmationCount) || 0,
-    isEditable: dto.isEditable ?? (dto.status === 'Draft'),
-    canRevise: dto.canRevise ?? (dto.status === 'Sent' || dto.status === 'In Negotiation'),
+    isEditable: dto.isEditable ?? (status === 'Draft'),
+    canRevise: dto.canRevise ?? !poReceived,
     nextStatuses: Array.isArray(dto.nextStatuses) ? dto.nextStatuses : [],
     createdOn: dto.createdOn || '',
     lastUpdatedAt: dto.lastUpdatedOn || dto.lastUpdatedAt || '',
@@ -193,7 +213,8 @@ export function quotationDetailFromApi(dto = {}) {
   if (!dto) return null;
 
   const latestRev = dto.latestRevision || {};
-  const status = dto.status || latestRev.status || 'Draft';
+  const isPoStatus = String(dto.status || latestRev.status || '').toLowerCase().replace(/[\s_-]/g, '') === 'poreceived';
+  const initialStatus = isPoStatus ? 'PO Received' : (dto.status || latestRev.status || 'Draft');
   const grandTotal = Number(latestRev.totalAmount ?? dto.totalAmount ?? dto.grandTotal) || 0;
   const subtotal = Number(latestRev.subTotal ?? dto.subTotal ?? dto.subtotal) || 0;
   const otherCharges = Number(latestRev.otherCharges ?? dto.otherCharges) || 0;
@@ -311,7 +332,7 @@ export function quotationDetailFromApi(dto = {}) {
         revisionNo: dto.currentRevision ?? latestRev.revisionNo ?? 0,
         revisionDate: (latestRev.revisionDate || dto.createdOn ? String(latestRev.revisionDate || dto.createdOn).slice(0, 10) : ''),
         revisionReason: latestRev.revisionReason || 'Initial quotation',
-        status,
+        status: initialStatus,
         subtotal,
         totalTax,
         grandTotal,
@@ -335,6 +356,9 @@ export function quotationDetailFromApi(dto = {}) {
       ? `/api/quotation-attachments/${dto.poAttachments[0].id}/download`
       : null,
   } : null);
+
+  const poReceived = Boolean(dto.poReceived || dto.isPoReceived || dto.hasPo || poDetails || isPoStatus);
+  const resolvedStatus = isPoStatus || poReceived ? 'PO Received' : initialStatus;
 
   return {
     id: dto.id,
@@ -360,7 +384,7 @@ export function quotationDetailFromApi(dto = {}) {
     termsAndConditions: dto.termsAndConditions || latestRev.termsAndConditions || '',
     otherCharges,
     otherChargesDescription: dto.otherChargesDescription || latestRev.otherChargesDescription || '',
-    status,
+    status: resolvedStatus,
     currentRevision: dto.currentRevision ?? latestRev.revisionNo ?? 0,
     latestRevisionId: latestRev.id ?? dto.latestRevision?.id ?? dto.revisions?.[0]?.id ?? null,
     approvalStatus: dto.approvalStatus ?? null,
@@ -374,13 +398,30 @@ export function quotationDetailFromApi(dto = {}) {
     negotiations,
     documents,
     revisions,
-    mailLogs: Array.isArray(dto.emailLogs) ? dto.emailLogs : [],
+    mailLogs: Array.isArray(dto.emailLogs)
+      ? dto.emailLogs.map((log, idx) => {
+          const isSuccess = log.isSuccess !== undefined ? Boolean(log.isSuccess) : (log.result === 'Success');
+          const sentAt = log.sentOn ? String(log.sentOn).replace('T', ' ').slice(0, 16) : (log.sentAt || '');
+          return {
+            id: log.id || `mail-${idx}`,
+            sentAt,
+            sentOn: log.sentOn || sentAt,
+            to: log.toAddress || log.to || '',
+            cc: log.ccAddress || log.cc || '',
+            subject: log.subject || '',
+            revisionNo: log.revisionNo ?? log.quotationRevisionNo ?? 0,
+            result: log.result || (isSuccess ? 'Success' : 'Failed'),
+            isSuccess,
+            error: log.errorMessage || log.error || '',
+          };
+        })
+      : [],
     // Task 61 PO Fields
-    poReceived: Boolean(dto.poReceived || dto.poNumber || poDetails),
+    poReceived,
     poDetails,
     orderConfirmationCount: Number(dto.orderConfirmationCount) || 0,
-    isEditable: dto.isEditable ?? (status === 'Draft'),
-    canRevise: dto.canRevise ?? (status === 'Sent' || status === 'In Negotiation'),
+    isEditable: dto.isEditable ?? (!poReceived && resolvedStatus === 'Draft'),
+    canRevise: dto.canRevise ?? !poReceived,
     nextStatuses: Array.isArray(dto.nextStatuses) ? dto.nextStatuses : [],
     createdOn: dto.createdOn || '',
     lastUpdatedAt: dto.lastUpdatedOn || dto.lastUpdatedAt || '',

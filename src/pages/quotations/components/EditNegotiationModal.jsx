@@ -71,7 +71,7 @@ export default function EditNegotiationModal({ isOpen, onClose, stage, quotation
 
   const userOptions = userList.map((u) => {
     const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email;
-    return { value: name, label: name };
+    return { value: name, label: name, id: u.id };
   });
 
   const rawModes = lookups?.modes || lookups?.negotiationModes;
@@ -88,10 +88,10 @@ export default function EditNegotiationModal({ isOpen, onClose, stage, quotation
   function handleSave() {
     if (!quotation || !stage || isConfirmed) return;
 
-    // Resolve handledBy user ID
+    // Resolve handledBy user ID (match by trimmed name or id)
     const selectedUser = userList.find((u) => {
       const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email;
-      return name === stageData.handledBy;
+      return name.toLowerCase() === String(stageData.handledBy || '').trim().toLowerCase() || String(u.id) === String(stageData.handledBy);
     });
     const handledByUserId = selectedUser?.id || stage.handledByUserId || null;
 

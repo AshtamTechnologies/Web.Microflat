@@ -11,6 +11,7 @@ import {
   Textarea,
   SearchableSelect,
 } from '../../components/ui';
+import { dealService } from '../../services';
 
 export default function DealFormModal({
   isOpen,
@@ -46,19 +47,32 @@ export default function DealFormModal({
 
     if (isCreate) {
       const client = prefill?.client || {};
-      const activeContacts = (client.contacts || []).filter((c) => c.isActive !== false);
+      const rawContacts = Array.isArray(client.contacts)
+        ? client.contacts
+        : Array.isArray(prefill?.contacts)
+          ? prefill.contacts
+          : [];
+
+      const activeContacts = rawContacts
+        .filter((c) => c && c.isActive !== false)
+        .map((c) => ({
+          clientContactId: c.clientContactId ?? c.id,
+          fullName: c.fullName ?? c.contactPersonName ?? 'Contact',
+          email: c.email ?? c.contactEmail ?? '',
+        }));
+
       setContacts(activeContacts);
 
       setFormData({
         inquiryId: prefill?.inquiryId || '',
         inquiryNo: prefill?.inquiryNo || '',
-        clientName: client.clientName || '',
-        clientCode: client.clientCode || '',
+        clientName: client.clientName || prefill?.clientName || '',
+        clientCode: client.clientCode || prefill?.clientCode || '',
         dealDate: new Date().toISOString().slice(0, 10),
         currencyId: prefill?.currencyId || 1,
         expectedValue: '',
         negotiatedValue: '',
-        clientContactId: prefill?.clientContactId || (activeContacts[0]?.clientContactId ?? ''),
+        clientContactId: prefill?.clientContactId || (activeContacts[0]?.clientContactId ? String(activeContacts[0].clientContactId) : ''),
         remarks: '',
       });
     } else if (initialDeal) {
@@ -78,15 +92,44 @@ export default function DealFormModal({
         clientContactId: initialDeal.clientContactId || '',
         remarks: initialDeal.remarks || '',
       });
-      // In edit mode, if contact options aren't fully loaded, provide current contact
-      if (initialDeal.clientContactId) {
-        setContacts([
-          {
-            clientContactId: initialDeal.clientContactId,
-            fullName: initialDeal.clientContactName || 'Selected Contact',
-            email: initialDeal.clientContactEmail || '',
-          },
-        ]);
+
+      // Provide current contact immediately as primary option
+      const initialContactList = initialDeal.clientContactId
+        ? [
+            {
+              clientContactId: initialDeal.clientContactId,
+              fullName: initialDeal.clientContactName || 'Selected Contact',
+              email: initialDeal.clientContactEmail || '',
+            },
+          ]
+        : [];
+      setContacts(initialContactList);
+
+      // In edit mode, load complete client contacts via prefill or client service if inquiryId is present
+      if (initialDeal.inquiryId) {
+        dealService
+          .getDealPrefill(initialDeal.inquiryId)
+          .then((pre) => {
+            const client = pre?.client || {};
+            const raw = Array.isArray(client.contacts)
+              ? client.contacts
+              : Array.isArray(pre?.contacts)
+                ? pre.contacts
+                : [];
+            if (raw.length > 0) {
+              const active = raw
+                .filter((c) => c && c.isActive !== false)
+                .map((c) => ({
+                  clientContactId: c.clientContactId ?? c.id,
+                  fullName: c.fullName ?? c.contactPersonName ?? 'Contact',
+                  email: c.email ?? c.contactEmail ?? '',
+                }));
+              setContacts(active);
+            }
+          })
+          .catch(() => {
+            // Keep initialContactList fallback silently
+          });
       }
     }
     setErrors({});
@@ -109,7 +152,13 @@ export default function DealFormModal({
     e.preventDefault();
     const newErrors = {};
 
-    if (!formData.expectedValue || Number(formData.expectedValue) < 0) {
+    if (
+      formData.expectedValue === '' ||
+      formData.expectedValue === null ||
+      formData.expectedValue === undefined ||
+      isNaN(Number(formData.expectedValue)) ||
+      Number(formData.expectedValue) < 0
+    ) {
       newErrors.expectedValue = 'Expected value is required and must be 0 or more.';
     }
 

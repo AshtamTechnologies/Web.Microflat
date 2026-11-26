@@ -4,7 +4,7 @@
  * Follows identical contract as orderConfirmationService.js.
  */
 
-import { INITIAL_SALES_ORDERS, calculateSalesOrderTotals } from '../../mocks/salesOrders';
+import { INITIAL_SALES_ORDERS } from '../../mocks/salesOrders';
 
 const STORAGE_KEY = 'microflat_sales_orders_data';
 
@@ -146,11 +146,11 @@ export async function uploadOrderConfirmationDocument(id, file, documentTypeId, 
   return newDoc;
 }
 
-export async function downloadOrderConfirmationDocument(docId, fileName) {
+export async function downloadOrderConfirmationDocument() {
   return true;
 }
 
-export async function deleteOrderConfirmationDocument(docId) {
+export async function deleteOrderConfirmationDocument() {
   return true;
 }
 
@@ -159,6 +159,6 @@ export async function getOrderConfirmationEmailLogs(id) {
   return order.emailLogs || [];
 }
 
-export async function sendOrderConfirmationEmail(id, payload) {
+export async function sendOrderConfirmationEmail() {
   return { isSuccess: true };
 }

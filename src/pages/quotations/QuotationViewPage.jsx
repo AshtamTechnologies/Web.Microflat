@@ -6,6 +6,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { triggerPdfDownload } from '../../utils/fileHelpers';
 import {
   IconBack,
@@ -24,6 +25,7 @@ import {
   IconPhone,
   IconMail,
   IconDelete,
+  IconInfo,
 } from '../../constants/icons';
 import {
   PageHeader,
@@ -291,13 +293,26 @@ export default function QuotationViewPage() {
   }, [activeRevision?.taxes, quotation?.taxes, lookups?.taxes]);
 
   const activeTotalsBreakdown = useMemo(() => {
-    return calculateQuotationTotals(
+    const fallback = calculateQuotationTotals(
       displayedItems,
       activeTaxTreatment,
       activeTaxes,
       activeRevision?.otherCharges || quotation?.otherCharges || 0
     );
-  }, [displayedItems, activeTaxTreatment, activeTaxes, activeRevision?.otherCharges, quotation?.otherCharges]);
+
+    // If server provides subtotal / totalTax / grandTotal on activeRevision or quotation, prioritize server values
+    const serverSubtotal = activeRevision?.subtotal ?? quotation?.subtotal;
+    const serverTotalTax = activeRevision?.totalTax ?? activeRevision?.taxAmount ?? quotation?.totalTax;
+    const serverGrandTotal = activeRevision?.grandTotal ?? quotation?.grandTotal;
+
+    return {
+      ...fallback,
+      subtotal: serverSubtotal !== undefined && serverSubtotal !== null ? Number(serverSubtotal) : fallback.subtotal,
+      taxAmount: serverTotalTax !== undefined && serverTotalTax !== null ? Number(serverTotalTax) : fallback.taxAmount,
+      totalTax: serverTotalTax !== undefined && serverTotalTax !== null ? Number(serverTotalTax) : fallback.totalTax,
+      grandTotal: serverGrandTotal !== undefined && serverGrandTotal !== null ? Number(serverGrandTotal) : fallback.grandTotal,
+    };
+  }, [displayedItems, activeTaxTreatment, activeTaxes, activeRevision, quotation]);
 
   const itemsWithDescription = useMemo(() => {
     return displayedItems.filter((it) => Boolean(it.description?.trim()));
@@ -414,7 +429,9 @@ export default function QuotationViewPage() {
             <span className="font-mono text-heading">{quotation.quotationNo}</span>
             <Badge
               variant={
-                quotation.status === 'Confirmed'
+                quotation.status === 'PO Received' || quotation.poReceived
+                  ? 'success'
+                  : quotation.status === 'Confirmed'
                   ? 'success'
                   : quotation.status === 'In Negotiation'
                   ? 'warning'
@@ -426,14 +443,8 @@ export default function QuotationViewPage() {
               }
               size="md"
             >
-              {quotation.status}
+              {quotation.poReceived || quotation.status === 'PO Received' ? 'PO Received' : quotation.status}
             </Badge>
-
-            {quotation.poReceived && (
-              <Badge variant="role" size="md">
-                PO Received
-              </Badge>
-            )}
 
             {quotation.approvalStatus === 2 || quotation.pendingApprovalRequestId ? (
               <Link
@@ -522,8 +533,21 @@ export default function QuotationViewPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => navigate(`/quotations/${quotation.id}/new-revision`)}
+              disabled={Boolean(quotation.poReceived || quotation.status === 'PO Received')}
+              onClick={() => {
+                if (quotation.poReceived || quotation.status === 'PO Received') {
+                  toast.error('A Customer PO has already been received for this quotation. It cannot be revised.');
+                  return;
+                }
+                navigate(`/quotations/${quotation.id}/new-revision`);
+              }}
               icon={<IconEdit size={14} />}
+              title={
+                quotation.poReceived || quotation.status === 'PO Received'
+                  ? 'A Customer PO has already been received for this quotation. PO Received quotations cannot be revised.'
+                  : 'Create New Revision'
+              }
+              className={quotation.poReceived || quotation.status === 'PO Received' ? 'opacity-60 cursor-not-allowed' : ''}
             >
               New Revision
             </Button>
@@ -549,22 +573,43 @@ export default function QuotationViewPage() {
             )}
 
             {quotation.status !== 'Cancelled' && quotation.status !== 'Rejected' && (
-              <Button
-                variant={quotation.poReceived ? 'secondary' : 'primary'}
-                size="sm"
-                onClick={() => setIsPoModalOpen(true)}
-                icon={<IconFileText size={14} />}
-                className={!quotation.poReceived ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600' : ''}
-              >
-                {quotation.poReceived ? 'Update Customer PO' : 'Record Customer PO'}
-              </Button>
+              (quotation.poReceived || quotation.status === 'PO Received') ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsPoModalOpen(true)}
+                    icon={<IconFileText size={14} />}
+                  >
+                    View / Edit PO Details
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => navigate(`/sales-orders/new?quotationId=${quotation.id}`)}
+                    className="bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white"
+                  >
+                    Generate Sales Order
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setIsPoModalOpen(true)}
+                  icon={<IconFileText size={14} />}
+                  className="bg-amber-600 hover:bg-amber-700 text-white border-amber-600"
+                >
+                  Record Customer PO
+                </Button>
+              )
             )}
           </div>
         }
       />
 
       {/* Confirmation & Customer PO Alert Banner */}
-      {(quotation.poReceived || quotation.status === 'Confirmed') && (
+      {(quotation.poReceived || quotation.status === 'Confirmed' || quotation.status === 'PO Received') && (
         <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-800 dark:text-emerald-300 shadow-2xs">
           <div className="flex items-start gap-2.5">
             <IconCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
@@ -642,13 +687,13 @@ export default function QuotationViewPage() {
         </div>
       )}
 
-      {/* Awaiting Customer PO Callout (When Approved but PO not yet received) */}
-      {quotation.status === 'Approved' && !quotation.poReceived && (
+      {/* Awaiting Customer PO Callout (When Confirmed / Approved but PO not yet received) */}
+      {(quotation.status === 'Confirmed' || quotation.status === 'Approved' || quotation.approvalStatus === 3) && !quotation.poReceived && quotation.status !== 'PO Received' && (
         <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-800 dark:text-blue-300">
           <div className="flex items-center gap-2">
             <IconInfo size={16} className="text-blue-600 shrink-0" />
             <span>
-              Quotation approved! Awaiting customer Purchase Order (PO) to confirm and create the Sales Order.
+              Quotation confirmed! Awaiting customer Purchase Order (PO) to record and create the Sales Order.
             </span>
           </div>
           <Button
@@ -1164,7 +1209,16 @@ export default function QuotationViewPage() {
                       {rev.revisionReason || '—'}
                     </Td>
                     <Td className="text-center">
-                      <Badge variant={rev.status === 'Sent' ? 'info' : 'neutral'} size="sm">
+                      <Badge
+                        variant={
+                          rev.status === 'Sent' ? 'info' :
+                          rev.status === 'Confirmed' ? 'success' :
+                          rev.status === 'In Negotiation' ? 'warning' :
+                          rev.status === 'PO Received' ? 'success' :
+                          'neutral'
+                        }
+                        size="sm"
+                      >
                         {rev.status}
                       </Badge>
                     </Td>

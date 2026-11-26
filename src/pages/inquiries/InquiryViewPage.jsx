@@ -387,7 +387,7 @@ export default function InquiryViewPage() {
         categoryName: it.categoryName || (it.categoryId ? getCategoryPathName(it.categoryId, categories) : getCategoryPathName(inquiry.CategoryId, categories)) || '—',
       }));
     }
-    if (inquiry.CategoryId || inquiry.Quantity) {
+    if (isMockApi && (inquiry.CategoryId || inquiry.Quantity)) {
       return [
         {
           prItemId: 1,
@@ -581,7 +581,7 @@ export default function InquiryViewPage() {
     );
   }
 
-  const statusInfo = getStatusOption(inquiry.Status);
+  const statusInfo = getStatusOption(inquiry.status || inquiry.StatusId || inquiry.Status);
   const assigneeName = resolveUserName(inquiry.AssignedTo);
   const isAssigned = Boolean(inquiry.AssignedTo);
   const renderDocumentsSection = () => (
@@ -674,6 +674,8 @@ export default function InquiryViewPage() {
                   const isExpanded = expandedDocIds.has(doc.documentId);
                   const versions = doc.versions || [];
                   const currentVersion = versions.find((v) => v.isCurrent) || versions[0] || {};
+                  const fileName = currentVersion.fileName || doc.fileName || doc.displayName || 'attachment.pdf';
+                  const fileExt = currentVersion.fileExtension || doc.fileExtension || (fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')).toLowerCase() : '.pdf');
 
                   return (
                     <Fragment key={doc.documentId}>
@@ -718,19 +720,21 @@ export default function InquiryViewPage() {
                             onClick={() =>
                               setPreviewItem({
                                 ...currentVersion,
+                                fileName,
+                                fileExtension: fileExt,
                                 documentTitle: doc.documentTitle,
                                 documentTypeId: doc.documentTypeId,
                               })
                             }
                             className="flex items-center gap-1.5 group/file hover:text-primary transition-colors cursor-pointer text-left w-full min-w-0 focus:outline-none"
-                            title={`Click to open preview of ${currentVersion.fileName}`}
+                            title={`Click to open preview of ${fileName}`}
                           >
-                            {renderFileExtIcon(currentVersion.fileExtension)}
+                            {renderFileExtIcon(fileExt)}
                             <span
                               className="font-mono text-xs text-heading font-medium truncate w-full min-w-0 group-hover/file:text-primary group-hover/file:underline"
-                              title={currentVersion.fileName}
+                              title={fileName}
                             >
-                              {currentVersion.fileName}
+                              {fileName}
                             </span>
                             <IconView size={13} className="text-text-muted/50 group-hover/file:text-primary shrink-0 opacity-0 group-hover/file:opacity-100 transition-opacity" />
                           </button>
@@ -1091,7 +1095,7 @@ export default function InquiryViewPage() {
               size="md"
               className="capitalize font-semibold"
             >
-              {statusInfo?.name || inquiry.Status || 'Status'}
+              {statusInfo?.name || inquiry.status || inquiry.StatusId || inquiry.Status || 'Status'}
             </Badge>
 
             {inquiry.Priority && (
@@ -1279,7 +1283,7 @@ export default function InquiryViewPage() {
                   />
                   <DetailField
                     label="Sales Region / Territory"
-                    value={getRegionName(inquiry.RegionId)}
+                    value={inquiry.regionName || inquiry.RegionName || getRegionName(inquiry.RegionId || inquiry.regionId)}
                     className="sm:col-span-2"
                   />
                   <DetailField

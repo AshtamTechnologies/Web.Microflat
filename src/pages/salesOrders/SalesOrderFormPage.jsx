@@ -24,7 +24,6 @@ import {
   IconRotateCcw,
   IconSalesOrder,
   IconTrash,
-  IconUploadCloud,
 } from '../../constants/icons';
 import {
   PageHeader,
@@ -56,24 +55,28 @@ import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useStandardsContext } from '../../context/StandardsContext';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
+import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
+import { useDeliveryTermsContext } from '../../context/DeliveryTermsContext';
 import { clientService, productService, quotationService } from '../../services';
 import { calculateFlatnessTolerance, normalizeGradeCode } from '../../utils/flatnessFormula';
 import {
-  INQUIRY_CATALOG_CATEGORIES,
-  INQUIRY_CATALOG_PRODUCTS,
-  buildCatalogProductDescription,
-} from '../../mocks/inquiryCatalog';
-import {
   calculateSalesOrderTotals,
   formatCurrency,
-  ORDER_DOCUMENT_TYPES,
-  TAX_SLABS,
-  TAX_TREATMENTS,
-} from '../../mocks/salesOrders';
+} from '../../models/salesOrders/orderConfirmationModel';
 import { formatDate } from '../../utils/dateUtils';
 import { triggerPdfDownload } from '../../utils/fileHelpers';
 import useColumnResize from '../../hooks/useColumnResize';
 import { isHtmlMarkup } from '../../utils/htmlUtils';
+
+function buildCatalogProductDescription(product, variant) {
+  if (!product) return '';
+  const parts = [
+    product.productName || product.name,
+    variant?.variantName || variant?.name,
+    variant?.specification || product.specification,
+  ].filter(Boolean);
+  return parts.join(' — ');
+}
 
 const CATALOG_OPTIONS = [
   'Rexine Cover (Standard)',
@@ -83,14 +86,6 @@ const CATALOG_OPTIONS = [
   'Metallic T-Slots',
   'Notch',
 ];
-
-function formatReadableFileSize(bytes = 0) {
-  if (!bytes || bytes <= 0) return '—';
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${Math.round(kb)} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
-}
 
 function toTermsArray(val, fallback = []) {
   if (Array.isArray(val)) {
@@ -110,7 +105,10 @@ function buildPrefillFromQuotation(quotation) {
       ? quotation.currentRevision
       : Math.max(0, (quotation.revisions?.length || 1) - 1);
   const latestRev =
-    quotation.revisions?.[revIdx] || quotation.revisions?.[quotation.revisions.length - 1];
+    quotation.latestRevision ||
+    quotation.revisions?.[revIdx] ||
+    quotation.revisions?.[quotation.revisions.length - 1] ||
+    {};
 
   const inheritedDoc = quotation.poDetails?.fileName
     ? [
@@ -130,16 +128,20 @@ function buildPrefillFromQuotation(quotation) {
     : [];
 
   const availableItems =
-    latestRev?.items && latestRev.items.length > 0
-      ? latestRev.items
-      : Array.isArray(quotation.items)
-      ? quotation.items
-      : [];
+    (Array.isArray(latestRev?.lineItems) && latestRev.lineItems.length > 0 ? latestRev.lineItems : null) ||
+    (Array.isArray(latestRev?.lines) && latestRev.lines.length > 0 ? latestRev.lines : null) ||
+    (Array.isArray(latestRev?.items) && latestRev.items.length > 0 ? latestRev.items : null) ||
+    (Array.isArray(quotation.lineItems) && quotation.lineItems.length > 0 ? quotation.lineItems : null) ||
+    (Array.isArray(quotation.items) && quotation.items.length > 0 ? quotation.items : null) ||
+    [];
 
   const resolvedAddressId =
     quotation.clientAddressId ||
     latestRev?.clientAddressId ||
     quotation.addressId ||
+    quotation.client?.addresses?.[0]?.clientAddressId ||
+    quotation.client?.addresses?.[0]?.id ||
+    quotation.inquiry?.clientAddressId ||
     null;
   const resolvedContactId =
     quotation.clientContactId ||
@@ -147,6 +149,7 @@ function buildPrefillFromQuotation(quotation) {
     quotation.client?.contacts?.[0]?.id ||
     quotation.client?.contacts?.[0]?.clientContactId ||
     quotation.contactId ||
+    quotation.inquiry?.clientContactId ||
     null;
 
   return {
@@ -163,11 +166,17 @@ function buildPrefillFromQuotation(quotation) {
     contactPerson: quotation.contactPerson || latestRev?.contactPerson || '',
     contactEmail: quotation.contactEmail || latestRev?.contactEmail || '',
     contactPhone: quotation.contactPhone || latestRev?.contactPhone || '',
-    clientPoNo: quotation.poDetails?.poNumber || '',
-    clientPoDate: quotation.poDetails?.receivedOn || '',
-    expectedDeliveryDate: quotation.poDetails?.expectedDeliveryDate || '',
-    paymentTerms: toTermsArray(quotation.paymentTerms, []),
-    deliveryTerms: toTermsArray(quotation.deliveryTerms, []),
+    clientPoNo: quotation.poDetails?.poNumber || quotation.poNumber || quotation.clientPoNo || '',
+    clientPoDate: (quotation.poDetails?.receivedOn || quotation.poReceivedDate || quotation.poDate)
+      ? String(quotation.poDetails?.receivedOn || quotation.poReceivedDate || quotation.poDate).slice(0, 10)
+      : '',
+    expectedDeliveryDate: (quotation.poDetails?.expectedDeliveryDate || quotation.expectedDeliveryDate)
+      ? String(quotation.poDetails?.expectedDeliveryDate || quotation.expectedDeliveryDate).slice(0, 10)
+      : '',
+    paymentTermId: quotation.paymentTermId || latestRev?.paymentTermId || null,
+    paymentTerms: toTermsArray(quotation.paymentTerms || quotation.paymentTermName, []),
+    deliveryTermId: quotation.deliveryTermId || latestRev?.deliveryTermId || null,
+    deliveryTerms: toTermsArray(quotation.deliveryTerms || quotation.deliveryTermName, []),
     currency: latestRev?.currency || quotation.currency || 'INR',
     taxTreatment: latestRev?.taxTreatment || quotation.taxTreatment || 'INTRA_STATE',
     selectedTaxIds: Array.isArray(latestRev?.taxes || quotation.taxes)
@@ -213,6 +222,7 @@ export default function SalesOrderFormPage() {
   const {
     lookups,
     getSalesOrderById,
+    fetchSalesOrderById,
     getNextOrderConfirmationNo,
     fetchNextOrderConfirmationNo,
     createSalesOrder,
@@ -223,6 +233,8 @@ export default function SalesOrderFormPage() {
   const standardsContext = useStandardsContext?.() || {};
   const { standardsList = [], gradeMapping = [], ensureStandardsLoaded } = standardsContext;
   const { categories: productCategories = [], ensureProductCategoriesLoaded } = useProductCategoriesContext?.() || {};
+  const { paymentTerms: masterPaymentTerms = [] } = usePaymentTermsContext?.() || {};
+  const { deliveryTerms: masterDeliveryTerms = [] } = useDeliveryTermsContext?.() || {};
 
   useEffect(() => {
     ensureStandardsLoaded?.();
@@ -235,8 +247,10 @@ export default function SalesOrderFormPage() {
   const [activeClients, setActiveClients] = useState([]);
   const [clientDetailData, setClientDetailData] = useState(null);
   const [productsList, setProductsList] = useState([]);
+  const [poPendingQuotes, setPoPendingQuotes] = useState([]);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const hasPrefilledInitialQuoteRef = useRef(false);
 
   // Drawer & Line Item Builder State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -309,23 +323,127 @@ export default function SalesOrderFormPage() {
     };
   }, []);
 
+  const [isLoadingOrder, setIsLoadingOrder] = useState(isEditMode);
+  const [fetchedOrder, setFetchedOrder] = useState(null);
+
   const existingOrder = useMemo(
-    () => (isEditMode ? getSalesOrderById(id) : null),
-    [isEditMode, id, getSalesOrderById]
+    () => fetchedOrder || (isEditMode ? getSalesOrderById(id) : null),
+    [fetchedOrder, isEditMode, id, getSalesOrderById]
   );
 
-  // §5.4g: Order confirmations are created from Confirmed quotations
-  const confirmedQuotations = useMemo(
-    () => quotations.filter((q) => q.status === 'Confirmed'),
-    [quotations]
-  );
+  useEffect(() => {
+    if (!isEditMode || !id) return;
+    let isMounted = true;
+    async function loadFullOrder() {
+      try {
+        setIsLoadingOrder(true);
+        const full = await fetchSalesOrderById(id);
+        if (isMounted && full) {
+          setFetchedOrder(full);
+          const isDirect = full.orderSource === true || full.isDirectOrder || !full.quotationId;
+          setOrderMode(isDirect ? 'DIRECT' : 'QUOTATION');
+          setFormData({
+            orderConfirmationNo: full.orderConfirmationNo || '',
+            orderConfirmationDate: full.orderConfirmationDate || '',
+            quotationId: full.quotationId || '',
+            quotationNo: full.quotationNo || '',
+            quotationRevisionNo: full.quotationRevisionNo ?? 0,
+            inquiryId: full.inquiryId || '',
+            inquiryNo: full.inquiryNo || '',
+            clientId: full.clientId || '',
+            clientName: full.clientName || '',
+            clientAddressId: full.clientAddressId || null,
+            clientAddress: full.clientAddress || '',
+            clientContactId: full.clientContactId || null,
+            contactPerson: full.contactPerson || '',
+            contactEmail: full.contactEmail || '',
+            contactPhone: full.contactPhone || '',
+            clientPoNo: full.clientPoNo || '',
+            clientPoDate: full.clientPoDate || '',
+            expectedDeliveryDate: full.expectedDeliveryDate || '',
+            paymentTermId: full.paymentTermId || null,
+            paymentTerms: toTermsArray(full.paymentTerms || full.paymentTermName, []),
+            deliveryTermId: full.deliveryTermId || null,
+            deliveryTerms: toTermsArray(full.deliveryTerms || full.deliveryTermName, []),
+            currencyId: full.currencyId || null,
+            currency: full.currencyCode || full.currency || 'INR',
+            taxTreatment: full.taxTreatment || 'INTRA_STATE',
+            selectedTaxIds: Array.isArray(full.taxes)
+              ? full.taxes.map((t) => Number(t.taxConfigDetailId || t.id)).filter(Boolean)
+              : [],
+            taxes: full.taxes || [],
+            otherCharges: full.otherCharges || 0,
+            otherChargesDescription: full.otherChargesDescription || '',
+            termsAndConditions: full.termsAndConditions || '',
+            remarks: full.remarks || '',
+            lineItems: (full.lineItems || []).map((item, idx) => ({
+              ...item,
+              id: item.id || `line-${idx}`,
+              otherCharges: Number(item.otherCharges) || 0,
+              taxPercent: item.taxPercent !== undefined ? Number(item.taxPercent) : 18,
+            })),
+            documents: full.documents || [],
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load full sales order detail for edit:', err);
+      } finally {
+        if (isMounted) setIsLoadingOrder(false);
+      }
+    }
+    loadFullOrder();
+    return () => {
+      isMounted = false;
+    };
+  }, [isEditMode, id, fetchSalesOrderById]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchPoPending() {
+      try {
+        const data = await quotationService.getPoPendingSalesOrderQuotations();
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          setPoPendingQuotes(data);
+        }
+      } catch (err) {
+        console.warn('Could not load PO-pending quotations from dedicated API:', err);
+      }
+    }
+    fetchPoPending();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // §5.4g: Order confirmations are created from Confirmed or PO Received quotations
+  const confirmedQuotations = useMemo(() => {
+    const contextFiltered = quotations.filter((q) => {
+      const s = String(q.status || '').toLowerCase().replace(/[\s_-]/g, '');
+      return (
+        s === 'confirmed' ||
+        s === 'poreceived' ||
+        Boolean(q.poReceived) ||
+        Boolean(q.poDetails?.poNumber) ||
+        Boolean(q.poNumber)
+      );
+    });
+
+    const map = new Map();
+    contextFiltered.forEach((q) => {
+      if (q?.id) map.set(String(q.id), q);
+    });
+    poPendingQuotes.forEach((q) => {
+      if (q?.id) map.set(String(q.id), q);
+    });
+    return Array.from(map.values());
+  }, [quotations, poPendingQuotes]);
 
   const quotationOptions = useMemo(
     () =>
       confirmedQuotations.map((q) => ({
         value: q.id,
-        label: `${q.quotationNo} — ${q.clientName}${
-          q.poDetails?.poNumber ? ` (PO: ${q.poDetails.poNumber})` : ''
+        label: `${q.quotationNo} — ${q.clientName || q.customerName || 'Client'}${
+          q.poDetails?.poNumber || q.poNumber ? ` (PO: ${q.poDetails?.poNumber || q.poNumber})` : ''
         }`,
       })),
     [confirmedQuotations]
@@ -362,8 +480,10 @@ export default function SalesOrderFormPage() {
         clientPoNo: existingOrder.clientPoNo || '',
         clientPoDate: existingOrder.clientPoDate || '',
         expectedDeliveryDate: existingOrder.expectedDeliveryDate || '',
-        paymentTerms: toTermsArray(existingOrder.paymentTerms, []),
-        deliveryTerms: toTermsArray(existingOrder.deliveryTerms, []),
+        paymentTermId: existingOrder.paymentTermId || null,
+        paymentTerms: toTermsArray(existingOrder.paymentTerms || existingOrder.paymentTermName, []),
+        deliveryTermId: existingOrder.deliveryTermId || null,
+        deliveryTerms: toTermsArray(existingOrder.deliveryTerms || existingOrder.deliveryTermName, []),
         currencyId: existingOrder.currencyId || null,
         currency: existingOrder.currencyCode || existingOrder.currency || 'INR',
         taxTreatment: existingOrder.taxTreatment || 'INTRA_STATE',
@@ -410,13 +530,15 @@ export default function SalesOrderFormPage() {
       clientPoNo: prefill?.clientPoNo || '',
       clientPoDate: prefill?.clientPoDate || '',
       expectedDeliveryDate: prefill?.expectedDeliveryDate || '',
+      paymentTermId: prefill?.paymentTermId || null,
       paymentTerms: prefill?.paymentTerms ? toTermsArray(prefill.paymentTerms) : [],
+      deliveryTermId: prefill?.deliveryTermId || null,
       deliveryTerms: prefill?.deliveryTerms ? toTermsArray(prefill.deliveryTerms) : [],
       currencyId: lookups?.defaultCurrencyId || 1,
       currency: prefill?.currency || 'INR',
       taxTreatment: prefill?.taxTreatment || 'INTRA_STATE',
-      selectedTaxIds: prefill?.selectedTaxIds || [38, 37],
-      taxes: prefill?.taxes || [{ taxConfigDetailId: 38 }, { taxConfigDetailId: 37 }],
+      selectedTaxIds: prefill?.selectedTaxIds || [],
+      taxes: prefill?.taxes || [],
       otherCharges: 0,
       otherChargesDescription: '',
       termsAndConditions: prefill?.termsAndConditions || '',
@@ -444,6 +566,27 @@ export default function SalesOrderFormPage() {
       }
     }
   }, [orderMode, formData.currencyId, lookups]);
+
+  // Preselect default taxes from lookups if creating a direct order without prefilled taxes
+  useEffect(() => {
+    if (orderMode === 'DIRECT' && (!formData.selectedTaxIds || formData.selectedTaxIds.length === 0)) {
+      if (Array.isArray(lookups?.taxes) && lookups.taxes.length > 0) {
+        const intraTaxes = lookups.taxes.filter((t) => {
+          const name = (t.taxName || '').toUpperCase();
+          return name.includes('CGST') || name.includes('SGST');
+        });
+        const defaultTaxes = intraTaxes.length > 0 ? intraTaxes : [lookups.taxes[0]];
+        const ids = defaultTaxes.map((t) => Number(t.taxConfigDetailId ?? t.id)).filter(Boolean);
+        if (ids.length > 0) {
+          setFormData((prev) => ({
+            ...prev,
+            selectedTaxIds: ids,
+            taxes: ids.map((id) => ({ taxConfigDetailId: id })),
+          }));
+        }
+      }
+    }
+  }, [orderMode, lookups?.taxes]);
 
   // Load client detail (addresses/contacts) whenever clientId is set
   useEffect(() => {
@@ -489,8 +632,10 @@ export default function SalesOrderFormPage() {
               clientAddress: hasValidAddr ? prev.clientAddress : formatAddressForDisplay(preferredAddr),
               clientContactId: resolvedContact?.clientContactId || resolvedContact?.id || null,
               contactPerson: resolvedContact
-                ? (resolvedContact.fullName || `${resolvedContact.firstName || ''} ${resolvedContact.lastName || ''}`.trim() || resolvedContact.name)
+                ? (resolvedContact.fullName || `${resolvedContact.firstName || ''} ${resolvedContact.lastName || ''}`.trim() || resolvedContact.name || '')
                 : prev.contactPerson,
+              contactEmail: resolvedContact?.email || resolvedContact?.contactEmail || prev.contactEmail || '',
+              contactPhone: resolvedContact?.phone || resolvedContact?.mobile || resolvedContact?.contactPhone || prev.contactPhone || '',
             };
           });
         }
@@ -506,12 +651,13 @@ export default function SalesOrderFormPage() {
 
   // Sync prefill if confirmedQuotations loaded after initial render or initialQuotationId provided
   useEffect(() => {
-    if (!isEditMode && initialQuotationId && (!formData.quotationId || formData.lineItems.length === 0)) {
+    if (!isEditMode && initialQuotationId && !hasPrefilledInitialQuoteRef.current) {
       let isMounted = true;
       async function loadInitialQuote() {
         try {
           const fullQuote = await quotationService.getQuotationById(initialQuotationId);
           if (isMounted && fullQuote) {
+            hasPrefilledInitialQuoteRef.current = true;
             const prefill = buildPrefillFromQuotation(fullQuote);
             if (prefill) {
               setFormData((prev) => ({
@@ -533,6 +679,7 @@ export default function SalesOrderFormPage() {
               String(q.quotationNo).toLowerCase() === initialQuotationId.toLowerCase()
           );
           if (isMounted && quote) {
+            hasPrefilledInitialQuoteRef.current = true;
             const prefill = buildPrefillFromQuotation(quote);
             if (prefill) {
               setFormData((prev) => ({
@@ -549,7 +696,7 @@ export default function SalesOrderFormPage() {
         isMounted = false;
       };
     }
-  }, [isEditMode, initialQuotationId, formData.quotationId, formData.lineItems.length, confirmedQuotations]);
+  }, [isEditMode, initialQuotationId, confirmedQuotations]);
 
   // Sync next order confirmation series number from API preview
   useEffect(() => {
@@ -630,7 +777,7 @@ export default function SalesOrderFormPage() {
           clientContactId: primaryContact?.clientContactId || primaryContact?.id || null,
           contactPerson: primaryContact?.fullName || `${primaryContact?.firstName || ''} ${primaryContact?.lastName || ''}`.trim() || '',
           contactEmail: primaryContact?.email || '',
-          contactPhone: primaryContact?.phoneNo || '',
+          contactPhone: primaryContact?.phoneNo || primaryContact?.phone || primaryContact?.mobile || '',
         }));
       }
     } catch (err) {
@@ -658,10 +805,11 @@ export default function SalesOrderFormPage() {
       };
     });
     if (formData.clientAddress && !opts.some((o) => o.rawAddress === formData.clientAddress || o.value === String(formData.clientAddressId))) {
+      const addrDisplay = formatAddressForDisplay(formData.clientAddress);
       opts.unshift({
         value: formData.clientAddressId ? String(formData.clientAddressId) : 'current',
-        label: formData.clientAddress,
-        rawAddress: formData.clientAddress,
+        label: addrDisplay,
+        rawAddress: addrDisplay,
       });
     }
     return opts;
@@ -741,30 +889,7 @@ export default function SalesOrderFormPage() {
     ];
   }, [lookups?.currencies]);
 
-  // Dynamic tax slabs from lookups.taxes (with fallback to TAX_SLABS)
-  const taxOptions = useMemo(() => {
-    if (Array.isArray(lookups?.taxes) && lookups.taxes.length > 0) {
-      return lookups.taxes.map((t) => {
-        const detailId = t.taxConfigDetailId ?? t.id;
-        const pct = Number(t.taxPercent ?? t.taxRate ?? t.percent ?? 0);
-        const name = t.taxName || '';
-        return {
-          value: String(detailId ?? pct),
-          detailId: detailId ? Number(detailId) : null,
-          percent: pct,
-          label: `${pct}%${name && !name.includes(`${pct}%`) ? ` — ${name}` : ''}`,
-        };
-      });
-    }
-    return TAX_SLABS.map((t) => ({
-      value: String(t.value),
-      detailId: null,
-      percent: t.value,
-      label: `${t.value}%`,
-    }));
-  }, [lookups?.taxes]);
-
-  // Multi-Select options for Taxes in Section 2 (Commercial Terms) matching Quotation
+  // Dynamic tax slabs from lookups.taxes
   const applicableTaxSelectOptions = useMemo(() => {
     if (Array.isArray(lookups?.taxes) && lookups.taxes.length > 0) {
       return lookups.taxes.map((t) => {
@@ -781,11 +906,7 @@ export default function SalesOrderFormPage() {
         };
       });
     }
-    return [
-      { value: 38, label: 'CGST (9%)', chipLabel: 'CGST 9%', taxPercent: 9, taxName: 'CGST', taxConfigDetailId: 38 },
-      { value: 37, label: 'SGST (9%)', chipLabel: 'SGST 9%', taxPercent: 9, taxName: 'SGST', taxConfigDetailId: 37 },
-      { value: 39, label: 'IGST (18%)', chipLabel: 'IGST 18%', taxPercent: 18, taxName: 'IGST', taxConfigDetailId: 39 },
-    ];
+    return [];
   }, [lookups?.taxes]);
 
   const selectedTaxObjects = useMemo(() => {
@@ -799,31 +920,6 @@ export default function SalesOrderFormPage() {
       ...prev,
       currencyId: Number(currencyId) || (currencyId ? String(currencyId) : null),
       currency: opt?.code || prev.currency,
-    }));
-  }
-
-  function handleLineItemTaxChange(idx, rawValue) {
-    const valStr = typeof rawValue === 'object' && rawValue !== null ? rawValue.target?.value : rawValue;
-    const found = taxOptions.find(
-      (o) =>
-        String(o.value) === String(valStr) ||
-        (o.detailId !== null && String(o.detailId) === String(valStr)) ||
-        String(o.percent) === String(valStr)
-    );
-    const percent = found ? found.percent : Number(valStr) || 18;
-    const detailId = found?.detailId || null;
-
-    setFormData((prev) => ({
-      ...prev,
-      lineItems: prev.lineItems.map((item, i) =>
-        i === idx
-          ? {
-              ...item,
-              taxPercent: percent,
-              taxConfigDetailId: detailId,
-            }
-          : item
-      ),
     }));
   }
 
@@ -846,36 +942,17 @@ export default function SalesOrderFormPage() {
     }
     return [
       { value: '0', label: 'None / 0% Tax (Exempt)', percent: 0, detailId: null },
-      ...TAX_SLABS.map((t) => ({
-        value: String(t.value),
-        detailId: null,
-        percent: t.value,
-        label: `${t.value}%`,
-      })),
     ];
   }, [lookups?.taxes]);
 
   const mergedCatalogProducts = useMemo(() => {
-    const list = Array.isArray(productsList) ? [...productsList] : [];
-    INQUIRY_CATALOG_PRODUCTS.forEach((mockP) => {
-      if (!list.some((p) => String(p.id) === String(mockP.id) || p.productName === mockP.productName)) {
-        list.push(mockP);
-      }
-    });
-    return list;
+    return Array.isArray(productsList) ? productsList : [];
   }, [productsList]);
 
   const categoryOptions = useMemo(() => {
     const catMap = new Map();
 
-    // 1. Standard catalog categories from INQUIRY_CATALOG_CATEGORIES (which have { value, label })
-    INQUIRY_CATALOG_CATEGORIES.forEach((c) => {
-      if (c.value && c.label) {
-        catMap.set(String(c.value), c.label);
-      }
-    });
-
-    // 2. Real product categories from Product Categories Context / Master
+    // 1. Real product categories from Product Categories Context / Master
     if (Array.isArray(productCategories)) {
       productCategories.forEach((c) => {
         const id = String(c.categoryId || c.id || c.value || '');
@@ -1075,16 +1152,18 @@ export default function SalesOrderFormPage() {
 
   const parseDimsFromOrderVariant = useCallback((v) => {
     if (!v) return { length: 0, width: 0 };
-    if (v.lengthMm && v.widthMm) return { length: Number(v.lengthMm), width: Number(v.widthMm) };
-    const str = v.size || v.variantName || '';
+    if (v.lengthMm) return { length: Number(v.lengthMm), width: Number(v.widthMm || 0) };
+    const str = v.size || v.variantName || v.itemCode || v.variantCode || '';
     const m = String(str).match(/(\d+)\s*[x×*]\s*(\d+)/i);
-    return m ? { length: Number(m[1]), width: Number(m[2]) } : { length: 0, width: 0 };
+    if (m) return { length: Number(m[1]), width: Number(m[2]) };
+    const single = String(str).match(/(\d{3,4})/);
+    return single ? { length: Number(single[1]), width: 0 } : { length: 0, width: 0 };
   }, []);
 
   const drawerCalculatedFlatness = useMemo(() => {
     if (!activeVariantObj || !drawerStandard || !drawerGrade) return '—';
     const dims = parseDimsFromOrderVariant(activeVariantObj);
-    if (!dims.length || !dims.width) return '—';
+    if (!dims.length) return '—';
     try {
       const res = calculateFlatnessTolerance(dims.length, dims.width, drawerStandard, drawerGrade);
       if (res && res.isSupported && res.valueMicrons !== undefined) {
@@ -1123,14 +1202,6 @@ export default function SalesOrderFormPage() {
       unitPrice: 0,
     }));
   }, [drawerProduct, productOptionsMap]);
-
-  const productOptions = useMemo(() => {
-    return productsList.map((p) => ({
-      value: String(p.id),
-      label: `${p.productCode ? `[${p.productCode}] ` : ''}${p.productName}`,
-      product: p,
-    }));
-  }, [productsList]);
 
   const totals = useMemo(
     () =>
@@ -1176,6 +1247,14 @@ export default function SalesOrderFormPage() {
     MIN_LINE_COL_WIDTHS
   );
 
+  if (isEditMode && isLoadingOrder) {
+    return (
+      <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
+        <p className="text-xs text-text-muted">Loading sales order details...</p>
+      </div>
+    );
+  }
+
   if (isEditMode && !existingOrder) {
     return (
       <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
@@ -1190,7 +1269,7 @@ export default function SalesOrderFormPage() {
     );
   }
 
-  if (isEditMode && existingOrder && !existingOrder.isEditable) {
+  if (isEditMode && existingOrder && (existingOrder.isEditable === false || (existingOrder.status && existingOrder.status !== 'Draft'))) {
     return (
       <div className="p-8 max-w-4xl mx-auto space-y-4">
         <ErrorBanner
@@ -1230,7 +1309,7 @@ export default function SalesOrderFormPage() {
         ? [
             ...prefill.documents,
             ...(prev.documents || []).filter(
-              (d) => !d.id.startsWith('oc-doc-inherited-')
+              (d) => !String(d.id || '').startsWith('oc-doc-inherited-')
             ),
           ]
         : prev.documents,
@@ -1263,16 +1342,81 @@ export default function SalesOrderFormPage() {
   // Open Drawer for Edit Product Line
   const handleStartEditItem = (item, index) => {
     setEditingIndex(index);
-    setDrawerCategory(item.categoryId || '');
-    setDrawerProduct(String(item.productId || ''));
-    setDrawerStandard(item.standards || item.standardCode || '');
-    setDrawerGrade(item.grade || item.gradeCode || '');
-    setDrawerVariant(String(item.variantId || ''));
+
+    // 1. Locate product in merged catalog products
+    const prod =
+      mergedCatalogProducts.find(
+        (p) =>
+          String(p.id || p.productId) === String(item.productId || item.ProductId) ||
+          (p.productName && item.productName && p.productName.toLowerCase() === item.productName.toLowerCase()) ||
+          (p.productCode && item.productCode && p.productCode.toLowerCase() === item.productCode.toLowerCase())
+      ) || null;
+
+    const resolvedCategoryId = String(item.categoryId || item.CategoryId || prod?.categoryId || '');
+    const resolvedProductId = String(item.productId || item.ProductId || prod?.id || prod?.productId || '');
+
+    // 2. Resolve Standard
+    let resolvedStandard = item.standards || item.standardCode || item.StandardCode || '';
+    if (!resolvedStandard) {
+      const desc = item.description || item.technicalDetails || '';
+      const stdMatch = desc.match(/\b(IS-[0-9]+(?:-[0-9]+)?|DIN-[0-9]+|BS-[0-9]+|US-Fed[^\s,)]+)/i);
+      if (stdMatch) {
+        resolvedStandard = stdMatch[1];
+      } else {
+        resolvedStandard =
+          prod?.primaryStandard ||
+          (prod?.standards && prod.standards[0]?.standardCode) ||
+          prod?.primaryStandardCode ||
+          (prod?.supportedStandards && prod.supportedStandards[0]) ||
+          '';
+      }
+    }
+
+    // 3. Resolve Grade
+    let resolvedGrade = item.grade || item.gradeCode || item.GradeCode || '';
+    if (!resolvedGrade) {
+      const desc = item.description || item.technicalDetails || '';
+      const gradeMatch = desc.match(/\b(Grade\s+[0-9A-Za-z]+|Gr-[0-9A-Za-z]+)/i);
+      if (gradeMatch) {
+        resolvedGrade = gradeMatch[1];
+      } else if (resolvedStandard) {
+        resolvedGrade = resolvedStandard.toUpperCase().includes('GGG') ? 'Grade AA' : 'Grade 0';
+      }
+    }
+
+    // 4. Resolve Variant
+    let resolvedVariant = String(item.variantId || item.productVariantId || item.VariantId || '');
+    if (!resolvedVariant && prod?.variants && prod.variants.length > 0) {
+      const matchedVar =
+        prod.variants.find(
+          (v) =>
+            (v.variantName && item.variantName && v.variantName.toLowerCase() === item.variantName.toLowerCase()) ||
+            (v.itemCode && item.itemCode && v.itemCode.toLowerCase() === item.itemCode.toLowerCase())
+        ) || prod.variants[0];
+      if (matchedVar) resolvedVariant = String(matchedVar.id || matchedVar.productVariantId || '');
+    }
+
+    // 5. Resolve Tax
+    let resolvedTaxDetailId = item.taxConfigDetailId ? String(item.taxConfigDetailId) : '';
+    let resolvedTaxPercent = item.taxPercent !== undefined ? Number(item.taxPercent) : 18;
+    if ((!resolvedTaxDetailId || resolvedTaxDetailId === '0') && resolvedTaxPercent > 0 && Array.isArray(singleProductTaxOptions)) {
+      const matchedTax = singleProductTaxOptions.find((t) => Number(t.percent) === resolvedTaxPercent || Number(t.taxPercent) === resolvedTaxPercent);
+      if (matchedTax) {
+        resolvedTaxDetailId = String(matchedTax.detailId || matchedTax.value);
+        resolvedTaxPercent = matchedTax.percent || matchedTax.taxPercent;
+      }
+    }
+
+    setDrawerCategory(resolvedCategoryId);
+    setDrawerProduct(resolvedProductId);
+    setDrawerStandard(resolvedStandard);
+    setDrawerGrade(resolvedGrade);
+    setDrawerVariant(resolvedVariant);
     setDrawerQty(String(item.quantity || 1));
     setDrawerRate(String(item.rate || 0));
     setDrawerRateSource(item.rateSource || 'Manual');
-    setDrawerTax(item.taxPercent !== undefined ? Number(item.taxPercent) : 18);
-    setDrawerTaxConfigDetailId(item.taxConfigDetailId ? String(item.taxConfigDetailId) : (item.taxPercent === 0 ? '0' : ''));
+    setDrawerTax(resolvedTaxPercent);
+    setDrawerTaxConfigDetailId(resolvedTaxDetailId || (resolvedTaxPercent === 0 ? '0' : ''));
     setDrawerOtherCharges(String(item.otherCharges || 0));
     setDrawerOptions(Array.isArray(item.options) ? item.options : ['Rexine Cover (Standard)']);
     const existingDesc = item.description ?? item.technicalDetails ?? '';
@@ -1432,8 +1576,8 @@ export default function SalesOrderFormPage() {
     const taxPercent = matchedTaxObj ? matchedTaxObj.percent : (Number(drawerTax) || 0);
 
     const payload = {
-      categoryId: drawerCategory || activeProductObj?.categoryId || 'cat-sp',
-      productId: activeProductObj?.productId || activeProductObj?.id || 'prod-custom',
+      categoryId: drawerCategory || activeProductObj?.categoryId || 1,
+      productId: Number(activeProductObj?.productId || activeProductObj?.id) || 1,
       productName: activeProductObj?.productName || 'Custom Product',
       variantId: activeVariantObj?.id || activeVariantObj?.productVariantId || '',
       variantName: activeVariantObj?.variantName || activeVariantObj?.name || 'Standard Variant',
@@ -1479,10 +1623,6 @@ export default function SalesOrderFormPage() {
     setErrors((prev) => ({ ...prev, lineItems: undefined }));
     setIsDrawerOpen(false);
   };
-
-  function handleAddLineItem() {
-    handleOpenAddDrawer();
-  }
 
   function handleRemoveLineItem(idx) {
     setFormData((prev) => ({
@@ -1549,7 +1689,7 @@ export default function SalesOrderFormPage() {
     if (!formData.orderConfirmationDate) {
       nextErrors.orderConfirmationDate = 'Order confirmation date is required.';
     }
-    if (targetStatus === 'Confirmed' && !formData.clientPoNo.trim()) {
+    if (targetStatus === 'Confirmed' && !String(formData.clientPoNo || '').trim()) {
       nextErrors.clientPoNo = 'Client PO No is required to confirm a sales order.';
     }
     if (formData.lineItems.length === 0) {
@@ -1586,11 +1726,17 @@ export default function SalesOrderFormPage() {
     );
 
     const resolvedId = selectedQuote ? selectedQuote.id : rawQuoteId;
-    const finalQuotationId = /^\d+$/.test(String(resolvedId || '').trim())
-      ? Number(String(resolvedId).trim())
-      : (typeof resolvedId === 'number' && Number.isFinite(resolvedId) ? resolvedId : null);
+    let finalQuotationId = null;
+    if (typeof resolvedId === 'number' && Number.isFinite(resolvedId)) {
+      finalQuotationId = resolvedId;
+    } else if (resolvedId && /^\d+$/.test(String(resolvedId).trim())) {
+      finalQuotationId = Number(String(resolvedId).trim());
+    } else if (resolvedId) {
+      const match = String(resolvedId).match(/(\d+)$/);
+      if (match) finalQuotationId = Number(match[1]);
+    }
 
-    const isDirect = orderMode === 'DIRECT' || !formData.quotationId;
+    const isDirect = orderMode === 'DIRECT' || (!formData.quotationId && !finalQuotationId);
 
     const payload = {
       ...formData,
@@ -1604,6 +1750,8 @@ export default function SalesOrderFormPage() {
       taxes: Array.isArray(formData.selectedTaxIds) && formData.selectedTaxIds.length > 0
         ? formData.selectedTaxIds.map((id) => ({ taxConfigDetailId: Number(id) }))
         : (formData.taxes || []),
+      paymentTermId: formData.paymentTermId ? Number(formData.paymentTermId) : null,
+      deliveryTermId: formData.deliveryTermId ? Number(formData.deliveryTermId) : null,
       paymentTerms: Array.isArray(formData.paymentTerms)
         ? formData.paymentTerms.join(', ')
         : (formData.paymentTerms || ''),
@@ -1613,7 +1761,7 @@ export default function SalesOrderFormPage() {
       status: targetStatus,
       lineItems: isDirect
         ? formData.lineItems.map((item) => ({
-            productId: Number(item.productId || 1),
+            productId: Number(item.productId) && !isNaN(Number(item.productId)) ? Number(item.productId) : 1,
             productName: item.productName,
             productCode: item.productCode || item.itemCode,
             quantity: Number(item.quantity) || 1,
@@ -1640,6 +1788,10 @@ export default function SalesOrderFormPage() {
       }
     } catch (err) {
       console.error('Failed to save sales order:', err);
+      toast.error(err?.message || 'Failed to save sales order. Please check the fields and try again.');
+      if (err?.fieldErrors) {
+        setErrors((prev) => ({ ...prev, ...err.fieldErrors }));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1925,7 +2077,14 @@ export default function SalesOrderFormPage() {
               maxDisplayTags={2}
               onChange={(e) => {
                 const val = Array.isArray(e) ? e : e?.target?.value || [];
-                setFormData((prev) => ({ ...prev, paymentTerms: val }));
+                const matched = masterPaymentTerms.find((t) =>
+                  val.some((v) => typeof v === 'string' && (v.includes(t.termCode) || v.includes(t.termName)))
+                );
+                setFormData((prev) => ({
+                  ...prev,
+                  paymentTerms: val,
+                  paymentTermId: matched ? Number(matched.id) : prev.paymentTermId,
+                }));
               }}
             />
 
@@ -1935,7 +2094,14 @@ export default function SalesOrderFormPage() {
               maxDisplayTags={2}
               onChange={(e) => {
                 const val = Array.isArray(e) ? e : e?.target?.value || [];
-                setFormData((prev) => ({ ...prev, deliveryTerms: val }));
+                const matched = masterDeliveryTerms.find((t) =>
+                  val.some((v) => typeof v === 'string' && (v.includes(t.termCode) || v.includes(t.termName)))
+                );
+                setFormData((prev) => ({
+                  ...prev,
+                  deliveryTerms: val,
+                  deliveryTermId: matched ? Number(matched.id) : prev.deliveryTermId,
+                }));
               }}
             />
 
@@ -2265,6 +2431,7 @@ export default function SalesOrderFormPage() {
           <div className="p-4 bg-surface/40 border border-border rounded-xl space-y-4">
             <DocumentUploader
               label="Select or Drop Document Files"
+              moduleFilter="ORDER_CONFIRMATION"
               showDocTypeSelect={true}
               docTypeLabel="Document Type"
               defaultDocTypeKeyword="Order"

@@ -107,6 +107,16 @@ export default function QuotationFormPage() {
   const [fetchedQuotation, setFetchedQuotation] = useState(null);
   const targetQuotation = useMemo(() => isRevisionMode ? (fetchedQuotation || getQuotationById(id)) : null, [isRevisionMode, id, fetchedQuotation, getQuotationById]);
 
+  const isTargetPoReceived = useMemo(() => {
+    if (!isRevisionMode || !targetQuotation) return false;
+    return Boolean(
+      targetQuotation.poReceived ||
+      targetQuotation.status === 'PO Received' ||
+      targetQuotation.poDetails?.poNumber ||
+      targetQuotation.poNumber
+    );
+  }, [isRevisionMode, targetQuotation]);
+
   useEffect(() => {
     let isMounted = true;
     if (isRevisionMode && id && fetchQuotationDetail) {
@@ -176,10 +186,11 @@ export default function QuotationFormPage() {
   const [negotiationStageData, setNegotiationStageData] = useState(() => {
     const now = new Date();
     const defaultDateTime = `${now.toISOString().split('T')[0]}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const loggedUserName = user?.fullName || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.name || '';
     return {
       dateTime: defaultDateTime,
       mode: 'Call',
-      handledBy: 'Janvi Motwani',
+      handledBy: loggedUserName || '',
       clientContact: '',
       ourOffer: '',
       clientCounter: '',
@@ -492,7 +503,7 @@ export default function QuotationFormPage() {
           otherCharges: Number(it.otherCharges || it.lineCharges) || 0,
           taxConfigDetailId: it.taxConfigDetailId || null,
           taxPercent: Number(it.taxPercent) || 18,
-          options: Array.isArray(it.options) ? it.options : ['Rexine Cover (Standard)'],
+          options: Array.isArray(it.options) ? it.options : [],
         };
       });
     }
@@ -729,9 +740,10 @@ export default function QuotationFormPage() {
         items: revItems.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })),
       });
 
+      const loggedUserName = user?.fullName || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.name || '';
       setNegotiationStageData((prev) => ({
         ...prev,
-        handledBy: userOptions[0]?.value || prev.handledBy || 'Janvi Motwani',
+        handledBy: userOptions[0]?.value || prev.handledBy || loggedUserName || '',
         clientContact: targetQuotation.contactPerson || prev.clientContact || '',
       }));
     } else if (!isRevisionMode) {
@@ -752,12 +764,13 @@ export default function QuotationFormPage() {
         }
       });
 
-      // If inquiryId was passed in query parameter, preselect it
-      if (inquiryIdParam) {
-        handleSelectInquiry(inquiryIdParam);
+      // If inquiryId was passed in query parameter or route state, preselect it
+      const targetInquiryId = inquiryIdParam || location.state?.inquiryId;
+      if (targetInquiryId) {
+        handleSelectInquiry(targetInquiryId);
       }
     }
-  }, [isRevisionMode, targetQuotation, getNextQuotationNo, inquiryIdParam]);
+  }, [isRevisionMode, targetQuotation, getNextQuotationNo, inquiryIdParam, location.state]);
 
   // Merged dynamic & fallback catalog products
   const mergedCatalogProducts = useMemo(() => {
@@ -794,15 +807,29 @@ export default function QuotationFormPage() {
 
   // Dynamic Product Options (filtered by Category)
   const productOptions = useMemo(() => {
-    const list = drawerCategory
-      ? mergedCatalogProducts.filter((p) => String(p.categoryId) === String(drawerCategory))
-      : mergedCatalogProducts;
+    let list = mergedCatalogProducts;
+    if (drawerCategory) {
+      const selectedCat = categoryOptions.find((c) => String(c.value) === String(drawerCategory));
+      const selectedLabel = (selectedCat ? selectedCat.label : '').toLowerCase();
+      const filterVal = String(drawerCategory).toLowerCase();
+
+      list = list.filter((p) => {
+        const pCatId = String(p.categoryId || '').toLowerCase();
+        const pCatName = String(p.categoryName || '').toLowerCase();
+        return (
+          pCatId === filterVal ||
+          (selectedLabel && pCatName === selectedLabel) ||
+          pCatName === filterVal ||
+          String(p.id) === String(drawerProduct)
+        );
+      });
+    }
 
     return list.map((p) => ({
       value: String(p.id),
       label: `${p.productCode} · ${p.productName}`,
     }));
-  }, [drawerCategory, mergedCatalogProducts]);
+  }, [drawerCategory, mergedCatalogProducts, categoryOptions, drawerProduct]);
 
   const activeProductObj = useMemo(() => {
     const base = mergedCatalogProducts.find((p) => String(p.id) === String(drawerProduct)) || null;
@@ -905,13 +932,7 @@ export default function QuotationFormPage() {
         label: s.description ? `${s.standardCode} (${s.description})` : s.standardCode,
       }));
     }
-    return [
-      { value: 'IS-7327-2003', label: 'IS-7327-2003 (Indian Standard - Granite)' },
-      { value: 'DIN-876', label: 'DIN-876 (German Standard)' },
-      { value: 'BS-817', label: 'BS-817 (British Standard)' },
-      { value: 'US-Fed GGG-P-463c', label: 'US-Fed GGG-P-463c (Federal Specification)' },
-      { value: 'IS-2285', label: 'IS-2285 (Cast Iron Surface Plates)' },
-    ];
+    return [];
   }, [activeProductObj, standardsList]);
 
   // Grade Options filtered strictly by drawerStandard
@@ -949,29 +970,25 @@ export default function QuotationFormPage() {
         { value: 'Grade 3', label: 'Grade 3 · Heavy Workshop' },
       ];
     }
-    return [
-      { value: 'Grade 00', label: 'Grade 00 · Calibration / Lab Grade' },
-      { value: 'Grade 0', label: 'Grade 0 · Inspection / Metrology Grade' },
-      { value: 'Grade 1', label: 'Grade 1 · Tool Room / Shop Floor' },
-      { value: 'Grade 2', label: 'Grade 2 · Workshop / Machining Grade' },
-      { value: 'Grade 3', label: 'Grade 3 · Rough Workshop Grade' },
-    ];
+    return [];
   }, [drawerStandard, gradeMapping]);
 
   // Parse dimensions from variant
   const parseDimsFromQuotationVariant = useCallback((v) => {
     if (!v) return { length: 0, width: 0 };
-    if (v.lengthMm && v.widthMm) return { length: Number(v.lengthMm), width: Number(v.widthMm) };
-    const str = v.size || v.variantName || '';
+    if (v.lengthMm) return { length: Number(v.lengthMm), width: Number(v.widthMm || 0) };
+    const str = v.size || v.variantName || v.itemCode || v.variantCode || '';
     const m = String(str).match(/(\d+)\s*[x×*]\s*(\d+)/i);
-    return m ? { length: Number(m[1]), width: Number(m[2]) } : { length: 0, width: 0 };
+    if (m) return { length: Number(m[1]), width: Number(m[2]) };
+    const single = String(str).match(/(\d{3,4})/);
+    return single ? { length: Number(single[1]), width: 0 } : { length: 0, width: 0 };
   }, []);
 
   // Dynamically calculate flatness for drawer
   const drawerCalculatedFlatness = useMemo(() => {
     if (!activeVariantObj || !drawerStandard || !drawerGrade) return '—';
     const dims = parseDimsFromQuotationVariant(activeVariantObj);
-    if (!dims.length || !dims.width) return '—';
+    if (!dims.length) return '—';
     try {
       const res = calculateFlatnessTolerance(dims.length, dims.width, drawerStandard, drawerGrade);
       if (res && res.isSupported && res.valueMicrons !== undefined) {
@@ -1369,7 +1386,7 @@ export default function QuotationFormPage() {
     setDrawerTax(defaultTax?.taxPercent ?? 10);
     setDrawerTaxConfigDetailId(defaultTax?.taxConfigDetailId ? String(defaultTax.taxConfigDetailId) : (defaultTax?.value || ''));
     setDrawerOtherCharges('0');
-    setDrawerOptions(['Rexine Cover (Standard)']);
+    setDrawerOptions([]);
     setDrawerDescription('');
     setIsDescriptionEdited(false);
     setIsDrawerOpen(true);
@@ -1378,16 +1395,81 @@ export default function QuotationFormPage() {
   // Open Drawer for Edit Product
   const handleStartEditItem = (item, index) => {
     setEditingIndex(index);
-    setDrawerCategory(item.categoryId || '');
-    setDrawerProduct(item.productId || '');
-    setDrawerStandard(item.standards || item.standardCode || '');
-    setDrawerGrade(item.grade || item.gradeCode || '');
-    setDrawerVariant(item.variantId || '');
+
+    // 1. Locate product in merged catalog products
+    const prod =
+      mergedCatalogProducts.find(
+        (p) =>
+          String(p.id) === String(item.productId || item.ProductId) ||
+          (p.productName && item.productName && p.productName.toLowerCase() === item.productName.toLowerCase()) ||
+          (p.productCode && item.productCode && p.productCode.toLowerCase() === item.productCode.toLowerCase())
+      ) || null;
+
+    const resolvedCategoryId = String(item.categoryId || item.CategoryId || prod?.categoryId || '');
+    const resolvedProductId = String(item.productId || item.ProductId || prod?.id || '');
+
+    // 2. Resolve Standard: from item, from description (e.g. "IS-2063-2002"), or from product's primary standard
+    let resolvedStandard = item.standards || item.standardCode || item.StandardCode || '';
+    if (!resolvedStandard) {
+      const desc = item.description || item.technicalDetails || '';
+      const stdMatch = desc.match(/\b(IS-[0-9]+(?:-[0-9]+)?|DIN-[0-9]+|BS-[0-9]+|US-Fed[^\s,\)]+)/i);
+      if (stdMatch) {
+        resolvedStandard = stdMatch[1];
+      } else {
+        resolvedStandard =
+          prod?.primaryStandard ||
+          (prod?.standards && prod.standards[0]?.standardCode) ||
+          prod?.primaryStandardCode ||
+          (prod?.supportedStandards && prod.supportedStandards[0]) ||
+          '';
+      }
+    }
+
+    // 3. Resolve Grade: from item, from description (e.g. "Grade 0"), or product default
+    let resolvedGrade = item.grade || item.gradeCode || item.GradeCode || '';
+    if (!resolvedGrade) {
+      const desc = item.description || item.technicalDetails || '';
+      const gradeMatch = desc.match(/\b(Grade\s+[0-9A-Za-z]+|Gr-[0-9A-Za-z]+)/i);
+      if (gradeMatch) {
+        resolvedGrade = gradeMatch[1];
+      } else if (resolvedStandard) {
+        resolvedGrade = resolvedStandard.toUpperCase().includes('GGG') ? 'Grade AA' : 'Grade 0';
+      }
+    }
+
+    // 4. Resolve Variant
+    let resolvedVariant = String(item.variantId || item.productVariantId || item.VariantId || '');
+    if (!resolvedVariant && prod?.variants && prod.variants.length > 0) {
+      const matchedVar =
+        prod.variants.find(
+          (v) =>
+            (v.variantName && item.variantName && v.variantName.toLowerCase() === item.variantName.toLowerCase()) ||
+            (v.itemCode && item.itemCode && v.itemCode.toLowerCase() === item.itemCode.toLowerCase())
+        ) || prod.variants[0];
+      if (matchedVar) resolvedVariant = String(matchedVar.id || matchedVar.productVariantId || '');
+    }
+
+    // 5. Resolve Tax
+    let resolvedTaxDetailId = item.taxConfigDetailId ? String(item.taxConfigDetailId) : '';
+    let resolvedTaxPercent = item.taxPercent !== undefined ? Number(item.taxPercent) : 18;
+    if ((!resolvedTaxDetailId || resolvedTaxDetailId === '0') && resolvedTaxPercent > 0 && Array.isArray(singleProductTaxOptions)) {
+      const matchedTax = singleProductTaxOptions.find((t) => Number(t.taxPercent) === resolvedTaxPercent);
+      if (matchedTax) {
+        resolvedTaxDetailId = String(matchedTax.taxConfigDetailId || matchedTax.value);
+        resolvedTaxPercent = matchedTax.taxPercent;
+      }
+    }
+
+    setDrawerCategory(resolvedCategoryId);
+    setDrawerProduct(resolvedProductId);
+    setDrawerStandard(resolvedStandard);
+    setDrawerGrade(resolvedGrade);
+    setDrawerVariant(resolvedVariant);
     setDrawerQty(String(item.quantity || 1));
     setDrawerRate(String(item.rate || 0));
     setDrawerRateSource(item.rateSource || 'Manual');
-    setDrawerTax(item.taxPercent !== undefined ? Number(item.taxPercent) : 10);
-    setDrawerTaxConfigDetailId(item.taxConfigDetailId ? String(item.taxConfigDetailId) : (item.taxPercent === 0 ? '0' : ''));
+    setDrawerTax(resolvedTaxPercent);
+    setDrawerTaxConfigDetailId(resolvedTaxDetailId || (resolvedTaxPercent === 0 ? '0' : ''));
     setDrawerOtherCharges(String(item.otherCharges || 0));
     setDrawerOptions(Array.isArray(item.options) ? item.options : ['Rexine Cover (Standard)']);
     const existingDesc = item.description ?? item.technicalDetails ?? '';
@@ -1684,6 +1766,11 @@ export default function QuotationFormPage() {
 
   // Save handler with validation & auto-scroll
   const handleSave = async (statusToSet = 'Draft') => {
+    if (isRevisionMode && isTargetPoReceived) {
+      toast.error('A Customer PO has already been received for this quotation. It cannot be revised.');
+      return;
+    }
+
     // 1. Revision Mode Validations
     if (isRevisionMode) {
       if (!formData.revisionDate) {
@@ -1773,6 +1860,19 @@ export default function QuotationFormPage() {
           documents: stagedDocuments,
         };
         const newQuote = await createQuotation(payload);
+
+        // Auto-advance linked inquiry stage to Quotation
+        if (formData.inquiryId) {
+          try {
+            await inquiryService.changeInquiryStatus(formData.inquiryId, {
+              status: 'Quotation',
+              comment: `Quotation ${payload.quotationNo || ''} created`,
+            });
+          } catch (inqErr) {
+            console.warn('Could not auto-advance inquiry status to Quotation:', inqErr);
+          }
+        }
+
         const targetId = newQuote?.id || targetQuotation?.id || formData.quotationNo;
         navigate(`/quotations/${targetId}`);
       }
@@ -1831,7 +1931,8 @@ export default function QuotationFormPage() {
               variant="secondary"
               size="sm"
               onClick={() => handleSave('Draft')}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isTargetPoReceived}
+              title={isTargetPoReceived ? 'PO received: Quotation revisions cannot be saved' : 'Save as Draft'}
             >
               Save as Draft
             </Button>
@@ -1839,7 +1940,8 @@ export default function QuotationFormPage() {
               variant="primary"
               size="sm"
               onClick={() => handleSave('Sent')}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isTargetPoReceived}
+              title={isTargetPoReceived ? 'PO received: Quotation revisions cannot be saved' : 'Save & Mark as Sent'}
               icon={<IconCheck size={16} />}
             >
               {isSubmitting ? 'Saving...' : 'Save & Mark as Sent'}
@@ -1847,6 +1949,35 @@ export default function QuotationFormPage() {
           </div>
         }
       />
+
+      {/* ── PO Received Warning Banner (Safety Guard) ── */}
+      {isRevisionMode && isTargetPoReceived && (
+        <div className="p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-amber-900 dark:text-amber-200 shadow-2xs">
+          <div className="flex items-start gap-3">
+            <IconWarning size={20} className="text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm">Cannot Revise: Customer Purchase Order Already Received</h4>
+              <p className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                A Customer Purchase Order (PO) has already been received and recorded for Quotation{' '}
+                <strong className="font-mono">{targetQuotation?.quotationNo || formData.quotationNo}</strong>.
+                Commercial terms are now finalized for Sales Order creation. Further quotation revisions are locked.
+              </p>
+              <p className="text-2xs text-amber-700/80 dark:text-amber-400/80">
+                Solution: If commercial or product terms need to change, please record a PO amendment or start a new quotation from the inquiry.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() => navigate(`/quotations/${targetQuotation?.id || id}`)}
+            className="shrink-0 bg-amber-600 hover:bg-amber-700 border-amber-600 text-white"
+          >
+            Back to Quotation
+          </Button>
+        </div>
+      )}
 
       {/* ── SECTION 1: QUOTATION & CLIENT DETAILS ── */}
       <CollapsibleCard
@@ -2885,7 +3016,8 @@ export default function QuotationFormPage() {
           <Button
             variant="secondary"
             onClick={() => handleSave('Draft')}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isTargetPoReceived}
+            title={isTargetPoReceived ? 'PO received: Quotation revisions cannot be saved' : 'Save as Draft'}
             className="w-full sm:w-auto justify-center"
           >
             Save as Draft
@@ -2894,7 +3026,8 @@ export default function QuotationFormPage() {
           <Button
             variant="primary"
             onClick={() => handleSave('Sent')}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isTargetPoReceived}
+            title={isTargetPoReceived ? 'PO received: Quotation revisions cannot be saved' : 'Save & Mark as Sent'}
             icon={<IconCheck size={16} />}
             className="w-full sm:w-auto justify-center"
           >

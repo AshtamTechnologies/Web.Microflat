@@ -61,7 +61,7 @@ export function useInquiryDocuments() {
 
   /* ── Get missing mandatory document types for an inquiry ── */
   const getMissingMandatoryDocumentTypes = useCallback(
-    (inquiryId, docTypesList = INITIAL_DOCUMENT_TYPES) => {
+    (inquiryId, docTypesList = []) => {
       const inqDocs = getDocumentsByInquiryId(inquiryId);
       const attachedTypeIds = new Set(inqDocs.map((d) => String(d.documentTypeId)));
 
@@ -133,12 +133,16 @@ export function useInquiryDocuments() {
 
   /* ── Add New Document Version ── */
   const addDocumentVersion = useCallback(
-    async (inquiryId, documentId, { file, remarks }) => {
+    async (inquiryId, documentId, { file, remarks, documentTypeId, documentTitle }) => {
       try {
+        const docRecord = documents.find((d) => d.documentId === documentId || d.id === documentId);
+        const resolvedDocTypeId = documentTypeId || docRecord?.documentTypeId;
+        const resolvedDocTitle = documentTitle || docRecord?.documentTitle || file?.name;
+
         // Upload via service
         const uploaded = await inquiryService.uploadInquiryAttachment(inquiryId, {
-          documentTypeId: 1,
-          documentTitle: file?.name,
+          documentTypeId: resolvedDocTypeId,
+          documentTitle: resolvedDocTitle,
           file,
           remarks,
         });

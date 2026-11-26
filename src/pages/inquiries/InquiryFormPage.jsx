@@ -77,10 +77,10 @@ import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
 import { useRegions } from '../../context/RegionsContext';
 import { useClientsContext } from '../../context/ClientsContext';
-import { useCountryState } from '../../context/CountryStateContext';
+import { useCountryState, DEFAULT_INDIAN_STATES } from '../../context/CountryStateContext';
 import { useStandardsContext } from '../../context/StandardsContext';
 import { calculateFlatnessTolerance, normalizeGradeCode } from '../../utils/flatnessFormula';
-import { inquiryService, productService } from '../../services';
+import { inquiryService, productService, clientService, isMockApi } from '../../services';
 import { getCategoryDropdownOptions, getCategoryPathName } from '../../utils/treeUtils';
 import { getTodayISO } from '../../utils/dateUtils';
 import {
@@ -188,7 +188,8 @@ const INITIAL_FORM = {
   AddressLine2: '',
   City: '',
   State: '',
-  Country: '',
+  Country: 'India',
+  countryId: 1,
   CategoryId: '',
   Quantity: '1',
   UOM: 'PCS',
@@ -452,12 +453,12 @@ export default function InquiryFormPage() {
     }
   };
 
-  const handleClientSelect = (selectedVal) => {
+  const handleClientSelect = async (selectedVal) => {
     const rawVal = selectedVal && typeof selectedVal === 'object' && 'target' in selectedVal
       ? selectedVal.target.value
       : selectedVal;
 
-    const selected = clients.find((c) => (c.clientId || c.id) === rawVal);
+    const selected = clients.find((c) => String(c.clientId || c.id) === String(rawVal));
     if (!selected) {
       setForm((prev) => ({
         ...prev,
@@ -467,25 +468,22 @@ export default function InquiryFormPage() {
       return;
     }
 
-    const contacts = selected.contacts || selected.activeVersion?.contacts || [];
-    const primaryContact = contacts.find((c) => c.isPrimary) || contacts[0] || null;
-
-    const resolvedContactName = primaryContact
-      ? `${primaryContact.firstName || ''} ${primaryContact.lastName || ''}`.trim()
-      : (selected.contactPerson || '');
-
-    const resolvedEmail = (primaryContact && primaryContact.email) || selected.email || '';
-    const resolvedPhone = (primaryContact && primaryContact.mobile1) || selected.phone || '';
-    const resolvedAltPhone = (primaryContact && primaryContact.mobile2) || selected.alternativePhone || '';
+    // Immediately pre-populate with available list-item summary fields
+    const baseCompanyName = selected.companyName || selected.clientName || selected.billingName || '';
+    const baseContactName = selected.primaryContactName || selected.contactPerson || '';
+    const baseEmail = selected.email || selected.officialEmail || '';
+    const basePhone = selected.primaryContactPhoneNo || selected.phone || '';
+    const baseCity = selected.city || '';
 
     setForm((prev) => ({
       ...prev,
-      clientId: rawVal,
-      CustomerName: selected.companyName || selected.billingName || '',
-      ContactPerson: resolvedContactName || prev.ContactPerson,
-      Email: resolvedEmail || prev.Email,
-      Phone: resolvedPhone || prev.Phone,
-      AlternativePhone: resolvedAltPhone || prev.AlternativePhone,
+      clientId: selected.clientId || selected.id || rawVal,
+      CustomerName: baseCompanyName,
+      ContactPerson: baseContactName || prev.ContactPerson,
+      Email: baseEmail || prev.Email,
+      Phone: basePhone || prev.Phone,
+      City: baseCity || prev.City,
+      city: baseCity || prev.city,
     }));
 
     setErrors((prev) => {
@@ -493,9 +491,72 @@ export default function InquiryFormPage() {
       delete next.CustomerName;
       delete next.Email;
       delete next.Phone;
-      delete next.AlternativePhone;
       return next;
     });
+
+    // Fetch full client details (addresses, detailed contacts, state, country) from GET /api/clients/{id}
+    const clientIdToFetch = selected.clientId || selected.id || rawVal;
+    if (clientIdToFetch) {
+      try {
+        const fullClient = await clientService.getClientById(clientIdToFetch);
+        if (fullClient) {
+          const detail = fullClient.currentDetail || fullClient;
+          const contacts = detail.contacts || fullClient.contacts || [];
+          const primaryContact = contacts.find((c) => c.isPrimary) || contacts[0] || null;
+
+          const fullContactName = primaryContact
+            ? `${primaryContact.firstName || ''} ${primaryContact.lastName || ''}`.trim()
+            : baseContactName;
+
+          const fullEmail = (primaryContact && primaryContact.email) || detail.officialEmail || detail.email || baseEmail;
+          const fullPhone = (primaryContact && (primaryContact.mobile1 || primaryContact.phoneNo)) || detail.phone || basePhone;
+          const fullAltPhone = (primaryContact && (primaryContact.mobile2 || primaryContact.alternatePhoneNo)) || detail.alternativePhone || '';
+
+          const addresses = detail.addresses || fullClient.addresses || [];
+          const primaryAddress = addresses.find((a) => a.addressType === 'Billing') || addresses[0] || null;
+
+          const resolvedAddr1 = primaryAddress?.address1 || '';
+          const resolvedAddr2 = primaryAddress?.address2 || '';
+          const resolvedCity = primaryAddress?.city || detail.city || baseCity || '';
+          const resolvedCountry = primaryAddress?.countryName || detail.countryName || 'India';
+          const resolvedCountryId = primaryAddress?.countryId || detail.countryId || 1;
+          const resolvedState = primaryAddress?.stateName || detail.stateName || '';
+          const resolvedStateId = primaryAddress?.stateId || detail.stateId || null;
+
+          setForm((prev) => ({
+            ...prev,
+            CustomerName: detail.clientName || detail.companyName || detail.billingName || baseCompanyName || prev.CustomerName,
+            ContactPerson: fullContactName || prev.ContactPerson,
+            Email: fullEmail || prev.Email,
+            Phone: fullPhone || prev.Phone,
+            AlternativePhone: fullAltPhone || prev.AlternativePhone,
+            AddressLine1: resolvedAddr1 || prev.AddressLine1,
+            address1: resolvedAddr1 || prev.address1,
+            AddressLine2: resolvedAddr2 || prev.AddressLine2,
+            address2: resolvedAddr2 || prev.address2,
+            City: resolvedCity || prev.City,
+            city: resolvedCity || prev.city,
+            Country: resolvedCountry || prev.Country,
+            countryId: resolvedCountryId || prev.countryId,
+            State: resolvedState || prev.State,
+            stateId: resolvedStateId || prev.stateId,
+          }));
+
+          setErrors((prev) => {
+            const next = { ...prev };
+            delete next.CustomerName;
+            delete next.Email;
+            delete next.Phone;
+            delete next.AlternativePhone;
+            delete next.Country;
+            delete next.State;
+            return next;
+          });
+        }
+      } catch (err) {
+        console.warn('Could not fetch full client record for inquiry auto-fill:', err);
+      }
+    }
   };
 
   const step1Fields = useMemo(() => [
@@ -624,14 +685,17 @@ export default function InquiryFormPage() {
       options: Array.isArray(p.options) ? p.options : [],
     }));
 
-    const standardItems = INQUIRY_CATALOG_PRODUCTS.map((p) => ({
-      ...p,
-      id: String(p.id),
-      productId: p.id,
-      categoryId: String(p.categoryId),
-      categoryName:
-        INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === p.categoryId)?.label || 'Precision Metrology',
-    }));
+    // Only include mock catalogue products when running in offline mock mode
+    const standardItems = isMockApi
+      ? INQUIRY_CATALOG_PRODUCTS.map((p) => ({
+          ...p,
+          id: String(p.id),
+          productId: p.id,
+          categoryId: String(p.categoryId),
+          categoryName:
+            INQUIRY_CATALOG_CATEGORIES.find((c) => c.value === p.categoryId)?.label || 'Precision Metrology',
+        }))
+      : [];
 
     // Avoid duplicate entries if backend already returned a product with the same code or name
     const backendCodes = new Set(backendItems.map((p) => String(p.productCode || '').toLowerCase()));
@@ -729,7 +793,7 @@ export default function InquiryFormPage() {
 
   // Helper: calculate flatness tolerance using metrology formula
   const resolveFlatnessTolerance = useCallback((length, width, standard, grade) => {
-    if (!length || !width || !standard || !grade) return '—';
+    if (!length || !standard || !grade) return '—';
     try {
       const res = calculateFlatnessTolerance(length, width, standard, grade);
       if (res && res.isSupported && res.valueMicrons !== undefined) {
@@ -2089,14 +2153,14 @@ export default function InquiryFormPage() {
 
   // Find selected country object
   const selectedCountryObj = useMemo(() => {
-    if (!form.Country && !form.countryId) return null;
+    const countryVal = form.Country || (form.countryId ? null : 'India');
     return (
       countries.find(
         (c) =>
           (form.countryId && Number(c.id) === Number(form.countryId)) ||
-          String(c.id) === String(form.Country) ||
-          c.countryName?.toLowerCase() === String(form.Country).toLowerCase()
-      ) || null
+          (countryVal && String(c.id) === String(countryVal)) ||
+          (countryVal && c.countryName?.toLowerCase() === String(countryVal).toLowerCase())
+      ) || (countries.length > 0 ? countries.find((c) => c.countryName?.toLowerCase() === 'india') || countries[0] : { id: 1, countryName: 'India' })
     );
   }, [form.Country, form.countryId, countries]);
 
@@ -2110,15 +2174,14 @@ export default function InquiryFormPage() {
 
   // Fetch states on demand when a country is selected
   useEffect(() => {
-    if (selectedCountryObj?.id) {
-      fetchStatesForCountry(selectedCountryObj.id);
-    }
+    const cId = selectedCountryObj?.id || 1;
+    fetchStatesForCountry(cId);
   }, [selectedCountryObj, fetchStatesForCountry]);
 
   // Formatted options for State SearchableSelect
   const stateDropdownOptions = useMemo(() => {
-    if (!selectedCountryObj?.id) return [];
-    const list = statesCache[String(selectedCountryObj.id)] || [];
+    const cId = selectedCountryObj?.id || 1;
+    const list = statesCache[String(cId)] || (cId === 1 ? DEFAULT_INDIAN_STATES : []);
     return list.map((s) => ({
       value: s.stateName,
       label: s.stateName,
@@ -2147,7 +2210,8 @@ export default function InquiryFormPage() {
   const handleStateSelect = (e) => {
     const val = typeof e === 'object' && e !== null && 'target' in e ? e.target.value : e;
     const nextVal = typeof val === 'object' && val !== null ? val.value || '' : String(val || '');
-    const currentStates = selectedCountryObj?.id ? (statesCache[String(selectedCountryObj.id)] || []) : [];
+    const cId = selectedCountryObj?.id || 1;
+    const currentStates = statesCache[String(cId)] || (cId === 1 ? DEFAULT_INDIAN_STATES : []);
     const matchedState = currentStates.find(
       (s) => String(s.id) === String(nextVal) || s.stateName?.toLowerCase() === nextVal.toLowerCase()
     );
@@ -2155,6 +2219,8 @@ export default function InquiryFormPage() {
       ...prev,
       State: matchedState ? matchedState.stateName : nextVal,
       stateId: matchedState ? matchedState.id : null,
+      Country: prev.Country || selectedCountryObj?.countryName || 'India',
+      countryId: prev.countryId || cId,
     }));
     if (errors.State) {
       setErrors((prev) => ({ ...prev, State: '' }));
@@ -2601,7 +2667,7 @@ export default function InquiryFormPage() {
                       onChange={handleChange}
                       onBlur={handleBlur}
                       error={errors.DistributorName}
-                      id="DistributorName_deprecated"
+                      // id="DistributorName_deprecated"
                     />
                   </div>
                 )}
@@ -2753,7 +2819,28 @@ export default function InquiryFormPage() {
                   autoComplete="address-level2"
                 />
 
-                {/* 8. Country (SearchableSelect) */}
+                {/* 8. State / Province (SearchableSelect) */}
+                <SearchableSelect
+                  id="State"
+                  name="State"
+                  label="State / Province"
+                  placeholder={
+                    selectedCountryObj && loadingStatesMap[selectedCountryObj.id]
+                      ? 'Loading states...'
+                      : stateDropdownOptions.length === 0
+                        ? 'No states available'
+                        : 'Select state...'
+                  }
+                  searchPlaceholder="Search states..."
+                  emptyText="No states found"
+                  options={stateDropdownOptions}
+                  value={form.State || ''}
+                  onChange={handleStateSelect}
+                  error={errors.State}
+                  disabled={stateDropdownOptions.length === 0}
+                />
+
+                {/* 9. Country (SearchableSelect) */}
                 <SearchableSelect
                   id="Country"
                   name="Country"
@@ -2762,32 +2849,9 @@ export default function InquiryFormPage() {
                   searchPlaceholder="Search countries..."
                   emptyText="No countries found"
                   options={countryDropdownOptions}
-                  value={form.Country || ''}
+                  value={form.Country || 'India'}
                   onChange={handleCountrySelect}
                   error={errors.Country}
-                />
-
-                {/* 9. State / Province (Cascading SearchableSelect) */}
-                <SearchableSelect
-                  id="State"
-                  name="State"
-                  label="State"
-                  placeholder={
-                    !form.Country
-                      ? 'Select country first...'
-                      : selectedCountryObj && loadingStatesMap[selectedCountryObj.id]
-                        ? 'Loading states...'
-                        : stateDropdownOptions.length === 0
-                          ? 'No states available'
-                          : 'Select state...'
-                  }
-                  searchPlaceholder="Search states..."
-                  emptyText="No states found"
-                  options={stateDropdownOptions}
-                  value={form.State || ''}
-                  onChange={handleStateSelect}
-                  error={errors.State}
-                  disabled={!form.Country || stateDropdownOptions.length === 0}
                 />
 
                 {/* 10. Address Line 1 */}

@@ -12,6 +12,105 @@
  *   - On create (POST), quotationId is integer and lineItems is null (backend auto-copies)
  */
 
+export function getNextOrderStatuses(status) {
+  if (status === 'Draft') return ['Confirmed', 'Cancelled'];
+  if (status === 'Confirmed') return ['Cancelled', 'Closed'];
+  return [];
+}
+
+export function formatCurrency(amount, currency = 'INR') {
+  const num = Number(amount) || 0;
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: currency || 'INR',
+    maximumFractionDigits: 2,
+  }).format(num);
+}
+
+export function getOrderStatusBadgeVariant(status) {
+  if (status === 'Confirmed') return 'success';
+  if (status === 'Cancelled') return 'danger';
+  if (status === 'Closed') return 'neutral';
+  return 'neutral';
+}
+
+export const TAX_TREATMENTS = [
+  { value: 'INTRA_STATE', label: 'Intra-State (CGST + SGST)' },
+  { value: 'INTER_STATE', label: 'Inter-State (IGST)' },
+  { value: 'EXPORT_LUT', label: 'Export under LUT (0%)' },
+  { value: 'EXEMPT', label: 'Exempt / Nil Rated' },
+];
+
+export function calculateSalesOrderTotals(
+  items = [],
+  taxTreatment = 'INTRA_STATE',
+  headerOtherCharges = 0,
+  selectedTaxes = []
+) {
+  let subtotal = 0;
+  let lineTaxAmount = 0;
+
+  const calculatedItems = (items || []).map((item) => {
+    const qty = Number(item.quantity) || 0;
+    const rate = Number(item.rate) || 0;
+    const itemOtherCharges = Number(item.otherCharges) || 0;
+    const lineAmount = qty * rate + itemOtherCharges;
+    const taxRate = Number(item.taxPercent !== undefined && item.taxPercent !== null ? item.taxPercent : 0);
+    const lineTax = (lineAmount * taxRate) / 100;
+
+    subtotal += lineAmount;
+    lineTaxAmount += lineTax;
+
+    return {
+      ...item,
+      quantity: qty,
+      rate,
+      otherCharges: itemOtherCharges,
+      taxPercent: taxRate,
+      lineAmount,
+      lineTax,
+    };
+  });
+
+  const extraCharges = Number(headerOtherCharges) || 0;
+  const isTaxZero = taxTreatment === 'EXPORT_LUT' || taxTreatment === 'EXEMPT';
+  const extraTax = isTaxZero ? 0 : (extraCharges * 18) / 100;
+
+  let cgst = 0;
+  let sgst = 0;
+  let igst = 0;
+
+  if (Array.isArray(selectedTaxes) && selectedTaxes.length > 0) {
+    selectedTaxes.forEach((t) => {
+      const pct = Number(t.taxPercent || t.percent || 0);
+      const taxAmt = ((subtotal + extraCharges) * pct) / 100;
+      const name = (t.taxName || t.name || '').toUpperCase();
+      if (name.includes('CGST')) cgst += taxAmt;
+      else if (name.includes('SGST')) sgst += taxAmt;
+      else if (name.includes('IGST')) igst += taxAmt;
+    });
+  } else if (taxTreatment === 'INTRA_STATE') {
+    cgst = (lineTaxAmount + extraTax) / 2;
+    sgst = (lineTaxAmount + extraTax) / 2;
+  } else if (taxTreatment === 'INTER_STATE') {
+    igst = lineTaxAmount + extraTax;
+  }
+
+  const totalTax = cgst + sgst + igst || (lineTaxAmount + extraTax);
+  const grandTotal = subtotal + extraCharges + totalTax;
+
+  return {
+    subtotal,
+    lineItems: calculatedItems,
+    headerOtherCharges: extraCharges,
+    cgst,
+    sgst,
+    igst,
+    totalTax,
+    grandTotal,
+  };
+}
+
 /**
  * Normalizes a single list item from GET /api/order-confirmations
  * @param {object} dto
@@ -19,7 +118,7 @@
  */
 export function orderConfirmationListItemFromApi(dto) {
   if (!dto) return null;
-  const status = dto.orderStatus || 'Draft';
+  const status = dto.orderStatus || dto.status || 'Draft';
   const grandTotal = Number(dto.totalAmount) || 0;
   const orderSource = dto.orderSource ?? false;
   const orderSourceName = dto.orderSourceName || (orderSource ? 'Direct' : 'Quotation');
@@ -33,6 +132,7 @@ export function orderConfirmationListItemFromApi(dto) {
     orderSource,
     orderSourceName,
     isDirectOrder: Boolean(orderSource),
+    isEditable: dto.isEditable !== undefined ? Boolean(dto.isEditable) : (status === 'Draft'),
     quotationDetailId: dto.quotationDetailId ?? null,
     quotationId: dto.quotationId ?? null,
     quotationNo: dto.quotationNo || null,
@@ -40,8 +140,9 @@ export function orderConfirmationListItemFromApi(dto) {
     inquiryId: dto.inquiryId ?? null,
     inquiryNo: dto.inquiryNo || null,
     clientId: dto.clientId,
-    clientCode: dto.clientCode || '',
-    clientName: dto.clientName || '',
+    clientCode: dto.clientCode || dto.client?.clientCode || '',
+    clientName: dto.clientName || dto.client?.clientName || dto.client?.companyName || dto.customerName || '',
+    contactPerson: dto.clientContactName || dto.contactPerson || dto.clientContact?.fullName || dto.clientContact?.name || '',
     clientPoNo: dto.clientPoNo || '',
     clientPoDate: dto.clientPoDate ? String(dto.clientPoDate).slice(0, 10) : '',
     expectedDeliveryDate: dto.expectedDeliveryDate ? String(dto.expectedDeliveryDate).slice(0, 10) : '',
@@ -49,6 +150,7 @@ export function orderConfirmationListItemFromApi(dto) {
     currencyCode: dto.currencyCode || 'INR',
     grandTotal,
     totalAmount: grandTotal,
+    confirmedOn: dto.confirmedOn ? String(dto.confirmedOn).slice(0, 10) : (dto.confirmedDate ? String(dto.confirmedDate).slice(0, 10) : null),
     createdBy: dto.createdBy,
     createdByName: dto.createdByName || '',
     createdOn: dto.createdOn || '',
@@ -64,7 +166,7 @@ export function orderConfirmationListItemFromApi(dto) {
 export function orderConfirmationDetailFromApi(dto) {
   if (!dto) return null;
 
-  const status = dto.orderStatus || 'Draft';
+  const status = dto.orderStatus || dto.status || 'Draft';
   const grandTotal = Number(dto.totalAmount) || 0;
   const subtotal = Number(dto.subTotal) || 0;
   const otherCharges = Number(dto.otherCharges) || 0;
@@ -90,7 +192,7 @@ export function orderConfirmationDetailFromApi(dto) {
     itemCode: item.productCode || '',
     productCode: item.productCode || '',
     productName: item.productName || 'Granite Product',
-    variantName: item.uomName || '',
+    variantName: item.variantName || item.productVariantName || item.specification || item.uomName || '',
     uomName: item.uomName || '',
     quantity: Number(item.quantity) || 0,
     rate: Number(item.rate) || 0,
@@ -131,20 +233,44 @@ export function orderConfirmationDetailFromApi(dto) {
     taxAmount: Number(tax.taxAmount) || 0,
   }));
 
+  let cgst = Number(dto.cgst) || 0;
+  let sgst = Number(dto.sgst) || 0;
+  let igst = Number(dto.igst) || 0;
+
+  taxes.forEach((t) => {
+    const name = (t.taxName || '').toUpperCase();
+    if (name.includes('CGST')) cgst = t.taxAmount;
+    else if (name.includes('SGST')) sgst = t.taxAmount;
+    else if (name.includes('IGST')) igst = t.taxAmount;
+  });
+
+  const taxTreatment = dto.taxTreatment || (igst > 0 ? 'INTER_STATE' : (cgst > 0 || sgst > 0 ? 'INTRA_STATE' : (totalTax > 0 ? 'INTER_STATE' : 'EXEMPT')));
+
   // Normalize email logs
-  const emailLogs = (dto.emailLogs || []).map((log, idx) => ({
-    id: log.id || `mail-${idx}`,
-    sentByUserId: log.sentByUserId,
-    sentByName: log.sentByName || '',
-    sentOn: log.sentOn || '',
-    fromAddress: log.fromAddress || '',
-    toAddress: log.toAddress || '',
-    ccAddress: log.ccAddress || '',
-    subject: log.subject || '',
-    body: log.body || '',
-    isSuccess: Boolean(log.isSuccess),
-    errorMessage: log.errorMessage || '',
-  }));
+  const emailLogs = (dto.emailLogs || []).map((log, idx) => {
+    const isSuccess = log.isSuccess !== undefined ? Boolean(log.isSuccess) : (log.result === 'Success');
+    const sentAt = log.sentAt || log.sentOn || '';
+    const to = log.to || log.toAddress || '';
+    const cc = log.cc || log.ccAddress || '';
+    const result = log.result || (isSuccess ? 'Success' : 'Failed');
+    return {
+      id: log.id || `mail-${idx}`,
+      sentByUserId: log.sentByUserId,
+      sentByName: log.sentByName || '',
+      sentOn: sentAt,
+      sentAt,
+      fromAddress: log.fromAddress || '',
+      toAddress: to,
+      to,
+      ccAddress: cc,
+      cc,
+      subject: log.subject || '',
+      body: log.body || '',
+      isSuccess,
+      result,
+      errorMessage: log.errorMessage || '',
+    };
+  });
 
   const orderSource = dto.orderSource ?? false;
   const orderSourceName = dto.orderSourceName || (orderSource ? 'Direct' : 'Quotation');
@@ -158,8 +284,8 @@ export function orderConfirmationDetailFromApi(dto) {
     orderSource,
     orderSourceName,
     isDirectOrder: Boolean(orderSource),
-    isEditable: Boolean(dto.isEditable),
-    nextStatuses: Array.isArray(dto.nextStatuses) ? dto.nextStatuses : [],
+    isEditable: dto.isEditable !== undefined ? Boolean(dto.isEditable) : (status === 'Draft'),
+    nextStatuses: Array.isArray(dto.nextStatuses) && dto.nextStatuses.length > 0 ? dto.nextStatuses : getNextOrderStatuses(status),
     quotationDetailId: dto.quotationDetailId ?? null,
     quotationId: dto.quotationId ?? null,
     quotationNo: dto.quotationNo || null,
@@ -168,15 +294,15 @@ export function orderConfirmationDetailFromApi(dto) {
     inquiryNo: dto.inquiryNo || null,
     clientId: dto.clientId,
     clientDetailId: dto.clientDetailId ?? null,
-    clientCode: dto.clientCode || '',
-    clientName: dto.clientName || '',
+    clientCode: dto.clientCode || dto.client?.clientCode || '',
+    clientName: dto.clientName || dto.client?.clientName || dto.client?.companyName || dto.customerName || '',
     gstNo: dto.gstNo || '',
     clientAddressId: dto.clientAddressId,
     clientAddress: addressDisplay,
-    clientContactId: dto.clientContactId,
-    contactPerson: dto.clientContactName || '',
-    contactEmail: dto.clientContactEmail || '',
-    contactPhone: dto.clientContactPhone || '',
+    clientContactId: dto.clientContactId || dto.clientContact?.id || null,
+    contactPerson: dto.clientContactName || dto.contactPerson || dto.clientContact?.fullName || dto.clientContact?.name || '',
+    contactEmail: dto.clientContactEmail || dto.contactEmail || dto.clientContact?.email || '',
+    contactPhone: dto.clientContactPhone || dto.contactPhone || dto.clientContact?.phone || dto.clientContact?.mobile || '',
     clientPoNo: dto.clientPoNo || '',
     clientPoDate: dto.clientPoDate ? String(dto.clientPoDate).slice(0, 10) : '',
     expectedDeliveryDate: dto.expectedDeliveryDate ? String(dto.expectedDeliveryDate).slice(0, 10) : '',
@@ -196,12 +322,19 @@ export function orderConfirmationDetailFromApi(dto) {
     otherChargesDescription: dto.otherChargesDescription || '',
     totalTax,
     taxAmount: totalTax,
+    taxTreatment,
+    cgst,
+    sgst,
+    igst,
     grandTotal,
     totalAmount: grandTotal,
     remarks: dto.remarks || '',
     createdBy: dto.createdBy,
     createdByName: dto.createdByName || '',
     createdOn: dto.createdOn || '',
+    confirmedOn: dto.confirmedOn ? String(dto.confirmedOn).slice(0, 10) : (dto.confirmedDate ? String(dto.confirmedDate).slice(0, 10) : null),
+    confirmedBy: dto.confirmedBy || null,
+    confirmedByName: dto.confirmedByName || '',
     lastUpdatedBy: dto.lastUpdatedBy,
     lastUpdatedByName: dto.lastUpdatedByName || '',
     lastUpdatedOn: dto.lastUpdatedOn || '',
@@ -228,15 +361,25 @@ export function orderConfirmationDetailFromApi(dto) {
  * @returns {object}
  */
 export function buildCreateOrderConfirmationPayload(form) {
+  let cleanQuotationId = null;
+  if (form.quotationId) {
+    if (typeof form.quotationId === 'number' && Number.isFinite(form.quotationId)) {
+      cleanQuotationId = form.quotationId;
+    } else {
+      const match = String(form.quotationId).match(/(\d+)$/);
+      if (match) cleanQuotationId = Number(match[1]);
+    }
+  }
+
   const isDirect = Boolean(
     form.orderSource === true ||
     form.isDirectOrder ||
-    (!form.quotationId && form.clientId)
+    (!cleanQuotationId && form.clientId)
   );
 
   const payload = {
     orderSource: isDirect,
-    quotationId: isDirect ? null : Number(form.quotationId),
+    quotationId: isDirect ? null : cleanQuotationId,
     orderConfirmationDate: form.orderConfirmationDate || null,
     clientAddressId: form.clientAddressId ? Number(form.clientAddressId) : null,
     clientContactId: form.clientContactId ? Number(form.clientContactId) : null,
@@ -259,7 +402,7 @@ export function buildCreateOrderConfirmationPayload(form) {
     }
     payload.lineItems = Array.isArray(form.lineItems) && form.lineItems.length > 0
       ? form.lineItems.map((item) => ({
-          productId: Number(item.productId),
+          productId: Number(item.productId) && !isNaN(Number(item.productId)) ? Number(item.productId) : 1,
           quantity: Number(item.quantity) || 1,
           rate: Number(item.rate) || 0,
           taxConfigDetailId: item.taxConfigDetailId ? Number(item.taxConfigDetailId) : null,
@@ -306,15 +449,11 @@ export function buildUpdateOrderConfirmationPayload(form) {
     remarks: form.remarks ? String(form.remarks).trim() : null,
   };
 
-  if (form.currencyId !== undefined) {
-    payload.currencyId = form.currencyId ? Number(form.currencyId) : null;
-  }
-
   // On PUT: if lineItems is passed as an array, send SalesLineRequestDto[]
   if (Array.isArray(form.lineItems)) {
     payload.lineItems = form.lineItems.map((item) => ({
-      id: typeof item.id === 'number' ? item.id : null,
-      productId: Number(item.productId || 1),
+      id: item.id && !isNaN(Number(item.id)) ? Number(item.id) : null,
+      productId: Number(item.productId) && !isNaN(Number(item.productId)) ? Number(item.productId) : 1,
       quantity: Number(item.quantity) || 1,
       rate: Number(item.rate) || 0,
       taxConfigDetailId: item.taxConfigDetailId ? Number(item.taxConfigDetailId) : null,

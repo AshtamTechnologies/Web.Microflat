@@ -55,6 +55,8 @@ export default function ProductViewPage() {
   // Approval modals
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectComments, setRejectComments] = useState('');
+  const [rejectError, setRejectError] = useState('');
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
 
   // Quick edit standards & options
@@ -71,30 +73,13 @@ export default function ProductViewPage() {
     try {
       const data = await productService.getProductById(id);
       if (data) {
-        let loadedStandards = (data.standards || []).map((s) => ({
+        const loadedStandards = (data.standards || []).map((s) => ({
           ...s,
           standardId: Number(s.standardId || s.id),
           standardCode: s.standardCode || '',
           isPrimary: Boolean(s.isPrimary),
           applicableGradeIds: s.applicableGradeIds || null,
         }));
-
-        // Hydrate product-specific grade applicability preferences if cached
-        try {
-          const cached = localStorage.getItem(`product_standards_grades_${id}`);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            loadedStandards = loadedStandards.map((s) => {
-              const sid = Number(s.standardId);
-              const found = parsed.find((p) => Number(p.standardId || p.id) === sid);
-              return found && found.applicableGradeIds !== undefined
-                ? { ...s, applicableGradeIds: found.applicableGradeIds }
-                : s;
-            });
-          }
-        } catch (e) {
-          console.warn('Could not read cached product grade preferences:', e);
-        }
 
         setProduct({ ...data, standards: loadedStandards });
         setCurrentStandards(loadedStandards);
@@ -146,11 +131,18 @@ export default function ProductViewPage() {
 
   // Handle Reject
   const handleReject = async () => {
+    if (!rejectComments.trim()) {
+      setRejectError('Rejection comments are required.');
+      return;
+    }
+
     setIsSubmittingApproval(true);
     try {
-      await productService.rejectProduct(product.id);
+      await productService.rejectProduct(product.id, { comments: rejectComments.trim() });
       toast.success('Product rejected');
       setIsRejectModalOpen(false);
+      setRejectComments('');
+      setRejectError('');
       loadProduct();
       refreshProducts?.();
       loadSummary?.();
@@ -185,12 +177,7 @@ export default function ProductViewPage() {
         product.id,
         currentStandards.filter((s) => s.standardId || s.id)
       );
-      try {
-        localStorage.setItem(`product_standards_grades_${product.id}`, JSON.stringify(currentStandards));
-      } catch (e) {
-        console.warn('Could not cache product grade preferences:', e);
-      }
-      toast.success('Standards & precision grade mapping updated successfully');
+      toast.success('Standards updated successfully');
       setIsEditingStandards(false);
       loadProduct();
       refreshProducts?.();
@@ -630,18 +617,58 @@ export default function ProductViewPage() {
         loading={isSubmittingApproval}
       />
 
-      {/* ── Reject Confirmation Modal ── */}
-      <ConfirmModal
+      {/* ── Reject Modal with Comments ── */}
+      <Modal
         isOpen={isRejectModalOpen}
-        onClose={() => !isSubmittingApproval && setIsRejectModalOpen(false)}
-        onConfirm={handleReject}
+        onClose={() => {
+          if (!isSubmittingApproval) {
+            setIsRejectModalOpen(false);
+            setRejectComments('');
+            setRejectError('');
+          }
+        }}
         title="Reject Product"
-        message={`Are you sure you want to reject "${product?.productName || product?.productCode}"?`}
-        confirmText="Reject"
-        cancelText="Cancel"
-        variant="danger"
-        loading={isSubmittingApproval}
-      />
+        size="sm"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <CancelButton
+              onClick={() => {
+                setIsRejectModalOpen(false);
+                setRejectComments('');
+                setRejectError('');
+              }}
+              disabled={isSubmittingApproval}
+            />
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleReject}
+              loading={isSubmittingApproval}
+            >
+              Reject Product
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Please provide the reason for rejecting <strong className="text-foreground">{product?.productName || product?.productCode}</strong>.
+            The creator will see these remarks when reviewing the rejected product.
+          </p>
+          <Textarea
+            label="Rejection Reason"
+            required
+            rows={3}
+            value={rejectComments}
+            onChange={(e) => {
+              setRejectComments(e.target.value);
+              if (rejectError) setRejectError('');
+            }}
+            placeholder="e.g. Incomplete accuracy specifications or dimensions outside standard capability..."
+            error={rejectError}
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -68,7 +68,7 @@ export default function DealStatusModal({
   );
 
   const subtitle = deal
-    ? [deal.dealNo, deal.clientName || deal.customerName].filter(Boolean).join(' • ')
+    ? [deal.dealNo, deal.clientName].filter(Boolean).join(' • ')
     : undefined;
 
   return (

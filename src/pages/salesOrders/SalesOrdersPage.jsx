@@ -31,11 +31,19 @@ import {
 } from '../../components/ui';
 import { useSalesOrdersContext } from '../../context/SalesOrdersContext';
 import {
-  ORDER_STATUS_FILTER_OPTIONS,
   formatCurrency,
   getOrderStatusBadgeVariant,
-} from '../../mocks/salesOrders';
+} from '../../models/salesOrders/orderConfirmationModel';
 import { formatDate } from '../../utils/dateUtils';
+import { triggerPdfDownload } from '../../utils/fileHelpers';
+
+const ORDER_STATUS_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Statuses' },
+  { value: 'Draft', label: 'Draft' },
+  { value: 'Confirmed', label: 'Confirmed' },
+  { value: 'Closed', label: 'Closed' },
+  { value: 'Cancelled', label: 'Cancelled' },
+];
 
 const SOURCE_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Sources' },
@@ -47,9 +55,10 @@ const columnHelper = createColumnHelper();
 
 export default function SalesOrdersPage() {
   const navigate = useNavigate();
-  const { salesOrders = [], refreshSalesOrders } = useSalesOrdersContext();
+  const { salesOrders = [], refreshSalesOrders, lookups } = useSalesOrdersContext();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [sourceFilter, setSourceFilter] = useState('ALL');
   const [fromDate, setFromDate] = useState('');
@@ -57,12 +66,34 @@ export default function SalesOrdersPage() {
   const [sorting, setSorting] = useState([]);
   const [columnSizing, setColumnSizing] = useState({});
 
+  const statusFilterOptions = useMemo(() => {
+    if (Array.isArray(lookups?.statuses) && lookups.statuses.length > 0) {
+      return [
+        { value: 'ALL', label: 'All Statuses' },
+        ...lookups.statuses.map((st) => {
+          const val = typeof st === 'string' ? st : (st.statusName || st.value || st.status || '');
+          const lbl = typeof st === 'string' ? st : (st.statusName || st.label || st.status || val);
+          return { value: val, label: lbl };
+        }),
+      ];
+    }
+    return ORDER_STATUS_FILTER_OPTIONS;
+  }, [lookups]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const hasActiveFilters = Boolean(
     searchQuery.trim() || statusFilter !== 'ALL' || sourceFilter !== 'ALL' || fromDate || toDate
   );
 
   function handleResetFilters() {
     setSearchQuery('');
+    setDebouncedSearch('');
     setStatusFilter('ALL');
     setSourceFilter('ALL');
     setFromDate('');
@@ -76,12 +107,12 @@ export default function SalesOrdersPage() {
       if (sourceFilter === 'DIRECT') params.orderSource = true;
       else if (sourceFilter === 'QUOTATION') params.orderSource = false;
       if (statusFilter !== 'ALL') params.status = statusFilter;
-      if (searchQuery.trim()) params.search = searchQuery.trim();
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
       if (fromDate) params.fromDate = fromDate;
       if (toDate) params.toDate = toDate;
       refreshSalesOrders(params);
     }
-  }, [sourceFilter, statusFilter, fromDate, toDate, refreshSalesOrders]);
+  }, [sourceFilter, statusFilter, fromDate, toDate, debouncedSearch, refreshSalesOrders]);
 
   const filteredData = useMemo(() => {
     return salesOrders.filter((order) => {
@@ -271,6 +302,20 @@ export default function SalesOrdersPage() {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    triggerPdfDownload(
+                      `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                      {
+                        title: 'Order Confirmation',
+                        documentType: 'Sales Order Confirmation',
+                        fileName: `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                        quotationNo: order.quotationNo,
+                        clientName: order.clientName,
+                        poNumber: order.clientPoNo,
+                        expectedDeliveryDate: order.expectedDeliveryDate,
+                        totalAmount: `${order.currency} ${order.grandTotal}`,
+                        remarks: `Status: ${order.status} | Source: ${order.orderSourceName}`,
+                      }
+                    );
                   }}
                   className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
                   title="Download Order Confirmation PDF"
@@ -348,7 +393,7 @@ export default function SalesOrdersPage() {
             id="sales-order-status-filter"
             placeholder="All Statuses"
             searchPlaceholder="Search statuses..."
-            options={ORDER_STATUS_FILTER_OPTIONS}
+            options={statusFilterOptions}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           />

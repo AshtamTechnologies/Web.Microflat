@@ -12,7 +12,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { INITIAL_QUOTATIONS, calculateQuotationTotals } from '../mocks/quotations';
+import { calculateQuotationTotals } from '../mocks/quotations';
 import { quotationService, isMockApi } from '../services';
 import { quotationDocumentFromApi } from '../models/quotations/quotationModel';
 
@@ -50,7 +50,7 @@ function sanitizeQuotation(q) {
 
   return {
     ...q,
-    id: String(id || qNo || ''),
+    id: id ?? qNo ?? null,
     quotationNo: String(qNo || id || ''),
     clientAddress: clientAddress !== undefined ? clientAddress : (q.clientAddress || ''),
     contactPerson: contactPerson !== undefined ? contactPerson : (q.contactPerson || ''),
@@ -86,7 +86,7 @@ export function QuotationsProvider({ children }) {
       } catch (e) {
         console.error('Failed to load quotations from localStorage:', e);
       }
-      return INITIAL_QUOTATIONS.map(sanitizeQuotation);
+      return [];
     }
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -171,6 +171,13 @@ export function QuotationsProvider({ children }) {
   }, []);
 
   /**
+   * Initial load of quotations from backend
+   */
+  useEffect(() => {
+    refreshQuotations();
+  }, [refreshQuotations]);
+
+  /**
    * Find quotation by ID or quotation number from state
    */
   const getQuotationById = useCallback(
@@ -195,6 +202,29 @@ export function QuotationsProvider({ children }) {
     try {
       const data = await quotationService.getQuotationById(id);
       if (data) {
+        if (!data.poReceived && !isMockApi) {
+          try {
+            const poData = await quotationService.getQuotationPo(id);
+            if (poData && (poData.poNumber || poData.id || poData.receivedOn || poData.poReceivedDate)) {
+              data.poReceived = true;
+              data.poDetails = {
+                poNumber: poData.poNumber || 'Client PO',
+                receivedOn: poData.receivedOn || poData.poReceivedDate || '',
+                expectedDeliveryDate: poData.expectedDeliveryDate || '',
+                remarks: poData.remarks || poData.poRemarks || '',
+                fileName: poData.fileName || poData.poFileName || '',
+                documentTypeName: poData.documentTypeName || 'Customer PO',
+                ...poData,
+              };
+              data.status = 'PO Received';
+              data.canRevise = false;
+              data.isEditable = false;
+            }
+          } catch {
+            // Silently ignore 404 when no PO has been recorded yet
+          }
+        }
+
         setQuotations((prev) => {
           const exists = prev.some((q) => String(q.id) === String(id) || String(q.quotationNo) === String(id));
           if (exists) {
@@ -208,7 +238,7 @@ export function QuotationsProvider({ children }) {
       console.warn('fetchQuotationDetail error:', err);
     }
     return null;
-  }, []);
+  }, [isMockApi]);
 
   /**
    * Get Next Quotation Number preview
@@ -251,7 +281,21 @@ export function QuotationsProvider({ children }) {
       // 1. Live API create when not in mock mode
       if (!isMockApi) {
         const created = await quotationService.createQuotation(payload);
-        const sanitized = sanitizeQuotation(created);
+        let sanitized = sanitizeQuotation(created);
+        // If clientName is empty because minimal DTO was returned, enrich with payload or detail
+        if (!sanitized.clientName && payload.clientName) {
+          sanitized.clientName = payload.clientName;
+        }
+        if (sanitized.id) {
+          try {
+            const fullDetail = await quotationService.getQuotationById(sanitized.id);
+            if (fullDetail) {
+              sanitized = sanitizeQuotation(fullDetail);
+            }
+          } catch (e) {
+            console.warn('Could not refetch created quotation detail:', e);
+          }
+        }
         setQuotations((prev) => [sanitized, ...prev]);
         toast.success(payload.status === 'Sent' ? 'Quotation saved & marked as Sent' : 'Quotation created as Draft');
         return sanitized;
@@ -463,8 +507,9 @@ export function QuotationsProvider({ children }) {
    * Sends multipart form-data to POST /api/quotations/{id}/po-received
    */
   const recordClientPO = useCallback(async (quotationId, poData) => {
+    let apiUpdated = null;
     if (!isMockApi) {
-      const apiUpdated = await quotationService.recordQuotationPo(quotationId, poData);
+      apiUpdated = await quotationService.recordQuotationPo(quotationId, poData);
       const sanitized = sanitizeQuotation(apiUpdated);
       setQuotations((prev) =>
         prev.map((q) => (String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId) ? { ...q, ...sanitized, poReceived: true } : q))
@@ -531,9 +576,14 @@ export function QuotationsProvider({ children }) {
   const addNegotiationStage = useCallback(async (quotationId, stageData, revisionId) => {
     let apiStage = null;
     const qObj = quotations.find((q) => String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId));
-    const resolvedRevId = revisionId || stageData?.revisionId || qObj?.latestRevisionId || qObj?.revisions?.[0]?.id || quotationId;
+    const resolvedRevId = revisionId || stageData?.revisionId || qObj?.latestRevisionId || (qObj?.revisions?.length ? qObj.revisions[qObj.revisions.length - 1]?.id : null);
 
     if (!isMockApi) {
+      if (!resolvedRevId) {
+        console.error('addNegotiationStage: No valid revisionId found for quotation', quotationId);
+        toast.error('Cannot add negotiation stage: Revision not found');
+        return;
+      }
       try {
         const mappedStageData = {
           ...stageData,
@@ -542,7 +592,9 @@ export function QuotationsProvider({ children }) {
         };
         apiStage = await quotationService.addNegotiationStage(resolvedRevId, mappedStageData);
       } catch (err) {
-        console.warn('Backend addNegotiationStage failed, using local fallback:', err);
+        console.error('Backend addNegotiationStage failed:', err);
+        toast.error('Failed to save negotiation stage to server');
+        throw err;
       }
     }
 
@@ -668,10 +720,25 @@ export function QuotationsProvider({ children }) {
    */
   const uploadDocument = useCallback(async (quotationId, docData, revisionNo) => {
     let apiDoc = null;
-    const qObj = quotations.find((q) => String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId));
-    const resolvedRevId = revisionNo || qObj?.latestRevisionId || qObj?.revisions?.[0]?.id || quotationId;
+    let qObj = quotations.find((q) => String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId));
+    let resolvedRevId = revisionNo || qObj?.latestRevisionId || (qObj?.revisions?.length ? qObj.revisions[qObj.revisions.length - 1]?.id : null);
 
     if (!isMockApi && docData?.file) {
+      if (!resolvedRevId) {
+        // Fetch detail if latestRevisionId is missing
+        const detail = await fetchQuotationDetail(quotationId);
+        if (detail) {
+          qObj = detail;
+          resolvedRevId = qObj?.latestRevisionId || (qObj?.revisions?.length ? qObj.revisions[qObj.revisions.length - 1]?.id : null);
+        }
+      }
+
+      if (!resolvedRevId) {
+        console.error('uploadDocument: No valid revisionId found for quotation', quotationId);
+        toast.error('Cannot upload document: Revision not found');
+        return;
+      }
+
       try {
         const formData = new FormData();
         if (docData.documentTypeId) {
@@ -683,7 +750,9 @@ export function QuotationsProvider({ children }) {
         }
         apiDoc = await quotationService.uploadQuotationDocument(resolvedRevId, formData);
       } catch (err) {
-        console.warn('Backend uploadQuotationDocument failed, fallback to local state:', err);
+        console.error('Backend uploadQuotationDocument failed:', err);
+        toast.error('Failed to upload document to server');
+        throw err;
       }
     }
 
@@ -717,14 +786,30 @@ export function QuotationsProvider({ children }) {
    * Send Mail Log
    */
   const sendMailLog = useCallback(async (quotationId, mailData) => {
-    const qObj = quotations.find((q) => String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId));
-    const revisionId = qObj?.latestRevisionId || quotationId;
+    let qObj = quotations.find((q) => String(q.id) === String(quotationId) || String(q.quotationNo) === String(quotationId));
+    let revisionId = qObj?.latestRevisionId || (qObj?.revisions?.length ? qObj.revisions[qObj.revisions.length - 1]?.id : null);
 
     if (!isMockApi) {
+      if (!revisionId) {
+        const detail = await fetchQuotationDetail(quotationId);
+        if (detail) {
+          qObj = detail;
+          revisionId = qObj?.latestRevisionId || (qObj?.revisions?.length ? qObj.revisions[qObj.revisions.length - 1]?.id : null);
+        }
+      }
+
+      if (!revisionId) {
+        console.error('sendMailLog: No valid revisionId found for quotation', quotationId);
+        toast.error('Cannot send email: Revision not found');
+        return;
+      }
+
       try {
         await quotationService.sendQuotationEmail(revisionId, mailData);
       } catch (err) {
-        console.warn('Backend sendQuotationEmail failed, using local log:', err);
+        console.error('Backend sendQuotationEmail failed:', err);
+        toast.error('Failed to send quotation email');
+        throw err;
       }
     }
 

@@ -72,7 +72,7 @@ export default function NegotiationStageFields({
           options={
             userOptions.length > 0
               ? userOptions
-              : [{ value: 'Janvi Motwani', label: 'Janvi Motwani' }]
+              : []
           }
           value={stageData.handledBy}
           onChange={(e) => handleField('handledBy', e.target.value)}

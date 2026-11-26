@@ -221,10 +221,12 @@ export default function UploadDocumentModal({
       if (isNewVersion && targetDocument) {
         const res = await addDocumentVersion(
           inquiryId,
-          targetDocument.documentId,
+          targetDocument.documentId || targetDocument.id,
           {
             file: selectedFile,
             remarks,
+            documentTypeId: targetDocument.documentTypeId,
+            documentTitle: targetDocument.documentTitle,
           }
         );
         if (res.ok) {

@@ -264,7 +264,7 @@ export default function ProductsPage() {
       />
 
       {/* ── 2. Summary KPI Cards ── */}
-      {/* <ProductSummaryCards summary={summary} isLoading={isLoadingSummary} /> */}
+      <ProductSummaryCards summary={summary} isLoading={isLoadingSummary} />
 
       {/* ── 3. Filters Toolbar (Swagger Image 1) ── */}
       <ProductFilterBar

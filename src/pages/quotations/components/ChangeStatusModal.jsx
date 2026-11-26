@@ -16,10 +16,15 @@ export default function ChangeStatusModal({ isOpen, onClose, quotation }) {
     }
   }, [quotation]);
 
-  const statusOptions = QUOTATION_STATUSES.map((s) => ({
-    value: s.id,
-    label: s.name,
-  }));
+  const statusOptions = (quotation?.nextStatuses && quotation.nextStatuses.length > 0)
+    ? quotation.nextStatuses.map((s) => ({
+        value: typeof s === 'object' ? (s.value || s.name || s.id) : s,
+        label: typeof s === 'object' ? (s.name || s.label || s.value) : s,
+      }))
+    : QUOTATION_STATUSES.map((s) => ({
+        value: s.id,
+        label: s.name,
+      }));
 
   function handleSave() {
     if (!quotation) return;

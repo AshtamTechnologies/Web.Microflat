@@ -27,7 +27,7 @@ export function approvalRequestFromApi(apiItem) {
     moduleName: apiItem.moduleName || (apiItem.moduleCode ? apiItem.moduleCode.charAt(0) + apiItem.moduleCode.slice(1).toLowerCase() : 'Vendor'),
     approvalTypeId: apiItem.approvalTypeId ?? 0,
     typeCode: apiItem.typeCode || '',
-    typeName: apiItem.typeName || 'Registration',
+    typeName: apiItem.typeName || (String(apiItem.moduleCode || '').toUpperCase() === 'VENDOR' ? 'Registration' : ''),
     referenceId: refId,
     vendorId: refId,
     referenceTitle: apiItem.referenceTitle || apiItem.vendorName || '',

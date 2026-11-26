@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Modal,
   Button,
@@ -8,14 +8,17 @@ import {
   Badge,
 } from '../../../components/ui';
 import { useSalesOrdersContext } from '../../../context/SalesOrdersContext';
-import { getNextOrderStatuses, getOrderStatusBadgeVariant } from '../../../mocks/salesOrders';
+import {
+  getNextOrderStatuses,
+  getOrderStatusBadgeVariant,
+} from '../../../models/salesOrders/orderConfirmationModel';
 import { IconRefresh } from '../../../constants/icons';
 
-export default function ChangeOrderStatusModal({ isOpen, onClose, order }) {
+export default function ChangeOrderStatusModal({ isOpen, onClose, order, onSuccess }) {
   const { changeSalesOrderStatus } = useSalesOrdersContext();
 
   const allowedNextStatuses = useMemo(() => {
-    if (Array.isArray(order?.nextStatuses)) {
+    if (Array.isArray(order?.nextStatuses) && order.nextStatuses.length > 0) {
       return order.nextStatuses;
     }
     return getNextOrderStatuses(order?.status);
@@ -28,16 +31,33 @@ export default function ChangeOrderStatusModal({ isOpen, onClose, order }) {
 
   const [newStatus, setNewStatus] = useState(allowedNextStatuses[0] || '');
   const [remarks, setRemarks] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && order) {
+      setNewStatus(allowedNextStatuses[0] || '');
+      setRemarks('');
+      setIsSubmitting(false);
+    }
+  }, [isOpen, order, allowedNextStatuses]);
 
   const effectiveStatus = allowedNextStatuses.includes(newStatus)
     ? newStatus
     : allowedNextStatuses[0] || '';
 
-  function handleSave() {
-    if (!order || !effectiveStatus) return;
-    changeSalesOrderStatus(order.id, effectiveStatus, remarks);
-    setRemarks('');
-    onClose();
+  async function handleSave() {
+    if (!order || !effectiveStatus || isSubmitting) return;
+    try {
+      setIsSubmitting(true);
+      const res = await changeSalesOrderStatus(order.id, effectiveStatus, remarks);
+      if (res) {
+        setRemarks('');
+        onSuccess?.();
+        onClose();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -84,14 +104,15 @@ export default function ChangeOrderStatusModal({ isOpen, onClose, order }) {
         )}
 
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-          <CancelButton onClick={onClose}>Cancel</CancelButton>
+          <CancelButton onClick={onClose} disabled={isSubmitting}>Cancel</CancelButton>
           {statusOptions.length > 0 && (
             <Button
               variant={effectiveStatus === 'Cancelled' ? 'danger' : 'primary'}
               onClick={handleSave}
+              disabled={isSubmitting}
               icon={<IconRefresh size={15} />}
             >
-              Update Status
+              {isSubmitting ? 'Updating...' : 'Update Status'}
             </Button>
           )}
         </div>

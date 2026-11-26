@@ -271,8 +271,11 @@ export default function ClientFormPage() {
       }
     }
 
-    if (form.gstNo && form.gstNo.length > 50) {
-      errs.gstNo = 'Max 50 characters';
+    if (form.gstNo?.trim()) {
+      const gstTrimmed = form.gstNo.trim().toUpperCase();
+      if (gstTrimmed.length !== 15) {
+        errs.gstNo = 'GSTIN must be 15 characters';
+      }
     }
 
     return errs;
@@ -561,10 +564,11 @@ export default function ClientFormPage() {
                 <Input
                   label="GST Number"
                   id="gstNo"
-                  maxLength={50}
+                  maxLength={15}
                   value={form.gstNo}
-                  onChange={(e) => handleFieldChange('gstNo', e.target.value.toUpperCase())}
+                  onChange={(e) => handleFieldChange('gstNo', (e.target.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
                   placeholder="e.g. 24AAACB1234F1Z5"
+                  hint="15-character alphanumeric tax identifier"
                   className="font-mono tabular-nums uppercase"
                   error={errors.gstNo}
                 />

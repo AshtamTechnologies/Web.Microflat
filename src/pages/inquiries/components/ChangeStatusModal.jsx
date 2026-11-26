@@ -10,6 +10,7 @@ import {
 import { Modal, Button, CancelButton, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiriesContext } from '../../../context/InquiriesContext';
 import { STATUS_OPTIONS, getStatusOption } from '../../../mocks/inquiries';
+import { API_INQUIRY_STATUSES, mapStageToApiStatus } from '../inquiryStages';
 
 export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
   const { changeInquiryStatus } = useInquiriesContext();
@@ -20,7 +21,7 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
 
   useEffect(() => {
     if (isOpen && inquiry) {
-      setSelectedStatusId(inquiry.StatusId || STATUS_OPTIONS[0].id);
+      setSelectedStatusId(inquiry.status || inquiry.StatusId || 'New');
       setRemarks('');
       setSubmitting(false);
     }
@@ -29,7 +30,7 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
   const statusOptions = (
     Array.isArray(inquiry?.nextStatuses) && inquiry.nextStatuses.length > 0
       ? inquiry.nextStatuses.map((s) => ({ value: s, label: s }))
-      : STATUS_OPTIONS.map((s) => ({ value: s.id, label: s.name }))
+      : API_INQUIRY_STATUSES.map((s) => ({ value: s.id, label: s.name }))
   );
 
   async function handleSubmit(e) {
@@ -38,9 +39,10 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
 
     setSubmitting(true);
     try {
+      const apiStatus = mapStageToApiStatus(selectedStatusId);
       const res = await changeInquiryStatus(
         inquiry.id || inquiry.InquiryId,
-        selectedStatusId,
+        apiStatus,
         remarks
       );
       if (res?.ok) {
@@ -53,7 +55,7 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
 
   if (!inquiry) return null;
 
-  const currentStatusInfo = getStatusOption(inquiry.StatusId);
+  const currentStatusInfo = getStatusOption(inquiry.status || inquiry.StatusId || 'New');
 
   return (
     <Modal

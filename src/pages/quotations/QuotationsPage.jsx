@@ -43,7 +43,7 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'In Negotiation', label: 'In Negotiation' },
   { value: 'Confirmed', label: 'Confirmed' },
   { value: 'Lost', label: 'Lost' },
-  { value: 'PO received', label: 'PO received' },
+  { value: 'PO Received', label: 'PO Received' },
 ];
 
 export default function QuotationsPage() {
@@ -61,8 +61,8 @@ export default function QuotationsPage() {
   const filteredData = useMemo(() => {
     return quotations.filter((q) => {
       // Status filter
-      if (activeFilter === 'PO received') {
-        if (!q.poReceived) return false;
+      if (activeFilter === 'PO Received') {
+        if (!q.poReceived && q.status !== 'PO Received') return false;
       } else if (activeFilter !== 'All') {
         if (q.status !== activeFilter) return false;
       }
@@ -166,22 +166,18 @@ export default function QuotationsPage() {
         cell: (info) => {
           const row = info.row.original;
           const status = info.getValue();
+          const isPo = Boolean(row.poReceived || status === 'PO Received');
           let variant = 'neutral';
-          if (status === 'Sent') variant = 'info';
+          if (isPo || status === 'Confirmed') variant = 'success';
+          else if (status === 'Sent') variant = 'info';
           else if (status === 'In Negotiation') variant = 'warning';
-          else if (status === 'Confirmed') variant = 'success';
           else if (status === 'Lost') variant = 'danger';
 
           return (
             <div className="flex items-center gap-1.5 flex-wrap">
               <Badge variant={variant} size="sm">
-                {status}
+                {isPo ? 'PO Received' : status}
               </Badge>
-              {row.poReceived && (
-                <Badge variant="role" size="sm">
-                  PO received
-                </Badge>
-              )}
             </div>
           );
         },
@@ -237,14 +233,25 @@ export default function QuotationsPage() {
               >
                 <IconView size={15} />
               </button>
-              <button
-                type="button"
-                onClick={() => navigate(`/quotations/${row.id}/new-revision`)}
-                className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
-                title="Create New Revision"
-              >
-                <IconEdit size={15} />
-              </button>
+              {!(row.poReceived || row.status === 'PO Received') ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/quotations/${row.id}/new-revision`)}
+                  className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
+                  title="Create New Revision"
+                >
+                  <IconEdit size={15} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="p-1.5 rounded-lg text-text-muted/30 cursor-not-allowed"
+                  title="Customer PO Received: Revisions are locked."
+                >
+                  <IconEdit size={15} />
+                </button>
+              )}
             </div>
           );
         },

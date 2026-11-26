@@ -53,7 +53,7 @@ function DealKanbanCard({
             label: 'Create Quotation',
             icon: IconQuotation,
             onClick: () =>
-              navigate(`/quotations/new`, {
+              navigate(`/quotations/new?inquiryId=${deal.inquiryId}`, {
                 state: {
                   fromDeal: true,
                   dealId: deal.id,

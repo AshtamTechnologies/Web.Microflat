@@ -3,6 +3,7 @@
  *
  * Switches between real API services and offline mock services based on:
  *   import.meta.env.VITE_USE_MOCK_API === 'true' (default: false).
+ * Approvals always use the live API service.
  *
  * Each service exports capabilities indicating supported features.
  */
@@ -32,7 +33,6 @@ import * as realClients from './clients/clientService';
 import * as mockClients from './clients/clientService.mock';
 
 import * as realApprovals from './approvals/approvalsService';
-import * as mockApprovals from './approvals/approvalsService.mock';
 
 import * as realUoms from './uom/uomService';
 import * as mockUoms from './uom/uomService.mock';
@@ -111,7 +111,7 @@ export const documentTypesService = useMock ? mockDocumentTypes : realDocumentTy
 export const documentSeriesService = useMock ? mockDocumentSeries : realDocumentSeries;
 export const vendorService = useMock ? mockVendors : realVendors;
 export const clientService = useMock ? mockClients : realClients;
-export const approvalsService = useMock ? mockApprovals : realApprovals;
+export const approvalsService = realApprovals;
 export const uomService = useMock ? mockUoms : realUoms;
 export const regionService = useMock ? mockRegions : realRegions;
 export const paymentTermService = useMock ? mockPaymentTerms : realPaymentTerms;

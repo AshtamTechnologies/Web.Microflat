@@ -38,6 +38,7 @@ import {
   KanbanBoard,
 } from '../../components/ui';
 import { useInquiriesContext } from '../../context/InquiriesContext';
+import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useUsersContext } from '../../context/UsersContext';
 import {
   STATUS_OPTIONS,
@@ -46,7 +47,7 @@ import {
   getStatusOption,
   getPriorityBadgeVariant,
 } from '../../mocks/inquiries';
-import { INQUIRY_STAGES } from './inquiryStages';
+import { INQUIRY_STAGES, normalizeInquiryStage, mapStageToApiStatus, API_INQUIRY_STATUSES } from './inquiryStages';
 import InquiryKanbanCard from './components/InquiryKanbanCard';
 import AssignInquiryModal from './components/AssignInquiryModal';
 import { formatDate } from '../../utils/dateUtils';
@@ -55,7 +56,7 @@ const columnHelper = createColumnHelper();
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
-  ...STATUS_OPTIONS.map((s) => ({ value: s.id, label: s.name })),
+  ...API_INQUIRY_STATUSES.map((s) => ({ value: s.id, label: s.name })),
 ];
 
 const PRIORITY_FILTER_OPTIONS = [
@@ -80,6 +81,90 @@ export default function InquiriesPage() {
     changeInquiryStatus,
     isLoading,
   } = useInquiriesContext();
+
+  let quotations = [];
+  let refreshQuotations = null;
+  try {
+    const qCtx = useQuotationsContext();
+    quotations = qCtx?.quotations || [];
+    refreshQuotations = qCtx?.refreshQuotations;
+  } catch {
+    quotations = [];
+  }
+
+  // Ensure quotations are loaded on page mount/refresh
+  useEffect(() => {
+    if (refreshQuotations) {
+      refreshQuotations();
+    }
+  }, [refreshQuotations]);
+
+  // Lookup map to quickly check if an inquiry has linked quotation(s)
+  const quotationByInquiryMap = useMemo(() => {
+    const map = new Map();
+    (quotations || []).forEach((q) => {
+      if (q.inquiryId !== undefined && q.inquiryId !== null && q.inquiryId !== '') {
+        map.set(String(q.inquiryId).toLowerCase(), q);
+      }
+      if (q.inquiryNo) {
+        const cleanNo = String(q.inquiryNo).trim().toLowerCase();
+        map.set(cleanNo, q);
+      }
+    });
+    return map;
+  }, [quotations]);
+
+  // Helper to find linked quotation for any inquiry
+  const getLinkedQuotation = useCallback(
+    (inq) => {
+      if (!inq) return null;
+      const inqId = inq.id || inq.InquiryId;
+      const inqNo = inq.InquiryNo || inq.inquiryNo;
+
+      let linked = null;
+      if (inqId) {
+        linked = quotationByInquiryMap.get(String(inqId).toLowerCase());
+      }
+      if (!linked && inqNo) {
+        const cleanInqNo = String(inqNo).trim().toLowerCase();
+        linked = quotationByInquiryMap.get(cleanInqNo);
+      }
+      return linked;
+    },
+    [quotationByInquiryMap]
+  );
+
+  // Derive inquiry's active stage, respecting linked quotations & normalized stages
+  const resolveInquiryStage = useCallback(
+    (inq) => {
+      if (!inq) return 'Inquiry';
+      const explicitStatus = inq.StatusId || inq.status;
+      const normalized = normalizeInquiryStage(explicitStatus);
+      const linkedQuotation = getLinkedQuotation(inq);
+
+      if (linkedQuotation) {
+        const qStatus = String(linkedQuotation.status || '').toLowerCase();
+        if (qStatus.includes('negotiat')) {
+          return 'Negotiation';
+        }
+        if (linkedQuotation.poReceived || qStatus.includes('po') || qStatus.includes('confirm')) {
+          return 'PO created';
+        }
+        // If the inquiry was in initial stage, advance it to Quotation
+        if (
+          normalized === 'Inquiry' ||
+          normalized === 'Qualified' ||
+          !explicitStatus ||
+          explicitStatus === 'New'
+        ) {
+          return 'Quotation';
+        }
+      }
+
+      return normalized;
+    },
+    [getLinkedQuotation]
+  );
 
   const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
   const userList = allUsers.length > 0 ? allUsers : users;
@@ -265,13 +350,13 @@ export default function InquiriesPage() {
       }),
 
       /* 4. REGION */
-      columnHelper.accessor('RegionId', {
+      columnHelper.accessor((row) => row.regionName || row.RegionName || getRegionName(row.RegionId || row.regionId), {
+        id: 'region',
         header: 'REGION',
         minSize: 120,
         size: 140,
         cell: (info) => {
-          const regionId = info.getValue();
-          const regionLabel = getRegionName(regionId);
+          const regionLabel = info.getValue() || '—';
           return (
             <span
               className="text-xs text-text-muted truncate block"
@@ -302,7 +387,8 @@ export default function InquiriesPage() {
       }),
 
       /* 6. STATUS */
-      columnHelper.accessor('StatusId', {
+      columnHelper.accessor((row) => resolveInquiryStage(row), {
+        id: 'status',
         header: 'STATUS',
         minSize: 120,
         size: 130,
@@ -654,21 +740,30 @@ export default function InquiriesPage() {
             columns={INQUIRY_STAGES}
             items={inquiries}
             getItemId={(item) => item.id || item.InquiryId}
-            getItemStatus={(item) => item.StatusId}
+            getItemStatus={(item) => resolveInquiryStage(item)}
             onItemMove={(itemId, newStatusId, oldStatusId, targetItemId, position) => {
-              changeInquiryStatus(itemId, newStatusId, '', targetItemId, position);
+              const apiStatus = mapStageToApiStatus(newStatusId);
+              changeInquiryStatus(itemId, apiStatus, '', targetItemId, position);
             }}
-            renderCard={(item) => (
-              <InquiryKanbanCard
-                inquiry={item}
-                assigneeName={resolveUserName(item.AssignedTo)}
-                onAssignClick={(inq) => setAssignModalInquiry(inq)}
-                onMoveStage={(itemId, newStatusId) => {
-                  changeInquiryStatus(itemId, newStatusId);
-                }}
-                availableStages={INQUIRY_STAGES}
-              />
-            )}
+            renderCard={(item) => {
+              const linkedQuotation = getLinkedQuotation(item);
+              const stage = resolveInquiryStage(item);
+
+              return (
+                <InquiryKanbanCard
+                  inquiry={item}
+                  assigneeName={resolveUserName(item.AssignedTo)}
+                  onAssignClick={(inq) => setAssignModalInquiry(inq)}
+                  onMoveStage={(itemId, newStatusId) => {
+                    const apiStatus = mapStageToApiStatus(newStatusId);
+                    changeInquiryStatus(itemId, apiStatus);
+                  }}
+                  availableStages={INQUIRY_STAGES}
+                  linkedQuotation={linkedQuotation}
+                  inquiryStage={stage}
+                />
+              );
+            }}
             emptyColumnText="No inquiries in this stage"
           />
         </div>
