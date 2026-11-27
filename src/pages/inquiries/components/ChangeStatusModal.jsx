@@ -2,7 +2,7 @@
  * ChangeStatusModal.jsx — Modal to transition an inquiry's status with optional remarks.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   IconMessageSquare,
   IconRefresh,
@@ -12,25 +12,35 @@ import { useInquiriesContext } from '../../../context/InquiriesContext';
 import { getInquiryStage, mapStageToApiStatus } from '../inquiryStages';
 
 export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
-  const { changeInquiryStatus } = useInquiriesContext();
+  const { changeInquiryStatus, statuses: lookupStatuses = [] } = useInquiriesContext();
 
   const [selectedStatusId, setSelectedStatusId] = useState('');
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const currentStatus = inquiry?.status || inquiry?.StatusId || '';
+  const currentStatusInfo = getInquiryStage(currentStatus);
+
+  const statusOptions = useMemo(() => {
+    if (Array.isArray(inquiry?.nextStatuses) && inquiry.nextStatuses.length > 0) {
+      return inquiry.nextStatuses.map((s) => ({ value: s, label: s }));
+    }
+    const allStatuses = lookupStatuses.length > 0
+      ? lookupStatuses
+      : ['New', 'Deal', 'Quoting', 'Won', 'Lost'];
+    return allStatuses
+      .filter((s) => s.toLowerCase() !== String(currentStatus).toLowerCase())
+      .map((s) => ({ value: s, label: s }));
+  }, [inquiry?.nextStatuses, lookupStatuses, currentStatus]);
+
   useEffect(() => {
     if (isOpen && inquiry) {
-      setSelectedStatusId(inquiry.status || inquiry.StatusId || '');
+      const defaultNext = statusOptions[0]?.value || '';
+      setSelectedStatusId(defaultNext);
       setRemarks('');
       setSubmitting(false);
     }
-  }, [isOpen, inquiry]);
-
-  const statusOptions = (
-    Array.isArray(inquiry?.nextStatuses)
-      ? inquiry.nextStatuses.map((s) => ({ value: s, label: s }))
-      : []
-  );
+  }, [isOpen, inquiry, statusOptions]);
 
   async function handleSubmit(e) {
     if (e) e.preventDefault();
@@ -38,7 +48,7 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
 
     setSubmitting(true);
     try {
-      const apiStatus = mapStageToApiStatus(selectedStatusId);
+      const apiStatus = mapStageToApiStatus(selectedStatusId) || selectedStatusId;
       if (!apiStatus) return;
       const res = await changeInquiryStatus(
         inquiry.id || inquiry.InquiryId,
@@ -54,9 +64,6 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
   }
 
   if (!inquiry) return null;
-
-  const currentStatus = inquiry.status || inquiry.StatusId || '';
-  const currentStatusInfo = getInquiryStage(currentStatus);
 
   return (
     <Modal

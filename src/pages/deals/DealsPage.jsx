@@ -40,6 +40,7 @@ import DealStatusModal from './DealStatusModal';
 import DealFormModal from './DealFormModal';
 import NegotiationModal from './NegotiationModal';
 import { formatDate } from '../../utils/dateUtils';
+import { dealService } from '../../services';
 
 const columnHelper = createColumnHelper();
 
@@ -127,6 +128,37 @@ export default function DealsPage() {
   const [editModalDeal, setEditModalDeal] = useState(null);
   const [discussionModalDeal, setDiscussionModalDeal] = useState(null);
   const [isActionSubmitting, setIsActionSubmitting] = useState(false);
+
+  // Convert Inquiry to Deal modal state
+  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [nextDealDocNumber, setNextDealDocNumber] = useState('');
+
+  const handleOpenConvertModal = async () => {
+    setIsConvertModalOpen(true);
+    try {
+      const nextNum = await dealService.getNextDealNumber();
+      if (nextNum?.documentNumber) {
+        setNextDealDocNumber(nextNum.documentNumber);
+      }
+    } catch (err) {
+      console.error('Failed to get next deal number:', err);
+    }
+  };
+
+  const handleSaveConvertDeal = async (formData) => {
+    try {
+      setIsActionSubmitting(true);
+      const created = await dealService.createDeal(formData);
+      toast.success(`Deal ${created?.dealNo || ''} created successfully.`);
+      setIsConvertModalOpen(false);
+      refreshDeals();
+      navigate(`/deals/${created.id}`);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to convert inquiry to deal.');
+    } finally {
+      setIsActionSubmitting(false);
+    }
+  };
 
   const hasActiveFilters = Boolean(
     search.trim() || statusFilter !== 'ALL' || fromDate || toDate
@@ -435,7 +467,7 @@ export default function DealsPage() {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => navigate('/inquiries')}
+              onClick={handleOpenConvertModal}
               className="shadow-sm text-xs font-semibold"
             >
               <IconAdd size={16} className="mr-1.5" aria-hidden="true" />
@@ -647,6 +679,19 @@ export default function DealsPage() {
           onClose={() => setDiscussionModalDeal(null)}
           currencySymbol={discussionModalDeal.currencySymbol}
           onSave={handleQuickDiscussionSave}
+          isSubmitting={isActionSubmitting}
+        />
+      )}
+
+      {/* ── Convert Inquiry to Deal Modal ── */}
+      {isConvertModalOpen && (
+        <DealFormModal
+          isOpen={isConvertModalOpen}
+          onClose={() => setIsConvertModalOpen(false)}
+          mode="CREATE"
+          nextDocNumber={nextDealDocNumber}
+          currencies={lookups.currencies}
+          onSave={handleSaveConvertDeal}
           isSubmitting={isActionSubmitting}
         />
       )}

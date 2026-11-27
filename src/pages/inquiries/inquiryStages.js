@@ -7,6 +7,7 @@
 
 export const API_INQUIRY_STATUSES = [
   { id: 'New', name: 'New' },
+  { id: 'Deal', name: 'Deal' },
   { id: 'Quoting', name: 'Quoting' },
   { id: 'Won', name: 'Won' },
   { id: 'Lost', name: 'Lost' },
@@ -21,6 +22,15 @@ export const INQUIRY_STAGES = [
     badgeClass: 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/20 dark:text-blue-300',
     dotClass: 'bg-blue-500',
     accentBorder: 'border-t-blue-500',
+  },
+  {
+    id: 'Deal',
+    name: 'Deal',
+    color: 'violet',
+    badgeVariant: 'role',
+    badgeClass: 'bg-violet-500/10 text-violet-600 border-violet-500/20 dark:bg-violet-500/20 dark:text-violet-300',
+    dotClass: 'bg-violet-500',
+    accentBorder: 'border-t-violet-500',
   },
   {
     id: 'Quoting',
@@ -146,10 +156,11 @@ export function mapStageToApiStatus(stageId) {
   if (!stageId) return null;
   const lower = String(stageId).toLowerCase();
   if (lower === 'new' || lower === 'inquiry' || lower === 'qualified') return 'New';
+  if (lower === 'deal') return 'Deal';
   if (lower === 'quoting' || lower === 'quotation' || lower === 'negotiation') return 'Quoting';
   if (lower === 'won' || lower === 'accepted' || lower === 'order confirm' || lower === 'po created') return 'Won';
   if (lower === 'lost' || lower === 'rejected') return 'Lost';
-  return null;
+  return String(stageId);
 }
 
 /**

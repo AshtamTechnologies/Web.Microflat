@@ -24,6 +24,7 @@ import {
   IconApproval,
   IconRefresh,
   IconShieldCheck,
+  IconUser,
   IconEdit,
   IconDelete,
   IconAdd,
@@ -62,7 +63,7 @@ const STATUS_FILTER_OPTIONS = [
 export default function ApprovalSettingsPage() {
   const { user } = useAuthContext();
   const [modules, setModules] = useState([]);
-  const [lookups, setLookups] = useState({ roles: [] });
+  const [lookups, setLookups] = useState({ roles: [], users: [], approverTypes: [] });
 
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -82,7 +83,9 @@ export default function ApprovalSettingsPage() {
   // Configure Modal State (PUT or initial POST for row)
   const [selectedModule, setSelectedModule] = useState(null);
   const [isApprovalRequired, setIsApprovalRequired] = useState(false);
+  const [approverType, setApproverType] = useState(1); // 1 = Role, 2 = User
   const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   // View Modal State (GET /api/approval-settings/by-module/{moduleCode})
@@ -93,7 +96,9 @@ export default function ApprovalSettingsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addModuleId, setAddModuleId] = useState('');
   const [addIsApprovalRequired, setAddIsApprovalRequired] = useState(true);
+  const [addApproverType, setAddApproverType] = useState(1); // 1 = Role, 2 = User
   const [addRoleId, setAddRoleId] = useState('');
+  const [addUserId, setAddUserId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 
   // Delete / Reset Confirmation Modal State
@@ -108,17 +113,24 @@ export default function ApprovalSettingsPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [modules, lookups] = await Promise.all([
+      const [modulesData, lookupsData] = await Promise.all([
         approvalsService.getApprovalSettingsModules({ isModuleActive: true }),
         approvalsService.getApprovalSettingsLookups(),
       ]);
 
-      if (!Array.isArray(modules) || !Array.isArray(lookups?.roles)) {
+      if (!Array.isArray(modulesData)) {
         throw new Error('Approval settings API returned an invalid response.');
       }
 
-      setModules(modules);
-      setLookups({ roles: lookups.roles });
+      setModules(modulesData);
+      setLookups({
+        roles: Array.isArray(lookupsData?.roles) ? lookupsData.roles : [],
+        users: Array.isArray(lookupsData?.users) ? lookupsData.users : [],
+        approverTypes: Array.isArray(lookupsData?.approverTypes) ? lookupsData.approverTypes : [
+          { id: 1, name: 'Role' },
+          { id: 2, name: 'User' },
+        ],
+      });
     } catch (err) {
       console.error('Failed to load approval settings data:', err);
       toast.error('Failed to load module approval settings.');
@@ -170,29 +182,42 @@ export default function ApprovalSettingsPage() {
     setSelectedModule(mod);
     const req = Boolean(mod.isApprovalRequired);
     setIsApprovalRequired(req);
+    const type = mod.approverType === 2 || (!mod.approverRoleId && mod.approverUserId) ? 2 : 1;
+    setApproverType(type);
     setSelectedRoleId(mod.approverRoleId ? String(mod.approverRoleId) : '');
+    setSelectedUserId(mod.approverUserId ? String(mod.approverUserId) : '');
   }
 
   function handleCloseConfig() {
     if (isSaving) return;
     setSelectedModule(null);
     setIsApprovalRequired(false);
+    setApproverType(1);
     setSelectedRoleId('');
+    setSelectedUserId('');
   }
 
   async function handleSaveConfig() {
     if (!selectedModule) return;
 
-    if (isApprovalRequired && !selectedRoleId) {
-      toast.error('Please select an active Approver Role when approval is required.');
-      return;
+    if (isApprovalRequired) {
+      if (approverType === 1 && !selectedRoleId) {
+        toast.error('Please select an active Approver Role when approval is required.');
+        return;
+      }
+      if (approverType === 2 && !selectedUserId) {
+        toast.error('Please select an active Approver User when approval is required.');
+        return;
+      }
     }
 
     try {
       setIsSaving(true);
       const payload = {
         isApprovalRequired,
-        approverRoleId: isApprovalRequired ? Number(selectedRoleId) : null,
+        approverType: isApprovalRequired ? approverType : 1,
+        approverRoleId: isApprovalRequired && approverType === 1 ? Number(selectedRoleId) : null,
+        approverUserId: isApprovalRequired && approverType === 2 ? Number(selectedUserId) : null,
       };
 
       if (selectedModule.approvalSettingId) {
@@ -222,7 +247,9 @@ export default function ApprovalSettingsPage() {
     const unconfigured = modules.find((m) => !m.isApprovalRequired && !m.approvalSettingId);
     setAddModuleId(unconfigured ? String(unconfigured.moduleId) : (modules[0]?.moduleId ? String(modules[0].moduleId) : ''));
     setAddIsApprovalRequired(true);
+    setAddApproverType(1);
     setAddRoleId('');
+    setAddUserId('');
   }
 
   function handleCloseAdd() {
@@ -230,7 +257,9 @@ export default function ApprovalSettingsPage() {
     setIsAddModalOpen(false);
     setAddModuleId('');
     setAddIsApprovalRequired(true);
+    setAddApproverType(1);
     setAddRoleId('');
+    setAddUserId('');
   }
 
   async function handleConfirmAdd() {
@@ -239,9 +268,15 @@ export default function ApprovalSettingsPage() {
       return;
     }
 
-    if (addIsApprovalRequired && !addRoleId) {
-      toast.error('Please select an active Approver Role when approval is required.');
-      return;
+    if (addIsApprovalRequired) {
+      if (addApproverType === 1 && !addRoleId) {
+        toast.error('Please select an active Approver Role when approval is required.');
+        return;
+      }
+      if (addApproverType === 2 && !addUserId) {
+        toast.error('Please select an active Approver User when approval is required.');
+        return;
+      }
     }
 
     try {
@@ -249,7 +284,9 @@ export default function ApprovalSettingsPage() {
       const payload = {
         moduleId: Number(addModuleId),
         isApprovalRequired: addIsApprovalRequired,
-        approverRoleId: addIsApprovalRequired ? Number(addRoleId) : null,
+        approverType: addIsApprovalRequired ? addApproverType : 1,
+        approverRoleId: addIsApprovalRequired && addApproverType === 1 ? Number(addRoleId) : null,
+        approverUserId: addIsApprovalRequired && addApproverType === 2 ? Number(addUserId) : null,
       };
 
       await approvalsService.createApprovalSetting(payload);
@@ -307,6 +344,13 @@ export default function ApprovalSettingsPage() {
     }));
   }, [lookups.roles]);
 
+  const userOptions = useMemo(() => {
+    return (lookups.users || []).map((u) => ({
+      value: String(u.userId || u.id),
+      label: u.name ? (u.email ? `${u.name} (${u.email})` : u.name) : (u.email || `User #${u.userId || u.id}`),
+    }));
+  }, [lookups.users]);
+
   /* ── 6. Filtered Data ── */
   const filteredModules = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -316,6 +360,8 @@ export default function ApprovalSettingsPage() {
         !q ||
         m.moduleName?.toLowerCase().includes(q) ||
         m.moduleCode?.toLowerCase().includes(q) ||
+        m.approverRoleName?.toLowerCase().includes(q) ||
+        m.approverUserName?.toLowerCase().includes(q);
         m.approverRoleName?.toLowerCase().includes(q);
 
       if (!matchesSearch) return false;
@@ -389,10 +435,31 @@ export default function ApprovalSettingsPage() {
             return <span className="text-text-muted">—</span>;
           }
 
+          const isUser =
+            row.original.approverType === 2 ||
+            (!row.original.approverRoleName && row.original.approverUserName);
+
+          if (isUser) {
+            return (
+              <span
+                className="font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1.5"
+                title={row.original.approverUserName || `User #${row.original.approverUserId}`}
+              >
+                <IconUser size={13} className="shrink-0" />
+                <span className="truncate max-w-[170px]">
+                  User: {row.original.approverUserName || `User #${row.original.approverUserId}`}
+                </span>
+              </span>
+            );
+          }
+
           return (
-            <span className="font-medium text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1.5">
+            <span
+              className="font-medium text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1.5"
+              title={row.original.approverRoleName || 'Admin'}
+            >
               <IconShieldCheck size={13} className="shrink-0" />
-              <span className="truncate max-w-[170px]" title={row.original.approverRoleName || 'Admin'}>
+              <span className="truncate max-w-[170px]">
                 Role: {row.original.approverRoleName || 'Admin'}
               </span>
             </span>
@@ -510,10 +577,17 @@ export default function ApprovalSettingsPage() {
           <div>
             <span className="text-2xs text-text-muted block">Designated Approver</span>
             {req ? (
-              <span className="text-primary font-medium inline-flex items-center gap-1 mt-0.5">
-                <IconShieldCheck size={12} />
-                {mod.approverRoleName || 'Admin'}
+              mod.approverType === 2 || (!mod.approverRoleName && mod.approverUserName) ? (
+                <span className="text-emerald-700 dark:text-emerald-300 font-medium inline-flex items-center gap-1 mt-0.5">
+                  <IconUser size={12} />
+                  User: {mod.approverUserName || `User #${mod.approverUserId}`}
                 </span>
+              ) : (
+                <span className="text-primary font-medium inline-flex items-center gap-1 mt-0.5">
+                  <IconShieldCheck size={12} />
+                  Role: {mod.approverRoleName || 'Admin'}
+                </span>
+              )
             ) : (
               <span className="text-text-muted">—</span>
             )}
@@ -712,21 +786,72 @@ export default function ApprovalSettingsPage() {
             </div>
           </div>
 
-          {/* Approver Role (conditional on isApprovalRequired) */}
+          {/* Approver Type & Assignment (conditional on isApprovalRequired) */}
           {isApprovalRequired && (
-            <div className="space-y-1.5 pt-2 border-t border-border animate-fadeIn">
-              <SearchableSelect
-                label="Designated Approver Role"
-                id="approverRoleId"
-                name="approverRoleId"
-                required
-                value={selectedRoleId}
-                onChange={(e) => setSelectedRoleId(e.target.value)}
-                options={roleOptions}
-                placeholder="-- Select Approver Role --"
-                searchPlaceholder="Search roles..."
-                hint="Every active user holding this role (except the submitter) receives the approval task."
-              />
+            <div className="space-y-3 pt-3 border-t border-border animate-fadeIn">
+              <div>
+                <label className="block text-xs font-semibold text-heading mb-1.5">
+                  Approver Type <span className="text-danger">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setApproverType(1)}
+                    className={`flex items-center justify-center gap-2 p-2 rounded-lg border text-xs font-medium transition-all ${
+                      approverType === 1
+                        ? 'border-primary bg-primary/10 text-primary font-semibold shadow-xs'
+                        : 'border-border bg-surface text-text-muted hover:bg-surface-subtle'
+                    }`}
+                  >
+                    <IconShieldCheck size={14} />
+                    <span>By Role</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setApproverType(2)}
+                    className={`flex items-center justify-center gap-2 p-2 rounded-lg border text-xs font-medium transition-all ${
+                      approverType === 2
+                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-semibold shadow-xs'
+                        : 'border-border bg-surface text-text-muted hover:bg-surface-subtle'
+                    }`}
+                  >
+                    <IconUser size={14} />
+                    <span>Specific User</span>
+                  </button>
+                </div>
+              </div>
+
+              {approverType === 1 ? (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <SearchableSelect
+                    label="Designated Approver Role"
+                    id="approverRoleId"
+                    name="approverRoleId"
+                    required
+                    value={selectedRoleId}
+                    onChange={(e) => setSelectedRoleId(e.target.value)}
+                    options={roleOptions}
+                    placeholder="-- Select Approver Role --"
+                    searchPlaceholder="Search roles..."
+                    hint="Every active user holding this role (except the submitter) receives the approval task."
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <SearchableSelect
+                    label="Designated Approver User"
+                    id="approverUserId"
+                    name="approverUserId"
+                    required
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    options={userOptions}
+                    placeholder="-- Select Approver User --"
+                    searchPlaceholder="Search users by name or email..."
+                    hint="Only this specific user (or their active delegates) will receive the approval task."
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -817,21 +942,72 @@ export default function ApprovalSettingsPage() {
             </div>
           </div>
 
-          {/* Approver Role (conditional on addIsApprovalRequired) */}
+          {/* Approver Type & Assignment (conditional on addIsApprovalRequired) */}
           {addIsApprovalRequired && (
-            <div className="space-y-1.5 pt-2 border-t border-border animate-fadeIn">
-              <SearchableSelect
-                label="Designated Approver Role"
-                id="add-role-select"
-                name="addRoleId"
-                required
-                value={addRoleId}
-                onChange={(e) => setAddRoleId(e.target.value)}
-                options={roleOptions}
-                placeholder="-- Select Approver Role --"
-                searchPlaceholder="Search roles..."
-                hint="Every active user holding this role (except the submitter) receives the approval task."
-              />
+            <div className="space-y-3 pt-3 border-t border-border animate-fadeIn">
+              <div>
+                <label className="block text-xs font-semibold text-heading mb-1.5">
+                  Approver Type <span className="text-danger">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAddApproverType(1)}
+                    className={`flex items-center justify-center gap-2 p-2 rounded-lg border text-xs font-medium transition-all ${
+                      addApproverType === 1
+                        ? 'border-primary bg-primary/10 text-primary font-semibold shadow-xs'
+                        : 'border-border bg-surface text-text-muted hover:bg-surface-subtle'
+                    }`}
+                  >
+                    <IconShieldCheck size={14} />
+                    <span>By Role</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddApproverType(2)}
+                    className={`flex items-center justify-center gap-2 p-2 rounded-lg border text-xs font-medium transition-all ${
+                      addApproverType === 2
+                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-semibold shadow-xs'
+                        : 'border-border bg-surface text-text-muted hover:bg-surface-subtle'
+                    }`}
+                  >
+                    <IconUser size={14} />
+                    <span>Specific User</span>
+                  </button>
+                </div>
+              </div>
+
+              {addApproverType === 1 ? (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <SearchableSelect
+                    label="Designated Approver Role"
+                    id="add-role-select"
+                    name="addRoleId"
+                    required
+                    value={addRoleId}
+                    onChange={(e) => setAddRoleId(e.target.value)}
+                    options={roleOptions}
+                    placeholder="-- Select Approver Role --"
+                    searchPlaceholder="Search roles..."
+                    hint="Every active user holding this role (except the submitter) receives the approval task."
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1.5 animate-fadeIn">
+                  <SearchableSelect
+                    label="Designated Approver User"
+                    id="add-user-select"
+                    name="addUserId"
+                    required
+                    value={addUserId}
+                    onChange={(e) => setAddUserId(e.target.value)}
+                    options={userOptions}
+                    placeholder="-- Select Approver User --"
+                    searchPlaceholder="Search users by name or email..."
+                    hint="Only this specific user (or their active delegates) will receive the approval task."
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -899,16 +1075,36 @@ export default function ApprovalSettingsPage() {
                 )}
               </DetailField>
 
-              <DetailField label="Designated Approver Role" className="sm:col-span-2">
+              <DetailField label="Designated Approver" className="sm:col-span-2">
                 {!viewingModule.isApprovalRequired ? (
                   <span className="text-text-muted">—</span>
+                ) : viewingModule.approverType === 2 || (!viewingModule.approverRoleName && viewingModule.approverUserName) ? (
+                  <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <IconUser size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <div>
+                        <span className="font-semibold text-heading text-xs block truncate">
+                          {viewingModule.approverUserName || `User #${viewingModule.approverUserId}`}
+                        </span>
+                        <span className="text-2xs text-text-muted">Specific User Approver</span>
+                      </div>
+                    </div>
+                    {viewingModule.approverUserId && (
+                      <span className="font-mono text-2xs text-text-muted bg-surface px-2 py-0.5 rounded border border-border shrink-0 ml-2">
+                        User #{viewingModule.approverUserId}
+                      </span>
+                    )}
+                  </div>
                 ) : (
                   <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 flex items-center justify-between">
                     <div className="flex items-center gap-2 min-w-0">
                       <IconShieldCheck size={16} className="text-primary shrink-0" />
-                      <span className="font-semibold text-heading text-xs truncate">
-                        {viewingModule.approverRoleName || 'Admin'}
-                      </span>
+                      <div>
+                        <span className="font-semibold text-heading text-xs block truncate">
+                          {viewingModule.approverRoleName || 'Admin'}
+                        </span>
+                        <span className="text-2xs text-text-muted">Role-Based Approver</span>
+                      </div>
                     </div>
                     {viewingModule.approverRoleId && (
                       <span className="font-mono text-2xs text-text-muted bg-surface px-2 py-0.5 rounded border border-border shrink-0 ml-2">
@@ -932,10 +1128,17 @@ export default function ApprovalSettingsPage() {
             {/* Dynamic Submissions Policy Notice */}
             <div className="p-3 bg-surface-subtle/70 border border-border rounded-lg text-2xs text-text-muted leading-relaxed">
               {viewingModule.isApprovalRequired ? (
-                <span>
-                  All new submissions in <strong>{viewingModule.moduleName || viewingModule.moduleCode}</strong> will be broadcast to all active members of the{' '}
-                  <strong>{viewingModule.approverRoleName || 'assigned role'}</strong>.
-                </span>
+                viewingModule.approverType === 2 || (!viewingModule.approverRoleName && viewingModule.approverUserName) ? (
+                  <span>
+                    All new submissions in <strong>{viewingModule.moduleName || viewingModule.moduleCode}</strong> will be routed specifically to{' '}
+                    <strong>{viewingModule.approverUserName || 'the assigned user'}</strong> (and their active delegates).
+                  </span>
+                ) : (
+                  <span>
+                    All new submissions in <strong>{viewingModule.moduleName || viewingModule.moduleCode}</strong> will be broadcast to all active members of the{' '}
+                    <strong>{viewingModule.approverRoleName || 'assigned role'}</strong>.
+                  </span>
+                )
               ) : (
                 <span>
                   New submissions in this module bypass the approval queue and use the module’s no-approval status.
