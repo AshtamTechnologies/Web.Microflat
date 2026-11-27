@@ -48,6 +48,12 @@ export function parseDate(val) {
     return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
   }
 
+  // Standard ISO 8601 strings with T (e.g., "2026-11-27T11:50:55+05:30" or "2026-11-27T11:50:55.000Z")
+  if (/^\d{4}-\d{2}-\d{2}T/i.test(str)) {
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+
   // DD-MM-YYYY, DD/MM/YYYY, or DD.MM.YYYY (with optional time and AM/PM)
   const ddmmyyyyMatch = str.match(/^(\d{2})[-/.](\d{2})[-/.](\d{4})(?:\s*[, ]\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?/i);
   if (ddmmyyyyMatch) {
@@ -127,11 +133,16 @@ export function formatDate(dateValue, formatOverride = SYSTEM_DATE_CONFIG.dateFo
 
 /**
  * Formats a date with time into the system-wide format (e.g. "11-09-2026, 10:30 AM").
+ * If the input has no time component (date-only or midnight 00:00:00 without explicit non-zero time),
+ * it returns only the formatted date part (e.g. "11-09-2026") instead of appending an unwanted ", 12:00 AM".
+ *
  * @param {string|number|Date} dateValue
  * @param {string} [formatOverride]
+ * @param {object} [options]
+ * @param {boolean} [options.alwaysShowTime=false] - When true, forces displaying time even at 00:00 (12:00 AM)
  * @returns {string}
  */
-export function formatDateTime(dateValue, formatOverride = SYSTEM_DATE_CONFIG.dateFormat) {
+export function formatDateTime(dateValue, formatOverride = SYSTEM_DATE_CONFIG.dateFormat, options = {}) {
   if (dateValue === null || dateValue === undefined || dateValue === '') {
     return SYSTEM_DATE_CONFIG.emptyPlaceholder;
   }
@@ -140,6 +151,17 @@ export function formatDateTime(dateValue, formatOverride = SYSTEM_DATE_CONFIG.da
   if (!d) return String(dateValue) || SYSTEM_DATE_CONFIG.emptyPlaceholder;
 
   const datePart = formatDate(d, formatOverride);
+
+  // If the raw value is a pure date or has no non-zero time (and caller did not force time display)
+  if (!options.alwaysShowTime) {
+    const rawStr = typeof dateValue === 'string' ? dateValue.trim() : '';
+    const isPureDateString = /^\d{4}[-/.]\d{2}[-/.]\d{2}$/.test(rawStr) || /^\d{2}[-/.]\d{2}[-/.]\d{4}$/.test(rawStr);
+    const isMidnight = d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0;
+
+    if (isPureDateString || isMidnight) {
+      return datePart;
+    }
+  }
 
   let timePart;
   if (SYSTEM_DATE_CONFIG.showTime12Hour) {

@@ -1540,7 +1540,7 @@ export default function InquiryViewPage() {
                 />
                 <DetailField
                   label="Created On"
-                  value={formatDateTime(inquiry.CreatedOn)}
+                  value={formatDateTime(inquiry.CreatedOn || inquiry.createdOn)}
                   mono
                 />
                 <DetailField
