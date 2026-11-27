@@ -53,7 +53,10 @@ import {
 import InquiryKanbanCard from './components/InquiryKanbanCard';
 import AssignInquiryModal from './components/AssignInquiryModal';
 import DealFormModal from '../deals/DealFormModal';
-import { dealService } from '../../services';
+import RegisterClientRequiredModal from '../quotations/components/RegisterClientRequiredModal';
+import QuickClientOnboardDrawer from '../quotations/components/QuickClientOnboardDrawer';
+import { dealService, inquiryService } from '../../services';
+import { useClientsContext } from '../../context/ClientsContext';
 import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
@@ -91,6 +94,12 @@ export default function InquiriesPage() {
   const [dealCurrencies, setDealCurrencies] = useState([]);
   const [isConvertingDeal, setIsConvertingDeal] = useState(false);
 
+  // ── Client Registration Modal & Drawer State (When inquiry is for a new client) ──
+  const { loadClients, ensureClientsLoaded } = useClientsContext?.() || {};
+  const [isConflictClientModalOpen, setIsConflictClientModalOpen] = useState(false);
+  const [isQuickClientDrawerOpen, setIsQuickClientDrawerOpen] = useState(false);
+  const [conflictInquiry, setConflictInquiry] = useState(null);
+
   const handleStartDealConversion = useCallback(async (inq) => {
     try {
       setIsConvertingDeal(true);
@@ -105,11 +114,67 @@ export default function InquiriesPage() {
       setDealCurrencies(lookups?.currencies || []);
       setIsConvertDealOpen(true);
     } catch (err) {
-      toast.error(err?.message || 'This inquiry cannot be converted to a deal.');
+      const errMsg = (err?.message || '').toLowerCase();
+      const isNewClientConflict =
+        err?.status === 409 ||
+        errMsg.includes('new client') ||
+        errMsg.includes('register the client') ||
+        inq?.isNewClient;
+
+      if (isNewClientConflict) {
+        setConflictInquiry(inq);
+        setIsConflictClientModalOpen(true);
+      } else {
+        toast.error(err?.message || 'This inquiry cannot be converted to a deal.');
+      }
     } finally {
       setIsConvertingDeal(false);
     }
   }, []);
+
+  const handleProceedToClientOnboard = useCallback(() => {
+    setIsConflictClientModalOpen(false);
+    setIsQuickClientDrawerOpen(true);
+  }, []);
+
+  const handleQuickClientSuccess = useCallback(async (createdClient) => {
+    setIsQuickClientDrawerOpen(false);
+    const targetInq = conflictInquiry;
+    const newClientId = createdClient?.clientId || createdClient?.id;
+    const inqId = targetInq?.id || targetInq?.InquiryId;
+
+    if (inqId && newClientId) {
+      try {
+        const fullInq = await inquiryService.getInquiryById(inqId);
+        await inquiryService.updateInquiry(inqId, {
+          ...fullInq,
+          isNewClient: false,
+          clientId: newClientId,
+          products: null,
+        });
+      } catch (err) {
+        console.warn('Could not link registered client to inquiry:', err);
+      }
+    }
+
+    if (loadClients) {
+      await loadClients();
+    } else if (ensureClientsLoaded) {
+      ensureClientsLoaded();
+    }
+
+    if (fetchInquiries) {
+      await fetchInquiries();
+    }
+
+    toast.success(`Client registered and linked to inquiry. Opening deal creation...`);
+    setConflictInquiry(null);
+
+    // Now proceed with deal conversion
+    if (inqId) {
+      handleStartDealConversion({ ...targetInq, isNewClient: false, clientId: newClientId });
+    }
+  }, [conflictInquiry, fetchInquiries, handleStartDealConversion, loadClients, ensureClientsLoaded]);
 
   const handleSaveDealConversion = useCallback(
     async (formData) => {
@@ -895,6 +960,28 @@ export default function InquiriesPage() {
         isOpen={Boolean(assignModalInquiry)}
         onClose={() => setAssignModalInquiry(null)}
         inquiry={assignModalInquiry}
+      />
+
+      {/* ── Client Registration Modals for Deal Conversion ── */}
+      <RegisterClientRequiredModal
+        isOpen={isConflictClientModalOpen}
+        onClose={() => {
+          setIsConflictClientModalOpen(false);
+          setConflictInquiry(null);
+        }}
+        inquiry={conflictInquiry}
+        onProceed={handleProceedToClientOnboard}
+        targetType="Deal"
+      />
+
+      <QuickClientOnboardDrawer
+        isOpen={isQuickClientDrawerOpen}
+        onClose={() => {
+          setIsQuickClientDrawerOpen(false);
+          setConflictInquiry(null);
+        }}
+        inquiry={conflictInquiry}
+        onSuccess={handleQuickClientSuccess}
       />
 
       {/* ── Convert to Deal Modal (Drag-to-Deal or Action) ── */}

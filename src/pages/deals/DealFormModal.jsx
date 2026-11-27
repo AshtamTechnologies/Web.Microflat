@@ -13,6 +13,9 @@ import {
   SearchableSelect,
 } from '../../components/ui';
 import { dealService, inquiryService } from '../../services';
+import RegisterClientRequiredModal from '../quotations/components/RegisterClientRequiredModal';
+import QuickClientOnboardDrawer from '../quotations/components/QuickClientOnboardDrawer';
+import { useClientsContext } from '../../context/ClientsContext';
 
 export default function DealFormModal({
   isOpen,
@@ -47,6 +50,13 @@ export default function DealFormModal({
   const [candidateInquiries, setCandidateInquiries] = useState([]);
   const [loadingInquiries, setLoadingInquiries] = useState(false);
   const [loadingPrefill, setLoadingPrefill] = useState(false);
+
+  // ── Client Registration Modal & Drawer State ──
+  const { loadClients, ensureClientsLoaded } = useClientsContext?.() || {};
+  const [isConflictClientModalOpen, setIsConflictClientModalOpen] = useState(false);
+  const [isQuickClientDrawerOpen, setIsQuickClientDrawerOpen] = useState(false);
+  const [conflictInquiry, setConflictInquiry] = useState(null);
+  const [pendingInquiryId, setPendingInquiryId] = useState(null);
 
   useEffect(() => {
     setDocNumber(nextDocNumber);
@@ -266,9 +276,76 @@ export default function DealFormModal({
         clientContactId: pre?.clientContactId || (activeContacts[0]?.clientContactId ? String(activeContacts[0].clientContactId) : ''),
       }));
     } catch (err) {
-      toast.error(err?.message || 'Failed to load details for selected inquiry.');
+      const errMsg = (err?.message || '').toLowerCase();
+      const isNewClientConflict =
+        err?.status === 409 ||
+        errMsg.includes('new client') ||
+        errMsg.includes('register the client');
+
+      if (isNewClientConflict) {
+        setPendingInquiryId(selectedInquiryId);
+        // Find matching inquiry from availableInquiries or fetch from inquiryService
+        const matched = (availableInquiries || []).find(
+          (i) => String(i.id || i.inquiryId || i.InquiryId) === String(selectedInquiryId)
+        );
+        if (matched) {
+          setConflictInquiry(matched);
+          setIsConflictClientModalOpen(true);
+        } else {
+          inquiryService.getInquiryById(selectedInquiryId)
+            .then((inq) => {
+              setConflictInquiry(inq);
+              setIsConflictClientModalOpen(true);
+            })
+            .catch(() => {
+              setConflictInquiry({ id: selectedInquiryId });
+              setIsConflictClientModalOpen(true);
+            });
+        }
+      } else {
+        toast.error(err?.message || 'Failed to load details for selected inquiry.');
+      }
     } finally {
       setLoadingPrefill(false);
+    }
+  };
+
+  const handleProceedToClientOnboard = () => {
+    setIsConflictClientModalOpen(false);
+    setIsQuickClientDrawerOpen(true);
+  };
+
+  const handleQuickClientSuccess = async (createdClient) => {
+    setIsQuickClientDrawerOpen(false);
+    const targetInqId = pendingInquiryId || conflictInquiry?.id || conflictInquiry?.InquiryId;
+    const newClientId = createdClient?.clientId || createdClient?.id;
+
+    if (targetInqId && newClientId) {
+      try {
+        const fullInq = await inquiryService.getInquiryById(targetInqId);
+        await inquiryService.updateInquiry(targetInqId, {
+          ...fullInq,
+          isNewClient: false,
+          clientId: newClientId,
+          products: null,
+        });
+      } catch (err) {
+        console.warn('Could not link registered client to inquiry:', err);
+      }
+    }
+
+    if (loadClients) {
+      await loadClients();
+    } else if (ensureClientsLoaded) {
+      ensureClientsLoaded();
+    }
+
+    toast.success('Client registered and linked to inquiry. Loading deal details...');
+    setConflictInquiry(null);
+
+    // Re-trigger prefill for the inquiry
+    if (targetInqId) {
+      handleInquiryChange(targetInqId);
     }
   };
 
@@ -470,6 +547,30 @@ export default function DealFormModal({
           </Button>
         </div>
       </form>
+
+      {/* ── Client Registration Modals for Deal Conversion ── */}
+      <RegisterClientRequiredModal
+        isOpen={isConflictClientModalOpen}
+        onClose={() => {
+          setIsConflictClientModalOpen(false);
+          setConflictInquiry(null);
+          setPendingInquiryId(null);
+        }}
+        inquiry={conflictInquiry}
+        onProceed={handleProceedToClientOnboard}
+        targetType="Deal"
+      />
+
+      <QuickClientOnboardDrawer
+        isOpen={isQuickClientDrawerOpen}
+        onClose={() => {
+          setIsQuickClientDrawerOpen(false);
+          setConflictInquiry(null);
+          setPendingInquiryId(null);
+        }}
+        inquiry={conflictInquiry}
+        onSuccess={handleQuickClientSuccess}
+      />
     </Modal>
   );
 }

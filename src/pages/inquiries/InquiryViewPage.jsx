@@ -68,6 +68,10 @@ import AssignInquiryModal from './components/AssignInquiryModal';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import UploadDocumentModal from './components/UploadDocumentModal';
 import DealFormModal from '../deals/DealFormModal';
+import RegisterClientRequiredModal from '../quotations/components/RegisterClientRequiredModal';
+import QuickClientOnboardDrawer from '../quotations/components/QuickClientOnboardDrawer';
+import { dealService, inquiryService, isMockApi } from '../../services';
+import { useClientsContext } from '../../context/ClientsContext';
 import { dealService, inquiryService, isMockApi } from '../../services';
 import { formatDate, formatDateTime } from '../../utils/dateUtils';
 import { getMeetings } from '../../services/meetings/meetingsService';
@@ -304,6 +308,11 @@ export default function InquiryViewPage() {
   const [nextDealDocNumber, setNextDealDocNumber] = useState('');
   const [dealCurrencies, setDealCurrencies] = useState([]);
   const [isConvertingDeal, setIsConvertingDeal] = useState(false);
+
+  // ── Client Registration Modal & Drawer State (When inquiry is for a new client) ──
+  const { loadClients, ensureClientsLoaded } = useClientsContext?.() || {};
+  const [isConflictClientModalOpen, setIsConflictClientModalOpen] = useState(false);
+  const [isQuickClientDrawerOpen, setIsQuickClientDrawerOpen] = useState(false);
   const [isRegisterClientModalOpen, setIsRegisterClientModalOpen] = useState(false);
   const [isRegisteringClient, setIsRegisteringClient] = useState(false);
   const [linkedDeal, setLinkedDeal] = useState(null);
@@ -376,6 +385,72 @@ export default function InquiryViewPage() {
       setDealCurrencies(lookups?.currencies || []);
       setIsConvertDealOpen(true);
     } catch (err) {
+      const errMsg = (err?.message || '').toLowerCase();
+      const isNewClientConflict =
+        err?.status === 409 ||
+        errMsg.includes('new client') ||
+        errMsg.includes('register the client') ||
+        inquiry?.isNewClient;
+
+      if (isNewClientConflict) {
+        setIsConflictClientModalOpen(true);
+      } else {
+        toast.error(err?.message || 'This inquiry cannot be converted to a deal.');
+      }
+    } finally {
+      setIsConvertingDeal(false);
+    }
+  };
+
+  const handleProceedToClientOnboard = () => {
+    setIsConflictClientModalOpen(false);
+    setIsQuickClientDrawerOpen(true);
+  };
+
+  const handleQuickClientSuccess = async (createdClient) => {
+    setIsQuickClientDrawerOpen(false);
+    const inqId = inquiry?.id || id;
+    const newClientId = createdClient?.clientId || createdClient?.id;
+
+    if (inqId && newClientId) {
+      try {
+        const fullInq = await inquiryService.getInquiryById(inqId);
+        await inquiryService.updateInquiry(inqId, {
+          ...fullInq,
+          isNewClient: false,
+          clientId: newClientId,
+          products: null,
+        });
+        if (refetchInquiry) {
+          await refetchInquiry();
+        }
+      } catch (err) {
+        console.warn('Could not link registered client to inquiry:', err);
+      }
+    }
+
+    if (loadClients) {
+      await loadClients();
+    } else if (ensureClientsLoaded) {
+      ensureClientsLoaded();
+    }
+
+    toast.success('Client registered and linked to inquiry. Opening deal creation...');
+
+    // Re-trigger convert to deal flow
+    try {
+      setIsConvertingDeal(true);
+      const [prefill, nextNum, lookups] = await Promise.all([
+        dealService.getDealPrefill(inqId),
+        dealService.getNextDealNumber(),
+        dealService.getDealLookups(),
+      ]);
+      setDealPrefillData(prefill);
+      setNextDealDocNumber(nextNum?.documentNumber || '');
+      setDealCurrencies(lookups?.currencies || []);
+      setIsConvertDealOpen(true);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to prepare deal conversion after client registration.');
       const msg = err?.message || '';
       if (
         msg.toLowerCase().includes('new client') ||
@@ -1706,6 +1781,21 @@ export default function InquiryViewPage() {
         document={selectedDocForVersion}
       />
 
+      {/* ── Client Registration Modals for Deal Conversion ── */}
+      <RegisterClientRequiredModal
+        isOpen={isConflictClientModalOpen}
+        onClose={() => setIsConflictClientModalOpen(false)}
+        inquiry={inquiry}
+        onProceed={handleProceedToClientOnboard}
+        targetType="Deal"
+      />
+
+      <QuickClientOnboardDrawer
+        isOpen={isQuickClientDrawerOpen}
+        onClose={() => setIsQuickClientDrawerOpen(false)}
+        inquiry={inquiry}
+        onSuccess={handleQuickClientSuccess}
+      />
       {/* ── Client Registration Required Modal (Bug 8) ── */}
       {isRegisterClientModalOpen && (
         <Modal
