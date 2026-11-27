@@ -72,7 +72,6 @@ import RegisterClientRequiredModal from '../quotations/components/RegisterClient
 import QuickClientOnboardDrawer from '../quotations/components/QuickClientOnboardDrawer';
 import { dealService, inquiryService, isMockApi } from '../../services';
 import { useClientsContext } from '../../context/ClientsContext';
-import { dealService, inquiryService, isMockApi } from '../../services';
 import { formatDate, formatDateTime } from '../../utils/dateUtils';
 import { getMeetings } from '../../services/meetings/meetingsService';
 import { getInquiryStage } from './inquiryStages';
