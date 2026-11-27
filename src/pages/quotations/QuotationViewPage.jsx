@@ -63,6 +63,24 @@ export default function QuotationViewPage() {
   const [clientDetail, setClientDetail] = useState(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const handleApprove = async () => {
+    setIsSubmittingApproval(true);
+    try {
+      const fresh = await submitForApproval(quotation.id);
+      if (fresh && fresh.id) {
+        setQuotationDetail(fresh);
+      } else {
+        const refetched = await fetchQuotationDetail(quotation.id);
+        if (refetched) setQuotationDetail(refetched);
+      }
+    } catch {
+      // toast already displayed in submitForApproval
+    } finally {
+      setIsSubmittingApproval(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     if (id && fetchQuotationDetail) {
@@ -85,16 +103,16 @@ export default function QuotationViewPage() {
   const cachedQuotation = getQuotationById(id);
   const quotation = quotationDetail
     ? {
-        ...cachedQuotation,
-        ...quotationDetail,
-        revisions: quotationDetail?.revisions?.length
-          ? quotationDetail.revisions
-          : cachedQuotation?.revisions,
-        negotiations: quotationDetail?.negotiations ?? cachedQuotation?.negotiations,
-        nextStatuses: quotationDetail?.nextStatuses?.length
-          ? quotationDetail.nextStatuses
-          : cachedQuotation?.nextStatuses,
-      }
+      ...cachedQuotation,
+      ...quotationDetail,
+      revisions: quotationDetail?.revisions?.length
+        ? quotationDetail.revisions
+        : cachedQuotation?.revisions,
+      negotiations: quotationDetail?.negotiations ?? cachedQuotation?.negotiations,
+      nextStatuses: quotationDetail?.nextStatuses?.length
+        ? quotationDetail.nextStatuses
+        : cachedQuotation?.nextStatuses,
+    }
     : cachedQuotation;
 
   const resolvedClientId =
@@ -260,20 +278,38 @@ export default function QuotationViewPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [expandedDescIds, setExpandedDescIds] = useState(() => new Set());
 
+  // Calculate latest revision number based on the maximum revisionNo in revisions
+  const latestRevisionNo = useMemo(() => {
+    const revs = quotation?.revisions || [];
+    if (revs.length === 0) return quotation?.currentRevision ?? 0;
+    return Math.max(...revs.map((r) => Number(r.revisionNo ?? 0)));
+  }, [quotation?.revisions, quotation?.currentRevision]);
+
   // Active Revision to view (defaults to latest)
-  const [selectedRevIndex, setSelectedRevIndex] = useState(() => {
+  const [selectedRevNo, setSelectedRevNo] = useState(() => {
     return quotation?.currentRevision !== undefined
       ? quotation.currentRevision
-      : (quotation?.revisions?.length ? quotation.revisions.length - 1 : 0);
+      : 0;
   });
 
-  const latestRevIndex = (quotation?.revisions?.length || 1) - 1;
-  const isViewingLatestRev = selectedRevIndex === latestRevIndex;
+  useEffect(() => {
+    if (quotation?.currentRevision !== undefined) {
+      setSelectedRevNo(quotation.currentRevision);
+    } else if (quotation?.revisions?.length) {
+      const maxNo = Math.max(...quotation.revisions.map((r) => Number(r.revisionNo ?? 0)));
+      setSelectedRevNo(maxNo);
+    }
+  }, [quotation?.currentRevision, quotation?.revisions]);
+
+  const isViewingLatestRev = selectedRevNo === latestRevisionNo;
 
   const activeRevision = useMemo(() => {
     if (!quotation || !quotation.revisions || quotation.revisions.length === 0) return null;
-    return quotation.revisions[selectedRevIndex] || quotation.revisions[latestRevIndex];
-  }, [quotation, selectedRevIndex, latestRevIndex]);
+    const byNo = quotation.revisions.find((r) => (r.revisionNo ?? 0) === selectedRevNo);
+    if (byNo) return byNo;
+    const byLatest = quotation.revisions.find((r) => (r.revisionNo ?? 0) === latestRevisionNo);
+    return byLatest || quotation.revisions[0];
+  }, [quotation, selectedRevNo, latestRevisionNo]);
   const isDraftQuotation =
     String(quotation?.status || activeRevision?.status || '').trim().toLowerCase() === 'draft';
 
@@ -286,11 +322,13 @@ export default function QuotationViewPage() {
 
   const activeTaxTreatment = activeRevision?.taxTreatment || quotation?.taxTreatment || '';
   const activeTaxTreatmentLabel = useMemo(() => {
-      return activeTaxTreatment || '';
+    return activeTaxTreatment || '';
   }, [activeTaxTreatment]);
 
   const activeTaxes = useMemo(() => {
-    const rawTaxes = activeRevision?.taxes || quotation?.taxes || [];
+    const rawTaxes = (activeRevision?.taxes && activeRevision.taxes.length > 0)
+      ? activeRevision.taxes
+      : (quotation?.taxes || []);
     if (Array.isArray(rawTaxes) && rawTaxes.length > 0) {
       return rawTaxes.map((t) => {
         const id = t.taxConfigDetailId || t.id || t;
@@ -300,6 +338,7 @@ export default function QuotationViewPage() {
           taxConfigDetailId: id,
           taxName: matched?.taxName || t.taxName || t.name || 'GST',
           taxPercent: Number(matched?.taxPercent ?? t.taxPercent ?? t.rate ?? 0),
+          taxAmount: Number(t.taxAmount || 0),
         };
       });
     }
@@ -307,17 +346,48 @@ export default function QuotationViewPage() {
   }, [activeRevision?.taxes, quotation?.taxes, lookups?.taxes]);
 
   const activeTotalsBreakdown = useMemo(() => {
-    const serverSubtotal = activeRevision?.subtotal ?? quotation?.subtotal;
-    const serverTotalTax = activeRevision?.totalTax ?? activeRevision?.taxAmount ?? quotation?.totalTax;
-    const serverGrandTotal = activeRevision?.grandTotal ?? quotation?.grandTotal;
+    const rawSubtotal = Number(activeRevision?.subtotal);
+    const fallbackSubtotal = Number(quotation?.subtotal);
+    const itemsSum = displayedItems.reduce((acc, it) => acc + (Number(it.amount) || (Number(it.quantity) * Number(it.rate)) || 0), 0);
+    const subtotal = rawSubtotal > 0 ? rawSubtotal : (fallbackSubtotal > 0 ? fallbackSubtotal : itemsSum);
+
+    const rawTotalTax = Number(activeRevision?.totalTax ?? activeRevision?.taxAmount);
+    const fallbackTotalTax = Number(quotation?.totalTax ?? quotation?.taxAmount);
+    const taxesSum = activeTaxes.reduce((acc, t) => acc + (Number(t.taxAmount) || 0), 0);
+    const totalTax = rawTotalTax > 0 ? rawTotalTax : (fallbackTotalTax > 0 ? fallbackTotalTax : taxesSum);
+
+    const otherCharges = Number(activeRevision?.otherCharges ?? quotation?.otherCharges ?? 0);
+    const rawGrandTotal = Number(activeRevision?.grandTotal ?? quotation?.grandTotal);
+    const grandTotal = rawGrandTotal > 0 ? rawGrandTotal : (subtotal + otherCharges + totalTax);
+
+    const lineTaxAmount = Number(
+      activeRevision?.lineTaxAmount ??
+      quotation?.lineTaxAmount ??
+      displayedItems.reduce((acc, it) => acc + (Number(it.taxAmount) || 0), 0)
+    );
+
+    const taxesBreakdown = activeTaxes.map((tx) => {
+      const computedAmount = tx.taxAmount > 0
+        ? tx.taxAmount
+        : Math.round(((subtotal * tx.taxPercent) / 100) * 100) / 100;
+      return {
+        id: tx.id || tx.taxConfigDetailId,
+        name: tx.taxName,
+        percent: tx.taxPercent,
+        amount: computedAmount,
+      };
+    });
 
     return {
-      subtotal: Number(serverSubtotal) || 0,
-      taxAmount: Number(serverTotalTax) || 0,
-      totalTax: Number(serverTotalTax) || 0,
-      grandTotal: Number(serverGrandTotal) || 0,
+      subtotal,
+      otherCharges,
+      lineTaxAmount,
+      taxAmount: totalTax,
+      totalTax,
+      grandTotal,
+      taxesBreakdown,
     };
-  }, [displayedItems, activeTaxTreatment, activeTaxes, activeRevision, quotation]);
+  }, [displayedItems, activeTaxes, activeRevision, quotation]);
 
   const itemsWithDescription = useMemo(() => {
     return displayedItems.filter((it) => Boolean(it.description?.trim()));
@@ -358,11 +428,11 @@ export default function QuotationViewPage() {
 
   // Options for Revision dropdown
   const revisionSelectOptions = useMemo(() => {
-    return (quotation?.revisions || []).map((r, idx) => ({
-      value: String(idx),
-      label: `Revision ${r.revisionNo} ${idx === latestRevIndex ? '(Latest)' : ''}`,
+    return (quotation?.revisions || []).map((r) => ({
+      value: String(r.revisionNo ?? 0),
+      label: `Revision ${r.revisionNo ?? 0} ${(r.revisionNo ?? 0) === latestRevisionNo ? '(Latest)' : ''}`,
     }));
-  }, [quotation?.revisions, latestRevIndex]);
+  }, [quotation?.revisions, latestRevisionNo]);
 
   // Column Resizing for Quoted Products Table
   const MIN_PRODUCT_COL_WIDTHS = useMemo(
@@ -437,12 +507,12 @@ export default function QuotationViewPage() {
                 quotation.status === 'PO Received' || quotation.poReceived
                   ? 'success'
                   : quotation.status === 'Confirmed'
-                  ? 'success'
-                  : quotation.status === 'In Negotiation'
-                  ? 'warning'
-                  : quotation.status === 'Sent'
-                  ? 'info'
-                  : 'neutral'
+                    ? 'success'
+                    : quotation.status === 'In Negotiation'
+                      ? 'warning'
+                      : quotation.status === 'Sent'
+                        ? 'info'
+                        : 'neutral'
               }
               size="md"
             >
@@ -574,7 +644,9 @@ export default function QuotationViewPage() {
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => submitForApproval(quotation.id)}
+                onClick={handleApprove}
+                loading={isSubmittingApproval}
+                disabled={isSubmittingApproval}
                 icon={<IconCheck size={14} />}
               >
                 Submit for Approval
@@ -630,7 +702,7 @@ export default function QuotationViewPage() {
                 </span>
                 <span className="inline-flex items-center gap-1 text-3xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-600 text-white shadow-2xs">
                   <IconCheck size={10} />
-                  Linked to Rev {quotation.currentRevision ?? latestRevIndex} (Latest Agreed)
+                  Linked to Rev {quotation.currentRevision ?? latestRevisionNo} (Latest Agreed)
                 </span>
               </div>
               <p className="text-2xs text-emerald-700/80 dark:text-emerald-300/80">
@@ -640,9 +712,9 @@ export default function QuotationViewPage() {
                 )}
                 . A Sales Order can now be generated from this quotation.
               </p>
-              {selectedRevIndex !== latestRevIndex && (
+              {selectedRevNo !== latestRevisionNo && (
                 <div className="mt-1 text-3xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 w-fit">
-                  <span>⚠️ You are viewing historical Rev {selectedRevIndex}. The Customer PO was awarded against Rev {latestRevIndex} (Latest).</span>
+                  <span>⚠️ You are viewing historical Rev {selectedRevNo}. The Customer PO was awarded against Rev {latestRevisionNo} (Latest).</span>
                 </div>
               )}
             </div>
@@ -722,7 +794,7 @@ export default function QuotationViewPage() {
         <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2.5 text-xs text-amber-800 dark:text-amber-300">
           <IconWarning size={16} className="shrink-0 text-amber-600" />
           <span>
-            You are currently viewing historical <strong>Revision {selectedRevIndex}</strong> in read-only mode. Only the latest revision can be amended via a new revision.
+            You are currently viewing historical <strong>Revision {selectedRevNo}</strong> in read-only mode. Only the latest revision can be amended via a new revision.
           </span>
         </div>
       )}
@@ -746,8 +818,8 @@ export default function QuotationViewPage() {
             <SearchableSelect
               size="sm"
               options={revisionSelectOptions}
-              value={String(selectedRevIndex)}
-              onChange={(e) => setSelectedRevIndex(Number(e.target.value))}
+              value={String(selectedRevNo)}
+              onChange={(e) => setSelectedRevNo(Number(e.target.value))}
               placeholder="Select revision..."
               searchPlaceholder="Search revision..."
             />
@@ -943,14 +1015,20 @@ export default function QuotationViewPage() {
                           )}
                           {Array.isArray(item.options) && item.options.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {item.options.map((opt, oIdx) => (
-                                <span
-                                  key={oIdx}
-                                  className="inline-flex items-center px-1.5 py-0.2 rounded text-3xs font-medium bg-surface text-text-muted border border-border"
-                                >
-                                  {opt.replace(' (Standard)', '')}
-                                </span>
-                              ))}
+                              {item.options.map((opt, oIdx) => {
+                                const optText = typeof opt === 'object' && opt !== null
+                                  ? (opt.optionName || opt.name || opt.label || '')
+                                  : String(opt || '');
+                                if (!optText) return null;
+                                return (
+                                  <span
+                                    key={oIdx}
+                                    className="inline-flex items-center px-1.5 py-0.2 rounded text-3xs font-medium bg-surface text-text-muted border border-border"
+                                  >
+                                    {optText.replace(' (Standard)', '')}
+                                  </span>
+                                );
+                              })}
                             </div>
                           )}
 
@@ -1022,7 +1100,7 @@ export default function QuotationViewPage() {
                     </div>
                   ) : (
                     <Badge variant="neutral" size="sm">
-                      {activeTaxTreatmentLabel}
+                      {activeTaxTreatmentLabel || 'None / Exempt'}
                     </Badge>
                   )}
                 </div>
@@ -1102,7 +1180,7 @@ export default function QuotationViewPage() {
                 {[
                   {
                     label: 'Payment Terms',
-                    raw: activeRevision?.paymentTerms || quotation.paymentTerms || quotation.paymentTermName,
+                    raw: activeRevision?.paymentTerms || quotation.paymentTerms || quotation.paymentTermName || activeRevision?.paymentTermName,
                   },
                   {
                     label: 'Delivery Terms',
@@ -1200,17 +1278,17 @@ export default function QuotationViewPage() {
                   <tr key={rev.revisionNo} className="hover:bg-surface/50 transition-colors">
                     <Td className="font-mono text-xs font-bold text-heading">
                       Rev {rev.revisionNo}{' '}
-                      {rev.revisionNo === latestRevIndex && (
+                      {rev.revisionNo === latestRevisionNo && (
                         <Badge variant="role" size="sm" className="ml-1">
                           Latest
                         </Badge>
                       )}
-                      {(quotation.poReceived || quotation.status === 'Confirmed') && rev.revisionNo === latestRevIndex && (
+                      {(quotation.poReceived || quotation.status === 'Confirmed') && rev.revisionNo === latestRevisionNo && (
                         <Badge variant="success" size="sm" className="ml-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
                           PO Confirmed
                         </Badge>
                       )}
-                      {(quotation.poReceived || quotation.status === 'Confirmed') && rev.revisionNo < latestRevIndex && (
+                      {(quotation.poReceived || quotation.status === 'Confirmed') && rev.revisionNo < latestRevisionNo && (
                         <Badge variant="neutral" size="sm" className="ml-1 opacity-70">
                           Superseded
                         </Badge>
@@ -1226,10 +1304,10 @@ export default function QuotationViewPage() {
                       <Badge
                         variant={
                           rev.status === 'Sent' ? 'info' :
-                          rev.status === 'Confirmed' ? 'success' :
-                          rev.status === 'In Negotiation' ? 'warning' :
-                          rev.status === 'PO Received' ? 'success' :
-                          'neutral'
+                            rev.status === 'Confirmed' ? 'success' :
+                              rev.status === 'In Negotiation' ? 'warning' :
+                                rev.status === 'PO Received' ? 'success' :
+                                  'neutral'
                         }
                         size="sm"
                       >
@@ -1244,7 +1322,7 @@ export default function QuotationViewPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          setSelectedRevIndex(rev.revisionNo);
+                          setSelectedRevNo(rev.revisionNo);
                           setActiveTab('overview');
                         }}
                       >

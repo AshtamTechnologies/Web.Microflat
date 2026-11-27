@@ -17,25 +17,38 @@ import {
 import { useAuthContext } from '../../../context/AuthContext';
 import { getTodayISO } from '../../../utils/dateUtils';
 
+function getDefaultMeetingTimes() {
+  const now = new Date();
+  // Round up to next hour (e.g., 5:22 PM -> 6:00 PM)
+  const nextHour = (now.getHours() + 1) % 24;
+  const endHour = (nextHour + 1) % 24;
+  const startTime = `${String(nextHour).padStart(2, '0')}:00`;
+  const endTime = `${String(endHour).padStart(2, '0')}:00`;
+  return { startTime, endTime };
+}
+
 export function useMeetingForm(id) {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { user } = useAuthContext();
 
-  const [formData, setFormData] = useState({
-    meetingTitle: '',
-    title: '',
-    meetingType: 'Internal', // 'Internal' | 'Client' | 'Vendor'
-    inquiryId: '',
-    inquiryNumber: '',
-    meetingDate: getTodayISO ? getTodayISO() : new Date().toISOString().split('T')[0],
-    startTime: '10:00',
-    endTime: '11:00',
-    location: '',
-    agenda: '',
-    attendees: [],
-    queuedAttachments: [], // [{ file, documentTypeId, documentTypeName, documentTitle, remarks, tempId }]
-    existingAttachments: [], // [{ id, fileName, documentTypeName, remarks, ... }]
+  const [formData, setFormData] = useState(() => {
+    const defaultTimes = getDefaultMeetingTimes();
+    return {
+      meetingTitle: '',
+      title: '',
+      meetingType: 'Internal', // 'Internal' | 'Client' | 'Vendor'
+      inquiryId: '',
+      inquiryNumber: '',
+      meetingDate: getTodayISO ? getTodayISO() : new Date().toISOString().split('T')[0],
+      startTime: defaultTimes.startTime,
+      endTime: defaultTimes.endTime,
+      location: '',
+      agenda: '',
+      attendees: [],
+      queuedAttachments: [], // [{ file, documentTypeId, documentTypeName, documentTitle, remarks, tempId }]
+      existingAttachments: [], // [{ id, fileName, documentTypeName, remarks, ... }]
+    };
   });
 
   const [initialAttendees, setInitialAttendees] = useState([]);
@@ -148,12 +161,24 @@ export function useMeetingForm(id) {
     if (!formData.startTime) {
       errors.startTime = 'Start time is required.';
     }
+    if (!isEdit && formData.meetingDate) {
+      const todayISO = getTodayISO();
+      if (formData.meetingDate < todayISO) {
+        errors.meetingDate = 'Meeting date cannot be in the past.';
+      } else if (formData.meetingDate === todayISO && formData.startTime) {
+        const now = new Date();
+        const nowHHmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        if (formData.startTime < nowHHmm) {
+          errors.startTime = 'Start time cannot be in the past.';
+        }
+      }
+    }
     if (formData.startTime && formData.endTime && formData.endTime <= formData.startTime) {
       errors.endTime = 'End time must be after start time.';
     }
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
-  }, [formData]);
+  }, [formData, isEdit]);
 
   const addQueuedAttachment = useCallback((attachmentItem) => {
     setFormData((prev) => ({

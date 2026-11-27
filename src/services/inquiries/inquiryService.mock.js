@@ -321,6 +321,18 @@ export async function toggleInquiryActive(id, isActive) {
   return { success: true };
 }
 
+export async function registerClient(id) {
+  await new Promise((r) => setTimeout(r, 150));
+  const found = inMemoryInquiries.find(
+    (i) => String(i.id) === String(id) || String(i.InquiryId) === String(id)
+  );
+  if (found) {
+    found.isNewClient = false;
+    found.clientId = found.clientId || 1;
+  }
+  return { success: true, message: 'Client registered successfully.', clientId: found?.clientId || 1 };
+}
+
 export async function getInquiryActivities(id) {
   await new Promise((r) => setTimeout(r, 60));
   const found = inMemoryInquiries.find(
