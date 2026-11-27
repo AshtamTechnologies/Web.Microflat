@@ -36,33 +36,37 @@ import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
-const STATUS_FILTER_OPTIONS = [
-  { value: 'All', label: 'All Statuses' },
-  { value: 'Draft', label: 'Draft' },
-  { value: 'Sent', label: 'Sent' },
-  { value: 'In Negotiation', label: 'In Negotiation' },
-  { value: 'Confirmed', label: 'Confirmed' },
-  { value: 'Lost', label: 'Lost' },
-  { value: 'PO received', label: 'PO received' },
-];
-
 export default function QuotationsPage() {
   const navigate = useNavigate();
-  const { quotations = [], refreshQuotations, isLoading } = useQuotationsContext();
+  const { quotations = [], refreshQuotations, fetchLookups, lookups, isLoading } = useQuotationsContext();
 
   useEffect(() => {
     refreshQuotations?.();
-  }, [refreshQuotations]);
+    fetchLookups?.();
+  }, [refreshQuotations, fetchLookups]);
 
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const statusFilterOptions = useMemo(() => {
+    const apiStatuses = Array.isArray(lookups?.statuses) ? lookups.statuses : [];
+    return [
+      { value: 'All', label: 'All Statuses' },
+      ...apiStatuses
+        .map((status) => {
+          const value = typeof status === 'object' ? (status.value || status.name || status.statusName || status.id) : status;
+          const label = typeof status === 'object' ? (status.label || status.name || status.statusName || status.value) : status;
+          return value ? { value: String(value), label: String(label || value) } : null;
+        })
+        .filter(Boolean),
+    ];
+  }, [lookups?.statuses]);
 
   // Filtered quotations
   const filteredData = useMemo(() => {
     return quotations.filter((q) => {
       // Status filter
-      if (activeFilter === 'PO received') {
-        if (!q.poReceived) return false;
+      if (activeFilter === 'PO Received') {
+        if (!q.poReceived && q.status !== 'PO Received') return false;
       } else if (activeFilter !== 'All') {
         if (q.status !== activeFilter) return false;
       }
@@ -166,22 +170,17 @@ export default function QuotationsPage() {
         cell: (info) => {
           const row = info.row.original;
           const status = info.getValue();
+          const isPo = Boolean(row.poReceived || status === 'PO Received');
           let variant = 'neutral';
-          if (status === 'Sent') variant = 'info';
+          if (isPo || status === 'Confirmed') variant = 'success';
+          else if (status === 'Sent') variant = 'info';
           else if (status === 'In Negotiation') variant = 'warning';
-          else if (status === 'Confirmed') variant = 'success';
-          else if (status === 'Lost') variant = 'danger';
 
           return (
             <div className="flex items-center gap-1.5 flex-wrap">
               <Badge variant={variant} size="sm">
-                {status}
+                {isPo ? 'PO Received' : status}
               </Badge>
-              {row.poReceived && (
-                <Badge variant="role" size="sm">
-                  PO received
-                </Badge>
-              )}
             </div>
           );
         },
@@ -237,14 +236,25 @@ export default function QuotationsPage() {
               >
                 <IconView size={15} />
               </button>
-              <button
-                type="button"
-                onClick={() => navigate(`/quotations/${row.id}/new-revision`)}
-                className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
-                title="Create New Revision"
-              >
-                <IconEdit size={15} />
-              </button>
+              {!(row.poReceived || row.status === 'PO Received') ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/quotations/${row.id}/new-revision`)}
+                  className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
+                  title={row.status === 'Draft' ? 'Edit latest Draft quotation' : 'Create New Revision'}
+                >
+                  <IconEdit size={15} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="p-1.5 rounded-lg text-text-muted/30 cursor-not-allowed"
+                  title="Customer PO Received: Revisions are locked."
+                >
+                  <IconEdit size={15} />
+                </button>
+              )}
             </div>
           );
         },
@@ -296,7 +306,7 @@ export default function QuotationsPage() {
             id="filter-status"
             placeholder="All Statuses"
             searchPlaceholder="Search status..."
-            options={STATUS_FILTER_OPTIONS}
+            options={statusFilterOptions}
             value={activeFilter}
             onChange={(e) => setActiveFilter(e.target.value)}
           />

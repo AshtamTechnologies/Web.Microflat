@@ -8,6 +8,11 @@
  */
 export function dealItemFromApi(apiItem) {
   if (!apiItem) return null;
+  const currencyCode = apiItem.currencyCode || 'INR';
+  const currencySymbol =
+    apiItem.currencySymbol ||
+    (currencyCode === 'USD' ? '$' : currencyCode === 'EUR' ? '€' : '₹');
+
   return {
     id: apiItem.id,
     dealNo: apiItem.dealNo || '',
@@ -17,13 +22,15 @@ export function dealItemFromApi(apiItem) {
     clientId: apiItem.clientId,
     clientCode: apiItem.clientCode || '',
     clientName: apiItem.clientName || '',
-    currencyCode: apiItem.currencyCode || 'INR',
+    currencyCode,
+    currencySymbol,
     expectedValue: Number(apiItem.expectedValue ?? 0),
-    negotiatedValue: apiItem.negotiatedValue !== null && apiItem.negotiatedValue !== undefined
-      ? Number(apiItem.negotiatedValue)
-      : null,
-    dealStatusId: apiItem.dealStatusId,
-    dealStatus: apiItem.dealStatus || 'Open',
+    negotiatedValue:
+      apiItem.negotiatedValue !== null && apiItem.negotiatedValue !== undefined
+        ? Number(apiItem.negotiatedValue)
+        : null,
+    dealStatusId: apiItem.dealStatusId ?? apiItem.statusId ?? 1,
+    dealStatus: apiItem.dealStatus ?? apiItem.statusName ?? 'Open',
     statusChangedOn: apiItem.statusChangedOn || null,
     createdBy: apiItem.createdBy,
     createdByName: apiItem.createdByName || '',
@@ -57,6 +64,11 @@ export function negotiationFromApi(apiItem) {
  */
 export function dealDetailFromApi(apiDetail) {
   if (!apiDetail) return null;
+  const currencyCode = apiDetail.currencyCode || 'INR';
+  const currencySymbol =
+    apiDetail.currencySymbol ||
+    (currencyCode === 'USD' ? '$' : currencyCode === 'EUR' ? '€' : '₹');
+
   return {
     id: apiDetail.id,
     dealNo: apiDetail.dealNo || '',
@@ -71,14 +83,15 @@ export function dealDetailFromApi(apiDetail) {
     clientContactName: apiDetail.clientContactName || '',
     clientContactEmail: apiDetail.clientContactEmail || '',
     currencyId: apiDetail.currencyId || 1,
-    currencyCode: apiDetail.currencyCode || 'INR',
-    currencySymbol: apiDetail.currencySymbol || '₹',
+    currencyCode,
+    currencySymbol,
     expectedValue: Number(apiDetail.expectedValue ?? 0),
-    negotiatedValue: apiDetail.negotiatedValue !== null && apiDetail.negotiatedValue !== undefined
-      ? Number(apiDetail.negotiatedValue)
-      : null,
-    dealStatusId: apiDetail.dealStatusId,
-    dealStatus: apiDetail.dealStatus || 'Open',
+    negotiatedValue:
+      apiDetail.negotiatedValue !== null && apiDetail.negotiatedValue !== undefined
+        ? Number(apiDetail.negotiatedValue)
+        : null,
+    dealStatusId: apiDetail.dealStatusId ?? apiDetail.statusId ?? 1,
+    dealStatus: apiDetail.dealStatus ?? apiDetail.statusName ?? 'Open',
     statusChangedOn: apiDetail.statusChangedOn || null,
     statusRemarks: apiDetail.statusRemarks || '',
     remarks: apiDetail.remarks || '',
@@ -96,7 +109,7 @@ export function dealDetailFromApi(apiDetail) {
 
     // Negotiation timeline entries
     negotiations: Array.isArray(apiDetail.negotiations)
-      ? apiDetail.negotiations.map(negotiationFromApi)
+      ? apiDetail.negotiations.map(negotiationFromApi).filter(Boolean)
       : [],
   };
 }

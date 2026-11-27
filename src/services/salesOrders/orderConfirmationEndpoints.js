@@ -5,9 +5,23 @@
  */
 
 function cleanId(id) {
-  if (typeof id === 'number') return id;
-  const match = String(id).match(/\d+/);
-  return match ? Number(match[0]) : id;
+  // Already a valid number
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  
+  // Purely numeric string like "15" or "7000001"
+  if (typeof id === 'string' && /^\d+$/.test(id.trim())) {
+    return Number(id.trim());
+  }
+  
+  // Prefix format like "ord-42" — take trailing digits only
+  if (typeof id === 'string') {
+    const match = id.trim().match(/^[a-zA-Z_-]+(\d+)$/);
+    if (match) return Number(match[1]);
+  }
+  
+  // Document series like "OC-2026-000001" — return as-is
+  // Let state lookup handle it via orderConfirmationNo matching
+  return id;
 }
 
 export const ORDER_CONFIRMATION_ENDPOINTS = {

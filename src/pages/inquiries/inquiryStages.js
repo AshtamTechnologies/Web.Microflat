@@ -5,7 +5,51 @@
  * The Kanban board, column styles, and status badges derive dynamically from here.
  */
 
+export const API_INQUIRY_STATUSES = [
+  { id: 'New', name: 'New' },
+  { id: 'Quoting', name: 'Quoting' },
+  { id: 'Won', name: 'Won' },
+  { id: 'Lost', name: 'Lost' },
+];
+
 export const INQUIRY_STAGES = [
+  {
+    id: 'New',
+    name: 'New',
+    color: 'blue',
+    badgeVariant: 'info',
+    badgeClass: 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/20 dark:text-blue-300',
+    dotClass: 'bg-blue-500',
+    accentBorder: 'border-t-blue-500',
+  },
+  {
+    id: 'Quoting',
+    name: 'Quoting',
+    color: 'amber',
+    badgeVariant: 'warning',
+    badgeClass: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-300',
+    dotClass: 'bg-amber-500',
+    accentBorder: 'border-t-amber-500',
+  },
+  {
+    id: 'Won',
+    name: 'Won',
+    color: 'emerald',
+    badgeVariant: 'success',
+    badgeClass: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300',
+    dotClass: 'bg-emerald-500',
+    accentBorder: 'border-t-emerald-500',
+  },
+  {
+    id: 'Lost',
+    name: 'Lost',
+    color: 'rose',
+    badgeVariant: 'danger',
+    badgeClass: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:bg-rose-500/20 dark:text-rose-300',
+    dotClass: 'bg-rose-500',
+    accentBorder: 'border-t-rose-500',
+  },
+  // Visual pipeline stages mapped to linked Quotation / PO progress
   {
     id: 'Inquiry',
     name: 'Inquiry',
@@ -81,11 +125,10 @@ export const INQUIRY_STAGES = [
 ];
 
 /**
- * Normalizes legacy status IDs (New, In Progress, Quoted, Won, Lost, Closed)
- * to one of the 8 canonical stages.
+ * Normalizes status IDs to one of the canonical stages.
  */
 export function normalizeInquiryStage(statusId) {
-  if (!statusId) return INQUIRY_STAGES[0].id;
+  if (!statusId) return '';
   
   // Exact match
   const directMatch = INQUIRY_STAGES.find(
@@ -93,23 +136,20 @@ export function normalizeInquiryStage(statusId) {
   );
   if (directMatch) return directMatch.id;
 
-  // Legacy mappings
-  switch (statusId) {
-    case 'New':
-      return 'Inquiry';
-    case 'In Progress':
-      return 'Qualified';
-    case 'Quoted':
-      return 'Quotation';
-    case 'Won':
-      return 'Order Confirm';
-    case 'Lost':
-      return 'Rejected';
-    case 'Closed':
-      return 'Accepted';
-    default:
-      return INQUIRY_STAGES[0].id;
-  }
+  return String(statusId);
+}
+
+/**
+ * Maps a Kanban visual stage back to a valid API status for PATCH /api/inquiries/{id}/status.
+ */
+export function mapStageToApiStatus(stageId) {
+  if (!stageId) return null;
+  const lower = String(stageId).toLowerCase();
+  if (lower === 'new' || lower === 'inquiry' || lower === 'qualified') return 'New';
+  if (lower === 'quoting' || lower === 'quotation' || lower === 'negotiation') return 'Quoting';
+  if (lower === 'won' || lower === 'accepted' || lower === 'order confirm' || lower === 'po created') return 'Won';
+  if (lower === 'lost' || lower === 'rejected') return 'Lost';
+  return null;
 }
 
 /**
@@ -117,6 +157,6 @@ export function normalizeInquiryStage(statusId) {
  */
 export function getInquiryStage(stageId) {
   const normalized = normalizeInquiryStage(stageId);
-  return INQUIRY_STAGES.find((s) => s.id === normalized) || INQUIRY_STAGES[0];
+  return INQUIRY_STAGES.find((s) => s.id === normalized) || null;
 }
 

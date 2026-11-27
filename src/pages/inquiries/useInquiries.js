@@ -1,24 +1,15 @@
 /**
  * useInquiries.js — Core state management and API operations for the Inquiry Module.
- * Integrates with inquiryService (real REST API or mock service) with offline fallback.
+ * Integrates with the live inquiry API or the explicitly configured mock service.
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { inquiryService, isMockApi } from '../../services';
-import { STATUS_OPTIONS, PRIORITY_OPTIONS } from '../../mocks/inquiries';
-import { formatDateTime, getTodayISO } from '../../utils/dateUtils';
 import {
   inquiryListItemFromApi,
   inquiryDetailFromApi,
 } from '../../models/inquiries/inquiryModel';
-
-let nextSeqNumber = 101;
-let nextIdNumber = 1;
-
-function formatAuditTimestamp(date = new Date()) {
-  return formatDateTime(date);
-}
 
 function resolveUserName(userId, usersList = []) {
   if (!userId) return 'Unassigned';
@@ -47,6 +38,7 @@ export function useInquiries(usersList = []) {
   // Lookups: Sources and Priority Levels
   const [sources, setSources] = useState([]);
   const [priorityLevels, setPriorityLevels] = useState([]);
+  const [defaultPriorityLevelId, setDefaultPriorityLevelId] = useState(null);
 
   /* ── 300ms Search Debounce ── */
   useEffect(() => {
@@ -73,11 +65,13 @@ export function useInquiries(usersList = []) {
             : Array.isArray(lookups.priorities)
             ? lookups.priorities
             : [];
-          if (sourcesList.length > 0) setSources(sourcesList);
-          if (prioritiesList.length > 0) setPriorityLevels(prioritiesList);
+          setSources(sourcesList);
+          setPriorityLevels(prioritiesList);
+          setDefaultPriorityLevelId(lookups.defaultPriorityLevelId ?? null);
         }
       } catch (err) {
-        console.warn('Failed to load inquiry lookups:', err);
+        console.error('Failed to load inquiry lookups:', err);
+        toast.error(err?.message || 'Failed to load inquiry lookups.');
       }
     }
     loadLookups();
@@ -126,9 +120,16 @@ export function useInquiries(usersList = []) {
         setInquiries(res);
         setTotalCount(res.length);
         setTotalPages(1);
+      } else {
+        setInquiries([]);
+        setTotalCount(0);
+        setTotalPages(1);
       }
     } catch (err) {
-      console.warn('inquiryService.listInquiries failed, using local/mock state:', err);
+      console.error('inquiryService.listInquiries failed:', err);
+      setInquiries([]);
+      setTotalCount(0);
+      setTotalPages(1);
       setError(err?.message || 'Failed to fetch inquiries');
     } finally {
       setIsLoading(false);
@@ -220,19 +221,16 @@ export function useInquiries(usersList = []) {
   /* ── Fetch full detail of an inquiry by ID from API ── */
   const fetchInquiryById = useCallback(async (id) => {
     if (!id) return null;
-    try {
-      const data = await inquiryService.getInquiryById(id);
-      return data;
-    } catch (err) {
-      console.warn(`fetchInquiryById(${id}) failed:`, err);
-      return null;
-    }
+    return inquiryService.getInquiryById(id);
   }, []);
 
-  /* ── Get next auto-generated Inquiry No (helper) ── */
-  const getNextInquiryNo = useCallback(() => {
-    const padded = String(nextSeqNumber).padStart(6, '0');
-    return `INQ-2026-${padded}`;
+  /* ── Get next inquiry number from the API ── */
+  const getNextInquiryNo = useCallback(async (inquiryDate) => {
+    const result = await inquiryService.getNextInquiryNumber(inquiryDate);
+    if (!result?.documentNumber) {
+      throw new Error('The inquiry number preview was not returned by the API.');
+    }
+    return result.documentNumber;
   }, []);
 
   /* ── Create Inquiry ── */
@@ -248,48 +246,10 @@ export function useInquiries(usersList = []) {
         console.error('Failed to create inquiry:', err);
         const errMsg = err?.message || 'Failed to create inquiry.';
         toast.error(errMsg);
-
-        // When connected to the real backend, report error so the form stays open with validation hints
-        if (!isMockApi) {
-          return { ok: false, error: errMsg };
-        }
-
-        // Fallback to local creation for offline mock mode
-        const now = formatAuditTimestamp();
-        const generatedNo = formData.InquiryNo?.trim() || getNextInquiryNo();
-        nextSeqNumber += 1;
-
-        const assignedUserId = formData.AssignedTo || formData.assignedToUserId || null;
-        const assignedUserName = resolveUserName(assignedUserId, usersList);
-        const defaultStatus = formData.StatusId || formData.status || STATUS_OPTIONS[0].id;
-
-        const genId = `inq-${nextIdNumber++}`;
-        const newInquiry = {
-          id: genId,
-          InquiryId: genId,
-          InquiryNo: generatedNo,
-          inquiryNo: generatedNo,
-          InquiryDate: formData.InquiryDate || formData.inquiryDate || getTodayISO(),
-          CustomerName: formData.CustomerName?.trim() || formData.companyName?.trim() || '',
-          companyName: formData.CustomerName?.trim() || formData.companyName?.trim() || '',
-          ContactPerson: formData.ContactPerson?.trim() || formData.contactPersonName?.trim() || '',
-          Email: formData.Email?.trim() || formData.email?.trim() || '',
-          Phone: formData.Phone?.trim() || formData.mobileNo?.trim() || '',
-          Priority: formData.Priority || 'Medium',
-          StatusId: defaultStatus,
-          status: defaultStatus,
-          AssignedTo: assignedUserId,
-          assignedToName: assignedUserName,
-          items: Array.isArray(formData.items) ? formData.items : [],
-          CreatedOn: now,
-          activity: [],
-        };
-
-        setInquiries((prev) => [newInquiry, ...prev]);
-        return { ok: true, inquiry: newInquiry };
+        return { ok: false, error: errMsg };
       }
     },
-    [fetchInquiries, getNextInquiryNo, usersList]
+    [fetchInquiries]
   );
 
   /* ── Update Inquiry ── */
@@ -304,25 +264,7 @@ export function useInquiries(usersList = []) {
         console.error('Failed to update inquiry:', err);
         const errMsg = err?.message || 'Failed to update inquiry.';
         toast.error(errMsg);
-
-        if (!isMockApi) {
-          return { ok: false, error: errMsg };
-        }
-
-        // Fallback local update
-        let updatedRecord = null;
-        setInquiries((prev) =>
-          prev.map((inq) => {
-            if (String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)) return inq;
-            updatedRecord = {
-              ...inq,
-              ...formData,
-              ModifiedOn: formatAuditTimestamp(),
-            };
-            return updatedRecord;
-          })
-        );
-        return { ok: true, inquiry: updatedRecord };
+        return { ok: false, error: errMsg };
       }
     },
     [fetchInquiries]
@@ -335,27 +277,16 @@ export function useInquiries(usersList = []) {
       try {
         await inquiryService.assignInquiry(id, {
           assignedToUserId: newUserId,
-          remarks: remarks?.trim() || null,
+          comment: remarks?.trim() || null,
         });
         toast.success(`Inquiry assigned to ${newUserName}`);
         await fetchInquiries();
         return { ok: true };
       } catch (err) {
         console.error('Failed to assign inquiry:', err);
-        // Fallback local update
-        setInquiries((prev) =>
-          prev.map((inq) => {
-            if (String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)) return inq;
-            return {
-              ...inq,
-              AssignedTo: newUserId,
-              assignedToUserId: newUserId,
-              assignedToName: newUserName,
-            };
-          })
-        );
-        toast.success(`Inquiry assigned to ${newUserName} (local)`);
-        return { ok: true };
+        const errMsg = err?.message || 'Failed to assign inquiry.';
+        toast.error(errMsg);
+        return { ok: false, error: errMsg };
       }
     },
     [fetchInquiries, usersList]
@@ -374,19 +305,9 @@ export function useInquiries(usersList = []) {
         return { ok: true };
       } catch (err) {
         console.error('Failed to change inquiry status:', err);
-        // Fallback local update
-        setInquiries((prev) =>
-          prev.map((inq) => {
-            if (String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)) return inq;
-            return {
-              ...inq,
-              StatusId: newStatusId,
-              status: newStatusId,
-            };
-          })
-        );
-        toast.success(`Inquiry status updated to ${newStatusId} (local)`);
-        return { ok: true };
+        const errMsg = err?.message || 'Failed to change inquiry status.';
+        toast.error(errMsg);
+        return { ok: false, error: errMsg };
       }
     },
     [fetchInquiries]
@@ -394,7 +315,7 @@ export function useInquiries(usersList = []) {
 
   /* ── Add Comment / Note to Inquiry ── */
   const addInquiryComment = useCallback(
-    async (id, commentText, author = 'Ian Chesnut') => {
+    async (id, commentText) => {
       if (!commentText?.trim()) return { ok: false };
       try {
         const activities = await inquiryService.addInquiryComment(id, commentText);
@@ -402,26 +323,9 @@ export function useInquiries(usersList = []) {
         return { ok: true, activities };
       } catch (err) {
         console.error('Failed to add inquiry comment:', err);
-        const now = formatAuditTimestamp();
-        const fallbackEntry = {
-          id: `act_${Date.now()}_comment`,
-          type: 'comment',
-          title: 'Comment Added',
-          timestamp: now,
-          changedBy: author,
-          remarks: commentText.trim(),
-        };
-        setInquiries((prev) =>
-          prev.map((inq) => {
-            if (String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)) return inq;
-            return {
-              ...inq,
-              activity: [fallbackEntry, ...(inq.activity || [])],
-            };
-          })
-        );
-        toast.success('Comment added (local).');
-        return { ok: true, activity: fallbackEntry };
+        const errMsg = err?.message || 'Failed to add inquiry comment.';
+        toast.error(errMsg);
+        return { ok: false, error: errMsg };
       }
     },
     []
@@ -435,9 +339,9 @@ export function useInquiries(usersList = []) {
         toast.success('Inquiry deactivated successfully.');
         await fetchInquiries();
       } catch (err) {
-        console.warn('Deactivate endpoint failed, removing from view:', err);
-        setInquiries((prev) => prev.filter((inq) => String(inq.id) !== String(id) && String(inq.InquiryId) !== String(id)));
-        toast.success('Inquiry removed from list.');
+        console.error('Failed to deactivate inquiry:', err);
+        toast.error(err?.message || 'Failed to deactivate inquiry.');
+        return { ok: false, error: err?.message || 'Failed to deactivate inquiry.' };
       }
     },
     [fetchInquiries]
@@ -470,6 +374,7 @@ export function useInquiries(usersList = []) {
     error,
     sources,
     priorityLevels,
+    defaultPriorityLevelId,
     resetFilters,
     fetchInquiries,
     getInquiryById,

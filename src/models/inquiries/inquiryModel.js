@@ -12,27 +12,27 @@
 export function inquiryProductFromApi(dto) {
   if (!dto) return null;
   return {
-    id: dto.id,
-    lineId: dto.id,
-    inquiryId: dto.inquiryId,
-    productId: dto.productId || null,
+    id: dto.id ?? null,
+    lineId: dto.id ?? null,
+    inquiryId: dto.inquiryId ?? null,
+    productId: dto.productId ?? null,
     productCode: dto.productCode || '',
     productName: dto.productName || dto.displayName || '',
     categoryName: dto.categoryName || '',
-    uomName: dto.uomName || 'Nos',
+    uomName: dto.uomName || '',
     isCustomSizeAllowed: Boolean(dto.isCustomSizeAllowed),
-    productVariantId: dto.productVariantId || null,
+    productVariantId: dto.productVariantId ?? null,
     variantCode: dto.variantCode || '',
     itemCode: dto.itemCode || dto.variantCode || dto.productCode || '',
     isCustomSize: Boolean(dto.isCustomSize),
     customSize: dto.customSize || '',
     itemName: dto.itemName || '',
-    displayName: dto.displayName || dto.productName || dto.itemName || 'Product',
+    displayName: dto.displayName || dto.productName || dto.itemName || '',
     isCustomItem: Boolean(dto.isCustomItem ?? !dto.productId),
-    quantity: Number(dto.quantity) || 1,
+    quantity: dto.quantity === null || dto.quantity === undefined ? null : Number(dto.quantity),
     specification: dto.specification || '',
     remarks: dto.remarks || '',
-    isActive: dto.isActive !== false,
+    isActive: dto.isActive,
     options: Array.isArray(dto.options)
       ? dto.options.map((opt) => ({
           id: opt.id,
@@ -48,7 +48,7 @@ export function inquiryProductFromApi(dto) {
     prItemId: dto.id,
     variantName: dto.isCustomSize && dto.customSize ? `${dto.customSize} (Custom)` : dto.variantCode || '',
     notes: dto.remarks || '',
-    uom: dto.uomName || 'Nos',
+    uom: dto.uomName || '',
   };
 }
 
@@ -75,7 +75,7 @@ export function inquiryProductToApi(item) {
     item.productName ||
     item.displayName ||
     item.itemCode ||
-    'Custom Product'
+    ''
   ).trim();
 
   const resolvedSpec = String(
@@ -99,14 +99,15 @@ export function inquiryProductToApi(item) {
     productOptionIds = validIds.length > 0 ? validIds : null;
   }
 
+  const quantity = Number(item.quantity);
   const payload = {
     productId: hasValidNumericProductId ? numProdId : null,
     productVariantId: hasValidNumericVariantId ? numVarId : null,
     isCustomSize: hasValidNumericProductId && Boolean(item.isCustomSize),
     customSize: hasValidNumericProductId && item.isCustomSize ? String(item.customSize || '').trim() || null : null,
-    itemName: isCustom ? (resolvedItemName || 'Custom Product') : null,
-    quantity: Math.max(0.01, Number(item.quantity) || 1),
-    specification: resolvedSpec || (isCustom ? 'Standard custom specification' : ''),
+    itemName: isCustom ? (resolvedItemName || null) : null,
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : null,
+    specification: resolvedSpec || null,
     remarks: item.remarks || item.notes ? String(item.remarks || item.notes).trim() : null,
     productOptionIds: isCustom || !productOptionIds || productOptionIds.length === 0 ? null : productOptionIds,
     isActive: item.isActive !== false,
@@ -126,39 +127,26 @@ export function inquiryProductToApi(item) {
  */
 export function inquiryAttachmentFromApi(dto) {
   if (!dto) return null;
+  const fileName = dto.fileName || '';
   return {
-    id: dto.id,
-    attachmentId: dto.id,
-    inquiryId: dto.inquiryId,
+    id: dto.id ?? null,
+    attachmentId: dto.id ?? null,
+    inquiryId: dto.inquiryId ?? null,
     inquiryNo: dto.inquiryNo || '',
-    documentTypeId: dto.documentTypeId,
-    documentTypeName: dto.documentTypeName || 'Document',
-    documentTitle: dto.documentTitle || dto.fileName || '',
-    fileName: dto.fileName || 'attachment.pdf',
-    displayName: dto.displayName || dto.documentTitle || dto.fileName || 'Attachment',
+    documentTypeId: dto.documentTypeId ?? null,
+    documentTypeName: dto.documentTypeName || '',
+    documentTitle: dto.documentTitle || fileName,
+    fileName,
+    displayName: dto.displayName || dto.documentTitle || fileName,
     remarks: dto.remarks || '',
-    downloadUrl: dto.downloadUrl || `/api/inquiry-attachments/${dto.id}/download`,
-    uploadedBy: dto.uploadedBy,
+    downloadUrl: dto.downloadUrl || '',
+    uploadedBy: dto.uploadedBy ?? null,
     uploadedByName: dto.uploadedByName || '',
     uploadedOn: dto.uploadedOn || null,
-
-    // File metadata fallbacks for existing UI previewers
-    fileExtension: dto.fileName ? dto.fileName.slice(dto.fileName.lastIndexOf('.')).toLowerCase() : '.pdf',
-    fileSizeKB: dto.fileSizeKB || 500,
-    currentVersionNo: dto.versionNo || 1,
-    versions: Array.isArray(dto.versions) && dto.versions.length > 0 ? dto.versions : [
-      {
-        versionId: `ver_${dto.id}_1`,
-        versionNo: 1,
-        fileName: dto.fileName || 'attachment.pdf',
-        fileExtension: dto.fileName ? dto.fileName.slice(dto.fileName.lastIndexOf('.')).toLowerCase() : '.pdf',
-        fileSizeKB: dto.fileSizeKB || 500,
-        changeRemarks: dto.remarks || 'Initial upload',
-        isCurrent: true,
-        uploadedBy: dto.uploadedByName || '',
-        uploadedOn: dto.uploadedOn || null,
-      }
-    ],
+    fileExtension: fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')).toLowerCase() : '',
+    fileSizeKB: dto.fileSizeKB ?? null,
+    currentVersionNo: dto.versionNo ?? null,
+    versions: Array.isArray(dto.versions) ? dto.versions : [],
   };
 }
 
@@ -170,16 +158,16 @@ export function inquiryAttachmentFromApi(dto) {
 export function inquiryActivityFromApi(dto) {
   if (!dto) return null;
   return {
-    id: dto.id,
-    inquiryId: dto.inquiryId,
-    activityType: dto.activityType || 'Comment',
-    type: (dto.activityType || 'comment').toLowerCase(),
+    id: dto.id ?? null,
+    inquiryId: dto.inquiryId ?? null,
+    activityType: dto.activityType || '',
+    type: String(dto.activityType || '').toLowerCase(),
     status: dto.status || null,
     comment: dto.comment || '',
     remarks: dto.comment || '',
-    userId: dto.userId,
-    userName: dto.userName || 'System',
-    changedBy: dto.userName || 'System',
+    userId: dto.userId ?? null,
+    userName: dto.userName || '',
+    changedBy: dto.userName || '',
     on: dto.on || null,
     timestamp: dto.on || null,
   };
@@ -192,28 +180,31 @@ export function inquiryActivityFromApi(dto) {
  */
 export function inquiryListItemFromApi(dto) {
   if (!dto) return null;
+  const id = resolveCleanNumber(dto.id);
+  const assignedToUserId = resolveCleanNumber(dto.assignedToUserId);
+  const productCount = dto.productCount ?? 0;
   return {
-    id: dto.id,
-    InquiryId: dto.id,
+    id,
+    InquiryId: id,
     inquiryNo: dto.inquiryNo || '',
     InquiryNo: dto.inquiryNo || '',
     inquiryDate: dto.inquiryDate || '',
     InquiryDate: dto.inquiryDate || '',
     estimateDate: dto.estimateDate || null,
     RequiredByDate: dto.estimateDate || '',
-    regionId: dto.regionId,
-    RegionId: dto.regionId,
+    regionId: resolveCleanNumber(dto.regionId),
+    RegionId: resolveCleanNumber(dto.regionId),
     regionName: dto.regionName || '',
-    inquirySourceId: dto.inquirySourceId,
+    inquirySourceId: resolveCleanNumber(dto.inquirySourceId),
     sourceName: dto.sourceName || '',
-    Source: dto.sourceName || 'Website',
-    priorityLevelId: dto.priorityLevelId,
-    priorityName: dto.priorityName || 'Medium',
-    Priority: dto.priorityName || 'Medium',
-    status: dto.status || 'New',
-    StatusId: dto.status || 'New',
+    Source: dto.sourceName || '',
+    priorityLevelId: resolveCleanNumber(dto.priorityLevelId),
+    priorityName: dto.priorityName || '',
+    Priority: dto.priorityName || '',
+    status: dto.status || '',
+    StatusId: dto.status || '',
     isNewClient: Boolean(dto.isNewClient),
-    clientId: dto.clientId || null,
+    clientId: resolveCleanNumber(dto.clientId),
     clientCode: dto.clientCode || '',
     companyName: dto.companyName || '',
     CustomerName: dto.companyName || '',
@@ -224,15 +215,15 @@ export function inquiryListItemFromApi(dto) {
     mobileNo: dto.mobileNo || '',
     Phone: dto.mobileNo || '',
     city: dto.city || '',
-    assignedToUserId: dto.assignedToUserId || null,
-    assignedToName: dto.assignedToName || 'Unassigned',
-    AssignedTo: dto.assignedToUserId ? String(dto.assignedToUserId) : null,
-    productCount: dto.productCount ?? 0,
-    Quantity: dto.productCount ?? 1,
-    UOM: 'NOS',
-    Subject: dto.companyName ? `${dto.companyName} (${dto.productCount ?? 0} item${dto.productCount === 1 ? '' : 's'})` : 'Customer Inquiry',
-    isActive: dto.isActive !== false,
-    createdBy: dto.createdBy,
+    assignedToUserId,
+    assignedToName: dto.assignedToName || '',
+    AssignedTo: assignedToUserId,
+    productCount,
+    Quantity: productCount,
+    UOM: '',
+    Subject: dto.companyName ? `${dto.companyName} (${productCount} item${productCount === 1 ? '' : 's'})` : '',
+    isActive: dto.isActive,
+    createdBy: dto.createdBy ?? null,
     createdByName: dto.createdByName || '',
     createdOn: dto.createdOn || '',
     CreatedOn: dto.createdOn || '',
@@ -296,44 +287,7 @@ function resolveCleanNumber(val, defaultVal = null) {
   const str = String(val).trim();
   const direct = Number(str);
   if (!isNaN(direct) && direct > 0) return direct;
-  const digits = parseInt(str.replace(/^[^0-9]+/, ''), 10);
-  return !isNaN(digits) && digits > 0 ? digits : defaultVal;
-}
-
-const COMMON_COUNTRIES = {
-  india: 1,
-  'united states': 2,
-  usa: 2,
-  us: 2,
-  germany: 3,
-  'united kingdom': 4,
-  uk: 4,
-  'united arab emirates': 5,
-  uae: 5,
-  qatar: 6,
-  'saudi arabia': 7,
-  australia: 8,
-  canada: 9,
-  japan: 10,
-  singapore: 11,
-};
-
-const COMMON_INDIAN_STATES = {
-  gujarat: 1,
-  maharashtra: 2,
-  karnataka: 3,
-  'tamil nadu': 4,
-  delhi: 5,
-  rajasthan: 6,
-  'uttar pradesh': 7,
-  haryana: 8,
-  'madhya pradesh': 9,
-  telangana: 10,
-  'andhra pradesh': 11,
-  'west bengal': 12,
-  punjab: 13,
-  kerala: 14,
-  odisha: 15,
+  return defaultVal;
 };
 
 /**
@@ -349,25 +303,15 @@ export function inquiryToCreatePayload(form) {
     ? (form.products || form.items).map(inquiryProductToApi).filter(Boolean)
     : [];
 
-  const rawCountry = String(form.Country || form.country || '').trim().toLowerCase();
-  let resolvedCountryId = resolveCleanNumber(form.countryId) || COMMON_COUNTRIES[rawCountry] || (rawCountry === 'india' ? 1 : null);
-
-  const rawState = String(form.State || form.state || '').trim().toLowerCase();
-  let resolvedStateId = resolveCleanNumber(form.stateId);
-  if (!resolvedStateId && rawState) {
-    resolvedStateId = COMMON_INDIAN_STATES[rawState] || null;
-  }
-  // stateId requires countryId
-  if (resolvedStateId && !resolvedCountryId) {
-    resolvedCountryId = 1;
-  }
+  const resolvedCountryId = resolveCleanNumber(form.countryId);
+  const resolvedStateId = resolveCleanNumber(form.stateId);
 
   const payload = {
     inquiryDate: form.inquiryDate || form.InquiryDate || new Date().toISOString().slice(0, 10),
     estimateDate: form.estimateDate || form.RequiredByDate || null,
-    regionId: resolveCleanNumber(form.regionId || form.RegionId, 1),
-    inquirySourceId: resolveCleanNumber(form.inquirySourceId, 1),
-    priorityLevelId: resolveCleanNumber(form.priorityLevelId || form.defaultPriorityLevelId, 2),
+    regionId: resolveCleanNumber(form.regionId || form.RegionId),
+    inquirySourceId: resolveCleanNumber(form.inquirySourceId),
+    priorityLevelId: resolveCleanNumber(form.priorityLevelId || form.defaultPriorityLevelId),
     detailedSpecification: form.detailedSpecification || form.Description || null,
     isNewClient: isNew,
     clientId,
@@ -381,7 +325,7 @@ export function inquiryToCreatePayload(form) {
     stateId: resolvedStateId,
     address1: form.address1 || form.AddressLine1 || null,
     address2: form.address2 || form.AddressLine2 || null,
-    assignedToUserId: resolveCleanNumber(form.assignedToUserId || form.AssignedTo, 1),
+    assignedToUserId: resolveCleanNumber(form.assignedToUserId || form.AssignedTo),
     comment: form.comment || form.initialComment ? String(form.comment || form.initialComment).trim() : null,
     products,
   };

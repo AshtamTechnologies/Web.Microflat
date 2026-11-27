@@ -15,9 +15,23 @@ import {
 } from '../../models/salesOrders/orderConfirmationModel';
 
 function cleanId(id) {
-  if (typeof id === 'number') return id;
-  const match = String(id).match(/\d+/);
-  return match ? Number(match[0]) : id;
+  // Already a valid number
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  
+  // Purely numeric string like "15" or "7000001"
+  if (typeof id === 'string' && /^\d+$/.test(id.trim())) {
+    return Number(id.trim());
+  }
+  
+  // Prefix format like "ord-42" — take trailing digits only
+  if (typeof id === 'string') {
+    const match = id.trim().match(/^[a-zA-Z_-]+(\d+)$/);
+    if (match) return Number(match[1]);
+  }
+  
+  // Document series like "OC-2026-000001" — return as-is
+  // Let state lookup handle it via orderConfirmationNo matching
+  return id;
 }
 
 /**
@@ -28,27 +42,26 @@ function cleanId(id) {
 export async function listOrderConfirmations(params = {}) {
   try {
     const query = {};
-    if (params.search?.trim()) query.Search = params.search.trim();
-    if (params.status && params.status !== 'ALL') query.Status = params.status;
-    if (params.quotationId) query.QuotationId = cleanId(params.quotationId);
-    if (params.inquiryId) query.InquiryId = cleanId(params.inquiryId);
-    if (params.clientId) query.ClientId = cleanId(params.clientId);
-    if (params.fromDate) query.FromDate = params.fromDate;
-    if (params.toDate) query.ToDate = params.toDate;
+    if (params.search?.trim()) query.search = params.search.trim();
+    if (params.status && params.status !== 'ALL') query.status = params.status;
+    if (params.quotationId) query.quotationId = cleanId(params.quotationId);
+    if (params.inquiryId) query.inquiryId = cleanId(params.inquiryId);
+    if (params.clientId) query.clientId = cleanId(params.clientId);
+    if (params.fromDate) query.fromDate = params.fromDate;
+    if (params.toDate) query.toDate = params.toDate;
     if (params.orderSource !== undefined && params.orderSource !== null && params.orderSource !== '' && params.orderSource !== 'ALL') {
       query.orderSource = params.orderSource;
     }
-    if (params.pageNumber) query.PageNumber = Number(params.pageNumber);
-    if (params.pageSize) query.PageSize = Number(params.pageSize);
+    if (params.pageNumber) query.pageNumber = Number(params.pageNumber);
+    if (params.pageSize) query.pageSize = Number(params.pageSize);
 
     const response = await axiosInstance.get(ORDER_CONFIRMATION_ENDPOINTS.ORDER_CONFIRMATIONS, {
       params: query,
     });
 
     const data = response.data || {};
-    const items = Array.isArray(data.items)
-      ? data.items.map(orderConfirmationListItemFromApi).filter(Boolean)
-      : [];
+    const rawList = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
+    const items = rawList.map(orderConfirmationListItemFromApi).filter(Boolean);
 
     return {
       items,
@@ -223,7 +236,7 @@ export async function uploadOrderConfirmationDocument(id, file, documentTypeId, 
  * @param {number|string} docId
  * @param {string} [fileName]
  */
-export async function downloadOrderConfirmationDocument(docId, fileName = 'order-document.pdf') {
+export async function downloadOrderConfirmationDocument(docId, fileName) {
   try {
     const validId = cleanId(docId);
     const response = await axiosInstance.get(
@@ -234,7 +247,7 @@ export async function downloadOrderConfirmationDocument(docId, fileName = 'order
     const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = blobUrl;
-    link.setAttribute('download', fileName);
+    if (fileName) link.setAttribute('download', fileName);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -286,9 +299,19 @@ export async function getOrderConfirmationEmailLogs(id) {
 export async function sendOrderConfirmationEmail(id, payload) {
   try {
     const validId = cleanId(id);
+    const to = payload.toAddress || payload.toEmail || payload.to || '';
+    const cc = payload.ccAddress || payload.ccEmail || payload.cc || '';
+    const body = {
+      toAddress: to,
+      toEmail: to,
+      ccAddress: cc,
+      ccEmail: cc,
+      subject: payload.subject || '',
+      body: payload.body || '',
+    };
     const response = await axiosInstance.post(
       ORDER_CONFIRMATION_ENDPOINTS.SEND_EMAIL(validId),
-      payload
+      body
     );
     return response.data;
   } catch (err) {

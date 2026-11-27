@@ -9,7 +9,7 @@ import {
 } from '../../../constants/icons';
 import { Modal, Button, CancelButton, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiriesContext } from '../../../context/InquiriesContext';
-import { STATUS_OPTIONS, getStatusOption } from '../../../mocks/inquiries';
+import { getInquiryStage, mapStageToApiStatus } from '../inquiryStages';
 
 export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
   const { changeInquiryStatus } = useInquiriesContext();
@@ -20,16 +20,16 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
 
   useEffect(() => {
     if (isOpen && inquiry) {
-      setSelectedStatusId(inquiry.StatusId || STATUS_OPTIONS[0].id);
+      setSelectedStatusId(inquiry.status || inquiry.StatusId || '');
       setRemarks('');
       setSubmitting(false);
     }
   }, [isOpen, inquiry]);
 
   const statusOptions = (
-    Array.isArray(inquiry?.nextStatuses) && inquiry.nextStatuses.length > 0
+    Array.isArray(inquiry?.nextStatuses)
       ? inquiry.nextStatuses.map((s) => ({ value: s, label: s }))
-      : STATUS_OPTIONS.map((s) => ({ value: s.id, label: s.name }))
+      : []
   );
 
   async function handleSubmit(e) {
@@ -38,9 +38,11 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
 
     setSubmitting(true);
     try {
+      const apiStatus = mapStageToApiStatus(selectedStatusId);
+      if (!apiStatus) return;
       const res = await changeInquiryStatus(
         inquiry.id || inquiry.InquiryId,
-        selectedStatusId,
+        apiStatus,
         remarks
       );
       if (res?.ok) {
@@ -53,7 +55,8 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
 
   if (!inquiry) return null;
 
-  const currentStatusInfo = getStatusOption(inquiry.StatusId);
+  const currentStatus = inquiry.status || inquiry.StatusId || '';
+  const currentStatusInfo = getInquiryStage(currentStatus);
 
   return (
     <Modal
@@ -70,7 +73,7 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
               Inquiry Reference
             </span>
             <span className="font-mono text-xs font-bold text-primary">
-              {inquiry.InquiryNo}
+              {inquiry.InquiryNo || inquiry.inquiryNo}
             </span>
           </div>
 
@@ -78,9 +81,9 @@ export default function ChangeStatusModal({ isOpen, onClose, inquiry }) {
             <span className="view-field-label mf-detail-label">
               Current Status
             </span>
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${currentStatusInfo.badgeClass}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${currentStatusInfo.dotClass}`} />
-              {currentStatusInfo.name}
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${currentStatusInfo?.badgeClass || 'bg-surface text-text-muted border-border'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${currentStatusInfo?.dotClass || 'bg-text-muted'}`} />
+              {currentStatus || currentStatusInfo?.name || '—'}
             </span>
           </div>
         </div>

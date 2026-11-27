@@ -26,7 +26,7 @@ export default function ProductSummaryCards({ summary, isLoading = false }) {
   const items = [
     {
       label: 'Total Products',
-      value: summary.totalProducts ?? summary.total ?? 0,
+      value: summary.total ?? summary.totalProducts ?? 0,
       icon: IconProduct,
       color: 'text-primary bg-primary/10 border-primary/20',
     },

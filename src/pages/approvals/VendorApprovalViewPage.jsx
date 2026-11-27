@@ -52,9 +52,9 @@ import {
   RejectApprovalModal,
   ApproveApprovalModal,
 } from '../../components/ui';
-import { approvalsService, vendorService } from '../../services';
+import { approvalsService } from '../../services';
+import { downloadVendorAttachment } from '../../services/vendors/vendorService';
 import { useAuthContext } from '../../context/AuthContext';
-import { useVendorsContext } from '../../context/VendorsContext';
 import { useCountryState } from '../../context/CountryStateContext';
 import { formatDate } from '../../utils/dateUtils';
 import { formatDateDisplay } from '../../utils/effectiveDateUtils';
@@ -89,7 +89,6 @@ export default function VendorApprovalViewPage() {
     }
   }, [location.state?.from, navigate]);
   const { user } = useAuthContext();
-  const { refreshVendors } = useVendorsContext();
   const { getCountryName, getStateName, fetchStatesForCountry } = useCountryState();
 
   const [loading, setLoading] = useState(true);
@@ -127,7 +126,7 @@ export default function VendorApprovalViewPage() {
           return;
         }
         if (mod === 'PURCHASE_REQUISITION' || mod === 'PR') {
-          navigate(`/purchase-requisitions/${req.referenceId || req.id}`, { replace: true });
+          navigate(`/purchase-requisition/${req.referenceId || req.id}`, { replace: true });
           return;
         }
         if (mod === 'PRODUCT') {
@@ -207,7 +206,6 @@ export default function VendorApprovalViewPage() {
 
       toast.success('Vendor approved successfully.');
       setIsApproveOpen(false);
-      refreshVendors?.();
       loadRequestDetail();
     } catch (err) {
       if (err?.status === 403) {
@@ -245,7 +243,6 @@ export default function VendorApprovalViewPage() {
 
       toast.success('Vendor application rejected.');
       setIsRejectOpen(false);
-      refreshVendors?.();
       loadRequestDetail();
     } catch (err) {
       if (err?.status === 403) {
@@ -282,7 +279,7 @@ export default function VendorApprovalViewPage() {
     if (!att) return;
     try {
       if (att.id) {
-        await vendorService.downloadVendorAttachment(att.id, att.fileName || 'attachment');
+        await downloadVendorAttachment(att.id, att.fileName || 'attachment');
       } else if (att.downloadUrl) {
         window.open(att.downloadUrl, '_blank');
       }

@@ -5,7 +5,7 @@
  * Aligned with Frontend-API-Guide.md §5.4g.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   IconBack,
@@ -38,13 +38,29 @@ import {
   formatCurrency,
   getOrderStatusBadgeVariant,
   TAX_TREATMENTS,
-} from '../../mocks/salesOrders';
+} from '../../models/salesOrders/orderConfirmationModel';
 import { formatDate } from '../../utils/dateUtils';
 import { isHtmlMarkup } from '../../utils/htmlUtils';
+import { triggerPdfDownload } from '../../utils/fileHelpers';
 import useColumnResize from '../../hooks/useColumnResize';
 import ChangeOrderStatusModal from './components/ChangeOrderStatusModal';
 import UploadOrderDocumentModal from './components/UploadOrderDocumentModal';
 import SendOrderMailModal from './components/SendOrderMailModal';
+
+function formatAddressForDisplay(a) {
+  if (!a) return '—';
+  if (typeof a === 'string') return a || '—';
+  const parts = [
+    a.address1 || a.addressLine1 || a.address,
+    a.address2 || a.addressLine2,
+    a.city,
+    a.stateName || a.state,
+    a.zipCode || a.pincode,
+  ].filter(Boolean);
+  const typeTag = a.addressType ? `${a.addressType}: ` : '';
+  const labelTag = a.addressLabel && a.addressLabel !== a.addressType ? `(${a.addressLabel}) ` : '';
+  return `${typeTag}${labelTag}${parts.join(', ')}`.trim() || parts.join(', ') || '—';
+}
 
 export default function SalesOrderViewPage() {
   const { id } = useParams();
@@ -52,7 +68,6 @@ export default function SalesOrderViewPage() {
   const location = useLocation();
   const fromPath = location.state?.from;
   const {
-    getSalesOrderById,
     fetchSalesOrderById,
     downloadSalesOrderDocument,
     deleteSalesOrderDocument,
@@ -60,15 +75,26 @@ export default function SalesOrderViewPage() {
 
   const [orderDetail, setOrderDetail] = useState(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [orderDetailError, setOrderDetailError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
     if (id && fetchSalesOrderById) {
-      setIsLoadingDetail(true);
+      queueMicrotask(() => {
+        if (isMounted) {
+          setOrderDetail(null);
+          setOrderDetailError('');
+          setIsLoadingDetail(true);
+        }
+      });
       fetchSalesOrderById(id)
         .then((res) => {
-          if (isMounted && res) {
-            setOrderDetail(res);
+          if (!res) throw new Error('The sales order API returned no detail record.');
+          if (isMounted) setOrderDetail(res);
+        })
+        .catch((err) => {
+          if (isMounted) {
+            setOrderDetailError(err?.message || 'Failed to load sales order details.');
           }
         })
         .finally(() => {
@@ -80,8 +106,25 @@ export default function SalesOrderViewPage() {
     };
   }, [id, fetchSalesOrderById]);
 
-  const cachedOrder = getSalesOrderById(id);
-  const order = orderDetail || cachedOrder;
+  const order = orderDetail;
+
+  const reloadOrderDetail = useCallback(async () => {
+    if (!id || !fetchSalesOrderById) return;
+    try {
+      const res = await fetchSalesOrderById(id);
+      if (res) {
+        setOrderDetail(res);
+      }
+    } catch (err) {
+      console.warn('Failed to reload order detail:', err);
+    }
+  }, [id, fetchSalesOrderById]);
+
+  async function handleDeleteDocument(docId) {
+    if (!order?.id) return;
+    await deleteSalesOrderDocument?.(order.id, docId);
+    reloadOrderDetail();
+  }
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
@@ -89,12 +132,12 @@ export default function SalesOrderViewPage() {
   const [isMailModalOpen, setIsMailModalOpen] = useState(false);
 
   function handleDownloadDocument(doc) {
-    if (doc?.downloadUrl) {
+    if (doc?.downloadUrl && (doc.downloadUrl.startsWith('blob:') || doc.downloadUrl.startsWith('data:'))) {
       const link = document.createElement('a');
       link.href = doc.downloadUrl;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.setAttribute('download', doc.fileName || 'document.pdf');
+      if (doc.fileName) link.setAttribute('download', doc.fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -104,7 +147,7 @@ export default function SalesOrderViewPage() {
       const blobUrl = URL.createObjectURL(doc.file);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = doc.fileName || 'document.pdf';
+      if (doc.fileName) link.download = doc.fileName;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -156,9 +199,11 @@ export default function SalesOrderViewPage() {
     }
     return (
       <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
-        <h2 className="text-xl font-bold text-heading">Sales Order Not Found</h2>
+        <h2 className="text-xl font-bold text-heading">
+          {orderDetailError ? 'Unable to Load Sales Order' : 'Sales Order Not Found'}
+        </h2>
         <p className="text-xs text-text-muted">
-          The requested sales order ({id}) does not exist.
+          {orderDetailError || `The requested sales order (${id}) does not exist.`}
         </p>
         <Button variant="primary" onClick={() => navigate('/sales-orders')}>
           Back to Sales Orders
@@ -174,12 +219,14 @@ export default function SalesOrderViewPage() {
   ];
 
   const canUploadDocs = order.status !== 'Cancelled';
-  const canChangeStatus = Array.isArray(order.nextStatuses)
-    ? order.nextStatuses.length > 0
-    : Boolean(order.nextStatuses?.length);
+  const canChangeStatus =
+    (Array.isArray(order.nextStatuses) && order.nextStatuses.length > 0) ||
+    order.status === 'Draft' ||
+    order.status === 'Confirmed';
 
-  const isDirect = Boolean(order.orderSource === true || order.isDirectOrder || !order.quotationId);
-  const sourceLabel = order.orderSourceName || (isDirect ? 'Direct' : 'Quotation');
+  const isDirect = order.orderSource === true || order.isDirectOrder === true;
+  const isQuotation = order.orderSource === false || order.isDirectOrder === false || order.quotationId != null;
+  const sourceLabel = order.orderSourceName || (isDirect ? 'Direct' : isQuotation ? 'Quotation' : '');
 
   return (
     <div className="w-full space-y-6 pb-20">
@@ -187,9 +234,11 @@ export default function SalesOrderViewPage() {
         title={
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-mono text-heading">{order.orderConfirmationNo}</span>
-            <Badge variant={isDirect ? 'warning' : 'info'} size="md">
-              {sourceLabel}
-            </Badge>
+            {sourceLabel && (
+              <Badge variant={isDirect ? 'warning' : 'info'} size="md">
+                {sourceLabel}
+              </Badge>
+            )}
             <Badge variant={getOrderStatusBadgeVariant(order.status)} size="md">
               {order.status}
             </Badge>
@@ -255,7 +304,22 @@ export default function SalesOrderViewPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => { }}
+              onClick={() => {
+                triggerPdfDownload(
+                  `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                  {
+                    title: 'Order Confirmation',
+                    documentType: 'Sales Order Confirmation',
+                    fileName: `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                    quotationNo: order.quotationNo,
+                    clientName: order.clientName,
+                    poNumber: order.clientPoNo,
+                    expectedDeliveryDate: order.expectedDeliveryDate,
+                    totalAmount: `${order.currency} ${order.grandTotal}`,
+                    remarks: `Status: ${order.status} | Source: ${order.orderSourceName}`,
+                  }
+                );
+              }}
               icon={<IconDownload size={14} />}
             >
               Download PDF
@@ -393,7 +457,7 @@ export default function SalesOrderViewPage() {
                 <DetailField
                   label="Billing Currency"
                   mono
-                  value={`${order.currency || 'INR'}${order.currencyCode && order.currencyCode !== order.currency ? ` (${order.currencyCode})` : ''}`}
+                  value={`${order.currency || '—'}${order.currencyCode && order.currencyCode !== order.currency ? ` (${order.currencyCode})` : ''}`}
                 />
                 <DetailField
                   label="Contact Person"
@@ -420,7 +484,7 @@ export default function SalesOrderViewPage() {
                 <DetailField
                   label="Billing / Shipping Address"
                   className="sm:col-span-2"
-                  value={order.clientAddress || '—'}
+                  value={formatAddressForDisplay(order.clientAddress)}
                 />
               </div>
             </Card>
@@ -431,7 +495,9 @@ export default function SalesOrderViewPage() {
             subtitle={
               isDirect
                 ? 'Product line items with quantities, rates, and applied taxes'
-                : 'Items linked to quotation revision lines with applied taxes'
+                : isQuotation
+                  ? 'Items linked to quotation revision lines with applied taxes'
+                  : ''
             }
             bodyClassName="p-0"
           >
@@ -494,9 +560,9 @@ export default function SalesOrderViewPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {(order.lineItems || []).map((item, idx) => {
-                    const lineAmount =
-                      (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
-                      (Number(item.otherCharges) || 0);
+                    const lineAmount = item.quantity != null && item.rate != null
+                      ? Number(item.quantity) * Number(item.rate) + (Number(item.otherCharges) || 0)
+                      : item.lineAmount ?? null;
                     return (
                       <tr key={item.id || idx} className="hover:bg-surface/40 transition-colors">
                         <Td className="text-center font-mono text-xs text-text-muted">
@@ -505,7 +571,7 @@ export default function SalesOrderViewPage() {
                         <Td className="text-xs">
                           <div className="font-bold text-heading">{item.productName}</div>
                           <div className="font-mono text-2xs text-primary font-medium">
-                            {item.itemCode || 'ITM'} · {item.variantName}
+                            {[item.itemCode, item.variantName].filter(Boolean).join(' · ') || '—'}
                           </div>
                           {item.technicalDetails && (
                             <div className="text-3xs text-text-muted truncate max-w-sm">
@@ -514,7 +580,7 @@ export default function SalesOrderViewPage() {
                           )}
                         </Td>
                         <Td className="text-center font-mono font-semibold text-xs text-heading">
-                          {item.quantity}
+                          {item.quantity ?? '—'}
                         </Td>
                         <Td className="text-right font-mono text-xs text-heading">
                           {formatCurrency(item.rate, order.currency)}
@@ -526,7 +592,7 @@ export default function SalesOrderViewPage() {
                         </Td>
                         <Td className="text-center">
                           <Badge variant="neutral" size="sm">
-                            {item.taxPercent ?? 18}%
+                            {item.taxPercent !== undefined && item.taxPercent !== null ? `${item.taxPercent}%` : '0%'}
                           </Badge>
                         </Td>
                         <Td className="text-right font-mono font-bold text-xs text-heading">
@@ -560,7 +626,16 @@ export default function SalesOrderViewPage() {
                     </span>
                   </div>
                 )}
-                {order.taxTreatment === 'INTRA_STATE' ? (
+                {Array.isArray(order.taxes) && order.taxes.length > 0 ? (
+                  order.taxes.map((t, idx) => (
+                    <div key={t.id || idx} className="flex justify-between text-text-muted">
+                      <span>{t.taxName}{t.taxPercent !== undefined && t.taxPercent !== null ? ` (${t.taxPercent}%)` : ''}</span>
+                      <span className="font-mono">
+                        {formatCurrency(t.taxAmount, order.currency)}
+                      </span>
+                    </div>
+                  ))
+                ) : order.taxTreatment === 'INTRA_STATE' ? (
                   <>
                     <div className="flex justify-between text-text-muted">
                       <span>CGST</span>
@@ -578,7 +653,7 @@ export default function SalesOrderViewPage() {
                 ) : (
                   <div className="flex justify-between text-text-muted">
                     <span>
-                      {order.taxTreatment === 'INTER_STATE' ? 'IGST' : 'Tax (0%)'}
+                      {order.taxTreatment === 'INTER_STATE' || order.totalTax > 0 ? 'IGST' : 'Tax (0%)'}
                     </span>
                     <span className="font-mono">
                       {formatCurrency(order.totalTax, order.currency)}
@@ -608,9 +683,9 @@ export default function SalesOrderViewPage() {
                         : typeof order.paymentTerms === 'string'
                           ? (order.paymentTerms.includes(',') ? order.paymentTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.paymentTerms.trim()])
                           : [order.paymentTerms]
-                      ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
+                      ).filter((t) => t && !isHtmlMarkup(t)).map((t, idx) => (
                         <Badge key={idx} variant="neutral" size="xs">
-                          {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}
+                          {t && typeof t === 'object' ? (t.termCode || t.termName || t.name || JSON.stringify(t)) : String(t || '—')}
                         </Badge>
                       ))}
                     </div>
@@ -631,9 +706,9 @@ export default function SalesOrderViewPage() {
                         : typeof order.deliveryTerms === 'string'
                           ? (order.deliveryTerms.includes(',') ? order.deliveryTerms.split(',').map((t) => t.trim()).filter(Boolean) : [order.deliveryTerms.trim()])
                           : [order.deliveryTerms]
-                      ).filter((t) => !isHtmlMarkup(t)).map((t, idx) => (
+                      ).filter((t) => t && !isHtmlMarkup(t)).map((t, idx) => (
                         <Badge key={idx} variant="neutral" size="xs">
-                          {typeof t === 'object' ? (t.termCode || t.name || JSON.stringify(t)) : String(t)}
+                          {t && typeof t === 'object' ? (t.termCode || t.termName || t.name || JSON.stringify(t)) : String(t || '—')}
                         </Badge>
                       ))}
                     </div>
@@ -643,7 +718,7 @@ export default function SalesOrderViewPage() {
                 )}
               </DetailField>
 
-              <DetailField label="Currency" value={order.currency || 'INR'} />
+              <DetailField label="Currency" value={order.currency || '—'} />
               <DetailField
                 label="Tax Treatment"
                 value={
@@ -761,7 +836,7 @@ export default function SalesOrderViewPage() {
                         {canUploadDocs && (
                           <button
                             type="button"
-                            onClick={() => deleteSalesOrderDocument(order.id, doc.id)}
+                            onClick={() => handleDeleteDocument(doc.id)}
                             className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
                             title="Delete document"
                           >
@@ -853,18 +928,21 @@ export default function SalesOrderViewPage() {
         isOpen={isStatusModalOpen}
         onClose={() => setIsStatusModalOpen(false)}
         order={order}
+        onSuccess={reloadOrderDetail}
       />
 
       <UploadOrderDocumentModal
         isOpen={isDocModalOpen}
         onClose={() => setIsDocModalOpen(false)}
         order={order}
+        onSuccess={reloadOrderDetail}
       />
 
       <SendOrderMailModal
         isOpen={isMailModalOpen}
         onClose={() => setIsMailModalOpen(false)}
         order={order}
+        onSuccess={reloadOrderDetail}
       />
     </div>
   );

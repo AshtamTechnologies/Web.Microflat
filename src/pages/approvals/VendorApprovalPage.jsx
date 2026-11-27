@@ -53,10 +53,8 @@ import {
   RejectApprovalModal,
   ApproveApprovalModal,
 } from '../../components/ui';
-import { useVendorsContext } from '../../context/VendorsContext';
 import { useAuthContext } from '../../context/AuthContext';
-import { approvalsService, vendorService } from '../../services';
-import { getStateName } from '../../mocks/vendors';
+import { approvalsService } from '../../services';
 import { formatDate } from '../../utils/dateUtils';
 import {
   ApprovalStatus,
@@ -83,7 +81,6 @@ function formatAuditTimestamp(date = new Date()) {
 
 export default function VendorApprovalPage() {
   const navigate = useNavigate();
-  const { allVendors, refreshVendors } = useVendorsContext();
   const { user } = useAuthContext();
 
   const [activeTab, setActiveTab] = useState('PENDING'); // 'PENDING' | 'HISTORY'
@@ -145,12 +142,18 @@ export default function VendorApprovalPage() {
     setIsLoading(true);
     try {
       if (activeTab === 'PENDING') {
-        const res = await approvalsService.getPendingApprovals({ moduleCode: 'vendor', mine: true });
+        const res = await approvalsService.getAllApprovalPages(
+          (params) => approvalsService.getPendingApprovals(params),
+          { moduleCode: 'VENDOR', mine: false }
+        );
         if (res && Array.isArray(res.items)) {
           setPendingRequests(res.items);
         }
       } else {
-        const res = await approvalsService.getApprovalHistory({ moduleCode: 'vendor', mine: true });
+        const res = await approvalsService.getAllApprovalPages(
+          (params) => approvalsService.getApprovalHistory(params),
+          { moduleCode: 'VENDOR', mine: false }
+        );
         if (res && Array.isArray(res.items)) {
           setHistoryRequests(res.items);
         }
@@ -177,17 +180,10 @@ export default function VendorApprovalPage() {
     const rawList = activeTab === 'PENDING' ? pendingRequests : historyRequests;
 
     return rawList.map((req) => {
-      const vMatch = allVendors.find(
-        (v) =>
-          String(v.id) === String(req.referenceId) ||
-          String(v.vendorId) === String(req.referenceId) ||
-          (v.vendorName && req.referenceTitle && v.vendorName.toLowerCase() === req.referenceTitle.toLowerCase())
-      );
-
       const numericStatus = normalizeApprovalStatus(req.status ?? req.approvalStatus);
 
-      let vendorCode = vMatch?.vendorCode || req.vendorCode || '';
-      let vendorName = vMatch?.vendorName || req.referenceTitle || 'Unknown Vendor';
+      let vendorCode = req.vendorCode || '';
+      let vendorName = req.vendorName || req.referenceTitle || 'Unknown Vendor';
       if ((!vendorCode || vendorCode === '—') && req.referenceTitle && req.referenceTitle.includes(' - ')) {
         const parts = req.referenceTitle.split(' - ');
         vendorCode = parts[0].trim();
@@ -198,20 +194,17 @@ export default function VendorApprovalPage() {
         ...req,
         id: req.id || req.approvalRequestId,
         approvalRequestId: req.id || req.approvalRequestId,
-        referenceId: req.referenceId || vMatch?.id,
-        vendorId: req.referenceId || vMatch?.id,
+        vendorId: req.referenceId,
         vendorName,
         vendorCode: vendorCode || '—',
-        contactPersonName: vMatch?.contactPersonName || req.contactPersonName || '',
-        city: vMatch?.city || req.city || '',
-        countryId: vMatch?.countryId || 2,
-        stateId: vMatch?.stateId || '',
-        effectiveDate: req.initiatedOn || vMatch?.effectiveDate || '',
+        contactPersonName: req.contactPersonName || '',
+        city: req.city || '',
+        effectiveDate: req.effectiveDate || req.initiatedOn || '',
         status: numericStatus,
         approvalStatus: numericStatus,
       };
     });
-  }, [activeTab, pendingRequests, historyRequests, allVendors]);
+  }, [activeTab, pendingRequests, historyRequests]);
 
   const filteredRequests = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -314,7 +307,6 @@ export default function VendorApprovalPage() {
       toast.success(`${vendorToApprove.vendorName} approved successfully.`);
       handleCloseApprove();
       loadApprovalsData();
-      refreshVendors?.();
     } catch (err) {
       if (err?.status === 403) {
         toast.error('You are not allowed to approve this request.');
@@ -350,7 +342,6 @@ export default function VendorApprovalPage() {
       toast.success(`${vendorToReject.vendorName} rejected.`);
       handleCloseReject();
       loadApprovalsData();
-      refreshVendors?.();
     } catch (err) {
       if (err?.status === 403) {
         toast.error('You are not allowed to reject this request.');
@@ -388,26 +379,6 @@ export default function VendorApprovalPage() {
       }
     } finally {
       setIsSubmittingVerify(false);
-    }
-  }
-
-  /* ── Download Attachments for Approval Request ── */
-  async function handleDownloadAttachments(row) {
-    const reqId = row.approvalRequestId || row.id;
-    try {
-      const fullReq = await approvalsService.getApprovalRequest(reqId);
-      const attachments = fullReq?.attachments || fullReq?.vendorDetail?.attachments || [];
-      if (!attachments || attachments.length === 0) {
-        toast.info('No documents attached for this vendor.');
-        return;
-      }
-      for (const att of attachments) {
-        await vendorService.downloadAttachment(att.id, att.fileName || 'document');
-      }
-      toast.success(`Downloaded ${attachments.length} document(s).`);
-    } catch (err) {
-      console.error('Download error:', err);
-      toast.error('Failed to download documents.');
     }
   }
 

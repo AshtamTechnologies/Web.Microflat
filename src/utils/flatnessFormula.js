@@ -15,15 +15,19 @@
  * Normalizes standard code string to standard identifier.
  * e.g., "IS-7327-2003", "IS 7327", "IS7327" -> "IS-7327"
  * @param {string} rawStandard
- * @returns {'IS-7327' | 'BS-817' | 'DIN-876' | 'GGG-P-463C' | null}
+ * @returns {'IS-7327' | 'IS-5268' | 'IS-2063' | 'IS-2285' | 'BS-817' | 'DIN-874' | 'DIN-876' | 'GGG-P-463C' | null}
  */
 export function normalizeStandardCode(rawStandard) {
   if (!rawStandard) return null;
   const str = String(rawStandard).toUpperCase().replace(/[\s_]+/g, '-');
 
   if (str.includes('7327')) return 'IS-7327';
-  if (str.includes('817')) return 'BS-817';
+  if (str.includes('5268')) return 'IS-5268';
+  if (str.includes('2063')) return 'IS-2063';
+  if (str.includes('2285')) return 'IS-2285';
+  if (str.includes('874')) return 'DIN-874';
   if (str.includes('876')) return 'DIN-876';
+  if (str.includes('817')) return 'BS-817';
   if (str.includes('463') || str.includes('GGG') || str.includes('ASME')) return 'GGG-P-463C';
 
   return null;
@@ -104,25 +108,38 @@ export function calculateNominalDiagonal(lengthMm, widthMm) {
  *   error?: string
  * }}
  */
-export function calculateFlatnessTolerance({
-  standardCode,
-  gradeCode,
-  lengthMm,
-  widthMm,
-}) {
+export function calculateFlatnessTolerance(arg1, arg2, arg3, arg4) {
+  let standardCode;
+  let gradeCode;
+  let lengthMm;
+  let widthMm;
+
+  if (typeof arg1 === 'object' && arg1 !== null) {
+    standardCode = arg1.standardCode || arg1.standard;
+    gradeCode = arg1.gradeCode || arg1.grade;
+    lengthMm = arg1.lengthMm !== undefined ? arg1.lengthMm : arg1.length;
+    widthMm = arg1.widthMm !== undefined ? arg1.widthMm : arg1.width;
+  } else {
+    // Positional signature: (lengthMm, widthMm, standardCode, gradeCode)
+    lengthMm = arg1;
+    widthMm = arg2;
+    standardCode = arg3;
+    gradeCode = arg4;
+  }
+
   const standardKey = normalizeStandardCode(standardCode);
   const gradeKey = normalizeGradeCode(gradeCode);
 
   const L = Number(lengthMm);
-  const W = Number(widthMm);
+  const W = Number(widthMm) || 0;
 
-  if (!L || L <= 0 || !W || W <= 0) {
+  if (!L || L <= 0) {
     return {
       isSupported: false,
       valueMicrons: null,
       unit: 'µm',
       formulaText: '',
-      detailText: 'Valid Length and Width dimensions (mm) are required for flatness calculation.',
+      detailText: 'Valid Length dimension (mm) is required for flatness calculation.',
       standardNormalized: standardKey,
       gradeNormalized: gradeKey,
       error: 'Invalid dimensions',
@@ -155,8 +172,135 @@ export function calculateFlatnessTolerance({
     };
   }
 
-  const { nominalDiagonal } = calculateNominalDiagonal(L, W);
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 0. Straight Edges: IS 5268:1991 / IS 2063:2002 / DIN 874
+  // Working face straightness & flatness based strictly on length L (mm)
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (standardKey === 'IS-5268' || standardKey === 'IS-2063' || standardKey === 'DIN-874') {
+    switch (gradeKey) {
+      case '00': {
+        const val = 1 + L / 500;
+        const rounded = roundToDecimals(val, 1);
+        return {
+          isSupported: true,
+          valueMicrons: rounded,
+          unit: 'µm',
+          formulaText: `1 + L / 500 µm`,
+          detailText: `Calculated Flatness: ${rounded} µm (${standardKey}, Grade Gr-00)`,
+          standardNormalized: standardKey,
+          gradeNormalized: gradeKey,
+        };
+      }
+      case '0': {
+        const val = 2 + L / 250;
+        const rounded = roundToDecimals(val, 1);
+        return {
+          isSupported: true,
+          valueMicrons: rounded,
+          unit: 'µm',
+          formulaText: `2 + L / 250 µm`,
+          detailText: `Calculated Flatness: ${rounded} µm (${standardKey}, Grade Gr-0)`,
+          standardNormalized: standardKey,
+          gradeNormalized: gradeKey,
+        };
+      }
+      case '1': {
+        const val = 5 + L / 100;
+        const rounded = roundToDecimals(val, 1);
+        return {
+          isSupported: true,
+          valueMicrons: rounded,
+          unit: 'µm',
+          formulaText: `5 + L / 100 µm`,
+          detailText: `Calculated Flatness: ${rounded} µm (${standardKey}, Grade Gr-1)`,
+          standardNormalized: standardKey,
+          gradeNormalized: gradeKey,
+        };
+      }
+      case '2': {
+        const val = 10 + L / 50;
+        const rounded = roundToDecimals(val, 1);
+        return {
+          isSupported: true,
+          valueMicrons: rounded,
+          unit: 'µm',
+          formulaText: `10 + L / 50 µm`,
+          detailText: `Calculated Flatness: ${rounded} µm (${standardKey}, Grade Gr-2)`,
+          standardNormalized: standardKey,
+          gradeNormalized: gradeKey,
+        };
+      }
+      default:
+        break;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Cast Iron Surface Plates: IS 2285:2003
+  // ─────────────────────────────────────────────────────────────────────────────
   const longerSide = Math.max(L, W);
+  if (standardKey === 'IS-2285') {
+    switch (gradeKey) {
+      case '0': {
+        const val = 4 + longerSide / 250;
+        const rounded = roundToDecimals(val, 1);
+        return {
+          isSupported: true,
+          valueMicrons: rounded,
+          unit: 'µm',
+          formulaText: `4 + L / 250 µm`,
+          detailText: `Calculated Flatness: ${rounded} µm (IS 2285, Grade Gr-0)`,
+          standardNormalized: standardKey,
+          gradeNormalized: gradeKey,
+        };
+      }
+      case '1': {
+        const val = 10 + longerSide / 100;
+        const rounded = roundToDecimals(val, 1);
+        return {
+          isSupported: true,
+          valueMicrons: rounded,
+          unit: 'µm',
+          formulaText: `10 + L / 100 µm`,
+          detailText: `Calculated Flatness: ${rounded} µm (IS 2285, Grade Gr-1)`,
+          standardNormalized: standardKey,
+          gradeNormalized: gradeKey,
+        };
+      }
+      case '2': {
+        const val = 20 + longerSide / 50;
+        const rounded = roundToDecimals(val, 1);
+        return {
+          isSupported: true,
+          valueMicrons: rounded,
+          unit: 'µm',
+          formulaText: `20 + L / 50 µm`,
+          detailText: `Calculated Flatness: ${rounded} µm (IS 2285, Grade Gr-2)`,
+          standardNormalized: standardKey,
+          gradeNormalized: gradeKey,
+        };
+      }
+      case '3': {
+        const val = 40 + longerSide / 25;
+        const rounded = roundToDecimals(val, 1);
+        return {
+          isSupported: true,
+          valueMicrons: rounded,
+          unit: 'µm',
+          formulaText: `40 + L / 25 µm`,
+          detailText: `Calculated Flatness: ${rounded} µm (IS 2285, Grade Gr-3)`,
+          standardNormalized: standardKey,
+          gradeNormalized: gradeKey,
+        };
+      }
+      default:
+        break;
+    }
+  }
+
+  // Effective width for diagonal calculations (defaults to L if 1D item)
+  const effW = W > 0 ? W : L;
+  const { nominalDiagonal } = calculateNominalDiagonal(L, effW);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // 1. IS 7327:2003 (Indian Standard)

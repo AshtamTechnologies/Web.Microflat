@@ -28,9 +28,10 @@ import NegotiationModal from './NegotiationModal';
 import DealFormModal from './DealFormModal';
 import { formatDate } from '../../utils/dateUtils';
 
-function formatCurrency(val, symbol = '₹') {
+function formatCurrency(val, currency = 'INR', symbol = null) {
   if (val === null || val === undefined || val === '') return '—';
-  return `${symbol}${Number(val).toLocaleString('en-IN')}`;
+  const sym = symbol || (currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₹');
+  return `${sym}${Number(val).toLocaleString('en-IN')}`;
 }
 
 export default function DealViewPage() {
@@ -61,11 +62,15 @@ export default function DealViewPage() {
   const loadCurrentDeal = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    const data = await fetchDealDetail(id);
-    if (data) {
-      setDeal(data);
+    try {
+      const data = await fetchDealDetail(id);
+      setDeal(data || null);
+    } catch (err) {
+      console.error('Failed to load deal:', err);
+      setDeal(null);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [id, fetchDealDetail]);
 
   useEffect(() => {
@@ -125,7 +130,7 @@ export default function DealViewPage() {
 
   // Navigate to Create Quotation with deal pre-population
   const handleCreateQuotation = () => {
-    navigate('/quotations/new', {
+    navigate(`/quotations/new?inquiryId=${deal.inquiryId}`, {
       state: {
         fromDeal: true,
         dealId: deal.id,
@@ -265,19 +270,19 @@ export default function DealViewPage() {
             <div>
               <span className="text-text-muted text-2xs block">Expected Deal Value</span>
               <span className="font-mono text-base font-bold text-heading">
-                {formatCurrency(deal.expectedValue, deal.currencySymbol)}
+                {formatCurrency(deal.expectedValue, deal.currencyCode, deal.currencySymbol)}
               </span>
             </div>
 
             <div>
               <span className="text-text-muted text-2xs block">Negotiated / Agreed Value</span>
               <span className={`font-mono text-base font-bold ${deal.negotiatedValue ? 'text-emerald-600 dark:text-emerald-400' : 'text-text-muted font-normal'}`}>
-                {deal.negotiatedValue ? formatCurrency(deal.negotiatedValue, deal.currencySymbol) : 'Pending finalization'}
+                {deal.negotiatedValue ? formatCurrency(deal.negotiatedValue, deal.currencyCode, deal.currencySymbol) : 'Pending finalization'}
               </span>
             </div>
 
             <div className="pt-2 border-t border-border/60 grid grid-cols-2 gap-2">
-              <DetailField label="Currency" value={`${deal.currencyCode} (${deal.currencySymbol})`} />
+              <DetailField label="Currency" value={`${deal.currencyCode}${deal.currencySymbol ? ` (${deal.currencySymbol})` : ''}`} />
               <DetailField label="Deal Date" value={formatDate(deal.dealDate)} />
             </div>
 
@@ -389,14 +394,14 @@ export default function DealViewPage() {
           )}
         </div>
 
-        {deal.negotiations?.length === 0 ? (
+        {!deal.negotiations || deal.negotiations.length === 0 ? (
           <div className="p-8 text-center text-text-muted text-xs">
             No negotiation notes recorded yet.
             {deal.isEditable && ' Click "Add Discussion Note" above to record customer discussions.'}
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {deal.negotiations.map((neg) => (
+            {(deal.negotiations || []).map((neg) => (
               <div
                 key={neg.id}
                 className="p-4 sm:px-6 hover:bg-surface/30 transition-colors flex flex-col sm:flex-row sm:items-start justify-between gap-4 text-xs"
@@ -408,7 +413,7 @@ export default function DealViewPage() {
                     </span>
                     {neg.discussedValue !== null && (
                       <span className="font-mono font-bold text-heading">
-                        Discussed: {formatCurrency(neg.discussedValue, deal.currencySymbol)}
+                        Discussed: {formatCurrency(neg.discussedValue, deal.currencyCode, deal.currencySymbol)}
                       </span>
                     )}
                     <span className="text-2xs text-text-muted">

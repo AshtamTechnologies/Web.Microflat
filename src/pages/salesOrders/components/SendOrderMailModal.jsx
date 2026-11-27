@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Modal, Button, CancelButton, Input, Textarea, Badge } from '../../../components/ui';
 import { useSalesOrdersContext } from '../../../context/SalesOrdersContext';
 import { IconSend, IconAttachment } from '../../../constants/icons';
 
-export default function SendOrderMailModal({ isOpen, onClose, order }) {
+export default function SendOrderMailModal({ isOpen, onClose, order, onSuccess }) {
   const { sendSalesOrderMail } = useSalesOrdersContext();
 
   const [to, setTo] = useState(order?.contactEmail || '');
@@ -18,18 +18,49 @@ export default function SendOrderMailModal({ isOpen, onClose, order }) {
       order?.clientPoNo ? ` (${order.clientPoNo})` : ''
     }. Please find attached our formal Order Confirmation ${
       order?.orderConfirmationNo || ''
-    } against quotation ${order?.quotationNo || ''}.\n\nBest Regards,\nMicroFlat Sales & Order Processing Team`
+    }${order?.quotationNo ? ` against quotation ${order.quotationNo}` : ''}.\n\nBest Regards,\nMicroFlat Sales & Order Processing Team`
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSend() {
-    if (!order || !to.trim()) return;
-    sendSalesOrderMail(order.id, {
-      to: to.trim(),
-      cc: cc.trim(),
-      subject: subject.trim(),
-      body,
-    });
-    onClose();
+  useEffect(() => {
+    if (isOpen && order) {
+      queueMicrotask(() => {
+        setIsSubmitting(false);
+        setTo(order.contactEmail || '');
+        setCc('');
+        setSubject(
+          `Order Confirmation ${order.orderConfirmationNo || ''}${
+            order.clientPoNo ? ` · Against PO ${order.clientPoNo}` : ''
+          } · MicroFlat ERP`
+        );
+        setBody(
+          `Dear ${order.contactPerson || 'Sir/Madam'},\n\nThank you for your purchase order${
+            order.clientPoNo ? ` (${order.clientPoNo})` : ''
+          }. Please find attached our formal Order Confirmation ${
+            order.orderConfirmationNo || ''
+          }${order.quotationNo ? ` against quotation ${order.quotationNo}` : ''}.\n\nBest Regards,\nMicroFlat Sales & Order Processing Team`
+        );
+      });
+    }
+  }, [isOpen, order]);
+
+  async function handleSend() {
+    if (!order || !to.trim() || isSubmitting) return;
+    try {
+      setIsSubmitting(true);
+      const res = await sendSalesOrderMail(order.id, {
+        to: to.trim(),
+        cc: cc.trim(),
+        subject: subject.trim(),
+        body,
+      });
+      if (res) {
+        onSuccess?.();
+        onClose();
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -85,9 +116,9 @@ export default function SendOrderMailModal({ isOpen, onClose, order }) {
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-          <CancelButton onClick={onClose}>Cancel</CancelButton>
-          <Button variant="primary" onClick={handleSend} icon={<IconSend size={15} />}>
-            Send Order Confirmation Email
+          <CancelButton onClick={onClose} disabled={isSubmitting}>Cancel</CancelButton>
+          <Button variant="primary" onClick={handleSend} disabled={isSubmitting} icon={<IconSend size={15} />}>
+            {isSubmitting ? 'Sending...' : 'Send Order Confirmation Email'}
           </Button>
         </div>
       </div>

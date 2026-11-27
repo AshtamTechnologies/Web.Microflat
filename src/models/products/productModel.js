@@ -47,7 +47,7 @@ export function productFromApi(dto) {
     isStandardProduct: Boolean(dto.isStandardProduct),
     isCustomSizeAllowed: Boolean(dto.isCustomSizeAllowed),
     requiresCalibration: Boolean(dto.requiresCalibration),
-    approvalStatus: dto.approvalStatus ?? ApprovalStatus.Draft,
+    approvalStatus: dto.approvalStatus ?? ApprovalStatus.Pending,
     isActive: dto.isActive !== undefined ? Boolean(dto.isActive) : true,
     primaryStandardCode: dto.primaryStandardCode || null,
     variantCount: dto.variantCount ?? 0,

@@ -10,8 +10,13 @@ import {
   IconMeeting,
 } from '../../../constants/icons';
 import { Badge, Button, TableActions } from '../../../components/ui';
-import { getPriorityBadgeVariant } from '../../../mocks/inquiries';
 import { formatDate } from '../../../utils/dateUtils';
+
+function getPriorityBadgeVariant(priority) {
+  if (priority === 'High') return 'danger';
+  if (priority === 'Medium') return 'warning';
+  return 'neutral';
+}
 
 /**
  * InquiryKanbanCard — MicroFlat ERP Kanban Card tailored for Inquiry management.
@@ -22,22 +27,43 @@ function InquiryKanbanCard({
   onAssignClick,
   onMoveStage,
   availableStages = [],
+  linkedQuotation = null,
+  inquiryStage = null,
 }) {
   const navigate = useNavigate();
 
   const id = inquiry.id || inquiry.InquiryId;
   const isUnassigned = !inquiry.AssignedTo || assigneeName === 'Unassigned';
   const displayDate = inquiry.RequiredByDate || inquiry.InquiryDate || inquiry.CreatedOn;
+  const activeStage = inquiryStage || inquiry.StatusId;
+  const status = inquiry.status || inquiry.StatusId || '';
+  const canCreateQuotation =
+    status === 'New' || status === 'Quoting';
 
   const overflowActions = [
-    {
-      label: 'Create Quotation',
-      icon: IconQuotation,
-      onClick: () =>
-        navigate(`/quotations/new?inquiryId=${id}`, {
-          state: { from: '/inquiries' },
-        }),
-    },
+    ...(linkedQuotation
+      ? [
+          {
+            label: `View Quotation (${linkedQuotation.quotationNo})`,
+            icon: IconQuotation,
+            onClick: () =>
+              navigate(`/quotations/${linkedQuotation.id || linkedQuotation.quotationNo}`, {
+                state: { from: '/inquiries' },
+              }),
+          },
+        ]
+      : canCreateQuotation
+      ? [
+          {
+            label: 'Create Quotation',
+            icon: IconQuotation,
+            onClick: () =>
+              navigate(`/quotations/new?inquiryId=${id}`, {
+                state: { from: '/inquiries' },
+              }),
+          },
+        ]
+      : []),
     {
       label: 'Schedule Meeting',
       icon: IconMeeting,
@@ -80,7 +106,7 @@ function InquiryKanbanCard({
           variant={getPriorityBadgeVariant(inquiry.Priority)}
           className="text-3xs uppercase font-semibold px-1.5 py-0.5 shrink-0"
         >
-          {inquiry.Priority || 'Low'}
+          {inquiry.Priority || ''}
         </Badge>
       </div>
 
@@ -101,6 +127,30 @@ function InquiryKanbanCard({
           </p>
         )}
       </div>
+
+      {/* ── Linked Quotation Pill ── */}
+      {linkedQuotation && (
+        <div
+          className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-2xs cursor-pointer hover:bg-amber-500/20 transition-all"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/quotations/${linkedQuotation.id || linkedQuotation.quotationNo}`);
+          }}
+          title={`View Quotation ${linkedQuotation.quotationNo}${linkedQuotation.status ? ` (${linkedQuotation.status})` : ''}`}
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            <IconQuotation size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="font-mono font-bold text-amber-700 dark:text-amber-300 truncate text-3xs">
+              {linkedQuotation.quotationNo}
+            </span>
+          </div>
+          {linkedQuotation.status && (
+            <span className="text-3xs uppercase font-semibold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
+              {linkedQuotation.status}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* ── Date Meta ── */}
       {displayDate && (
@@ -173,7 +223,7 @@ function InquiryKanbanCard({
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <span className="text-3xs text-text-muted font-medium shrink-0">Stage:</span>
             <select
-              value={inquiry.StatusId}
+              value={activeStage}
               onChange={(e) => {
                 e.stopPropagation();
                 onMoveStage(id, e.target.value);

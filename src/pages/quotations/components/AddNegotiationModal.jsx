@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { Modal, Button, CancelButton } from '../../../components/ui';
 import { useQuotationsContext } from '../../../context/QuotationsContext';
 import { useUsersContext } from '../../../context/UsersContext';
@@ -8,32 +9,51 @@ import NegotiationStageFields from './NegotiationStageFields';
 
 export default function AddNegotiationModal({ isOpen, onClose, quotation, selectedRevisionId }) {
   const { addNegotiationStage, lookups } = useQuotationsContext();
-  const { allUsers = [], users = [] } = useUsersContext();
+  const { allUsers = [], users = [], ensureAllActiveUsersLoaded } = useUsersContext();
   const { user } = useAuthContext();
   const userList = allUsers.length > 0 ? allUsers : users;
+  const activeUserList = userList.filter((u) => u.isActive !== false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const nextStageNo = (quotation?.negotiations?.length || 0) + 1;
-  const isConfirmed = quotation?.status === 'Confirmed';
+  const isConfirmed = quotation?.poReceived || quotation?.status === 'Confirmed' || quotation?.status === 'PO Received';
 
   const getInitialData = useCallback(() => {
     const now = new Date();
     const defaultDateTime = `${now.toISOString().split('T')[0]}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const loggedUserName = user?.fullName || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.name;
-    const fallbackUser = userList[0] ? `${userList[0].firstName || ''} ${userList[0].lastName || ''}`.trim() || userList[0].name : 'Sales Exec';
-
     return {
       dateTime: defaultDateTime,
       mode: 'Call',
-      handledBy: loggedUserName || fallbackUser,
+      handledBy: loggedUserName || '',
       clientContact: quotation?.contactPerson || '',
       ourOffer: '',
       clientCounter: '',
       revisionNo: quotation?.currentRevision !== undefined ? String(quotation.currentRevision) : '0',
       discussion: '',
     };
-  }, [quotation, userList, user]);
+  }, [quotation, user]);
 
   const [stageData, setStageData] = useState(getInitialData);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    let isMounted = true;
+    setIsLoadingUsers(true);
+    ensureAllActiveUsersLoaded()
+      .catch((err) => {
+        toast.error(err?.message || 'Failed to load users for negotiation.');
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingUsers(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, ensureAllActiveUsersLoaded]);
 
   // Reset form whenever the modal opens
   useEffect(() => {
@@ -47,9 +67,9 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation, select
     label: `Revision ${r.revisionNo}`,
   }));
 
-  const userOptions = userList.map((u) => {
+  const userOptions = activeUserList.map((u) => {
     const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email;
-    return { value: name, label: name };
+    return { value: name, label: name, id: u.id };
   });
 
   const rawModes = lookups?.modes || lookups?.negotiationModes;
@@ -63,13 +83,13 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation, select
     return null;
   }, [rawModes]);
 
-  function handleSave() {
+  async function handleSave() {
     if (!quotation || isConfirmed) return;
 
-    // Resolve handledBy user ID
-    const selectedUser = userList.find((u) => {
+    // Resolve handledBy user ID (match by trimmed name or id)
+    const selectedUser = activeUserList.find((u) => {
       const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email;
-      return name === stageData.handledBy;
+      return name.toLowerCase() === String(stageData.handledBy || '').trim().toLowerCase() || String(u.id) === String(stageData.handledBy);
     });
     const handledByUserId = selectedUser?.id || (user?.id ? user.id : null);
 
@@ -82,7 +102,7 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation, select
       selectedRevision?.id ||
       selectedRevision?.revisionId ||
       quotation?.latestRevisionId ||
-      quotation?.id;
+      null;
 
     const payload = {
       negotiationOn: stageData.dateTime ? stageData.dateTime.slice(0, 10) : new Date().toISOString().slice(0, 10),
@@ -105,9 +125,16 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation, select
       revisionId: resolvedRevId,
     };
 
-    addNegotiationStage(quotation.id, payload, resolvedRevId);
-    setStageData(getInitialData());
-    onClose();
+    try {
+      setIsSaving(true);
+      await addNegotiationStage(quotation.id, payload, resolvedRevId);
+      setStageData(getInitialData());
+      onClose();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to save negotiation stage.');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleCancel() {
@@ -136,6 +163,7 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation, select
           onChange={setStageData}
           revisionOptions={revisionOptions}
           userOptions={userOptions}
+          userOptionsLoading={isLoadingUsers}
           modeOptions={modeOptions}
           currency={quotation?.currency || 'INR'}
         />
@@ -145,10 +173,10 @@ export default function AddNegotiationModal({ isOpen, onClose, quotation, select
           <Button
             variant="primary"
             onClick={handleSave}
-            disabled={isConfirmed}
+            disabled={isConfirmed || isSaving}
             icon={<IconCheck size={15} />}
           >
-            Save Negotiation Stage
+            {isSaving ? 'Saving...' : 'Save Negotiation Stage'}
           </Button>
         </div>
       </div>

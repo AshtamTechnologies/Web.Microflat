@@ -3,7 +3,7 @@
  *
  * Aligned with Frontend-API-Guide.md §5.4g and Swagger OpenAPI specifications:
  *   - Created from a Confirmed quotation's latest revision (backend auto-copies lines & taxes)
- *   - Direct Orders (without Quotation - Task 60) gracefully handled with local fallback
+ *   - Direct Orders (without Quotation) are created through the order confirmation API
  *   - Statuses: Draft -> Confirmed -> Cancelled
  *   - Only Draft orders are editable
  *   - Documents allowed in Draft & Confirmed (blocked when Cancelled)
@@ -12,35 +12,12 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
-import {
-  INITIAL_SALES_ORDERS,
-  calculateSalesOrderTotals,
-  getNextOrderStatuses,
-} from '../mocks/salesOrders';
-import { orderConfirmationService, isMockApi } from '../services';
-import { triggerPdfDownload } from '../utils/fileHelpers';
+import { orderConfirmationService } from '../services';
 
 const SalesOrdersContext = createContext(null);
-const STORAGE_KEY = 'microflat_sales_orders_data';
 
 export function SalesOrdersProvider({ children }) {
-  const [salesOrders, setSalesOrders] = useState(() => {
-    if (isMockApi) {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          return JSON.parse(saved);
-        }
-      } catch (e) {
-        console.error('Failed to load sales orders from localStorage:', e);
-      }
-      return INITIAL_SALES_ORDERS;
-    }
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {}
-    return [];
-  });
+  const [salesOrders, setSalesOrders] = useState([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [lookups, setLookups] = useState({
@@ -54,24 +31,10 @@ export function SalesOrdersProvider({ children }) {
   });
   const [nextNumberPreview, setNextNumberPreview] = useState('');
 
-  // Persist to localStorage only in mock mode
-  useEffect(() => {
-    if (!isMockApi) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(salesOrders));
-    } catch (e) {
-      console.error('Failed to save sales orders to localStorage:', e);
-    }
-  }, [salesOrders]);
-
   /**
    * Refreshes sales orders list from backend API (or mock).
    */
   const refreshSalesOrders = useCallback(async (params = {}) => {
-    if (isMockApi) {
-      return salesOrders;
-    }
-
     try {
       setIsLoading(true);
       const res = await orderConfirmationService.listOrderConfirmations(params);
@@ -91,7 +54,7 @@ export function SalesOrdersProvider({ children }) {
    */
   const hasLoadedRef = useRef(false);
   useEffect(() => {
-    if (hasLoadedRef.current || isMockApi) return;
+    if (hasLoadedRef.current) return;
     hasLoadedRef.current = true;
 
     async function initializeApiData() {
@@ -105,8 +68,11 @@ export function SalesOrdersProvider({ children }) {
           setLookups(lookupData.value);
         }
 
-        if (listRes.status === 'fulfilled' && listRes.value?.items) {
-          setSalesOrders(listRes.value.items);
+        if (listRes.status === 'fulfilled' && listRes.value) {
+          const rawItems = Array.isArray(listRes.value?.items)
+            ? listRes.value.items
+            : (Array.isArray(listRes.value) ? listRes.value : []);
+          setSalesOrders(rawItems);
         }
       } catch (err) {
         console.warn('API initialization for sales orders encountered an error:', err);
@@ -135,40 +101,75 @@ export function SalesOrdersProvider({ children }) {
   );
 
   /**
+   * Resolves a numeric database ID whether given a number, numeric string, or document series number.
+   */
+  const resolveNumericId = useCallback(
+    (input) => {
+      if (!input) return null;
+      if (typeof input === 'number' && Number.isFinite(input)) return input;
+      if (typeof input === 'string' && /^\d+$/.test(input.trim())) return Number(input.trim());
+      const matched = salesOrders.find(
+        (o) =>
+          String(o.id).toLowerCase() === String(input).toLowerCase() ||
+          String(o.orderConfirmationNo).toLowerCase() === String(input).toLowerCase()
+      );
+      if (matched?.id && (typeof matched.id === 'number' || /^\d+$/.test(String(matched.id)))) {
+        return Number(matched.id);
+      }
+      return null;
+    },
+    [salesOrders]
+  );
+
+  /**
    * Asynchronous fetch from API for full order detail (including lines, documents, and email logs).
    */
   const fetchSalesOrderById = useCallback(
     async (id) => {
       if (!id) return null;
-      const local = getSalesOrderById(id);
-      if (isMockApi) {
-        return local;
-      }
-
       try {
-        const detail = await orderConfirmationService.getOrderConfirmationById(id);
-        if (detail) {
-          setSalesOrders((prev) => {
-            const idx = prev.findIndex(
-              (o) =>
-                String(o.id).toLowerCase() === String(detail.id).toLowerCase() ||
-                String(o.orderConfirmationNo).toLowerCase() === String(detail.orderConfirmationNo).toLowerCase()
-            );
-            if (idx >= 0) {
-              const updated = [...prev];
-              updated[idx] = { ...updated[idx], ...detail };
-              return updated;
-            }
-            return [detail, ...prev];
-          });
-          return detail;
+        let targetId =
+          typeof id === 'number' && Number.isFinite(id)
+            ? id
+            : typeof id === 'string' && /^\d+$/.test(id.trim())
+              ? Number(id.trim())
+              : null;
+        if (targetId == null && typeof id === 'string') {
+          const searchResult = await orderConfirmationService.listOrderConfirmations({ search: id.trim() });
+          const searchItems = Array.isArray(searchResult?.items)
+            ? searchResult.items
+            : (Array.isArray(searchResult) ? searchResult : []);
+          const foundItem = searchItems.find(
+            (item) => String(item.orderConfirmationNo).toLowerCase() === id.trim().toLowerCase()
+          );
+          if (!foundItem?.id) {
+            throw new Error(`Sales order "${id}" was not found.`);
+          }
+          targetId = foundItem.id;
         }
+        targetId = targetId || id;
+        const detail = await orderConfirmationService.getOrderConfirmationById(targetId);
+        if (!detail) throw new Error('The sales order API returned no detail record.');
+        setSalesOrders((prev) => {
+          const idx = prev.findIndex(
+            (o) =>
+              String(o.id).toLowerCase() === String(detail.id).toLowerCase() ||
+              String(o.orderConfirmationNo).toLowerCase() === String(detail.orderConfirmationNo).toLowerCase()
+          );
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], ...detail };
+            return updated;
+          }
+          return [detail, ...prev];
+        });
+        return detail;
       } catch (err) {
         console.warn('Failed to fetch sales order detail from API:', err?.message || err);
+        throw err;
       }
-      return local;
     },
-    [getSalesOrderById]
+    []
   );
 
   const getOrderCountByQuotationId = useCallback(
@@ -190,41 +191,25 @@ export function SalesOrdersProvider({ children }) {
   const fetchNextOrderConfirmationNo = useCallback(
     async (orderDate) => {
       const todayDate = orderDate || new Date().toISOString().split('T')[0];
-      if (!isMockApi) {
-        try {
-          const num = await orderConfirmationService.getNextOrderConfirmationNumber(todayDate);
-          if (num) {
-            setNextNumberPreview(num);
-            return num;
-          }
-        } catch (err) {
-          console.warn('Could not retrieve next order confirmation number from API:', err);
+      try {
+        const num = await orderConfirmationService.getNextOrderConfirmationNumber(todayDate);
+        if (num) {
+          setNextNumberPreview(num);
+          return num;
         }
+      } catch (err) {
+        toast.error(err?.detail || err?.message || 'Could not preview the sales order number.');
       }
-      const parsedYear = todayDate ? new Date(todayDate).getFullYear() : NaN;
-      const year = Number.isFinite(parsedYear) ? parsedYear : new Date().getFullYear();
-      const seq = salesOrders.length + 1;
-      const fallback = `OC-${year}-${String(seq).padStart(6, '0')}`;
-      setNextNumberPreview(fallback);
-      return fallback;
+      setNextNumberPreview('');
+      return '';
     },
-    [salesOrders]
+    []
   );
 
   /**
-   * Synchronously returns current next order confirmation number (or fallback formula).
+   * Synchronously returns the latest order confirmation number preview from the API.
    */
-  const getNextOrderConfirmationNo = useCallback(
-    (orderDate) => {
-      if (nextNumberPreview) return nextNumberPreview;
-      const todayDate = orderDate || new Date().toISOString().split('T')[0];
-      const parsedYear = todayDate ? new Date(todayDate).getFullYear() : NaN;
-      const year = Number.isFinite(parsedYear) ? parsedYear : new Date().getFullYear();
-      const seq = salesOrders.length + 1;
-      return `OC-${year}-${String(seq).padStart(6, '0')}`;
-    },
-    [nextNumberPreview, salesOrders]
-  );
+  const getNextOrderConfirmationNo = useCallback(() => nextNumberPreview, [nextNumberPreview]);
 
   /**
    * Creates a new sales order.
@@ -235,20 +220,36 @@ export function SalesOrdersProvider({ children }) {
    */
   const createSalesOrder = useCallback(
     async (payload) => {
-      const orderDate =
-        payload.orderConfirmationDate || new Date().toISOString().split('T')[0];
-      const status = payload.status === 'Confirmed' ? 'Confirmed' : 'Draft';
-      const isDirect = Boolean(payload.orderSource === true || payload.isDirectOrder || !payload.quotationId);
-
-      // ── Scenario A: Call Backend API (Quotation or Direct) ──
-      if (!isMockApi) {
-        try {
+      try {
           setIsLoading(true);
           const createdApiOrder = await orderConfirmationService.createOrderConfirmation(payload);
+          if (!createdApiOrder) throw new Error('The sales order API returned no created record.');
+
+          // Upload any attached documents with files
+          let uploadedDocs = [];
+          if (Array.isArray(payload.documents) && payload.documents.length > 0 && createdApiOrder?.id) {
+            const uploadPromises = payload.documents
+              .filter((doc) => doc?.file instanceof Blob || doc?.file instanceof File)
+              .map(async (doc) => {
+                if (doc.documentTypeId == null) {
+                  throw new Error(`A document type is required for "${doc.fileName || doc.file.name}".`);
+                }
+                return orderConfirmationService.uploadOrderConfirmationDocument(
+                  createdApiOrder.id,
+                  doc.file,
+                  doc.documentTypeId,
+                  doc.remarks || ''
+                );
+              });
+
+            if (uploadPromises.length > 0) {
+              uploadedDocs = await Promise.all(uploadPromises);
+            }
+          }
 
           // If user requested initial status as 'Confirmed', move status
           let finalOrder = createdApiOrder;
-          if (status === 'Confirmed' && createdApiOrder?.id) {
+          if (payload.status === 'Confirmed' && createdApiOrder?.id) {
             try {
               finalOrder = await orderConfirmationService.updateOrderConfirmationStatus(
                 createdApiOrder.id,
@@ -257,6 +258,13 @@ export function SalesOrdersProvider({ children }) {
             } catch (statusErr) {
               console.warn('Order created as Draft, but confirming it failed:', statusErr);
             }
+          }
+
+          if (uploadedDocs.length > 0) {
+            finalOrder = {
+              ...finalOrder,
+              documents: [...uploadedDocs, ...(finalOrder.documents || [])],
+            };
           }
 
           // Prepend to state
@@ -272,80 +280,11 @@ export function SalesOrdersProvider({ children }) {
           const errMsg = apiErr?.detail || apiErr?.message || 'Failed to create sales order on backend.';
           toast.error(errMsg);
           throw apiErr;
-        } finally {
-          setIsLoading(false);
-        }
+      } finally {
+        setIsLoading(false);
       }
-
-      // ── Scenario B: Mock API Only ──
-      const orderConfirmationNo =
-        payload.orderConfirmationNo ||
-        `OC-${new Date(orderDate).getFullYear() || new Date().getFullYear()}-${String(
-          salesOrders.length + 1
-        ).padStart(6, '0')}`;
-
-      const totals = calculateSalesOrderTotals(
-        payload.lineItems || [],
-        payload.taxTreatment || 'INTRA_STATE',
-        payload.otherCharges || 0
-      );
-
-      const newOrder = {
-        id: orderConfirmationNo,
-        orderConfirmationNo,
-        orderConfirmationDate: orderDate,
-        orderSource: isDirect,
-        orderSourceName: isDirect ? 'Direct' : 'Quotation',
-        isDirectOrder: isDirect,
-        quotationId: isDirect ? null : payload.quotationId || null,
-        quotationNo: isDirect ? null : payload.quotationNo || null,
-        quotationRevisionNo: isDirect ? null : payload.quotationRevisionNo ?? 0,
-        inquiryId: payload.inquiryId || null,
-        inquiryNo: payload.inquiryNo || null,
-        clientId: payload.clientId || '',
-        clientName: payload.clientName || '',
-        clientAddress: payload.clientAddress || '',
-        contactPerson: payload.contactPerson || '',
-        contactEmail: payload.contactEmail || '',
-        contactPhone: payload.contactPhone || '',
-        clientPoNo: payload.clientPoNo || '',
-        clientPoDate: payload.clientPoDate || '',
-        expectedDeliveryDate: payload.expectedDeliveryDate || '',
-        paymentTerms: payload.paymentTerms || 'Net 30 Days',
-        deliveryTerms: payload.deliveryTerms || '',
-        currency: payload.currency || 'INR',
-        taxTreatment: payload.taxTreatment || 'INTRA_STATE',
-        otherCharges: Number(payload.otherCharges) || 0,
-        otherChargesDescription: payload.otherChargesDescription || '',
-        termsAndConditions: payload.termsAndConditions || '',
-        remarks: payload.remarks || '',
-        status,
-        isEditable: status === 'Draft',
-        nextStatuses: getNextOrderStatuses(status),
-        confirmedOn: status === 'Confirmed' ? orderDate : null,
-        lastUpdatedBy: payload.lastUpdatedBy || 'Current User',
-        lastUpdatedAt: new Date().toISOString(),
-        lineItems: totals.calculatedItems,
-        subtotal: totals.subtotal,
-        totalTax: totals.totalTax,
-        cgst: totals.cgst,
-        sgst: totals.sgst,
-        igst: totals.igst,
-        grandTotal: totals.grandTotal,
-        documents: payload.documents || [],
-        emailLogs: [],
-      };
-
-      setSalesOrders((prev) => [newOrder, ...prev]);
-
-      toast.success(
-        status === 'Confirmed'
-          ? `Sales Order ${orderConfirmationNo} created & confirmed`
-          : `Sales Order ${orderConfirmationNo} saved as Draft`
-      );
-      return newOrder;
     },
-    [salesOrders]
+    []
   );
 
   /**
@@ -353,16 +292,40 @@ export function SalesOrdersProvider({ children }) {
    */
   const updateSalesOrder = useCallback(
     async (id, payload) => {
-      const isNumericBackendId = typeof id === 'number' || /^\d+$/.test(String(id));
+      const targetNumericId = resolveNumericId(id);
 
-      if (!isMockApi && isNumericBackendId) {
+      if (targetNumericId) {
         try {
           setIsLoading(true);
-          let updatedApiOrder = await orderConfirmationService.updateOrderConfirmation(id, payload);
+          let updatedApiOrder = await orderConfirmationService.updateOrderConfirmation(targetNumericId, payload);
+          if (!updatedApiOrder) throw new Error('The sales order API returned no updated record.');
+
+          // Upload any newly attached documents with files in edit mode
+          if (Array.isArray(payload.documents) && payload.documents.length > 0) {
+            const newDocUploads = payload.documents
+              .filter((doc) => doc?.file instanceof Blob || doc?.file instanceof File)
+              .map(async (doc) => {
+                if (doc.documentTypeId == null) {
+                  throw new Error(`A document type is required for "${doc.fileName || doc.file.name}".`);
+                }
+                return orderConfirmationService.uploadOrderConfirmationDocument(
+                  targetNumericId,
+                  doc.file,
+                  doc.documentTypeId,
+                  doc.remarks || ''
+                );
+              });
+
+            if (newDocUploads.length > 0) {
+              await Promise.all(newDocUploads);
+              const refreshedDocs = await orderConfirmationService.getOrderConfirmationDocuments(targetNumericId);
+              updatedApiOrder = { ...updatedApiOrder, documents: refreshedDocs };
+            }
+          }
 
           if (payload.status === 'Confirmed' && updatedApiOrder.status !== 'Confirmed') {
             updatedApiOrder = await orderConfirmationService.updateOrderConfirmationStatus(
-              id,
+              targetNumericId,
               'Confirmed'
             );
           }
@@ -392,103 +355,22 @@ export function SalesOrdersProvider({ children }) {
         }
       }
 
-      // Local / Mock update
-      let updatedOrder = null;
-      setSalesOrders((prev) =>
-        prev.map((o) => {
-          if (String(o.id).toLowerCase() !== String(id).toLowerCase() &&
-              String(o.orderConfirmationNo).toLowerCase() !== String(id).toLowerCase()) {
-            return o;
-          }
-          if (o.status !== 'Draft') {
-            toast.error('Only Draft sales orders can be edited.');
-            return o;
-          }
-
-          const nextStatus = payload.status === 'Confirmed' ? 'Confirmed' : 'Draft';
-          const totals = calculateSalesOrderTotals(
-            payload.lineItems || o.lineItems || [],
-            payload.taxTreatment || o.taxTreatment || 'INTRA_STATE',
-            payload.otherCharges !== undefined ? payload.otherCharges : o.otherCharges
-          );
-
-          updatedOrder = {
-            ...o,
-            orderConfirmationDate: payload.orderConfirmationDate || o.orderConfirmationDate,
-            clientAddress:
-              payload.clientAddress !== undefined ? payload.clientAddress : o.clientAddress,
-            contactPerson:
-              payload.contactPerson !== undefined ? payload.contactPerson : o.contactPerson,
-            contactEmail:
-              payload.contactEmail !== undefined ? payload.contactEmail : o.contactEmail,
-            contactPhone:
-              payload.contactPhone !== undefined ? payload.contactPhone : o.contactPhone,
-            clientPoNo: payload.clientPoNo !== undefined ? payload.clientPoNo : o.clientPoNo,
-            clientPoDate: payload.clientPoDate !== undefined ? payload.clientPoDate : o.clientPoDate,
-            expectedDeliveryDate:
-              payload.expectedDeliveryDate !== undefined
-                ? payload.expectedDeliveryDate
-                : o.expectedDeliveryDate,
-            paymentTerms: payload.paymentTerms || o.paymentTerms,
-            deliveryTerms:
-              payload.deliveryTerms !== undefined ? payload.deliveryTerms : o.deliveryTerms,
-            taxTreatment: payload.taxTreatment || o.taxTreatment,
-            otherCharges:
-              payload.otherCharges !== undefined ? Number(payload.otherCharges) || 0 : o.otherCharges,
-            otherChargesDescription:
-              payload.otherChargesDescription !== undefined
-                ? payload.otherChargesDescription
-                : o.otherChargesDescription,
-            termsAndConditions:
-              payload.termsAndConditions !== undefined
-                ? payload.termsAndConditions
-                : o.termsAndConditions,
-            remarks: payload.remarks !== undefined ? payload.remarks : o.remarks,
-            status: nextStatus,
-            isEditable: nextStatus === 'Draft',
-            nextStatuses: getNextOrderStatuses(nextStatus),
-            confirmedOn:
-              nextStatus === 'Confirmed'
-                ? o.confirmedOn || new Date().toISOString().split('T')[0]
-                : o.confirmedOn,
-            lastUpdatedBy: 'Current User',
-            lastUpdatedAt: new Date().toISOString(),
-            lineItems: totals.calculatedItems,
-            subtotal: totals.subtotal,
-            totalTax: totals.totalTax,
-            cgst: totals.cgst,
-            sgst: totals.sgst,
-            igst: totals.igst,
-            grandTotal: totals.grandTotal,
-            documents: payload.documents !== undefined ? payload.documents : o.documents,
-          };
-          return updatedOrder;
-        })
-      );
-
-      if (updatedOrder) {
-        toast.success(
-          updatedOrder.status === 'Confirmed'
-            ? `Sales Order ${updatedOrder.orderConfirmationNo} confirmed`
-            : `Sales Order ${updatedOrder.orderConfirmationNo} updated`
-        );
-      }
-      return updatedOrder;
+      throw new Error('A valid integer sales order ID is required.');
     },
-    []
+    [resolveNumericId]
   );
 
   /**
    * Status change: Draft -> Confirmed or Cancelled.
    */
   const changeSalesOrderStatus = useCallback(
-    async (id, newStatus, remarks = '') => {
-      const isNumericBackendId = typeof id === 'number' || /^\d+$/.test(String(id));
+    async (id, newStatus) => {
+      const targetNumericId = resolveNumericId(id);
 
-      if (!isMockApi && isNumericBackendId) {
+      if (targetNumericId) {
         try {
           setIsLoading(true);
-          const updated = await orderConfirmationService.updateOrderConfirmationStatus(id, newStatus);
+          const updated = await orderConfirmationService.updateOrderConfirmationStatus(targetNumericId, newStatus);
           setSalesOrders((prev) =>
             prev.map((o) =>
               String(o.id).toLowerCase() === String(id).toLowerCase() ||
@@ -508,34 +390,9 @@ export function SalesOrdersProvider({ children }) {
         }
       }
 
-      setSalesOrders((prev) =>
-        prev.map((o) => {
-          if (
-            String(o.id).toLowerCase() !== String(id).toLowerCase() &&
-            String(o.orderConfirmationNo).toLowerCase() !== String(id).toLowerCase()
-          ) {
-            return o;
-          }
-          return {
-            ...o,
-            status: newStatus,
-            isEditable: newStatus === 'Draft',
-            nextStatuses: getNextOrderStatuses(newStatus),
-            confirmedOn:
-              newStatus === 'Confirmed'
-                ? o.confirmedOn || new Date().toISOString().split('T')[0]
-                : o.confirmedOn,
-            remarks: remarks
-              ? `${o.remarks ? `${o.remarks}\n` : ''}[${newStatus}] ${remarks}`
-              : o.remarks,
-            lastUpdatedBy: 'Current User',
-            lastUpdatedAt: new Date().toISOString(),
-          };
-        })
-      );
-      toast.success(`Sales Order status updated to ${newStatus}`);
+      throw new Error('A valid integer sales order ID is required.');
     },
-    []
+    [resolveNumericId]
   );
 
   /**
@@ -543,105 +400,50 @@ export function SalesOrdersProvider({ children }) {
    */
   const uploadSalesOrderDocument = useCallback(
     async (id, docPayload) => {
-      const isNumericBackendId = typeof id === 'number' || /^\d+$/.test(String(id));
+      const targetNumericId = resolveNumericId(id);
 
-      if (!isMockApi && isNumericBackendId && docPayload?.file) {
+      if (targetNumericId && docPayload?.file && docPayload.documentTypeId != null) {
         try {
           setIsLoading(true);
-          const uploaded = await orderConfirmationService.uploadOrderConfirmationDocument(
-            id,
+          await orderConfirmationService.uploadOrderConfirmationDocument(
+            targetNumericId,
             docPayload.file,
-            docPayload.documentTypeId || 1,
+            docPayload.documentTypeId,
             docPayload.remarks || ''
           );
-
-          // Refresh documents on the order in state
-          setSalesOrders((prev) =>
-            prev.map((o) => {
-              if (
-                String(o.id).toLowerCase() !== String(id).toLowerCase() &&
-                String(o.orderConfirmationNo).toLowerCase() !== String(id).toLowerCase()
-              ) {
-                return o;
-              }
-              const newDoc = {
-                id: uploaded?.id || `oc-doc-${Date.now()}`,
-                fileName: uploaded?.fileName || docPayload.file.name,
-                documentTypeId: uploaded?.documentTypeId || docPayload.documentTypeId,
-                documentTypeName: uploaded?.documentTypeName || docPayload.documentType || 'Client PO',
-                documentType: uploaded?.documentTypeName || docPayload.documentType || 'Client PO',
-                downloadUrl: uploaded?.downloadUrl || '',
-                uploadedAt: new Date().toISOString().split('T')[0],
-                fileSize: docPayload.fileSize || '300 KB',
-                remarks: docPayload.remarks || '',
-              };
-              return {
-                ...o,
-                documents: [newDoc, ...(o.documents || [])],
-                lastUpdatedAt: new Date().toISOString(),
-              };
-            })
-          );
           toast.success(`Uploaded "${docPayload.file.name}"`);
-          return uploaded;
+          return true;
         } catch (apiErr) {
           console.error('Failed to upload document via API:', apiErr);
           toast.error(apiErr?.message || 'Failed to upload document to backend.');
-          return null;
+          throw apiErr;
         } finally {
           setIsLoading(false);
         }
       }
 
-      // Local / Mock document append
-      setSalesOrders((prev) =>
-        prev.map((o) => {
-          if (
-            String(o.id).toLowerCase() !== String(id).toLowerCase() &&
-            String(o.orderConfirmationNo).toLowerCase() !== String(id).toLowerCase()
-          ) {
-            return o;
-          }
-          const newDoc = {
-            id: `oc-doc-${Date.now()}`,
-            fileName: docPayload.fileName || docPayload.file?.name || 'Document.pdf',
-            documentType: docPayload.documentType || 'Client PO',
-            uploadedAt: new Date().toISOString().split('T')[0],
-            fileSize: docPayload.fileSize || '280 KB',
-            remarks: docPayload.remarks || '',
-          };
-          return {
-            ...o,
-            documents: [newDoc, ...(o.documents || [])],
-            lastUpdatedAt: new Date().toISOString(),
-          };
-        })
-      );
-      toast.success(`Uploaded "${docPayload.fileName || docPayload.file?.name || 'document'}"`);
+      throw new Error('A valid order ID, file, and document type are required.');
     },
-    []
+    [resolveNumericId]
   );
 
   /**
    * Download a document by ID.
    */
   const downloadSalesOrderDocument = useCallback(
-    async (docId, fileName = 'Customer_PO.pdf') => {
-      const isNumericDocId = typeof docId === 'number' || /^\d+$/.test(String(docId));
-      if (!isMockApi && isNumericDocId) {
-        try {
-          return await orderConfirmationService.downloadOrderConfirmationDocument(docId, fileName);
-        } catch (err) {
-          console.error('Failed to download document from API:', err);
-          toast.error('Failed to download document from server.');
-        }
+    async (docId, fileName) => {
+      const isNumericDocId = (typeof docId === 'number' && Number.isFinite(docId)) || /^\d+$/.test(String(docId));
+      if (!isNumericDocId) {
+        toast.error('Document is not available for download from the server.');
+        return;
       }
-      toast(`Downloading document "${fileName}"`, { icon: '📄' });
-      triggerPdfDownload(fileName, {
-        title: 'Customer Purchase Order',
-        documentType: 'Client PO',
-        fileName,
-      });
+      try {
+        return await orderConfirmationService.downloadOrderConfirmationDocument(docId, fileName);
+      } catch (err) {
+        console.error('Failed to download document from API:', err);
+        toast.error('Document is not available for download from the server.');
+        return false;
+      }
     },
     []
   );
@@ -651,14 +453,18 @@ export function SalesOrdersProvider({ children }) {
    */
   const deleteSalesOrderDocument = useCallback(
     async (id, docId) => {
-      const isNumericDocId = typeof docId === 'number' || /^\d+$/.test(String(docId));
+      const isNumericDocId = (typeof docId === 'number' && Number.isFinite(docId)) || /^\d+$/.test(String(docId));
 
-      if (!isMockApi && isNumericDocId) {
-        try {
-          await orderConfirmationService.deleteOrderConfirmationDocument(docId);
-        } catch (apiErr) {
-          console.warn('Backend document delete error:', apiErr?.message || apiErr);
-        }
+      if (!isNumericDocId) {
+        toast.error('Failed to delete document from server.');
+        return;
+      }
+      try {
+        await orderConfirmationService.deleteOrderConfirmationDocument(docId);
+      } catch (apiErr) {
+        console.error('Backend document delete error:', apiErr);
+        toast.error('Failed to delete document from server.');
+        return false;
       }
 
       setSalesOrders((prev) =>
@@ -672,7 +478,6 @@ export function SalesOrdersProvider({ children }) {
           return {
             ...o,
             documents: (o.documents || []).filter((d) => String(d.id) !== String(docId)),
-            lastUpdatedAt: new Date().toISOString(),
           };
         })
       );
@@ -686,55 +491,37 @@ export function SalesOrdersProvider({ children }) {
    */
   const sendSalesOrderMail = useCallback(
     async (id, mailPayload) => {
-      const isNumericBackendId = typeof id === 'number' || /^\d+$/.test(String(id));
+      const targetNumericId = resolveNumericId(id);
 
-      if (!isMockApi && isNumericBackendId) {
+      if (targetNumericId) {
         try {
           setIsLoading(true);
-          await orderConfirmationService.sendOrderConfirmationEmail(id, {
+          const result = await orderConfirmationService.sendOrderConfirmationEmail(targetNumericId, {
+            toAddress: mailPayload.to,
             toEmail: mailPayload.to,
+            ccAddress: mailPayload.cc || '',
             ccEmail: mailPayload.cc || '',
             subject: mailPayload.subject,
             body: mailPayload.body,
           });
+          if (result?.isSuccess === false) {
+            throw new Error(result.errorMessage || 'The mail provider rejected the email.');
+          }
+          await fetchSalesOrderById(targetNumericId);
+          toast.success('Email sent');
+          return true;
         } catch (apiErr) {
           console.error('Failed to send email via API:', apiErr);
           toast.error(apiErr?.message || 'Failed to send email through server.');
+          return false;
         } finally {
           setIsLoading(false);
         }
       }
 
-      const now = new Date();
-      const sentAt = `${now.toISOString().split('T')[0]} ${now.toTimeString().slice(0, 5)}`;
-      const newLog = {
-        id: `oc-mail-${Date.now()}`,
-        sentAt,
-        to: mailPayload.to,
-        cc: mailPayload.cc || '',
-        subject: mailPayload.subject,
-        result: 'Success',
-        error: '',
-      };
-
-      setSalesOrders((prev) =>
-        prev.map((o) => {
-          if (
-            String(o.id).toLowerCase() !== String(id).toLowerCase() &&
-            String(o.orderConfirmationNo).toLowerCase() !== String(id).toLowerCase()
-          ) {
-            return o;
-          }
-          return {
-            ...o,
-            emailLogs: [newLog, ...(o.emailLogs || [])],
-            lastUpdatedAt: now.toISOString(),
-          };
-        })
-      );
-      toast.success(`Email sent to ${mailPayload.to}`);
+      throw new Error('A valid integer sales order ID is required.');
     },
-    []
+    [resolveNumericId, fetchSalesOrderById]
   );
 
   return (

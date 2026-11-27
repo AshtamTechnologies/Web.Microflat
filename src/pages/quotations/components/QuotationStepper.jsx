@@ -14,7 +14,7 @@ const STAGES = [
 export default function QuotationStepper({ status = 'Draft', poReceived = false, className = '' }) {
   // Determine active stage index (0-indexed)
   let activeIndex = 2; // Default to Quotation
-  if (poReceived) {
+  if (poReceived || status === 'PO Received') {
     activeIndex = 6; // PO
   } else if (status === 'Draft') {
     activeIndex = 2;
@@ -24,8 +24,6 @@ export default function QuotationStepper({ status = 'Draft', poReceived = false,
     activeIndex = 4;
   } else if (status === 'Confirmed') {
     activeIndex = 5;
-  } else if (status === 'Lost') {
-    activeIndex = 3;
   }
 
   return (
