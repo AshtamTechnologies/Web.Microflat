@@ -28,9 +28,11 @@ export default function RegisterClientRequiredModal({
   onClose,
   inquiry,
   onProceed,
+  targetType = 'Quotation', // 'Quotation' | 'Deal'
 }) {
   if (!inquiry) return null;
 
+  const targetLabel = targetType === 'Deal' ? 'Deal' : 'Quotation';
   const companyName = inquiry.companyName || inquiry.CustomerName || inquiry.clientName || 'New Prospect';
   const contactPerson = inquiry.contactPerson || inquiry.ContactPerson || inquiry.contactPersonName || inquiry.contactName || '—';
   const phone = inquiry.contactNo || inquiry.ContactNo || inquiry.phoneNo || inquiry.Phone || inquiry.mobileNo || inquiry.phone || '—';
@@ -48,7 +50,7 @@ export default function RegisterClientRequiredModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Register Customer to Create Quotation"
+      title={`Register Customer to Create ${targetLabel}`}
       subtitle={inquiryNo ? `Source Inquiry: ${inquiryNo}` : undefined}
       maxWidth="max-w-xl"
     >
@@ -62,7 +64,7 @@ export default function RegisterClientRequiredModal({
             <p className="font-semibold text-heading">New Customer Onboarding</p>
             <p className="text-text-muted leading-relaxed">
               This inquiry is for a new customer (<span className="font-semibold text-heading">{companyName}</span>).
-              Before creating a quotation, please save them to your Client directory. Their details from the inquiry are pre-filled below for quick registration.
+              Before creating a {targetLabel.toLowerCase()}, please save them to your Client directory. Their details from the inquiry are pre-filled below for quick registration.
             </p>
           </div>
         </div>
@@ -116,7 +118,7 @@ export default function RegisterClientRequiredModal({
         </div>
 
         <p className="text-2xs text-text-muted italic">
-          Clicking <strong>Save Customer & Continue to Quotation</strong> will open the client onboarding drawer with all captured details automatically filled in.
+          Clicking <strong>Save Customer &amp; Continue to {targetLabel}</strong> will open the client onboarding drawer with all captured details automatically filled in.
         </p>
 
         {/* Action Buttons */}
@@ -129,7 +131,7 @@ export default function RegisterClientRequiredModal({
             onClick={onProceed}
             icon={<IconUserPlus size={16} />}
           >
-            Save Customer &amp; Continue to Quotation
+            Save Customer &amp; Continue to {targetLabel}
           </Button>
         </div>
       </div>
