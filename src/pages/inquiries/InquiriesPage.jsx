@@ -64,11 +64,6 @@ function getPriorityBadgeVariant(priority) {
   return 'neutral';
 }
 
-const STATUS_FILTER_OPTIONS = [
-  { value: 'ALL', label: 'All Statuses' },
-  ...API_INQUIRY_STATUSES.map((s) => ({ value: s.id, label: s.name })),
-];
-
 export default function InquiriesPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -195,46 +190,14 @@ export default function InquiriesPage() {
     [quotationByInquiryMap]
   );
 
-  // Derive inquiry's active stage, respecting linked quotations & normalized stages
+  // Derive inquiry's active stage
   const resolveInquiryStage = useCallback(
     (inq) => {
       if (!inq) return '';
       const explicitStatus = inq.StatusId || inq.status;
-      const normalized = normalizeInquiryStage(explicitStatus);
-
-      // If inquiry has an explicit terminal or recognized API status, prioritize it
-      const lower = String(explicitStatus || '').trim().toLowerCase();
-      if (lower === 'won' || lower === 'lost' || lower === 'deal') {
-        return normalized;
-      }
-
-      const linkedQuotation = getLinkedQuotation(inq);
-
-      if (linkedQuotation) {
-        const qStatus = String(linkedQuotation.status || '').trim().toLowerCase();
-        if (qStatus.includes('negotiat')) {
-          return 'Negotiation';
-        }
-        if (linkedQuotation.poReceived || qStatus === 'po received') {
-          return 'PO created';
-        }
-        if (qStatus === 'confirmed') {
-          return 'Accepted';
-        }
-        // If the inquiry was in initial stage, advance it to Quotation
-        if (
-          normalized === 'Inquiry' ||
-          normalized === 'Qualified' ||
-          !explicitStatus ||
-          explicitStatus === 'New'
-        ) {
-          return 'Quotation';
-        }
-      }
-
-      return normalized;
+      return normalizeInquiryStage(explicitStatus);
     },
-    [getLinkedQuotation]
+    []
   );
 
   const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
