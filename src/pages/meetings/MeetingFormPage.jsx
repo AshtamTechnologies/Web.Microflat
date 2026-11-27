@@ -35,6 +35,8 @@ import {
   IconAttachment,
 } from '../../constants/icons';
 import { useMeetingForm } from './hooks/useMeetingForm';
+import { getTodayISO } from '../../utils/dateUtils';
+import { isAssignableUser } from '../../utils/userFilters';
 import { useUserOptions } from '../../context/UsersContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import AttendeeManager from './components/AttendeeManager';
@@ -67,7 +69,11 @@ export default function MeetingFormPage() {
   const returnPath = location.state?.from;
   const [searchParams] = useSearchParams();
   const inquiryIdParam = searchParams.get('inquiryId');
-  const { options: userOptions } = useUserOptions();
+  const { options: allUserOptions } = useUserOptions();
+  // Local filter: hide inactive users and CLIENT-role users from attendee selection
+  const userOptions = useMemo(() => {
+    return (allUserOptions || []).filter((opt) => isAssignableUser(opt.user));
+  }, [allUserOptions]);
   const inqCtx = useInquiriesContext();
   const inquiriesList = Array.isArray(inqCtx?.inquiries) ? inqCtx.inquiries : [];
 
@@ -148,6 +154,16 @@ export default function MeetingFormPage() {
       (i) => String(i.id || i.InquiryId) === String(formData.inquiryId)
     );
   }, [formData.inquiryId, inquiriesList]);
+
+  // When scheduling for today, block times earlier than the current time
+  const minStartTime = (() => {
+    if (isEdit || formData.meetingDate !== getTodayISO()) return '';
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  })();
+
+  // Minimum allowed end time is the chosen start time
+  const minEndTime = formData.startTime || minStartTime || '';
 
   const durationText = useMemo(() => {
     return getDurationBadge(formData.startTime, formData.endTime);
@@ -353,6 +369,7 @@ export default function MeetingFormPage() {
                   Meeting Date <span className="text-danger">*</span>
                 </label>
                 <DatePicker
+                  min={isEdit ? undefined : getTodayISO()}
                   value={formData.meetingDate}
                   onChange={(e) => {
                     const val = e?.target?.value !== undefined ? e.target.value : e;
@@ -377,8 +394,13 @@ export default function MeetingFormPage() {
                     onChange={(e) => {
                       const val = e?.target?.value !== undefined ? e.target.value : e;
                       setField('startTime', val);
+                      // If existing endTime is earlier than or equal to new startTime, auto-clear or adjust
+                      if (formData.endTime && val && formData.endTime <= val) {
+                        setField('endTime', '');
+                      }
                     }}
                     placeholder="Start..."
+                    minTime={minStartTime}
                     error={fieldErrors.startTime}
                   />
                   {fieldErrors.startTime && (
@@ -399,6 +421,7 @@ export default function MeetingFormPage() {
                       setField('endTime', val);
                     }}
                     placeholder="End..."
+                    minTime={minEndTime}
                     error={fieldErrors.endTime}
                   />
                   {fieldErrors.endTime && (

@@ -27,6 +27,7 @@ export const INQUIRY_ENDPOINTS = {
   STATUS: (id) => `/api/inquiries/${cleanId(id)}/status`,
   ASSIGN: (id) => `/api/inquiries/${cleanId(id)}/assign`,
   ACTIVE: (id) => `/api/inquiries/${cleanId(id)}/active`,
+  REGISTER_CLIENT: (id) => `/api/inquiries/${cleanId(id)}/register-client`,
   ACTIVITIES: (id) => `/api/inquiries/${cleanId(id)}/activities`,
   COMMENTS: (id) => `/api/inquiries/${cleanId(id)}/comments`,
 

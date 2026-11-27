@@ -14,6 +14,7 @@ import {
 import { Modal, Button, CancelButton, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiriesContext } from '../../../context/InquiriesContext';
 import { useUsersContext } from '../../../context/UsersContext';
+import { isAssignableUser } from '../../../utils/userFilters';
 
 export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
   const { reassignInquiry } = useInquiriesContext();
@@ -43,11 +44,13 @@ export default function AssignInquiryModal({ isOpen, onClose, inquiry }) {
 
   // Build user options for SearchableSelect
   const userOptions = useMemo(() => {
-    return userList.map((u) => ({
-      value: u.id,
-      label: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'User',
-    }));
-  }, [userList]);
+    return userList
+      .filter((u) => isAssignableUser(u) || String(u.id) === String(inquiry?.AssignedTo))
+      .map((u) => ({
+        value: u.id,
+        label: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'User',
+      }));
+  }, [userList, inquiry]);
 
   // Sync state on modal open
   useEffect(() => {

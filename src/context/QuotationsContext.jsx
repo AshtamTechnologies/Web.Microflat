@@ -250,14 +250,20 @@ export function QuotationsProvider({ children }) {
   const updateQuotation = useCallback(
     async (id, payload) => {
       const updated = await quotationService.updateQuotation(id, payload);
-      const sanitized = sanitizeQuotation(updated);
+      let sanitized = sanitizeQuotation(updated);
+      try {
+        const refreshed = await fetchQuotationDetail(id);
+        if (refreshed) sanitized = sanitizeQuotation(refreshed);
+      } catch (err) {
+        console.warn('Could not re-fetch quotation detail after update:', err);
+      }
       setQuotations((prev) =>
         prev.map((q) => (String(q.id) === String(id) || String(q.quotationNo) === String(id) ? { ...q, ...sanitized } : q))
       );
       toast.success('Quotation updated successfully');
       return sanitized;
     },
-    []
+    [fetchQuotationDetail]
   );
 
   /**
@@ -412,10 +418,12 @@ export function QuotationsProvider({ children }) {
       const appStatus = res?.approvalStatus;
       const statusText = appStatus === 2 ? 'Pending Approval' : appStatus === 6 ? 'Approval Not Required (Backend Rule)' : (appStatus || 'Submitted');
       toast.success(`Quotation submitted: Status is now "${statusText}". Request ID: ${res?.pendingApprovalRequestId || 'None'}`, { duration: 6000 });
-      await fetchQuotationDetail(quotationId);
+      const freshDetail = await fetchQuotationDetail(quotationId);
+      return freshDetail || res;
     } catch (err) {
       console.error(`[QUOTATIONS_CONTEXT] Submit failed:`, err);
       toast.error(err?.detail || err?.message || 'Failed to submit for approval.');
+      throw err;
     }
   }, [fetchQuotationDetail]);
 

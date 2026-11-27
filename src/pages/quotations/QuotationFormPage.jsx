@@ -52,6 +52,7 @@ import { useClientsContext } from '../../context/ClientsContext';
 import { useUsersContext } from '../../context/UsersContext';
 import { useAuthContext } from '../../context/AuthContext';
 import { useStandardsContext } from '../../context/StandardsContext';
+import { usePaymentTermsContext } from '../../context/PaymentTermsContext';
 import { calculateFlatnessTolerance, normalizeGradeCode } from '../../utils/flatnessFormula';
 import { getTodayISO } from '../../utils/dateUtils';
 import {
@@ -102,6 +103,7 @@ export default function QuotationFormPage() {
 
   const { inquiries = [], fetchInquiries, updateInquiry } = useInquiriesContext();
   const { clients = [], ensureClientsLoaded, loadClients } = useClientsContext();
+  const { paymentTerms: masterPaymentTerms = [] } = usePaymentTermsContext?.() || {};
   const { allUsers = [], users = [], ensureAllActiveUsersLoaded } = useUsersContext();
   const { user } = useAuthContext();
   const userList = allUsers.length > 0 ? allUsers : users;
@@ -538,7 +540,9 @@ export default function QuotationFormPage() {
           optionExtras: Number(it.optionExtras) || 0,
           otherCharges: Number(it.otherCharges || it.lineCharges) || 0,
           taxConfigDetailId: it.taxConfigDetailId || null,
-          taxPercent: Number(it.taxPercent) || 18,
+          taxPercent: it.taxPercent !== undefined && it.taxPercent !== null && !isNaN(Number(it.taxPercent))
+            ? Number(it.taxPercent)
+            : 0,
           options: Array.isArray(it.options) ? it.options : [],
         };
       });
@@ -1518,7 +1522,9 @@ export default function QuotationFormPage() {
 
     // 5. Resolve Tax
     let resolvedTaxDetailId = item.taxConfigDetailId ? String(item.taxConfigDetailId) : '';
-    let resolvedTaxPercent = item.taxPercent !== undefined ? Number(item.taxPercent) : 18;
+    let resolvedTaxPercent = item.taxPercent !== undefined && item.taxPercent !== null && !isNaN(Number(item.taxPercent))
+      ? Number(item.taxPercent)
+      : (singleProductTaxOptions[1]?.taxPercent ?? singleProductTaxOptions[0]?.taxPercent ?? 0);
     if ((!resolvedTaxDetailId || resolvedTaxDetailId === '0') && resolvedTaxPercent > 0 && Array.isArray(singleProductTaxOptions)) {
       const matchedTax = singleProductTaxOptions.find((t) => Number(t.taxPercent) === resolvedTaxPercent);
       if (matchedTax) {
@@ -1650,28 +1656,77 @@ export default function QuotationFormPage() {
         .map((opt) => opt.id)
         .filter(Boolean);
 
+      // Resolve standardId and gradeId from selected drawer standard and grade
+      const curStd = String(effectiveDrawerStandard || '').trim();
+      const matchedStd = (standardsList || []).find(
+        (s) => String(s.standardCode || '').toLowerCase() === curStd.toLowerCase() || String(s.id) === curStd
+      );
+      const matchedMapping = (gradeMapping || []).find(
+        (m) => String(m.standardCode || '').toLowerCase() === curStd.toLowerCase() || String(m.standardId || '') === curStd
+      );
+      const resolvedStandardId =
+        activeVariantObj?.standardId ||
+        matchedStd?.id ||
+        matchedMapping?.standardId ||
+        activeProductObj?.primaryStandardId ||
+        undefined;
+
+      const curGrd = String(selectedDrawerGrade || effectiveDrawerGrade || '').trim();
+      const normCurGrd = normalizeGradeCode(curGrd);
+      let resolvedGradeId = activeVariantObj?.gradeId || undefined;
+      if (!resolvedGradeId && matchedMapping && Array.isArray(matchedMapping.grades)) {
+        const matchedG = matchedMapping.grades.find(
+          (g) => normalizeGradeCode(g.gradeCode) === normCurGrd || String(g.gradeId) === curGrd
+        );
+        if (matchedG?.gradeId) resolvedGradeId = Number(matchedG.gradeId);
+      }
+      if (!resolvedGradeId && Array.isArray(lookups?.grades)) {
+        const matchedG = lookups.grades.find(
+          (g) => normalizeGradeCode(g.gradeCode || g.name) === normCurGrd || String(g.id) === curGrd
+        );
+        if (matchedG?.id) resolvedGradeId = Number(matchedG.id);
+      }
+
       const res = await productService.lookupProductPrice({
         productId: activeProductObj?.productId || drawerProduct,
         productVariantId: activeVariantObj?.productVariantId || activeVariantObj?.id || drawerVariant || undefined,
-        standardId: activeVariantObj?.standardId || activeProductObj?.primaryStandardId || undefined,
-        gradeId: activeVariantObj?.gradeId || undefined,
+        standardId: resolvedStandardId,
+        gradeId: resolvedGradeId,
         currencyId: resolvedCurrencyId,
         productOptionIds: selectedOptIds.length > 0 ? selectedOptIds : undefined,
       });
+
+      let matchingCandidates = Array.isArray(res?.candidates) ? res.candidates : [];
+      if (matchingCandidates.length > 0 && curGrd) {
+        const filtered = matchingCandidates.filter((cand) => {
+          if (cand.gradeCode && normalizeGradeCode(cand.gradeCode) !== normCurGrd) return false;
+          if (resolvedGradeId && cand.gradeId && Number(cand.gradeId) !== Number(resolvedGradeId)) return false;
+          return true;
+        });
+        if (filtered.length > 0) {
+          matchingCandidates = filtered;
+        }
+      }
 
       if (res?.suggestedRate !== undefined && res.suggestedRate !== null) {
         setDrawerRate(String(res.suggestedRate));
         setDrawerRateSource('ListPrice');
         const extraNote = res.optionExtras ? ` (Includes ${formatCurrency(res.optionExtras, formData.currency)} option extras)` : '';
         toast.success(`List price applied: ${formatCurrency(res.suggestedRate, formData.currency)}${extraNote}`);
-      } else if (Array.isArray(res?.candidates) && res.candidates.length > 0) {
+      } else if (matchingCandidates.length === 1) {
+        const cand = matchingCandidates[0];
+        const finalRate = (Number(cand.unitPrice) || 0) + (Number(res?.optionExtras || 0));
+        setDrawerRate(String(finalRate));
+        setDrawerRateSource('ListPrice');
+        toast.success(`List price applied (${cand.standardCode || ''} ${cand.gradeCode || ''}): ${formatCurrency(finalRate, formData.currency)}`);
+      } else if (matchingCandidates.length > 1) {
         setPriceCandidatesModal({
-          candidates: res.candidates,
+          candidates: matchingCandidates,
           optionExtras: res.optionExtras || 0,
           targetItemIndex: null, // Drawer
         });
       } else {
-        toast.error('No active list price found for this configuration in the selected currency.');
+        toast.error(`No active list price found for ${curGrd || 'this configuration'} in the selected currency.`);
       }
     } catch (err) {
       console.warn('Price lookup failed:', err);
@@ -1689,6 +1744,12 @@ export default function QuotationFormPage() {
     ].filter(Boolean).join(' · ');
 
     if (targetIndex === null) {
+      if (cand.gradeCode && cand.gradeCode !== drawerGrade) {
+        setDrawerGrade(cand.gradeCode);
+      }
+      if (cand.standardCode && cand.standardCode !== drawerStandard) {
+        setDrawerStandard(cand.standardCode);
+      }
       setDrawerRate(String(finalRate));
       setDrawerRateSource('ListPrice');
       if (configTag) {
@@ -1715,6 +1776,7 @@ export default function QuotationFormPage() {
             rate: finalRate,
             rateSource: 'ListPrice',
             priceCandidates: null,
+            grade: cand.gradeCode || next[targetIndex].grade,
             standardCode: cand.standardCode || next[targetIndex].standardCode,
             gradeCode: cand.gradeCode || next[targetIndex].gradeCode,
             standardId: cand.standardId || next[targetIndex].standardId,
@@ -2734,7 +2796,17 @@ export default function QuotationFormPage() {
               maxDisplayTags={10}
               onChange={(e) => {
                 const val = Array.isArray(e) ? e : e?.target?.value || [];
-                setFormData((prev) => ({ ...prev, paymentTerms: val }));
+                let resolvedPaymentTermId = formData.paymentTermId;
+                if (val.length > 0 && Array.isArray(masterPaymentTerms) && masterPaymentTerms.length > 0) {
+                  const firstVal = typeof val[0] === 'object' ? val[0].termCode || val[0].termName : String(val[0]);
+                  const matchedTerm = masterPaymentTerms.find((t) =>
+                    firstVal.includes(t.termCode) || firstVal.includes(t.termName) || String(t.id) === firstVal
+                  );
+                  if (matchedTerm?.id || matchedTerm?.paymentTermId) {
+                    resolvedPaymentTermId = matchedTerm.id || matchedTerm.paymentTermId;
+                  }
+                }
+                setFormData((prev) => ({ ...prev, paymentTerms: val, paymentTermId: resolvedPaymentTermId }));
               }}
             />
 

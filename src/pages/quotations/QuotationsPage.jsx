@@ -132,7 +132,7 @@ export default function QuotationsPage() {
           const currentRev = row.revisions?.[row.currentRevision] || row.revisions?.[row.revisions.length - 1];
           return (
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="font-mono font-semibold">Rev {info.getValue()}</span>
+              <span className="font-mono font-semibold">Rev {info.getValue() ?? row.latestRevisionNo ?? row.revisionNo ?? 0}</span>
               {currentRev && (
                 <Badge variant={currentRev.status === 'Sent' ? 'info' : 'neutral'} size="sm">
                   {currentRev.status}

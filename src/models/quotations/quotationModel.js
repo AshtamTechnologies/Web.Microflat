@@ -59,7 +59,14 @@ export function quotationLineItemFromApi(dto = {}) {
     taxAmount,
     lineTotal,
     remarks: dto.remarks || '',
-    options: Array.isArray(dto.options) ? dto.options : (dto.options ? [dto.options] : []),
+    options: (Array.isArray(dto.options)
+      ? dto.options
+      : Array.isArray(dto.productOptions)
+        ? dto.productOptions
+        : Array.isArray(dto.catalogOptions)
+          ? dto.catalogOptions
+          : (dto.options ? [dto.options] : [])
+    ).map((opt) => (typeof opt === 'object' && opt !== null ? opt.optionName || opt.name || opt.label || '' : String(opt))),
     rateSource: dto.rateSource || 'Manual',
   };
 }
@@ -150,12 +157,18 @@ export function quotationListItemFromApi(dto = {}) {
   const poReceived = Boolean(dto.poReceived || dto.isPoReceived || dto.hasPo || dto.poNumber || isPoStatus);
   const status = isPoStatus ? 'PO Received' : (rawStatus || 'Draft');
 
+  const currentRevision = dto.latestRevisionNo ?? dto.currentRevision ?? dto.revisionNo ?? 0;
+
   return {
     id: dto.id,
     quotationNo: dto.quotationNo || '',
     quotationDate: dto.revisionDate || dto.quotationDate ? String(dto.revisionDate || dto.quotationDate).slice(0, 10) : '',
-    currentRevision: dto.currentRevision ?? dto.revisionNo ?? 0,
-    revisionNo: dto.currentRevision ?? dto.revisionNo ?? 0,
+    currentRevision,
+    revisionNo: currentRevision,
+    latestRevisionNo: currentRevision,
+    latestRevisionId: dto.latestRevisionId ?? null,
+    latestRevisionDate: dto.latestRevisionDate ? String(dto.latestRevisionDate).slice(0, 10) : '',
+    approvalStatus: dto.approvalStatus ?? null,
     status,
     inquiryId: dto.inquiryId,
     inquiryNo: dto.inquiryNo || '',
@@ -313,34 +326,52 @@ export function quotationDetailFromApi(dto = {}) {
   // Normalize historical revisions list (ensure latest revision holds the line items)
   const revisions = Array.isArray(dto.revisions) && dto.revisions.length > 0
     ? dto.revisions.map((rev, revIdx) => {
-        const revLines = rev.lines || rev.lineItems || rev.items || (revIdx === 0 ? rawItems : []);
-        return {
-          id: rev.id,
-          revisionId: rev.id,
-          revisionNo: rev.revisionNo ?? revIdx,
-          revisionDate: rev.revisionDate ? String(rev.revisionDate).slice(0, 10) : '',
-          revisionReason: rev.revisionReason || 'Revision',
-          status: rev.quotationStatus || rev.status || 'Draft',
-          subtotal: Number(rev.subTotal ?? rev.subtotal) || 0,
-          totalTax: Number(rev.taxAmount) || 0,
-          grandTotal: Number(rev.totalAmount ?? rev.grandTotal) || 0,
-          currency: rev.currencyCode || rev.currency || 'INR',
-          items: Array.isArray(revLines) ? revLines.map(quotationLineItemFromApi).filter(Boolean) : [],
-        };
-      })
+      const isLatest =
+        (latestRev.id && rev.id === latestRev.id) ||
+        (latestRev.revisionNo !== undefined && rev.revisionNo === latestRev.revisionNo) ||
+        revIdx === 0;
+      const revLines = rev.lines || rev.lineItems || rev.items || (isLatest ? rawItems : []);
+      const revTaxes = rev.taxes || (isLatest ? rawTaxes : []);
+      const revSubtotal = Number(rev.subTotal ?? rev.subtotal) || (isLatest ? subtotal : 0);
+      const revTotalTax = Number(rev.taxAmount) || (isLatest ? totalTax : 0);
+      const revGrandTotal = Number(rev.totalAmount ?? rev.grandTotal) || (isLatest ? grandTotal : 0);
+
+      return {
+        id: rev.id,
+        revisionId: rev.id,
+        revisionNo: rev.revisionNo ?? revIdx,
+        revisionDate: rev.revisionDate ? String(rev.revisionDate).slice(0, 10) : '',
+        revisionReason: rev.revisionReason || 'Revision',
+        status: rev.quotationStatus || rev.status || (isLatest ? initialStatus : 'Draft'),
+        subtotal: revSubtotal,
+        totalTax: revTotalTax,
+        grandTotal: revGrandTotal,
+        currency: rev.currencyCode || rev.currency || dto.currencyCode || latestRev.currencyCode || 'INR',
+        paymentTermId: rev.paymentTermId ?? dto.paymentTermId ?? latestRev.paymentTermId ?? null,
+        paymentTerms: rev.paymentTerms || rev.paymentTermName || dto.paymentTerms || latestRev.paymentTerms || dto.paymentTermName || latestRev.paymentTermName || '',
+        deliveryTermId: rev.deliveryTermId ?? dto.deliveryTermId ?? latestRev.deliveryTermId ?? null,
+        deliveryTerms: rev.deliveryTerms || dto.deliveryTerms || latestRev.deliveryTerms || '',
+        taxes: Array.isArray(revTaxes) ? revTaxes.map(quotationTaxFromApi).filter(Boolean) : [],
+        items: Array.isArray(revLines) ? revLines.map(quotationLineItemFromApi).filter(Boolean) : [],
+      };
+    })
     : [{
-          id: Number.isInteger(latestRev.id) ? latestRev.id : null,
-          revisionId: Number.isInteger(latestRev.id) ? latestRev.id : null,
-        revisionNo: dto.currentRevision ?? latestRev.revisionNo ?? 0,
-        revisionDate: (latestRev.revisionDate || dto.createdOn ? String(latestRev.revisionDate || dto.createdOn).slice(0, 10) : ''),
-        revisionReason: latestRev.revisionReason || 'Initial quotation',
-        status: initialStatus,
-        subtotal,
-        totalTax,
-        grandTotal,
-        currency: dto.currencyCode || latestRev.currencyCode || 'INR',
-        items,
-      }];
+      id: Number.isInteger(latestRev.id) ? latestRev.id : null,
+      revisionId: Number.isInteger(latestRev.id) ? latestRev.id : null,
+      revisionNo: dto.currentRevision ?? latestRev.revisionNo ?? 0,
+      revisionDate: (latestRev.revisionDate || dto.createdOn ? String(latestRev.revisionDate || dto.createdOn).slice(0, 10) : ''),
+      revisionReason: latestRev.revisionReason || 'Initial quotation',
+      status: initialStatus,
+      subtotal,
+      totalTax,
+      grandTotal,
+      currency: dto.currencyCode || latestRev.currencyCode || 'INR',
+      paymentTermId: dto.paymentTermId || latestRev.paymentTermId || null,
+      paymentTerms: dto.paymentTerms || latestRev.paymentTerms || dto.paymentTermName || latestRev.paymentTermName || '',
+      deliveryTermId: dto.deliveryTermId || latestRev.deliveryTermId || null,
+      deliveryTerms: dto.deliveryTerms || latestRev.deliveryTerms || '',
+      items,
+    }];
 
   // Client PO Information (Task 61)
   const poDetails = dto.poDetails || (dto.poNumber ? {
@@ -397,21 +428,21 @@ export function quotationDetailFromApi(dto = {}) {
     revisions,
     mailLogs: Array.isArray(dto.emailLogs)
       ? dto.emailLogs.map((log) => {
-          const isSuccess = log.isSuccess !== undefined ? Boolean(log.isSuccess) : (log.result === 'Success');
-          const sentAt = log.sentOn ? String(log.sentOn).replace('T', ' ').slice(0, 16) : (log.sentAt || '');
-          return {
-            id: Number.isInteger(log.id) ? log.id : null,
-            sentAt,
-            sentOn: log.sentOn || sentAt,
-            to: log.toAddress || log.to || '',
-            cc: log.ccAddress || log.cc || '',
-            subject: log.subject || '',
-            revisionNo: log.revisionNo ?? log.quotationRevisionNo ?? 0,
-            result: log.result || (isSuccess ? 'Success' : 'Failed'),
-            isSuccess,
-            error: log.errorMessage || log.error || '',
-          };
-        })
+        const isSuccess = log.isSuccess !== undefined ? Boolean(log.isSuccess) : (log.result === 'Success');
+        const sentAt = log.sentOn ? String(log.sentOn).replace('T', ' ').slice(0, 16) : (log.sentAt || '');
+        return {
+          id: Number.isInteger(log.id) ? log.id : null,
+          sentAt,
+          sentOn: log.sentOn || sentAt,
+          to: log.toAddress || log.to || '',
+          cc: log.ccAddress || log.cc || '',
+          subject: log.subject || '',
+          revisionNo: log.revisionNo ?? log.quotationRevisionNo ?? 0,
+          result: log.result || (isSuccess ? 'Success' : 'Failed'),
+          isSuccess,
+          error: log.errorMessage || log.error || '',
+        };
+      })
       : [],
     // Task 61 PO Fields
     poReceived,
@@ -423,6 +454,27 @@ export function quotationDetailFromApi(dto = {}) {
     createdOn: dto.createdOn || '',
     lastUpdatedAt: dto.lastUpdatedOn || dto.lastUpdatedAt || '',
   };
+}
+
+/**
+ * Sanitizes paymentTerms to ensure it is always a string or null (never an array []).
+ * Database column is max 500 characters.
+ */
+function formatPaymentTerms(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    const valid = value
+      .filter(Boolean)
+      .map((item) => (typeof item === 'object' ? item.name || item.termName || item.termCode || item.value : String(item)))
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return valid.length > 0 ? valid.join(', ').slice(0, 500) : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed.slice(0, 500) : null;
+  }
+  return null;
 }
 
 /**
@@ -453,21 +505,22 @@ function formatDeliveryTerms(value) {
 export function buildCreateQuotationPayload(formValues = {}) {
   const lineItems = Array.isArray(formValues.items) && formValues.items.length > 0
     ? formValues.items.map((item) => ({
-        id: null,
-        productId: item.productId ? cleanId(item.productId) : null,
-        description: item.description || item.specification || item.productName || '',
-        quantity: Number(item.quantity) || 1,
-        rate: Number(item.rate) || 0,
-        otherCharges: Number(item.otherCharges || item.lineCharges) || 0,
-        taxConfigDetailId: item.taxConfigDetailId ? cleanId(item.taxConfigDetailId) : null,
-        remarks: item.remarks || null,
-      }))
+      id: null,
+      productId: item.productId ? cleanId(item.productId) : null,
+      description: item.description || item.specification || item.productName || '',
+      quantity: Number(item.quantity) || 1,
+      rate: Number(item.rate) || 0,
+      otherCharges: Number(item.otherCharges || item.lineCharges) || 0,
+      taxConfigDetailId: item.taxConfigDetailId ? cleanId(item.taxConfigDetailId) : null,
+      remarks: item.remarks || null,
+      options: Array.isArray(item.options) ? item.options : [],
+    }))
     : null; // null copies the inquiry lines automatically per §5.4f.1
 
   const taxes = Array.isArray(formValues.taxes)
     ? formValues.taxes
-        .filter((t) => t.taxConfigDetailId)
-        .map((t) => ({ taxConfigDetailId: cleanId(t.taxConfigDetailId) }))
+      .filter((t) => t.taxConfigDetailId)
+      .map((t) => ({ taxConfigDetailId: cleanId(t.taxConfigDetailId) }))
     : [];
 
   return {
@@ -479,6 +532,7 @@ export function buildCreateQuotationPayload(formValues = {}) {
     deliveryTermId: formValues.deliveryTermId ? cleanId(formValues.deliveryTermId) : null,
     currencyId: formValues.currencyId ? cleanId(formValues.currencyId) : null,
     validUntil: formValues.validUntil || null,
+    paymentTerms: formatPaymentTerms(formValues.paymentTerms),
     deliveryTerms: formatDeliveryTerms(formValues.deliveryTerms),
     termsAndConditions: formValues.termsAndConditions || '',
     otherCharges: Number(formValues.otherCharges) || 0,
@@ -494,21 +548,22 @@ export function buildCreateQuotationPayload(formValues = {}) {
 export function buildUpdateQuotationPayload(formValues = {}) {
   const lineItems = Array.isArray(formValues.items)
     ? formValues.items.map((item) => ({
-        id: item.quotationLineItemId ? cleanId(item.quotationLineItemId) : null,
-        productId: item.productId ? cleanId(item.productId) : null,
-        description: item.description || item.specification || item.productName || '',
-        quantity: Number(item.quantity) || 1,
-        rate: Number(item.rate) || 0,
-        otherCharges: Number(item.otherCharges || item.lineCharges) || 0,
-        taxConfigDetailId: item.taxConfigDetailId ? cleanId(item.taxConfigDetailId) : null,
-        remarks: item.remarks || null,
-      }))
+      id: item.quotationLineItemId ? cleanId(item.quotationLineItemId) : null,
+      productId: item.productId ? cleanId(item.productId) : null,
+      description: item.description || item.specification || item.productName || '',
+      quantity: Number(item.quantity) || 1,
+      rate: Number(item.rate) || 0,
+      otherCharges: Number(item.otherCharges || item.lineCharges) || 0,
+      taxConfigDetailId: item.taxConfigDetailId ? cleanId(item.taxConfigDetailId) : null,
+      remarks: item.remarks || null,
+      options: Array.isArray(item.options) ? item.options : [],
+    }))
     : null;
 
   const taxes = Array.isArray(formValues.taxes)
     ? formValues.taxes
-        .filter((t) => t.taxConfigDetailId)
-        .map((t) => ({ taxConfigDetailId: cleanId(t.taxConfigDetailId) }))
+      .filter((t) => t.taxConfigDetailId)
+      .map((t) => ({ taxConfigDetailId: cleanId(t.taxConfigDetailId) }))
     : [];
 
   return {
@@ -519,6 +574,7 @@ export function buildUpdateQuotationPayload(formValues = {}) {
     deliveryTermId: formValues.deliveryTermId ? cleanId(formValues.deliveryTermId) : null,
     currencyId: formValues.currencyId ? cleanId(formValues.currencyId) : null,
     validUntil: formValues.validUntil || null,
+    paymentTerms: formatPaymentTerms(formValues.paymentTerms),
     deliveryTerms: formatDeliveryTerms(formValues.deliveryTerms),
     termsAndConditions: formValues.termsAndConditions || '',
     otherCharges: Number(formValues.otherCharges) || 0,
