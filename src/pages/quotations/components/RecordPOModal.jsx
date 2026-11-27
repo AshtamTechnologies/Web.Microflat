@@ -16,6 +16,13 @@ import { IconInfo } from '../../../constants/icons';
 export default function RecordPOModal({ isOpen, onClose, quotation }) {
   const { recordClientPO, lookups } = useQuotationsContext();
 
+  const isExistingPo = Boolean(
+    quotation?.poReceived ||
+    quotation?.status === 'PO Received' ||
+    quotation?.poDetails?.poNumber ||
+    quotation?.poNumber
+  );
+
   const [poNumber, setPoNumber] = useState('');
   const [receivedOn, setReceivedOn] = useState(new Date().toISOString().split('T')[0]);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
@@ -143,10 +150,20 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Record Customer Purchase Order (PO)"
+      title={isExistingPo ? "Customer Purchase Order Details" : "Record Customer Purchase Order (PO)"}
       maxWidth="max-w-lg"
     >
       <div className="space-y-4">
+        {/* Existing PO Info Banner */}
+        {isExistingPo && (
+          <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+            <IconInfo size={16} className="text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              Customer PO <strong>{poNumber || quotation?.poDetails?.poNumber || 'on file'}</strong> has already been recorded. You can update delivery dates, client instructions, or upload new attachments below.
+            </div>
+          </div>
+        )}
+
         {/* Quotation Details Chip */}
         <div className="p-3 bg-surface rounded-xl border border-border text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -233,7 +250,7 @@ export default function RecordPOModal({ isOpen, onClose, quotation }) {
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
           <CancelButton onClick={onClose} disabled={isSaving}>Cancel</CancelButton>
           <SaveButton onClick={handleSave} loading={isSaving}>
-            Save Customer PO
+            {isExistingPo ? "Update Customer PO" : "Save Customer PO"}
           </SaveButton>
         </div>
       </div>

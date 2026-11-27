@@ -69,7 +69,7 @@ export default function ProductVariantsTab({
   }, [user]);
 
   // Approved product RBAC check: Only Admins can modify specs on approved products
-  const isProductApproved = Boolean(product?.approvalStatus === 3 || product?.isApproved);
+  const isProductApproved = Boolean(Number(product?.approvalStatus) === ApprovalStatus.Approved || product?.isApproved);
   const isSpecsReadOnly = readOnly || (isProductApproved && !isAdmin);
 
   const [variantsList, setVariantsList] = useState([]);
@@ -371,7 +371,8 @@ export default function ProductVariantsTab({
   const computeStandardFlatness = useCallback(
     (stdId, grdId) => {
       if (!selectedVariantForSpecs) return null;
-      const { lengthMm, widthMm } = selectedVariantForSpecs;
+      const lengthMm = selectedVariantForSpecs.lengthMm;
+      const widthMm = selectedVariantForSpecs.widthMm;
       if (!lengthMm || !widthMm) return null;
       if (!stdId || !grdId) return null;
 
@@ -431,19 +432,21 @@ export default function ProductVariantsTab({
       if (hasStandardGradeValues && !hasCommonValues) {
         // Saved under Standard+Grade — restore that exact pair
         const firstSGVal = allSavedValues.find((v) => v.standardId && v.gradeId);
-        const matchedStd = availableStandards.find(
-          (s) => Number(s.value) === Number(firstSGVal.standardId)
-        );
-        if (matchedStd) {
-          initScope = 'STANDARD_GRADE';
-          initStd = Number(matchedStd.value);
-          const mapping = (gradeMapping || []).find(
-            (m) => Number(m.standardId) === Number(initStd)
+        if (firstSGVal) {
+          const matchedStd = availableStandards.find(
+            (s) => Number(s.value) === Number(firstSGVal.standardId)
           );
-          const matchedGrade = (mapping?.grades || []).find(
-            (g) => Number(g.gradeId) === Number(firstSGVal.gradeId)
-          );
-          initGrd = matchedGrade ? Number(matchedGrade.gradeId) : Number(firstSGVal.gradeId);
+          if (matchedStd) {
+            initScope = 'STANDARD_GRADE';
+            initStd = Number(matchedStd.value);
+            const mapping = (gradeMapping || []).find(
+              (m) => Number(m.standardId) === Number(initStd)
+            );
+            const matchedGrade = (mapping?.grades || []).find(
+              (g) => Number(g.gradeId) === Number(firstSGVal.gradeId)
+            );
+            initGrd = matchedGrade ? Number(matchedGrade.gradeId) : Number(firstSGVal.gradeId);
+          }
         }
       } else if (!hasCommonValues && !hasStandardGradeValues) {
         // Nothing saved yet — keep empty so user explicitly chooses standard & grade

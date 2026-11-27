@@ -4,39 +4,56 @@ import { Modal, Button, CancelButton, Input, DocumentUploader } from '../../../c
 import { useSalesOrdersContext } from '../../../context/SalesOrdersContext';
 import { IconUploadCloud } from '../../../constants/icons';
 
-export default function UploadOrderDocumentModal({ isOpen, onClose, order }) {
+export default function UploadOrderDocumentModal({ isOpen, onClose, order, onSuccess }) {
   const { uploadSalesOrderDocument } = useSalesOrdersContext();
   const [selectedDocTypeId, setSelectedDocTypeId] = useState('');
   const [docTypeObj, setDocTypeObj] = useState(null);
   const [fileData, setFileData] = useState(null);
   const [remarks, setRemarks] = useState('');
   const [error, setError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
-  function handleUpload() {
-    if (!order) return;
-    if (!fileData) {
+  async function handleUpload() {
+    if (!order || isUploading) return;
+    if (!fileData?.file) {
       setError('Please select or attach a file to upload.');
       toast.error('Please select a file to upload.');
       return;
     }
 
-    const docTypeName = docTypeObj?.label || fileData.documentTypeName || 'Client PO';
-    uploadSalesOrderDocument(order.id, {
-      fileName: fileData.fileName || `${docTypeName.replace(/\s+/g, '_')}_${order.orderConfirmationNo}.pdf`,
-      documentType: docTypeName,
-      documentTypeId: docTypeObj?.id || selectedDocTypeId || null,
-      fileSize: fileData.fileSize || '340 KB',
-      file: fileData.file || null,
-      remarks,
-    });
+    const documentTypeId = docTypeObj?.id ?? selectedDocTypeId;
+    if (!documentTypeId) {
+      setError('Please select a document type.');
+      toast.error('Please select a document type.');
+      return;
+    }
 
-    setFileData(null);
-    setRemarks('');
-    setError('');
-    onClose();
+    try {
+      setIsUploading(true);
+      const res = await uploadSalesOrderDocument(order.id, {
+        documentTypeId,
+        file: fileData.file,
+        remarks,
+      });
+
+      if (res) {
+        setFileData(null);
+        setRemarks('');
+        setError('');
+        onSuccess?.();
+        onClose();
+      }
+    } catch (err) {
+      const message = err?.message || 'Failed to upload document.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   function handleClose() {
+    if (isUploading) return;
     setFileData(null);
     setRemarks('');
     setError('');
@@ -55,6 +72,7 @@ export default function UploadOrderDocumentModal({ isOpen, onClose, order }) {
         <DocumentUploader
           label="Select File"
           required
+          moduleFilter="ORDER_CONFIRMATION"
           showDocTypeSelect={true}
           docTypeLabel="Document Type"
           defaultDocTypeKeyword="Order"
@@ -79,9 +97,9 @@ export default function UploadOrderDocumentModal({ isOpen, onClose, order }) {
         />
 
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-          <CancelButton onClick={handleClose}>Cancel</CancelButton>
-          <Button variant="primary" onClick={handleUpload} icon={<IconUploadCloud size={15} />}>
-            Upload Document
+          <CancelButton onClick={handleClose} disabled={isUploading}>Cancel</CancelButton>
+          <Button variant="primary" onClick={handleUpload} disabled={isUploading} icon={<IconUploadCloud size={15} />}>
+            {isUploading ? 'Uploading...' : 'Upload Document'}
           </Button>
         </div>
       </div>

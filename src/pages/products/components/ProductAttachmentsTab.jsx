@@ -24,6 +24,7 @@ import {
   IconUpload,
 } from '../../../constants/icons';
 import { productService } from '../../../services';
+import { axiosInstance } from '../../../axiosConfig/axiosInstance';
 
 function getFileIcon(fileName = '', mimeType = '') {
   const name = (fileName || '').toLowerCase();
@@ -57,6 +58,31 @@ export default function ProductAttachmentsTab({
     value: Number(d.id),
     label: d.typeName || d.name || `Type #${d.id}`,
   }));
+
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  const handleDownload = async (att) => {
+    const downloadUrl = att.downloadUrl || att.fileUrl;
+    if (!downloadUrl) return;
+    const fileName = att.fileName || att.documentName || 'attachment';
+
+    setDownloadingId(att.id);
+    try {
+      const res = await axiosInstance.get(downloadUrl, { responseType: 'blob' });
+      const blobUrl = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to download attachment');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const handleOpenModal = () => {
     setForm({
@@ -183,14 +209,15 @@ export default function ProductAttachmentsTab({
                   </td>
                   <td className="p-2.5 text-center">
                     {att.fileUrl || att.downloadUrl ? (
-                      <a
-                        href={att.fileUrl || att.downloadUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(att)}
+                        disabled={downloadingId === att.id}
+                        className="inline-flex items-center gap-1 text-primary hover:underline cursor-pointer disabled:opacity-50"
+                        title="Download attachment"
                       >
-                        <IconDownload size={14} />
-                      </a>
+                        <IconDownload size={14} className={downloadingId === att.id ? 'animate-bounce' : ''} />
+                      </button>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}

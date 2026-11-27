@@ -6,6 +6,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { triggerPdfDownload } from '../../utils/fileHelpers';
 import {
   IconBack,
@@ -24,6 +25,7 @@ import {
   IconPhone,
   IconMail,
   IconDelete,
+  IconInfo,
 } from '../../constants/icons';
 import {
   PageHeader,
@@ -41,7 +43,7 @@ import {
 } from '../../components/ui';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { clientService } from '../../services';
-import { TAX_TREATMENTS, calculateQuotationTotals, formatCurrency } from '../../mocks/quotations';
+import { formatCurrency } from '../../mocks/quotations';
 import { formatAddressValue } from '../../models/quotations/quotationModel';
 import { formatDate } from '../../utils/dateUtils';
 import { isHtmlMarkup } from '../../utils/htmlUtils';
@@ -81,7 +83,19 @@ export default function QuotationViewPage() {
   }, [id, fetchQuotationDetail]);
 
   const cachedQuotation = getQuotationById(id);
-  const quotation = quotationDetail || cachedQuotation;
+  const quotation = quotationDetail
+    ? {
+        ...cachedQuotation,
+        ...quotationDetail,
+        revisions: quotationDetail?.revisions?.length
+          ? quotationDetail.revisions
+          : cachedQuotation?.revisions,
+        negotiations: quotationDetail?.negotiations ?? cachedQuotation?.negotiations,
+        nextStatuses: quotationDetail?.nextStatuses?.length
+          ? quotationDetail.nextStatuses
+          : cachedQuotation?.nextStatuses,
+      }
+    : cachedQuotation;
 
   const resolvedClientId =
     quotation?.clientId ||
@@ -260,6 +274,8 @@ export default function QuotationViewPage() {
     if (!quotation || !quotation.revisions || quotation.revisions.length === 0) return null;
     return quotation.revisions[selectedRevIndex] || quotation.revisions[latestRevIndex];
   }, [quotation, selectedRevIndex, latestRevIndex]);
+  const isDraftQuotation =
+    String(quotation?.status || activeRevision?.status || '').trim().toLowerCase() === 'draft';
 
   const displayedItems = useMemo(() => {
     if (activeRevision?.items && activeRevision.items.length > 0) {
@@ -268,9 +284,9 @@ export default function QuotationViewPage() {
     return quotation?.items || [];
   }, [activeRevision?.items, quotation?.items]);
 
-  const activeTaxTreatment = activeRevision?.taxTreatment || quotation?.taxTreatment || 'INTRA_STATE';
+  const activeTaxTreatment = activeRevision?.taxTreatment || quotation?.taxTreatment || '';
   const activeTaxTreatmentLabel = useMemo(() => {
-    return TAX_TREATMENTS.find((t) => t.value === activeTaxTreatment)?.label || activeTaxTreatment;
+      return activeTaxTreatment || '';
   }, [activeTaxTreatment]);
 
   const activeTaxes = useMemo(() => {
@@ -291,13 +307,17 @@ export default function QuotationViewPage() {
   }, [activeRevision?.taxes, quotation?.taxes, lookups?.taxes]);
 
   const activeTotalsBreakdown = useMemo(() => {
-    return calculateQuotationTotals(
-      displayedItems,
-      activeTaxTreatment,
-      activeTaxes,
-      activeRevision?.otherCharges || quotation?.otherCharges || 0
-    );
-  }, [displayedItems, activeTaxTreatment, activeTaxes, activeRevision?.otherCharges, quotation?.otherCharges]);
+    const serverSubtotal = activeRevision?.subtotal ?? quotation?.subtotal;
+    const serverTotalTax = activeRevision?.totalTax ?? activeRevision?.taxAmount ?? quotation?.totalTax;
+    const serverGrandTotal = activeRevision?.grandTotal ?? quotation?.grandTotal;
+
+    return {
+      subtotal: Number(serverSubtotal) || 0,
+      taxAmount: Number(serverTotalTax) || 0,
+      totalTax: Number(serverTotalTax) || 0,
+      grandTotal: Number(serverGrandTotal) || 0,
+    };
+  }, [displayedItems, activeTaxTreatment, activeTaxes, activeRevision, quotation]);
 
   const itemsWithDescription = useMemo(() => {
     return displayedItems.filter((it) => Boolean(it.description?.trim()));
@@ -414,26 +434,20 @@ export default function QuotationViewPage() {
             <span className="font-mono text-heading">{quotation.quotationNo}</span>
             <Badge
               variant={
-                quotation.status === 'Confirmed'
+                quotation.status === 'PO Received' || quotation.poReceived
+                  ? 'success'
+                  : quotation.status === 'Confirmed'
                   ? 'success'
                   : quotation.status === 'In Negotiation'
                   ? 'warning'
                   : quotation.status === 'Sent'
                   ? 'info'
-                  : quotation.status === 'Lost'
-                  ? 'danger'
                   : 'neutral'
               }
               size="md"
             >
-              {quotation.status}
+              {quotation.poReceived || quotation.status === 'PO Received' ? 'PO Received' : quotation.status}
             </Badge>
-
-            {quotation.poReceived && (
-              <Badge variant="role" size="md">
-                PO Received
-              </Badge>
-            )}
 
             {quotation.approvalStatus === 2 || quotation.pendingApprovalRequestId ? (
               <Link
@@ -445,7 +459,11 @@ export default function QuotationViewPage() {
                 Approval Pending
               </Link>
             ) : quotation.approvalStatus === 3 ? (
-              <Badge variant="success" size="md">
+              <Badge
+                variant="success"
+                size="md"
+                title="Internal quotation approval is complete; the quotation lifecycle status is shown separately."
+              >
                 Approved
               </Badge>
             ) : quotation.approvalStatus === 4 ? (
@@ -522,10 +540,25 @@ export default function QuotationViewPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => navigate(`/quotations/${quotation.id}/new-revision`)}
+              disabled={Boolean(quotation.poReceived || quotation.status === 'PO Received')}
+              onClick={() => {
+                if (quotation.poReceived || quotation.status === 'PO Received') {
+                  toast.error('A Customer PO has already been received for this quotation. It cannot be revised.');
+                  return;
+                }
+                navigate(`/quotations/${quotation.id}/new-revision`);
+              }}
               icon={<IconEdit size={14} />}
+              title={
+                quotation.poReceived || quotation.status === 'PO Received'
+                  ? 'A Customer PO has already been received for this quotation. PO Received quotations cannot be revised.'
+                  : isDraftQuotation
+                    ? 'Edit latest Draft; saving updates the current revision.'
+                    : 'Create New Revision'
+              }
+              className={quotation.poReceived || quotation.status === 'PO Received' ? 'opacity-60 cursor-not-allowed' : ''}
             >
-              New Revision
+              {isDraftQuotation ? 'Edit Draft' : 'New Revision'}
             </Button>
 
             <Button
@@ -548,23 +581,44 @@ export default function QuotationViewPage() {
               </Button>
             )}
 
-            {quotation.status !== 'Cancelled' && quotation.status !== 'Rejected' && (
-              <Button
-                variant={quotation.poReceived ? 'secondary' : 'primary'}
-                size="sm"
-                onClick={() => setIsPoModalOpen(true)}
-                icon={<IconFileText size={14} />}
-                className={!quotation.poReceived ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600' : ''}
-              >
-                {quotation.poReceived ? 'Update Customer PO' : 'Record Customer PO'}
-              </Button>
+            {['Sent', 'In Negotiation', 'Confirmed', 'PO Received'].includes(quotation.status) && (
+              (quotation.poReceived || quotation.status === 'PO Received') ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsPoModalOpen(true)}
+                    icon={<IconFileText size={14} />}
+                  >
+                    View / Edit PO Details
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => navigate(`/sales-orders/new?quotationId=${quotation.id}`)}
+                    className="bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white"
+                  >
+                    Generate Sales Order
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setIsPoModalOpen(true)}
+                  icon={<IconFileText size={14} />}
+                  className="bg-amber-600 hover:bg-amber-700 text-white border-amber-600"
+                >
+                  Record Customer PO
+                </Button>
+              )
             )}
           </div>
         }
       />
 
       {/* Confirmation & Customer PO Alert Banner */}
-      {(quotation.poReceived || quotation.status === 'Confirmed') && (
+      {(quotation.poReceived || quotation.status === 'Confirmed' || quotation.status === 'PO Received') && (
         <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-800 dark:text-emerald-300 shadow-2xs">
           <div className="flex items-start gap-2.5">
             <IconCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
@@ -642,13 +696,13 @@ export default function QuotationViewPage() {
         </div>
       )}
 
-      {/* Awaiting Customer PO Callout (When Approved but PO not yet received) */}
-      {quotation.status === 'Approved' && !quotation.poReceived && (
+      {/* Awaiting Customer PO Callout */}
+      {quotation.status === 'Confirmed' && !quotation.poReceived && (
         <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-800 dark:text-blue-300">
           <div className="flex items-center gap-2">
             <IconInfo size={16} className="text-blue-600 shrink-0" />
             <span>
-              Quotation approved! Awaiting customer Purchase Order (PO) to confirm and create the Sales Order.
+              Quotation confirmed! Awaiting customer Purchase Order (PO) to record and create the Sales Order.
             </span>
           </div>
           <Button
@@ -670,6 +724,11 @@ export default function QuotationViewPage() {
           <span>
             You are currently viewing historical <strong>Revision {selectedRevIndex}</strong> in read-only mode. Only the latest revision can be amended via a new revision.
           </span>
+        </div>
+      )}
+      {isDraftQuotation && isViewingLatestRev && (
+        <div className="p-3.5 bg-sky-500/10 border border-sky-500/20 rounded-xl text-xs text-sky-900 dark:text-sky-200">
+          <strong>Draft quotation:</strong> “Edit Draft” and “Save as Draft” update the current revision. To create the next revision, mark this quotation as Sent first.
         </div>
       )}
 
@@ -1164,7 +1223,16 @@ export default function QuotationViewPage() {
                       {rev.revisionReason || '—'}
                     </Td>
                     <Td className="text-center">
-                      <Badge variant={rev.status === 'Sent' ? 'info' : 'neutral'} size="sm">
+                      <Badge
+                        variant={
+                          rev.status === 'Sent' ? 'info' :
+                          rev.status === 'Confirmed' ? 'success' :
+                          rev.status === 'In Negotiation' ? 'warning' :
+                          rev.status === 'PO Received' ? 'success' :
+                          'neutral'
+                        }
+                        size="sm"
+                      >
                         {rev.status}
                       </Badge>
                     </Td>
@@ -1198,7 +1266,7 @@ export default function QuotationViewPage() {
             <p className="text-xs text-text-muted">
               Log commercial meetings, client counter-offers, and agreed pricing adjustments.
             </p>
-            {quotation.status !== 'Confirmed' && (
+            {!quotation.poReceived && quotation.status !== 'Confirmed' && quotation.status !== 'PO Received' && (
               <Button
                 variant="primary"
                 size="sm"
@@ -1213,7 +1281,7 @@ export default function QuotationViewPage() {
           {(quotation.negotiations || []).length === 0 ? (
             <div className="p-12 text-center bg-card dark:bg-card-dark rounded-xl border border-border">
               <p className="text-xs text-text-muted">No negotiation stages recorded yet.</p>
-              {quotation.status !== 'Confirmed' && (
+              {!quotation.poReceived && quotation.status !== 'Confirmed' && quotation.status !== 'PO Received' && (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -1254,7 +1322,7 @@ export default function QuotationViewPage() {
                           <span className="font-mono text-2xs text-text-muted">
                             {dateDisplay}
                           </span>
-                          {quotation.status !== 'Confirmed' && (
+                          {!quotation.poReceived && quotation.status !== 'Confirmed' && quotation.status !== 'PO Received' && (
                             <div className="flex items-center gap-1 ml-2">
                               <button
                                 type="button"
@@ -1448,7 +1516,14 @@ export default function QuotationViewPage() {
       {/* MODALS */}
       <ChangeStatusModal
         isOpen={isStatusModalOpen}
-        onClose={() => setIsStatusModalOpen(false)}
+        onClose={() => {
+          setIsStatusModalOpen(false);
+          if (id && fetchQuotationDetail) {
+            fetchQuotationDetail(id).then((detail) => {
+              if (detail) setQuotationDetail(detail);
+            });
+          }
+        }}
         quotation={quotation}
       />
 

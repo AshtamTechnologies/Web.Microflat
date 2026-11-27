@@ -50,11 +50,12 @@ import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useClientsContext } from '../../context/ClientsContext';
 import { useUsersContext } from '../../context/UsersContext';
+import { useAuthContext } from '../../context/AuthContext';
 import { useStandardsContext } from '../../context/StandardsContext';
 import { calculateFlatnessTolerance, normalizeGradeCode } from '../../utils/flatnessFormula';
+import { getTodayISO } from '../../utils/dateUtils';
 import {
   TAX_SLABS,
-  TAX_TREATMENTS,
   calculateQuotationTotals,
   formatCurrency,
 } from '../../mocks/quotations';
@@ -92,6 +93,8 @@ export default function QuotationFormPage() {
     getNextQuotationNo,
     createQuotation,
     createRevision,
+    updateQuotation,
+    updateQuotationStatus,
     fetchQuotationPrefill,
     fetchLookups,
     lookups,
@@ -99,13 +102,29 @@ export default function QuotationFormPage() {
 
   const { inquiries = [], fetchInquiries, updateInquiry } = useInquiriesContext();
   const { clients = [], ensureClientsLoaded, loadClients } = useClientsContext();
-  const { allUsers = [], users = [] } = useUsersContext();
+  const { allUsers = [], users = [], ensureAllActiveUsersLoaded } = useUsersContext();
+  const { user } = useAuthContext();
   const userList = allUsers.length > 0 ? allUsers : users;
 
   const isRevisionMode = Boolean(id);
   const [isLoadingRevisionDetail, setIsLoadingRevisionDetail] = useState(isRevisionMode);
   const [fetchedQuotation, setFetchedQuotation] = useState(null);
+  const [revisionCreatedInSession, setRevisionCreatedInSession] = useState(false);
   const targetQuotation = useMemo(() => isRevisionMode ? (fetchedQuotation || getQuotationById(id)) : null, [isRevisionMode, id, fetchedQuotation, getQuotationById]);
+  const isEditingExistingDraft =
+    isRevisionMode &&
+    !revisionCreatedInSession &&
+    String(targetQuotation?.status || '').trim().toLowerCase() === 'draft';
+
+  const isTargetPoReceived = useMemo(() => {
+    if (!isRevisionMode || !targetQuotation) return false;
+    return Boolean(
+      targetQuotation.poReceived ||
+      targetQuotation.status === 'PO Received' ||
+      targetQuotation.poDetails?.poNumber ||
+      targetQuotation.poNumber
+    );
+  }, [isRevisionMode, targetQuotation]);
 
   useEffect(() => {
     let isMounted = true;
@@ -128,7 +147,7 @@ export default function QuotationFormPage() {
   }, [isRevisionMode, id, fetchQuotationDetail]);
 
   const userOptions = useMemo(() => {
-    return userList.map((u) => {
+    return userList.filter((u) => u.isActive !== false).map((u) => {
       const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email;
       return { value: name, label: name };
     });
@@ -140,7 +159,7 @@ export default function QuotationFormPage() {
     inquiryNo: '',
     inquiryId: '',
     revisionNo: 0,
-    revisionDate: new Date().toISOString().split('T')[0],
+    revisionDate: getTodayISO(),
     revisionReason: '',
     clientName: '',
     clientId: '',
@@ -173,19 +192,39 @@ export default function QuotationFormPage() {
 
   // Revision-Mode Negotiation State
   const [logNegotiationStage, setLogNegotiationStage] = useState(false);
+  const [isLoadingNegotiationUsers, setIsLoadingNegotiationUsers] = useState(false);
   const [negotiationStageData, setNegotiationStageData] = useState(() => {
     const now = new Date();
     const defaultDateTime = `${now.toISOString().split('T')[0]}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const loggedUserName = user?.fullName || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.name || '';
     return {
       dateTime: defaultDateTime,
       mode: 'Call',
-      handledBy: 'Janvi Motwani',
+      handledBy: loggedUserName || '',
       clientContact: '',
       ourOffer: '',
       clientCounter: '',
       discussion: '',
     };
   });
+
+  useEffect(() => {
+    if (!isRevisionMode || !logNegotiationStage) return undefined;
+
+    let isMounted = true;
+    setIsLoadingNegotiationUsers(true);
+    ensureAllActiveUsersLoaded()
+      .catch((err) => {
+        toast.error(err?.message || 'Failed to load users for negotiation.');
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingNegotiationUsers(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isRevisionMode, logNegotiationStage, ensureAllActiveUsersLoaded]);
 
   // Drawer & Line Item Builder State
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -468,7 +507,10 @@ export default function QuotationFormPage() {
       mappedItems = rawItems.map((it, idx) => {
         const catProd =
           mergedCatalogProducts.find((p) => String(p.id) === String(it.productId) || String(p.productId) === String(it.productId)) || null;
-        const catVar = catProd?.variants?.find((v) => String(v.id) === String(it.variantId) || String(v.productVariantId) === String(it.productVariantId));
+        const inquiryVariantId = it.variantId || it.productVariantId;
+        const catVar = catProd?.variants?.find(
+          (v) => String(v.id || v.productVariantId) === String(inquiryVariantId)
+        );
         const fallbackDesc = catProd ? buildCatalogProductDescription(catProd, catVar) : '';
         return {
           id: it.id || `it-${Date.now()}-${idx}`,
@@ -478,7 +520,12 @@ export default function QuotationFormPage() {
           productName: it.productName || catProd?.productName || it.itemName || 'Product',
           variantId: it.variantId || it.productVariantId || '',
           variantName: it.variantName || catVar?.variantName || 'Standard Size',
+          standards: it.standards || it.standardCode || catVar?.standardCode || catVar?.standardName || '',
+          standardCode: it.standardCode || it.standards || catVar?.standardCode || catVar?.standardName || '',
+          grade: it.grade || it.gradeCode || catVar?.gradeCode || catVar?.gradeName || '',
+          gradeCode: it.gradeCode || it.grade || catVar?.gradeCode || catVar?.gradeName || '',
           itemCode: it.itemCode || it.productCode || catVar?.variantCode || '—',
+          flatness: it.flatness ?? it.Flatness ?? '',
           technicalDetails: it.technicalDetails || it.specification || '',
           description: (it.description || it.specification || fallbackDesc || '')
             .replace(/,?\s*undefined\s*,?/g, ', ')
@@ -492,7 +539,7 @@ export default function QuotationFormPage() {
           otherCharges: Number(it.otherCharges || it.lineCharges) || 0,
           taxConfigDetailId: it.taxConfigDetailId || null,
           taxPercent: Number(it.taxPercent) || 18,
-          options: Array.isArray(it.options) ? it.options : ['Rexine Cover (Standard)'],
+          options: Array.isArray(it.options) ? it.options : [],
         };
       });
     }
@@ -698,8 +745,12 @@ export default function QuotationFormPage() {
         quotationNo: targetQuotation.quotationNo,
         inquiryNo: targetQuotation.inquiryNo,
         inquiryId: targetQuotation.inquiryId,
-        revisionNo: (targetQuotation.revisions?.length || (Number(targetQuotation.currentRevision) + 1) || 1),
-        revisionDate: new Date().toISOString().split('T')[0],
+        revisionNo: isEditingExistingDraft
+          ? Number(targetQuotation.currentRevision) || 0
+          : (targetQuotation.revisions?.length || (Number(targetQuotation.currentRevision) + 1) || 1),
+        revisionDate: isEditingExistingDraft
+          ? String(latestRev?.revisionDate || targetQuotation.revisionDate || getTodayISO()).slice(0, 10)
+          : getTodayISO(),
         revisionReason: '',
         clientName: targetQuotation.clientName || targetQuotation.client?.companyName || '',
         clientId: resolvedClientId,
@@ -729,9 +780,10 @@ export default function QuotationFormPage() {
         items: revItems.map((it, idx) => ({ ...it, id: it.id || `it-${Date.now()}-${idx}` })),
       });
 
+      const loggedUserName = user?.fullName || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.name || '';
       setNegotiationStageData((prev) => ({
         ...prev,
-        handledBy: userOptions[0]?.value || prev.handledBy || 'Janvi Motwani',
+        handledBy: userOptions[0]?.value || prev.handledBy || loggedUserName || '',
         clientContact: targetQuotation.contactPerson || prev.clientContact || '',
       }));
     } else if (!isRevisionMode) {
@@ -752,12 +804,13 @@ export default function QuotationFormPage() {
         }
       });
 
-      // If inquiryId was passed in query parameter, preselect it
-      if (inquiryIdParam) {
-        handleSelectInquiry(inquiryIdParam);
+      // If inquiryId was passed in query parameter or route state, preselect it
+      const targetInquiryId = inquiryIdParam || location.state?.inquiryId;
+      if (targetInquiryId) {
+        handleSelectInquiry(targetInquiryId);
       }
     }
-  }, [isRevisionMode, targetQuotation, getNextQuotationNo, inquiryIdParam]);
+  }, [isRevisionMode, targetQuotation, getNextQuotationNo, inquiryIdParam, location.state]);
 
   // Merged dynamic & fallback catalog products
   const mergedCatalogProducts = useMemo(() => {
@@ -794,15 +847,29 @@ export default function QuotationFormPage() {
 
   // Dynamic Product Options (filtered by Category)
   const productOptions = useMemo(() => {
-    const list = drawerCategory
-      ? mergedCatalogProducts.filter((p) => String(p.categoryId) === String(drawerCategory))
-      : mergedCatalogProducts;
+    let list = mergedCatalogProducts;
+    if (drawerCategory) {
+      const selectedCat = categoryOptions.find((c) => String(c.value) === String(drawerCategory));
+      const selectedLabel = (selectedCat ? selectedCat.label : '').toLowerCase();
+      const filterVal = String(drawerCategory).toLowerCase();
+
+      list = list.filter((p) => {
+        const pCatId = String(p.categoryId || '').toLowerCase();
+        const pCatName = String(p.categoryName || '').toLowerCase();
+        return (
+          pCatId === filterVal ||
+          (selectedLabel && pCatName === selectedLabel) ||
+          pCatName === filterVal ||
+          String(p.id) === String(drawerProduct)
+        );
+      });
+    }
 
     return list.map((p) => ({
       value: String(p.id),
       label: `${p.productCode} · ${p.productName}`,
     }));
-  }, [drawerCategory, mergedCatalogProducts]);
+  }, [drawerCategory, mergedCatalogProducts, categoryOptions, drawerProduct]);
 
   const activeProductObj = useMemo(() => {
     const base = mergedCatalogProducts.find((p) => String(p.id) === String(drawerProduct)) || null;
@@ -888,35 +955,42 @@ export default function QuotationFormPage() {
     return (activeProductObj.variants || []).find((v) => String(v.id) === String(drawerVariant)) || null;
   }, [drawerProduct, productVariantsMap, activeProductObj, drawerVariant]);
 
+  const effectiveDrawerStandard =
+    drawerStandard ||
+    activeVariantObj?.standardCode ||
+    activeVariantObj?.standardName ||
+    activeProductObj?.primaryStandard ||
+    activeProductObj?.primaryStandardCode ||
+    activeProductObj?.standards?.[0]?.standardCode ||
+    '';
+  const effectiveDrawerGrade =
+    drawerGrade || activeVariantObj?.gradeCode || activeVariantObj?.gradeName || activeVariantObj?.grade || '';
+
   // Standard Options for Quotation Drawer
   const drawerStandardOptions = useMemo(() => {
+    let options = [];
     if (activeProductObj?.supportedStandards && Array.isArray(activeProductObj.supportedStandards) && activeProductObj.supportedStandards.length > 0) {
-      return activeProductObj.supportedStandards.map((s) => ({ value: s, label: s }));
-    }
-    if (activeProductObj?.standards && Array.isArray(activeProductObj.standards) && activeProductObj.standards.length > 0) {
-      return activeProductObj.standards.map((s) => ({
+      options = activeProductObj.supportedStandards.map((s) => ({ value: s, label: s }));
+    } else if (activeProductObj?.standards && Array.isArray(activeProductObj.standards) && activeProductObj.standards.length > 0) {
+      options = activeProductObj.standards.map((s) => ({
         value: s.standardCode || String(s.standardId || s.id),
         label: s.standardCode || `Standard #${s.standardId || s.id}`,
       }));
-    }
-    if (Array.isArray(standardsList) && standardsList.length > 0) {
-      return standardsList.filter((s) => s.isActive !== false).map((s) => ({
+    } else if (Array.isArray(standardsList) && standardsList.length > 0) {
+      options = standardsList.filter((s) => s.isActive !== false).map((s) => ({
         value: s.standardCode || String(s.id),
         label: s.description ? `${s.standardCode} (${s.description})` : s.standardCode,
       }));
     }
-    return [
-      { value: 'IS-7327-2003', label: 'IS-7327-2003 (Indian Standard - Granite)' },
-      { value: 'DIN-876', label: 'DIN-876 (German Standard)' },
-      { value: 'BS-817', label: 'BS-817 (British Standard)' },
-      { value: 'US-Fed GGG-P-463c', label: 'US-Fed GGG-P-463c (Federal Specification)' },
-      { value: 'IS-2285', label: 'IS-2285 (Cast Iron Surface Plates)' },
-    ];
-  }, [activeProductObj, standardsList]);
+    if (effectiveDrawerStandard && !options.some((option) => String(option.value) === String(effectiveDrawerStandard))) {
+      options.push({ value: effectiveDrawerStandard, label: effectiveDrawerStandard });
+    }
+    return options;
+  }, [activeProductObj, standardsList, effectiveDrawerStandard]);
 
   // Grade Options filtered strictly by drawerStandard
   const drawerGradeOptions = useMemo(() => {
-    const curStd = String(drawerStandard || '').trim();
+    const curStd = String(effectiveDrawerStandard || '').trim();
     if (!curStd) return [];
 
     const matchedMapping = (gradeMapping || []).find((m) =>
@@ -949,31 +1023,44 @@ export default function QuotationFormPage() {
         { value: 'Grade 3', label: 'Grade 3 · Heavy Workshop' },
       ];
     }
-    return [
-      { value: 'Grade 00', label: 'Grade 00 · Calibration / Lab Grade' },
-      { value: 'Grade 0', label: 'Grade 0 · Inspection / Metrology Grade' },
-      { value: 'Grade 1', label: 'Grade 1 · Tool Room / Shop Floor' },
-      { value: 'Grade 2', label: 'Grade 2 · Workshop / Machining Grade' },
-      { value: 'Grade 3', label: 'Grade 3 · Rough Workshop Grade' },
-    ];
-  }, [drawerStandard, gradeMapping]);
+    return [];
+  }, [effectiveDrawerStandard, gradeMapping]);
+
+  const selectedDrawerGrade = useMemo(() => {
+    const normalizedGrade = normalizeGradeCode(effectiveDrawerGrade);
+    const matchedOption = drawerGradeOptions.find(
+      (option) => normalizeGradeCode(option.value) === normalizedGrade
+    );
+    return matchedOption?.value || effectiveDrawerGrade;
+  }, [drawerGradeOptions, effectiveDrawerGrade]);
+
+  const drawerGradeOptionsWithCurrent = useMemo(() => {
+    if (!effectiveDrawerGrade || drawerGradeOptions.some(
+      (option) => normalizeGradeCode(option.value) === normalizeGradeCode(effectiveDrawerGrade)
+    )) {
+      return drawerGradeOptions;
+    }
+    return [...drawerGradeOptions, { value: effectiveDrawerGrade, label: effectiveDrawerGrade }];
+  }, [drawerGradeOptions, effectiveDrawerGrade]);
 
   // Parse dimensions from variant
   const parseDimsFromQuotationVariant = useCallback((v) => {
     if (!v) return { length: 0, width: 0 };
-    if (v.lengthMm && v.widthMm) return { length: Number(v.lengthMm), width: Number(v.widthMm) };
-    const str = v.size || v.variantName || '';
+    if (v.lengthMm) return { length: Number(v.lengthMm), width: Number(v.widthMm || 0) };
+    const str = v.size || v.variantName || v.itemCode || v.variantCode || '';
     const m = String(str).match(/(\d+)\s*[x×*]\s*(\d+)/i);
-    return m ? { length: Number(m[1]), width: Number(m[2]) } : { length: 0, width: 0 };
+    if (m) return { length: Number(m[1]), width: Number(m[2]) };
+    const single = String(str).match(/(\d{3,4})/);
+    return single ? { length: Number(single[1]), width: 0 } : { length: 0, width: 0 };
   }, []);
 
   // Dynamically calculate flatness for drawer
   const drawerCalculatedFlatness = useMemo(() => {
-    if (!activeVariantObj || !drawerStandard || !drawerGrade) return '—';
+    if (!activeVariantObj || !effectiveDrawerStandard || !effectiveDrawerGrade) return '—';
     const dims = parseDimsFromQuotationVariant(activeVariantObj);
-    if (!dims.length || !dims.width) return '—';
+    if (!dims.length) return '—';
     try {
-      const res = calculateFlatnessTolerance(dims.length, dims.width, drawerStandard, drawerGrade);
+      const res = calculateFlatnessTolerance(dims.length, dims.width, effectiveDrawerStandard, effectiveDrawerGrade);
       if (res && res.isSupported && res.valueMicrons !== undefined) {
         return `${res.valueMicrons} µm`;
       }
@@ -981,18 +1068,18 @@ export default function QuotationFormPage() {
       // ignore
     }
     return '—';
-  }, [activeVariantObj, drawerStandard, drawerGrade, parseDimsFromQuotationVariant]);
+  }, [activeVariantObj, effectiveDrawerStandard, effectiveDrawerGrade, parseDimsFromQuotationVariant]);
 
   // Dynamically calculate item code
   const drawerCalculatedItemCode = useMemo(() => {
     if (!activeVariantObj && !activeProductObj) return 'Auto-generated';
     const baseCode = activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'ITM';
-    if (drawerGrade) {
-      const normGrd = normalizeGradeCode(drawerGrade) || '0';
+    if (effectiveDrawerGrade) {
+      const normGrd = normalizeGradeCode(effectiveDrawerGrade) || '0';
       return `${baseCode}-GR${normGrd}`;
     }
     return baseCode;
-  }, [activeVariantObj, activeProductObj, drawerGrade]);
+  }, [activeVariantObj, activeProductObj, effectiveDrawerGrade]);
 
   // Dynamic Product Options & Accessories with pricing from backend
   const availableDrawerOptions = useMemo(() => {
@@ -1094,10 +1181,7 @@ export default function QuotationFormPage() {
 
   // Tax Treatment Options
   const taxTreatmentOptions = useMemo(() => {
-    return TAX_TREATMENTS.map((t) => ({
-      value: t.value,
-      label: t.label,
-    }));
+    return [];
   }, []);
 
   // Client Selection Options (filtered for active clients only)
@@ -1369,7 +1453,7 @@ export default function QuotationFormPage() {
     setDrawerTax(defaultTax?.taxPercent ?? 10);
     setDrawerTaxConfigDetailId(defaultTax?.taxConfigDetailId ? String(defaultTax.taxConfigDetailId) : (defaultTax?.value || ''));
     setDrawerOtherCharges('0');
-    setDrawerOptions(['Rexine Cover (Standard)']);
+    setDrawerOptions([]);
     setDrawerDescription('');
     setIsDescriptionEdited(false);
     setIsDrawerOpen(true);
@@ -1378,16 +1462,81 @@ export default function QuotationFormPage() {
   // Open Drawer for Edit Product
   const handleStartEditItem = (item, index) => {
     setEditingIndex(index);
-    setDrawerCategory(item.categoryId || '');
-    setDrawerProduct(item.productId || '');
-    setDrawerStandard(item.standards || item.standardCode || '');
-    setDrawerGrade(item.grade || item.gradeCode || '');
-    setDrawerVariant(item.variantId || '');
+
+    // 1. Locate product in merged catalog products
+    const prod =
+      mergedCatalogProducts.find(
+        (p) =>
+          String(p.id) === String(item.productId || item.ProductId) ||
+          (p.productName && item.productName && p.productName.toLowerCase() === item.productName.toLowerCase()) ||
+          (p.productCode && item.productCode && p.productCode.toLowerCase() === item.productCode.toLowerCase())
+      ) || null;
+
+    const resolvedCategoryId = String(item.categoryId || item.CategoryId || prod?.categoryId || '');
+    const resolvedProductId = String(item.productId || item.ProductId || prod?.id || '');
+
+    // 2. Resolve Standard: from item, from description (e.g. "IS-2063-2002"), or from product's primary standard
+    let resolvedStandard = item.standards || item.standardCode || item.StandardCode || '';
+    if (!resolvedStandard) {
+      const desc = item.description || item.technicalDetails || '';
+      const stdMatch = desc.match(/\b(IS-[0-9]+(?:-[0-9]+)?|DIN-[0-9]+|BS-[0-9]+|US-Fed[^\s,\)]+)/i);
+      if (stdMatch) {
+        resolvedStandard = stdMatch[1];
+      } else {
+        resolvedStandard =
+          prod?.primaryStandard ||
+          (prod?.standards && prod.standards[0]?.standardCode) ||
+          prod?.primaryStandardCode ||
+          (prod?.supportedStandards && prod.supportedStandards[0]) ||
+          '';
+      }
+    }
+
+    // 3. Resolve Grade: from item, from description (e.g. "Grade 0"), or product default
+    let resolvedGrade = item.grade || item.gradeCode || item.GradeCode || '';
+    if (!resolvedGrade) {
+      const desc = item.description || item.technicalDetails || '';
+      const gradeMatch = desc.match(/\b(Grade\s+[0-9A-Za-z]+|Gr-[0-9A-Za-z]+)/i);
+      if (gradeMatch) {
+        resolvedGrade = gradeMatch[1];
+      } else if (resolvedStandard) {
+        resolvedGrade = resolvedStandard.toUpperCase().includes('GGG') ? 'Grade AA' : 'Grade 0';
+      }
+    }
+
+    // 4. Resolve Variant
+    let resolvedVariant = String(item.variantId || item.productVariantId || item.VariantId || '');
+    if (!resolvedVariant && prod?.variants && prod.variants.length > 0) {
+      const matchedVar =
+        prod.variants.find(
+          (v) =>
+            (v.variantName && item.variantName && v.variantName.toLowerCase() === item.variantName.toLowerCase()) ||
+            (v.itemCode && item.itemCode && v.itemCode.toLowerCase() === item.itemCode.toLowerCase())
+        ) || prod.variants[0];
+      if (matchedVar) resolvedVariant = String(matchedVar.id || matchedVar.productVariantId || '');
+    }
+
+    // 5. Resolve Tax
+    let resolvedTaxDetailId = item.taxConfigDetailId ? String(item.taxConfigDetailId) : '';
+    let resolvedTaxPercent = item.taxPercent !== undefined ? Number(item.taxPercent) : 18;
+    if ((!resolvedTaxDetailId || resolvedTaxDetailId === '0') && resolvedTaxPercent > 0 && Array.isArray(singleProductTaxOptions)) {
+      const matchedTax = singleProductTaxOptions.find((t) => Number(t.taxPercent) === resolvedTaxPercent);
+      if (matchedTax) {
+        resolvedTaxDetailId = String(matchedTax.taxConfigDetailId || matchedTax.value);
+        resolvedTaxPercent = matchedTax.taxPercent;
+      }
+    }
+
+    setDrawerCategory(resolvedCategoryId);
+    setDrawerProduct(resolvedProductId);
+    setDrawerStandard(resolvedStandard);
+    setDrawerGrade(resolvedGrade);
+    setDrawerVariant(resolvedVariant);
     setDrawerQty(String(item.quantity || 1));
     setDrawerRate(String(item.rate || 0));
     setDrawerRateSource(item.rateSource || 'Manual');
-    setDrawerTax(item.taxPercent !== undefined ? Number(item.taxPercent) : 10);
-    setDrawerTaxConfigDetailId(item.taxConfigDetailId ? String(item.taxConfigDetailId) : (item.taxPercent === 0 ? '0' : ''));
+    setDrawerTax(resolvedTaxPercent);
+    setDrawerTaxConfigDetailId(resolvedTaxDetailId || (resolvedTaxPercent === 0 ? '0' : ''));
     setDrawerOtherCharges(String(item.otherCharges || 0));
     setDrawerOptions(Array.isArray(item.options) ? item.options : ['Rexine Cover (Standard)']);
     const existingDesc = item.description ?? item.technicalDetails ?? '';
@@ -1606,11 +1755,13 @@ export default function QuotationFormPage() {
       productName: activeProductObj?.productName || 'Custom Product',
       variantId: activeVariantObj?.id || activeVariantObj?.productVariantId || '',
       variantName: activeVariantObj?.variantName || activeVariantObj?.name || 'Standard Variant',
-      standards: drawerStandard,
-      standardCode: drawerStandard,
-      grade: drawerGrade,
-      gradeCode: drawerGrade,
-      flatness: drawerCalculatedFlatness,
+      standards: effectiveDrawerStandard,
+      standardCode: effectiveDrawerStandard,
+      grade: effectiveDrawerGrade,
+      gradeCode: effectiveDrawerGrade,
+      flatness: drawerCalculatedFlatness !== '—'
+        ? drawerCalculatedFlatness
+        : (editingIndex !== null ? formData.items[editingIndex]?.flatness || '' : ''),
       itemCode: drawerCalculatedItemCode !== 'Auto-generated' ? drawerCalculatedItemCode : (activeVariantObj?.variantCode || activeVariantObj?.itemCode || activeProductObj?.productCode || activeProductObj?.itemCodePrefix || 'ITM-01'),
       technicalDetails: activeVariantObj?.technicalDetails || activeProductObj?.standardInfo || '',
       description: drawerDescription.trim() || defaultDesc,
@@ -1684,13 +1835,18 @@ export default function QuotationFormPage() {
 
   // Save handler with validation & auto-scroll
   const handleSave = async (statusToSet = 'Draft') => {
+    if (isRevisionMode && isTargetPoReceived) {
+      toast.error('A Customer PO has already been received for this quotation. It cannot be revised.');
+      return;
+    }
+
     // 1. Revision Mode Validations
     if (isRevisionMode) {
       if (!formData.revisionDate) {
         scrollToField('field-revision-date', 'Revision Date is required.');
         return;
       }
-      if (!formData.revisionReason?.trim()) {
+      if (!isEditingExistingDraft && !formData.revisionReason?.trim()) {
         scrollToField('field-revision-reason', 'Revision reason is required when creating a new revision.');
         return;
       }
@@ -1736,6 +1892,7 @@ export default function QuotationFormPage() {
       return;
     }
 
+    let revisionCreated = revisionCreatedInSession;
     try {
       setIsSubmitting(true);
 
@@ -1760,7 +1917,28 @@ export default function QuotationFormPage() {
           newNegotiation: logNegotiationStage ? negotiationStageData : null,
           newDocuments: stagedDocuments,
         };
-        await createRevision(targetQuotation.id, payload);
+        if (!isEditingExistingDraft && !revisionCreated) {
+          await createRevision(targetQuotation.id, payload);
+          revisionCreated = true;
+          setRevisionCreatedInSession(true);
+        }
+        await updateQuotation(targetQuotation.id, {
+          ...payload,
+          items: formData.items.map((item) => ({
+            ...item,
+            ...(isEditingExistingDraft ? {} : { id: null, quotationLineItemId: null }),
+          })),
+        });
+
+        if (statusToSet === 'Sent') {
+          try {
+            await updateQuotationStatus(targetQuotation.id, 'Sent');
+          } catch (statusErr) {
+            console.warn('Could not mark quotation as Sent:', statusErr);
+            toast.error(statusErr?.message || 'Quotation saved as Draft, but could not be marked as Sent.');
+          }
+        }
+
         navigate(`/quotations/${targetQuotation.id}`);
       } else {
         const payload = {
@@ -1774,11 +1952,37 @@ export default function QuotationFormPage() {
         };
         const newQuote = await createQuotation(payload);
         const targetId = newQuote?.id || targetQuotation?.id || formData.quotationNo;
+
+        // Auto-advance linked inquiry stage to Quotation
+        if (formData.inquiryId) {
+          try {
+            await inquiryService.changeInquiryStatus(formData.inquiryId, {
+              status: 'Quotation',
+              comment: `Quotation ${payload.quotationNo || ''} created`,
+            });
+          } catch (inqErr) {
+            console.warn('Could not auto-advance inquiry status to Quotation:', inqErr);
+          }
+        }
+
+        if (statusToSet === 'Sent' && targetId) {
+          try {
+            await updateQuotationStatus(targetId, 'Sent');
+          } catch (statusErr) {
+            console.warn('Could not mark quotation as Sent:', statusErr);
+            toast.error(statusErr?.message || 'Quotation created as Draft, but could not be marked as Sent.');
+          }
+        }
+
         navigate(`/quotations/${targetId}`);
       }
     } catch (err) {
       console.error('Failed to save quotation:', err);
-      toast.error(err?.message || 'Failed to save quotation. Please try again.');
+      toast.error(
+        revisionCreated
+          ? `Revision created, but its product and pricing changes were not saved: ${err?.message || 'Please retry Save as Draft.'}`
+          : err?.message || 'Failed to save quotation. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1802,12 +2006,14 @@ export default function QuotationFormPage() {
       <PageHeader
         title={
           isRevisionMode
-            ? `New Revision · ${formData.quotationNo} (Rev ${formData.revisionNo})`
+            ? `${isEditingExistingDraft ? 'Edit Draft' : 'New Revision'} · ${formData.quotationNo} (Rev ${formData.revisionNo})`
             : 'New Quotation'
         }
         subtitle={
           isRevisionMode
-            ? `Revision ${formData.revisionNo} copies from previous revision. Older revisions become read-only.`
+            ? isEditingExistingDraft
+              ? 'Update the latest draft quotation without creating a new revision.'
+              : `Revision ${formData.revisionNo} copies from previous revision. Older revisions become read-only.`
             : 'Create formal commercial quotation from inquiry product specifications.'
         }
         icon={<IconQuotation className="h-6 w-6 text-primary" aria-hidden="true" />}
@@ -1831,7 +2037,8 @@ export default function QuotationFormPage() {
               variant="secondary"
               size="sm"
               onClick={() => handleSave('Draft')}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isTargetPoReceived}
+              title={isTargetPoReceived ? 'PO received: Quotation revisions cannot be saved' : 'Save as Draft'}
             >
               Save as Draft
             </Button>
@@ -1839,7 +2046,8 @@ export default function QuotationFormPage() {
               variant="primary"
               size="sm"
               onClick={() => handleSave('Sent')}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isTargetPoReceived}
+              title={isTargetPoReceived ? 'PO received: Quotation revisions cannot be saved' : 'Save & Mark as Sent'}
               icon={<IconCheck size={16} />}
             >
               {isSubmitting ? 'Saving...' : 'Save & Mark as Sent'}
@@ -1847,6 +2055,35 @@ export default function QuotationFormPage() {
           </div>
         }
       />
+
+      {/* ── PO Received Warning Banner (Safety Guard) ── */}
+      {isRevisionMode && isTargetPoReceived && (
+        <div className="p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-amber-900 dark:text-amber-200 shadow-2xs">
+          <div className="flex items-start gap-3">
+            <IconWarning size={20} className="text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm">Cannot Revise: Customer Purchase Order Already Received</h4>
+              <p className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                A Customer Purchase Order (PO) has already been received and recorded for Quotation{' '}
+                <strong className="font-mono">{targetQuotation?.quotationNo || formData.quotationNo}</strong>.
+                Commercial terms are now finalized for Sales Order creation. Further quotation revisions are locked.
+              </p>
+              <p className="text-2xs text-amber-700/80 dark:text-amber-400/80">
+                Solution: If commercial or product terms need to change, please record a PO amendment or start a new quotation from the inquiry.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() => navigate(`/quotations/${targetQuotation?.id || id}`)}
+            className="shrink-0 bg-amber-600 hover:bg-amber-700 border-amber-600 text-white"
+          >
+            Back to Quotation
+          </Button>
+        </div>
+      )}
 
       {/* ── SECTION 1: QUOTATION & CLIENT DETAILS ── */}
       <CollapsibleCard
@@ -1931,7 +2168,7 @@ export default function QuotationFormPage() {
           </div>
 
           {/* Revision Reason (ONLY in Revision Mode) */}
-          {isRevisionMode && (
+          {isRevisionMode && !isEditingExistingDraft && (
             <div id="field-revision-reason" className="pt-2">
               <Textarea
                 label="Revision Reason"
@@ -2457,6 +2694,7 @@ export default function QuotationFormPage() {
                     onChange={setNegotiationStageData}
                     lockedRevisionLabel={`Revision ${formData.revisionNo}`}
                     userOptions={userOptions}
+                    userOptionsLoading={isLoadingNegotiationUsers}
                     currency={formData.currency}
                     suggestedOffer={totals.grandTotal}
                   />
@@ -2579,7 +2817,7 @@ export default function QuotationFormPage() {
             <SearchableSelect
               label="Manufacturing Standard"
               options={drawerStandardOptions}
-              value={drawerStandard}
+              value={effectiveDrawerStandard}
               placeholder={activeProductObj ? '-- Choose Standard --' : 'Select product first'}
               disabled={!activeProductObj}
               onChange={(e) => handleDrawerStandardChange(e.target.value)}
@@ -2587,10 +2825,10 @@ export default function QuotationFormPage() {
 
             <SearchableSelect
               label="Grade / Accuracy"
-              options={drawerGradeOptions}
-              value={drawerGrade}
-              placeholder={!activeProductObj ? 'Select product first' : !drawerStandard ? 'Select standard first' : '-- Choose Grade --'}
-              disabled={!activeProductObj || !drawerStandard}
+              options={drawerGradeOptionsWithCurrent}
+              value={selectedDrawerGrade}
+              placeholder={!activeProductObj ? 'Select product first' : !effectiveDrawerStandard ? 'Select standard first' : '-- Choose Grade --'}
+              disabled={!activeProductObj || !effectiveDrawerStandard}
               onChange={(e) => handleDrawerGradeChange(e.target.value)}
             />
           </div>
@@ -2700,15 +2938,19 @@ export default function QuotationFormPage() {
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Standard</div>
-                  <div className="font-semibold text-heading truncate">{drawerStandard || activeProductObj?.primaryStandardCode || (activeProductObj?.standards?.[0]?.standardCode || activeProductObj?.standards?.[0]?.name) || activeVariantObj?.standardCode || '—'}</div>
+                  <div className="font-semibold text-heading truncate">{effectiveDrawerStandard || activeProductObj?.primaryStandardCode || (activeProductObj?.standards?.[0]?.standardCode || activeProductObj?.standards?.[0]?.name) || '—'}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Grade</div>
-                  <div className="font-semibold text-heading truncate">{drawerGrade || activeVariantObj?.gradeCode || activeVariantObj?.grade || lookups?.grades?.find((g) => g.id === activeVariantObj?.gradeId)?.gradeCode || '—'}</div>
+                  <div className="font-semibold text-heading truncate">{effectiveDrawerGrade || activeVariantObj?.grade || lookups?.grades?.find((g) => g.id === activeVariantObj?.gradeId)?.gradeCode || '—'}</div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Flatness</div>
-                  <div className="font-semibold text-heading truncate">{drawerCalculatedFlatness !== '—' ? drawerCalculatedFlatness : (activeVariantObj?.flatness || '—')}</div>
+                  <div className="font-semibold text-heading truncate">
+                    {drawerCalculatedFlatness !== '—'
+                      ? drawerCalculatedFlatness
+                      : (activeVariantObj?.flatness || (editingIndex !== null ? formData.items[editingIndex]?.flatness : '') || '—')}
+                  </div>
                 </div>
                 <div>
                   <div className="text-3xs text-text-muted">Dimensions</div>
@@ -2885,16 +3127,17 @@ export default function QuotationFormPage() {
           <Button
             variant="secondary"
             onClick={() => handleSave('Draft')}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isTargetPoReceived}
+            title={isTargetPoReceived ? 'PO received: Quotation revisions cannot be saved' : 'Save as Draft'}
             className="w-full sm:w-auto justify-center"
           >
             Save as Draft
           </Button>
-
           <Button
             variant="primary"
             onClick={() => handleSave('Sent')}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isTargetPoReceived}
+            title={isTargetPoReceived ? 'PO received: Quotation revisions cannot be saved' : 'Save & Mark as Sent'}
             icon={<IconCheck size={16} />}
             className="w-full sm:w-auto justify-center"
           >

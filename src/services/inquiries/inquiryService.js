@@ -467,7 +467,7 @@ export async function uploadInquiryAttachment(inquiryId, { documentTypeId, file,
  * @param {number|string} attachmentId
  * @param {string} [fileName]
  */
-export async function downloadInquiryAttachment(attachmentId, fileName = 'attachment.pdf') {
+export async function downloadInquiryAttachment(attachmentId, fileName = '') {
   try {
     const validId = cleanId(attachmentId);
     const response = await axiosInstance.get(INQUIRY_ENDPOINTS.ATTACHMENT_DOWNLOAD(validId), {

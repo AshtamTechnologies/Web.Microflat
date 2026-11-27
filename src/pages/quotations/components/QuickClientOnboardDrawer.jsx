@@ -220,9 +220,23 @@ export default function QuickClientOnboardDrawer({
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => {
-      const next = { ...prev, [field]: value };
+      let cleanVal = value;
+      if (field === 'gstNo') {
+        cleanVal = (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
+      } else if (field === 'panNo') {
+        cleanVal = (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      }
+
+      const next = { ...prev, [field]: cleanVal };
       if (field === 'companyName' && prev.billingNameSameAsClientName) {
-        next.billingName = value;
+        next.billingName = cleanVal;
+      }
+      // Auto-extract PAN from GSTIN if PAN is empty
+      if (field === 'gstNo' && cleanVal.length >= 12 && !prev.panNo) {
+        const panCandidate = cleanVal.substring(2, 12);
+        if (/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panCandidate)) {
+          next.panNo = panCandidate;
+        }
       }
       return next;
     });
@@ -255,6 +269,18 @@ export default function QuickClientOnboardDrawer({
     }
     if (!form.city?.trim()) {
       errs.city = 'City is required';
+    }
+    if (form.gstNo?.trim()) {
+      const gstTrimmed = form.gstNo.trim().toUpperCase();
+      if (gstTrimmed.length !== 15) {
+        errs.gstNo = 'GSTIN must be 15 characters';
+      }
+    }
+    if (form.panNo?.trim()) {
+      const panTrimmed = form.panNo.trim().toUpperCase();
+      if (panTrimmed.length !== 10) {
+        errs.panNo = 'PAN must be 10 characters';
+      }
     }
     return errs;
   };
@@ -418,17 +444,23 @@ export default function QuickClientOnboardDrawer({
             <Input
               label="GSTIN"
               placeholder="e.g. 24AAAAA0000A1Z5"
+              maxLength={15}
               value={form.gstNo}
-              onChange={(e) => handleFieldChange('gstNo', e.target.value.toUpperCase())}
+              onChange={(e) => handleFieldChange('gstNo', e.target.value)}
               error={errors.gstNo}
+              hint="15-character alphanumeric tax identifier"
+              className="font-mono uppercase"
             />
 
             <Input
               label="PAN"
               placeholder="e.g. ABCDE1234F"
+              maxLength={10}
               value={form.panNo}
-              onChange={(e) => handleFieldChange('panNo', e.target.value.toUpperCase())}
+              onChange={(e) => handleFieldChange('panNo', e.target.value)}
               error={errors.panNo}
+              hint="10-character alphanumeric PAN"
+              className="font-mono uppercase"
             />
           </div>
         </div>
@@ -480,19 +512,19 @@ export default function QuickClientOnboardDrawer({
             />
 
             <SearchableSelect
-              label="Country"
-              options={countryOptions}
-              value={form.countryId}
-              onChange={(e) => handleFieldChange('countryId', Number(e.target.value) || 1)}
-              placeholder="Select Country"
-            />
-
-            <SearchableSelect
               label="State / Province"
               options={stateOptions}
               value={form.stateId}
               onChange={(e) => handleFieldChange('stateId', e.target.value)}
               placeholder="Select State"
+            />
+
+            <SearchableSelect
+              label="Country"
+              options={countryOptions}
+              value={form.countryId}
+              onChange={(e) => handleFieldChange('countryId', Number(e.target.value) || 1)}
+              placeholder="Select Country"
             />
 
             {regionOptions.length > 1 && (

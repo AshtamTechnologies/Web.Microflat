@@ -3,6 +3,7 @@
  *
  * Switches between real API services and offline mock services based on:
  *   import.meta.env.VITE_USE_MOCK_API === 'true' (default: false).
+ * Approvals always use the live API service.
  *
  * Each service exports capabilities indicating supported features.
  */
@@ -32,7 +33,6 @@ import * as realClients from './clients/clientService';
 import * as mockClients from './clients/clientService.mock';
 
 import * as realApprovals from './approvals/approvalsService';
-import * as mockApprovals from './approvals/approvalsService.mock';
 
 import * as realUoms from './uom/uomService';
 import * as mockUoms from './uom/uomService.mock';
@@ -86,9 +86,7 @@ import * as realNotifications from './notifications/notificationsService';
 import * as mockNotifications from './notifications/notificationsService.mock';
 
 import * as realOrderConfirmations from './salesOrders/orderConfirmationService';
-import * as mockOrderConfirmations from './salesOrders/orderConfirmationService.mock';
 import * as realQuotations from './quotations/quotationService';
-import * as mockQuotations from './quotations/quotationService.mock';
 import * as realDeliveryTerms from './deliveryTerms/deliveryTermService';
 import * as mockDeliveryTerms from './deliveryTerms/deliveryTermService.mock';
 
@@ -111,7 +109,7 @@ export const documentTypesService = useMock ? mockDocumentTypes : realDocumentTy
 export const documentSeriesService = useMock ? mockDocumentSeries : realDocumentSeries;
 export const vendorService = useMock ? mockVendors : realVendors;
 export const clientService = useMock ? mockClients : realClients;
-export const approvalsService = useMock ? mockApprovals : realApprovals;
+export const approvalsService = realApprovals;
 export const uomService = useMock ? mockUoms : realUoms;
 export const regionService = useMock ? mockRegions : realRegions;
 export const paymentTermService = useMock ? mockPaymentTerms : realPaymentTerms;
@@ -127,8 +125,8 @@ export const financialYearService = useMock ? mockFinancialYears : realFinancial
 export const emailTemplatesService = useMock ? mockEmailTemplates : realEmailTemplates;
 export const myQueueService = useMock ? mockMyQueue : realMyQueue;
 export const notificationsService = useMock ? mockNotifications : realNotifications;
-export const orderConfirmationService = useMock ? mockOrderConfirmations : realOrderConfirmations;
-export const quotationService = useMock ? mockQuotations : realQuotations;
+export const orderConfirmationService = realOrderConfirmations;
+export const quotationService = realQuotations;
 export const deliveryTermService = useMock ? mockDeliveryTerms : realDeliveryTerms;
 export const notificationSetupService = useMock ? mockNotificationSetup : realNotificationSetup;
 export const dealService = useMock ? mockDeals : realDeals;

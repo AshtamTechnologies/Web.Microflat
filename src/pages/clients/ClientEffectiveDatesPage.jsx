@@ -1811,9 +1811,12 @@ export default function ClientEffectiveDatesPage() {
                     id="gstNo"
                     name="gstNo"
                     label="GST / Tax ID"
+                    maxLength={15}
                     value={formData.gstNo}
-                    onChange={(e) => handleFieldChange('gstNo', e.target.value.toUpperCase())}
+                    onChange={(e) => handleFieldChange('gstNo', (e.target.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
                     placeholder="e.g. 24AABCA1234F1Z5"
+                    hint="15-character alphanumeric tax identifier"
+                    className="font-mono uppercase"
                   />
 
                   <div className="flex flex-col justify-between pt-1">

@@ -148,6 +148,7 @@ export function useUsers() {
   const [loading, setLoading] = useState(false);
   const [rolesList, setRolesList] = useState([]);
   const debounceTimerRef = useRef(null);
+  const activeUsersLoadRef = useRef(null);
 
   // Debounce search input by 400ms
   useEffect(() => {
@@ -243,6 +244,49 @@ export function useUsers() {
   // Explicit helper to ensure users are loaded when needed outside /users route
   const ensureUsersLoaded = useCallback(() => {
     setHasRequestedUsers(true);
+  }, []);
+
+  const ensureAllActiveUsersLoaded = useCallback(async () => {
+    if (activeUsersLoadRef.current) {
+      return activeUsersLoadRef.current;
+    }
+
+    const loadPromise = (async () => {
+      const activeUsers = [];
+      let pageNumber = 1;
+      let totalPages = 1;
+
+      while (pageNumber <= totalPages) {
+        const result = await userService.getUsers({
+          isActive: true,
+          pageNumber,
+          pageSize: 100,
+        });
+        const items = result.items || [];
+        activeUsers.push(...items);
+        totalPages = result.totalPages || 1;
+        pageNumber += 1;
+
+        if (items.length === 0) break;
+      }
+
+      setAllUsers((prev) => {
+        const map = new Map(prev.map((u) => [String(u.id), u]));
+        activeUsers.forEach((u) => map.set(String(u.id), u));
+        return Array.from(map.values());
+      });
+
+      return activeUsers;
+    })();
+
+    activeUsersLoadRef.current = loadPromise;
+    try {
+      return await loadPromise;
+    } finally {
+      if (activeUsersLoadRef.current === loadPromise) {
+        activeUsersLoadRef.current = null;
+      }
+    }
   }, []);
 
   // Manual refresh helper
@@ -497,6 +541,7 @@ export function useUsers() {
     resetFilters,
     fetchUsers,
     ensureUsersLoaded,
+    ensureAllActiveUsersLoaded,
     getUserById,
     getUserName: resolveUserName,
     createUser,

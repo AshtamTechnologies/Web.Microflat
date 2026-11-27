@@ -7,16 +7,31 @@ import { axiosInstance } from '../../axiosConfig/axiosInstance';
 import { APPROVAL_ENDPOINTS } from './approvalEndpoints';
 import { normalizeApiError } from '../../utils/apiError';
 import {
-  approvalRequestFromApi,
   approvalRequestsFromApi,
   approvalSummaryFromApi,
 } from '../../models/approvals/approvalModel';
 import { normalizeApprovalStatus } from '../../constants/approvalStatus';
 
+export async function getAllApprovalPages(fetchPage, params = {}) {
+  const pageSize = params.pageSize || 100;
+  const firstPage = await fetchPage({ ...params, pageNumber: 1, pageSize });
+  const items = [...firstPage.items];
+  const totalPages = Math.max(1, Number(firstPage.totalPages) || 1);
+
+  for (let pageNumber = 2; pageNumber <= totalPages; pageNumber += 1) {
+    const page = await fetchPage({ ...params, pageNumber, pageSize });
+    items.push(...page.items);
+  }
+
+  return { ...firstPage, items, pageNumber: 1, pageSize, totalPages };
+}
+
 function cleanId(val) {
-  if (typeof val === 'number') return val;
-  const match = String(val).match(/\d+/);
-  return match ? Number(match[0]) : val;
+  const id = typeof val === 'number' ? val : Number(val);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('Approval IDs must be positive integers.');
+  }
+  return id;
 }
 
 /**
@@ -26,7 +41,10 @@ function cleanId(val) {
 export async function getApprovalStatuses() {
   try {
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.STATUSES);
-    return Array.isArray(response.data) ? response.data : [];
+    if (!Array.isArray(response.data)) {
+      throw new Error('Approval statuses API returned an invalid response.');
+    }
+    return response.data;
   } catch (err) {
     throw normalizeApiError(err);
   }
@@ -164,7 +182,10 @@ export async function getRequestTimeline(id) {
   try {
     const validId = cleanId(id);
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.TIMELINE(validId));
-    return Array.isArray(response.data) ? response.data : [];
+    if (!Array.isArray(response.data)) {
+      throw new Error('Approval timeline API returned an invalid response.');
+    }
+    return response.data;
   } catch (err) {
     throw normalizeApiError(err);
   }
@@ -329,13 +350,16 @@ export async function cancelRequest(id, data = {}) {
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Returns lookups for approval settings: approverTypes, roles, users.
+ * Returns lookups for approval settings, including roles.
  * GET /api/approval-settings/lookups
  */
 export async function getApprovalSettingsLookups() {
   try {
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.SETTINGS_LOOKUPS);
-    return response.data || { approverTypes: [], roles: [], users: [] };
+    if (!response.data || typeof response.data !== 'object' || Array.isArray(response.data)) {
+      throw new Error('Approval settings lookups API returned an invalid response.');
+    }
+    return response.data;
   } catch (err) {
     throw normalizeApiError(err);
   }
@@ -351,7 +375,10 @@ export async function getApprovalSettingsModules(params = { isModuleActive: true
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.SETTINGS_MODULES, {
       params,
     });
-    return Array.isArray(response.data) ? response.data : [];
+    if (!Array.isArray(response.data)) {
+      throw new Error('Approval settings modules API returned an invalid response.');
+    }
+    return response.data;
   } catch (err) {
     throw normalizeApiError(err);
   }
@@ -367,7 +394,10 @@ export async function getApprovalSettings(params = {}) {
     const response = await axiosInstance.get(APPROVAL_ENDPOINTS.SETTINGS, {
       params,
     });
-    return Array.isArray(response.data) ? response.data : [];
+    if (!Array.isArray(response.data)) {
+      throw new Error('Approval settings API returned an invalid response.');
+    }
+    return response.data;
   } catch (err) {
     throw normalizeApiError(err);
   }
@@ -405,18 +435,15 @@ export async function getApprovalSetting(id) {
 /**
  * Creates approval setting for a module (Admin only).
  * POST /api/approval-settings
- * @param {{ moduleId: number, isApprovalRequired: boolean, approverType?: number, approverRoleId?: number, approverUserId?: number }} data
+ * @param {{ moduleId: number, isApprovalRequired: boolean, approverRoleId?: number }} data
  */
 export async function createApprovalSetting(data) {
   try {
     const isApprovalRequired = Boolean(data.isApprovalRequired);
-    const approverType = data.approverType ? Number(data.approverType) : 1;
     const payload = {
       moduleId: Number(data.moduleId),
       isApprovalRequired,
-      approverType,
-      approverRoleId: isApprovalRequired && approverType === 1 && data.approverRoleId ? Number(data.approverRoleId) : null,
-      approverUserId: isApprovalRequired && approverType === 2 && data.approverUserId ? Number(data.approverUserId) : null,
+      approverRoleId: isApprovalRequired && data.approverRoleId ? Number(data.approverRoleId) : null,
     };
     const response = await axiosInstance.post(APPROVAL_ENDPOINTS.SETTINGS, payload);
     return response.data;
@@ -429,18 +456,15 @@ export async function createApprovalSetting(data) {
  * Updates approval setting for a module (Admin only).
  * PUT /api/approval-settings/{id}
  * @param {number|string} id
- * @param {{ isApprovalRequired: boolean, approverType?: number, approverRoleId?: number, approverUserId?: number }} data
+ * @param {{ isApprovalRequired: boolean, approverRoleId?: number }} data
  */
 export async function updateApprovalSetting(id, data) {
   try {
     const validId = cleanId(id);
     const isApprovalRequired = Boolean(data.isApprovalRequired);
-    const approverType = data.approverType ? Number(data.approverType) : 1;
     const payload = {
       isApprovalRequired,
-      approverType,
-      approverRoleId: isApprovalRequired && approverType === 1 && data.approverRoleId ? Number(data.approverRoleId) : null,
-      approverUserId: isApprovalRequired && approverType === 2 && data.approverUserId ? Number(data.approverUserId) : null,
+      approverRoleId: isApprovalRequired && data.approverRoleId ? Number(data.approverRoleId) : null,
     };
     const response = await axiosInstance.put(APPROVAL_ENDPOINTS.SETTINGS_BY_ID(validId), payload);
     return response.data;

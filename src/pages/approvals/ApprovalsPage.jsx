@@ -16,7 +16,7 @@
  *   - Action modals: Approve, Reject, Cancel/Withdraw, Audit Timeline
  *   - Module-aware detail navigation:
  *       • VENDOR               → /approvals/vendors/:id
- *       • PURCHASE_REQUISITION → /purchase-requisitions/:referenceId
+ *       • PURCHASE_REQUISITION → /purchase-requisition/:referenceId
  *       • QUOTATION            → /quotations/:referenceId
  *       • PRODUCT              → /products/:referenceId
  *   - Full RBAC & self-approval prevention enforcement
@@ -149,7 +149,7 @@ function getDetailRoute(row) {
       return `/approvals/vendors/${targetId}`;
     case 'PURCHASE_REQUISITION':
     case 'PR':
-      return `/purchase-requisitions/${referenceId || targetId}`;
+      return `/purchase-requisition/${referenceId || targetId}`;
     case 'QUOTATION':
       return `/quotations/${referenceId || targetId}`;
     case 'PRODUCT':
@@ -207,6 +207,7 @@ export default function ApprovalsPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   // TanStack Table states
   const [sorting, setSorting] = useState([]);
@@ -273,7 +274,10 @@ export default function ApprovalsPage() {
         if (!targetModule || targetModule === 'ALL') {
           const [summaryRes, pendingRes] = await Promise.allSettled([
             approvalsService.getApprovalSummary({ mine: false }),
-            approvalsService.getPendingApprovals({ mine: false }),
+            approvalsService.getAllApprovalPages(
+              (params) => approvalsService.getPendingApprovals(params),
+              { mine: false }
+            ),
           ]);
           const summary = summaryRes.status === 'fulfilled' ? summaryRes.value : null;
           const pendingCount =
@@ -290,9 +294,18 @@ export default function ApprovalsPage() {
         } else {
           // Module-specific counts for targetModule
           const [pendingRes, listPendingRes, historyRes] = await Promise.allSettled([
-            approvalsService.getPendingApprovals({ moduleCode: targetModule, mine: false }),
-            approvalsService.listApprovalRequests({ moduleCode: targetModule, status: 2, mine: false }),
-            approvalsService.getApprovalHistory({ moduleCode: targetModule, mine: false, pageSize: 100 }),
+            approvalsService.getAllApprovalPages(
+              (params) => approvalsService.getPendingApprovals(params),
+              { moduleCode: targetModule, mine: false }
+            ),
+            approvalsService.getAllApprovalPages(
+              (params) => approvalsService.listApprovalRequests(params),
+              { moduleCode: targetModule, status: 2, mine: false }
+            ),
+            approvalsService.getAllApprovalPages(
+              (params) => approvalsService.getApprovalHistory(params),
+              { moduleCode: targetModule, mine: false }
+            ),
           ]);
 
           const pendingItems =
@@ -327,6 +340,7 @@ export default function ApprovalsPage() {
   /* ── 2. Load Approvals Queue ── */
   const loadApprovalsData = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(false);
     console.log('[APPROVALS_PAGE] Loading approvals queue. activeTab:', activeTab, 'moduleFilter:', moduleFilter);
 
     try {
@@ -352,10 +366,15 @@ export default function ApprovalsPage() {
       let res;
       if (activeTab === 'PENDING') {
         const combinedItems = [];
+        let endpointSucceeded = false;
 
         // 1. Try GET /api/approval-requests/pending?Mine=false
         try {
-          const pendingRes = await approvalsService.getPendingApprovals({ ...params, mine: false });
+          const pendingRes = await approvalsService.getAllApprovalPages(
+            (pageParams) => approvalsService.getPendingApprovals(pageParams),
+            { ...params, mine: false }
+          );
+          endpointSucceeded = true;
           if (Array.isArray(pendingRes?.items)) {
             combinedItems.push(...pendingRes.items);
           }
@@ -366,7 +385,11 @@ export default function ApprovalsPage() {
 
         // 2. Try full list endpoint GET /api/approval-requests?Status=2 (includes self-submitted records for auditing)
         try {
-          const listRes = await approvalsService.listApprovalRequests({ ...params, status: 2 });
+          const listRes = await approvalsService.getAllApprovalPages(
+            (pageParams) => approvalsService.listApprovalRequests(pageParams),
+            { ...params, status: 2 }
+          );
+          endpointSucceeded = true;
           console.log('[APPROVALS_PAGE] listApprovalRequests (Status=2) result:', listRes);
           if (Array.isArray(listRes?.items)) {
             for (const item of listRes.items) {
@@ -382,7 +405,11 @@ export default function ApprovalsPage() {
 
         // 3. Fallback: check awaiting-me
         try {
-          const awaitingRes = await approvalsService.getAwaitingMeApprovals(params);
+          const awaitingRes = await approvalsService.getAllApprovalPages(
+            (pageParams) => approvalsService.getAwaitingMeApprovals(pageParams),
+            params
+          );
+          endpointSucceeded = true;
           console.log('[APPROVALS_PAGE] awaiting-me result:', awaitingRes);
           if (Array.isArray(awaitingRes?.items)) {
             for (const item of awaitingRes.items) {
@@ -396,12 +423,18 @@ export default function ApprovalsPage() {
           console.warn('[APPROVALS_PAGE] awaiting-me threw:', awaitingErr);
         }
 
+        if (!endpointSucceeded) {
+          throw new Error('Approval queue endpoints are unavailable.');
+        }
         res = { items: combinedItems };
       } else {
         if (historyStatusFilter !== 'ALL') {
           params.status = historyStatusFilter;
         }
-        res = await approvalsService.getApprovalHistory({ ...params, mine: false });
+        res = await approvalsService.getAllApprovalPages(
+          (pageParams) => approvalsService.getApprovalHistory(pageParams),
+          { ...params, mine: false }
+        );
         console.log('[APPROVALS_PAGE] History approvals result:', res);
       }
 
@@ -413,6 +446,7 @@ export default function ApprovalsPage() {
       console.error('[APPROVALS_PAGE] Failed to fetch approval requests:', err);
       toast.error(err?.detail || err?.message || 'Failed to load approvals queue.');
       setItems([]);
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -1116,12 +1150,16 @@ export default function ApprovalsPage() {
         isLoading={isLoading}
         entityName="approvals"
         emptyTitle={
-          activeTab === 'PENDING'
+          loadError
+            ? 'Approval queue unavailable'
+            : activeTab === 'PENDING'
             ? 'Your approval queue is completely clear!'
             : 'No approval history records found'
         }
         emptyDescription={
-          activeTab === 'PENDING'
+          loadError
+            ? 'Could not load approval requests. Refresh to try again.'
+            : activeTab === 'PENDING'
             ? 'No actions are currently waiting for your decision.'
             : 'Try adjusting your search criteria or clearing filters.'
         }

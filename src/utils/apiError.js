@@ -80,13 +80,16 @@ export function normalizeApiError(err) {
 
     // 2. Determine best user-facing message
     let message = '';
-    if (typeof data === 'string' && data.trim()) {
+    const validationMsgs = Object.values(fieldErrors).filter(Boolean);
+    if (validationMsgs.length > 0) {
+      message = validationMsgs.join(' | ');
+    } else if (typeof data === 'string' && data.trim()) {
       message = cleanUserFacingMessage(data);
     } else if (data.detail && typeof data.detail === 'string') {
       message = cleanUserFacingMessage(data.detail);
     } else if (data.message && typeof data.message === 'string') {
       message = cleanUserFacingMessage(data.message);
-    } else if (data.title && typeof data.title === 'string') {
+    } else if (data.title && typeof data.title === 'string' && data.title !== 'One or more validation errors occurred.') {
       message = cleanUserFacingMessage(data.title);
     }
 

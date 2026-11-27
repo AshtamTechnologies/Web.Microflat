@@ -43,10 +43,10 @@ import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
-function formatCurrency(val, currency = 'INR') {
+function formatCurrency(val, currency = 'INR', symbol = null) {
   if (val === null || val === undefined || val === '') return '—';
-  const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₹';
-  return `${symbol}${Number(val).toLocaleString('en-IN')}`;
+  const sym = symbol || (currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₹');
+  return `${sym}${Number(val).toLocaleString('en-IN')}`;
 }
 
 export default function DealsPage() {
@@ -75,6 +75,7 @@ export default function DealsPage() {
     changeDealStatus,
     updateDeal,
     addNegotiation,
+    refreshDeals,
   } = useDealsContext();
 
   // View mode switcher: 'list' | 'kanban' with persistent storage & URL support
@@ -164,10 +165,16 @@ export default function DealsPage() {
     const targetStage = DEAL_STAGES.find((s) => s.id === newStatusId);
     if (!targetStage) return;
 
+    // Resolve statusId dynamically from lookups if available, otherwise targetStage.statusId
+    const statusLookup = (lookups?.statuses || []).find(
+      (s) => s.statusName?.toLowerCase() === newStatusId.toLowerCase()
+    );
+    const resolvedStatusId = statusLookup?.id ?? targetStage.statusId;
+
     // Moving to On Hold or Lost requires a reason remark
     if (newStatusId === 'On Hold' || newStatusId === 'Lost') {
       setStatusModalDeal(deal);
-      setTargetStatus({ id: targetStage.statusId, statusName: targetStage.id });
+      setTargetStatus({ id: resolvedStatusId, statusName: targetStage.id });
       return;
     }
 
@@ -179,13 +186,13 @@ export default function DealsPage() {
         return;
       }
       setStatusModalDeal(deal);
-      setTargetStatus({ id: targetStage.statusId, statusName: targetStage.id });
+      setTargetStatus({ id: resolvedStatusId, statusName: targetStage.id });
       return;
     }
 
     // Moving back to Open
     try {
-      await changeDealStatus(deal.id, targetStage.statusId, '');
+      await changeDealStatus(deal.id, resolvedStatusId, '');
     } catch (err) {
       console.error('Error changing deal status on drag:', err);
     }
@@ -221,6 +228,7 @@ export default function DealsPage() {
     setIsActionSubmitting(true);
     try {
       await addNegotiation(discussionModalDeal.id, formData);
+      await refreshDeals();
       setDiscussionModalDeal(null);
     } finally {
       setIsActionSubmitting(false);
@@ -566,6 +574,8 @@ export default function DealsPage() {
               (sum, d) => sum + (d.negotiatedValue ?? d.expectedValue ?? 0),
               0
             );
+            const primaryCurrency = colItems?.[0]?.currencyCode || 'INR';
+            const primarySymbol = colItems?.[0]?.currencySymbol || null;
             return (
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
@@ -577,7 +587,7 @@ export default function DealsPage() {
                 <div className="flex items-center gap-1.5 shrink-0">
                   {colTotal > 0 && (
                     <span className="text-3xs font-mono font-medium text-text-muted">
-                      {formatCurrency(colTotal)}
+                      {formatCurrency(colTotal, primaryCurrency, primarySymbol)}
                     </span>
                   )}
                   <span
