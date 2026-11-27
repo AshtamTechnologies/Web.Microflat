@@ -28,8 +28,8 @@ export function quotationLineItemFromApi(dto = {}) {
 
   return {
     ...dto,
-    id: dto.id || `line-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    quotationLineItemId: dto.id,
+    id: Number.isInteger(dto.id) ? dto.id : null,
+    quotationLineItemId: Number.isInteger(dto.id) ? dto.id : null,
     productId: dto.productId || dto.ProductId || null,
     productCode: dto.productCode || dto.itemCode || dto.ProductCode || dto.ItemCode || '',
     productName: dto.productName || dto.itemName || dto.ProductName || dto.ItemName || '',
@@ -84,8 +84,8 @@ export function quotationTaxFromApi(dto = {}) {
 export function quotationNegotiationFromApi(dto = {}) {
   if (!dto) return null;
   return {
-    id: dto.id || `neg-${Date.now()}`,
-    stageId: dto.id || dto.stageId,
+    id: Number.isInteger(dto.id) ? dto.id : null,
+    stageId: Number.isInteger(dto.id) ? dto.id : (Number.isInteger(dto.stageId) ? dto.stageId : null),
     revisionId: dto.revisionId,
     revisionNo: dto.revisionNo ?? 0,
     negotiationOn: dto.negotiationOn ? String(dto.negotiationOn).slice(0, 10) : (dto.date ? String(dto.date).slice(0, 10) : ''),
@@ -145,9 +145,10 @@ export function quotationListItemFromApi(dto = {}) {
   const subtotal = Number(dto.subTotal ?? dto.subtotal ?? dto.latestRevision?.subTotal) || 0;
   const clientName = dto.clientName || dto.client?.companyName || dto.client?.clientName || dto.customerName || '';
 
-  const isPoStatus = String(dto.status || '').toLowerCase().replace(/[\s_-]/g, '') === 'poreceived';
+  const rawStatus = dto.quotationStatus || dto.status || '';
+  const isPoStatus = String(rawStatus).toLowerCase().replace(/[\s_-]/g, '') === 'poreceived';
   const poReceived = Boolean(dto.poReceived || dto.isPoReceived || dto.hasPo || dto.poNumber || isPoStatus);
-  const status = isPoStatus ? 'PO Received' : (dto.status || 'Draft');
+  const status = isPoStatus ? 'PO Received' : (rawStatus || 'Draft');
 
   return {
     id: dto.id,
@@ -213,8 +214,9 @@ export function quotationDetailFromApi(dto = {}) {
   if (!dto) return null;
 
   const latestRev = dto.latestRevision || {};
-  const isPoStatus = String(dto.status || latestRev.status || '').toLowerCase().replace(/[\s_-]/g, '') === 'poreceived';
-  const initialStatus = isPoStatus ? 'PO Received' : (dto.status || latestRev.status || 'Draft');
+  const rawStatus = dto.quotationStatus || dto.status || latestRev.quotationStatus || latestRev.status || '';
+  const isPoStatus = String(rawStatus).toLowerCase().replace(/[\s_-]/g, '') === 'poreceived';
+  const initialStatus = isPoStatus ? 'PO Received' : (rawStatus || 'Draft');
   const grandTotal = Number(latestRev.totalAmount ?? dto.totalAmount ?? dto.grandTotal) || 0;
   const subtotal = Number(latestRev.subTotal ?? dto.subTotal ?? dto.subtotal) || 0;
   const otherCharges = Number(latestRev.otherCharges ?? dto.otherCharges) || 0;
@@ -318,7 +320,7 @@ export function quotationDetailFromApi(dto = {}) {
           revisionNo: rev.revisionNo ?? revIdx,
           revisionDate: rev.revisionDate ? String(rev.revisionDate).slice(0, 10) : '',
           revisionReason: rev.revisionReason || 'Revision',
-          status: rev.status || 'Draft',
+          status: rev.quotationStatus || rev.status || 'Draft',
           subtotal: Number(rev.subTotal ?? rev.subtotal) || 0,
           totalTax: Number(rev.taxAmount) || 0,
           grandTotal: Number(rev.totalAmount ?? rev.grandTotal) || 0,
@@ -327,8 +329,8 @@ export function quotationDetailFromApi(dto = {}) {
         };
       })
     : [{
-        id: latestRev.id || 'rev-0',
-        revisionId: latestRev.id || 'rev-0',
+          id: Number.isInteger(latestRev.id) ? latestRev.id : null,
+          revisionId: Number.isInteger(latestRev.id) ? latestRev.id : null,
         revisionNo: dto.currentRevision ?? latestRev.revisionNo ?? 0,
         revisionDate: (latestRev.revisionDate || dto.createdOn ? String(latestRev.revisionDate || dto.createdOn).slice(0, 10) : ''),
         revisionReason: latestRev.revisionReason || 'Initial quotation',
@@ -339,11 +341,6 @@ export function quotationDetailFromApi(dto = {}) {
         currency: dto.currencyCode || latestRev.currencyCode || 'INR',
         items,
       }];
-
-  // If revision 0 items were empty, fallback to items
-  if (revisions.length > 0 && (!revisions[0].items || revisions[0].items.length === 0)) {
-    revisions[0].items = items;
-  }
 
   // Client PO Information (Task 61)
   const poDetails = dto.poDetails || (dto.poNumber ? {
@@ -399,11 +396,11 @@ export function quotationDetailFromApi(dto = {}) {
     documents,
     revisions,
     mailLogs: Array.isArray(dto.emailLogs)
-      ? dto.emailLogs.map((log, idx) => {
+      ? dto.emailLogs.map((log) => {
           const isSuccess = log.isSuccess !== undefined ? Boolean(log.isSuccess) : (log.result === 'Success');
           const sentAt = log.sentOn ? String(log.sentOn).replace('T', ' ').slice(0, 16) : (log.sentAt || '');
           return {
-            id: log.id || `mail-${idx}`,
+            id: Number.isInteger(log.id) ? log.id : null,
             sentAt,
             sentOn: log.sentOn || sentAt,
             to: log.toAddress || log.to || '',

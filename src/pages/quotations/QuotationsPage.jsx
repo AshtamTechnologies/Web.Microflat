@@ -36,26 +36,30 @@ import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
-const STATUS_FILTER_OPTIONS = [
-  { value: 'All', label: 'All Statuses' },
-  { value: 'Draft', label: 'Draft' },
-  { value: 'Sent', label: 'Sent' },
-  { value: 'In Negotiation', label: 'In Negotiation' },
-  { value: 'Confirmed', label: 'Confirmed' },
-  { value: 'Lost', label: 'Lost' },
-  { value: 'PO Received', label: 'PO Received' },
-];
-
 export default function QuotationsPage() {
   const navigate = useNavigate();
-  const { quotations = [], refreshQuotations, isLoading } = useQuotationsContext();
+  const { quotations = [], refreshQuotations, fetchLookups, lookups, isLoading } = useQuotationsContext();
 
   useEffect(() => {
     refreshQuotations?.();
-  }, [refreshQuotations]);
+    fetchLookups?.();
+  }, [refreshQuotations, fetchLookups]);
 
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const statusFilterOptions = useMemo(() => {
+    const apiStatuses = Array.isArray(lookups?.statuses) ? lookups.statuses : [];
+    return [
+      { value: 'All', label: 'All Statuses' },
+      ...apiStatuses
+        .map((status) => {
+          const value = typeof status === 'object' ? (status.value || status.name || status.statusName || status.id) : status;
+          const label = typeof status === 'object' ? (status.label || status.name || status.statusName || status.value) : status;
+          return value ? { value: String(value), label: String(label || value) } : null;
+        })
+        .filter(Boolean),
+    ];
+  }, [lookups?.statuses]);
 
   // Filtered quotations
   const filteredData = useMemo(() => {
@@ -171,7 +175,6 @@ export default function QuotationsPage() {
           if (isPo || status === 'Confirmed') variant = 'success';
           else if (status === 'Sent') variant = 'info';
           else if (status === 'In Negotiation') variant = 'warning';
-          else if (status === 'Lost') variant = 'danger';
 
           return (
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -238,7 +241,7 @@ export default function QuotationsPage() {
                   type="button"
                   onClick={() => navigate(`/quotations/${row.id}/new-revision`)}
                   className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
-                  title="Create New Revision"
+                  title={row.status === 'Draft' ? 'Edit latest Draft quotation' : 'Create New Revision'}
                 >
                   <IconEdit size={15} />
                 </button>
@@ -303,7 +306,7 @@ export default function QuotationsPage() {
             id="filter-status"
             placeholder="All Statuses"
             searchPlaceholder="Search status..."
-            options={STATUS_FILTER_OPTIONS}
+            options={statusFilterOptions}
             value={activeFilter}
             onChange={(e) => setActiveFilter(e.target.value)}
           />

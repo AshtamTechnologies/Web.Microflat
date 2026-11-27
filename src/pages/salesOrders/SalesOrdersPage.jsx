@@ -41,9 +41,18 @@ const ORDER_STATUS_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
   { value: 'Draft', label: 'Draft' },
   { value: 'Confirmed', label: 'Confirmed' },
-  { value: 'Closed', label: 'Closed' },
   { value: 'Cancelled', label: 'Cancelled' },
 ];
+
+function getOrderSourceDisplay(order) {
+  const isDirect = order.orderSource === true || order.isDirectOrder === true;
+  const isQuotation = order.orderSource === false || order.isDirectOrder === false || order.quotationId != null;
+  return {
+    isDirect,
+    isQuotation,
+    label: order.orderSourceName || (isDirect ? 'Direct' : isQuotation ? 'Quotation' : ''),
+  };
+}
 
 const SOURCE_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Sources' },
@@ -120,8 +129,8 @@ export default function SalesOrdersPage() {
         return false;
       }
 
-      const isDirect = Boolean(order.orderSource === true || order.isDirectOrder || !order.quotationId);
-      if (sourceFilter === 'QUOTATION' && isDirect) {
+      const { isDirect, isQuotation } = getOrderSourceDisplay(order);
+      if (sourceFilter === 'QUOTATION' && !isQuotation) {
         return false;
       }
       if (sourceFilter === 'DIRECT' && !isDirect) {
@@ -185,11 +194,11 @@ export default function SalesOrdersPage() {
         size: 110,
         cell: (info) => {
           const row = info.row.original;
-          const isDirect = Boolean(row.orderSource === true || row.isDirectOrder || !row.quotationId);
-          const sourceLabel = row.orderSourceName || (isDirect ? 'Direct' : 'Quotation');
+          const source = getOrderSourceDisplay(row);
+          if (!source.label) return <span className="text-xs text-text-muted">—</span>;
           return (
-            <Badge variant={isDirect ? 'warning' : 'info'} size="sm">
-              {sourceLabel}
+            <Badge variant={source.isDirect ? 'warning' : 'info'} size="sm">
+              {source.label}
             </Badge>
           );
         },
@@ -475,12 +484,14 @@ export default function SalesOrdersPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                  <Badge
-                    variant={order.orderSource || order.isDirectOrder || !order.quotationId ? 'warning' : 'info'}
-                    size="sm"
-                  >
-                    {order.orderSourceName || (order.orderSource || order.isDirectOrder || !order.quotationId ? 'Direct' : 'Quotation')}
-                  </Badge>
+                  {(() => {
+                    const source = getOrderSourceDisplay(order);
+                    return source.label ? (
+                      <Badge variant={source.isDirect ? 'warning' : 'info'} size="sm">
+                        {source.label}
+                      </Badge>
+                    ) : null;
+                  })()}
                   <Badge variant={getOrderStatusBadgeVariant(order.status)} size="sm">
                     {order.status}
                   </Badge>

@@ -68,7 +68,6 @@ export default function SalesOrderViewPage() {
   const location = useLocation();
   const fromPath = location.state?.from;
   const {
-    getSalesOrderById,
     fetchSalesOrderById,
     downloadSalesOrderDocument,
     deleteSalesOrderDocument,
@@ -76,15 +75,26 @@ export default function SalesOrderViewPage() {
 
   const [orderDetail, setOrderDetail] = useState(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [orderDetailError, setOrderDetailError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
     if (id && fetchSalesOrderById) {
-      setIsLoadingDetail(true);
+      queueMicrotask(() => {
+        if (isMounted) {
+          setOrderDetail(null);
+          setOrderDetailError('');
+          setIsLoadingDetail(true);
+        }
+      });
       fetchSalesOrderById(id)
         .then((res) => {
-          if (isMounted && res) {
-            setOrderDetail(res);
+          if (!res) throw new Error('The sales order API returned no detail record.');
+          if (isMounted) setOrderDetail(res);
+        })
+        .catch((err) => {
+          if (isMounted) {
+            setOrderDetailError(err?.message || 'Failed to load sales order details.');
           }
         })
         .finally(() => {
@@ -96,8 +106,7 @@ export default function SalesOrderViewPage() {
     };
   }, [id, fetchSalesOrderById]);
 
-  const cachedOrder = getSalesOrderById(id);
-  const order = orderDetail || cachedOrder;
+  const order = orderDetail;
 
   const reloadOrderDetail = useCallback(async () => {
     if (!id || !fetchSalesOrderById) return;
@@ -128,7 +137,7 @@ export default function SalesOrderViewPage() {
       link.href = doc.downloadUrl;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.setAttribute('download', doc.fileName || 'document.pdf');
+      if (doc.fileName) link.setAttribute('download', doc.fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -138,7 +147,7 @@ export default function SalesOrderViewPage() {
       const blobUrl = URL.createObjectURL(doc.file);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = doc.fileName || 'document.pdf';
+      if (doc.fileName) link.download = doc.fileName;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -190,9 +199,11 @@ export default function SalesOrderViewPage() {
     }
     return (
       <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
-        <h2 className="text-xl font-bold text-heading">Sales Order Not Found</h2>
+        <h2 className="text-xl font-bold text-heading">
+          {orderDetailError ? 'Unable to Load Sales Order' : 'Sales Order Not Found'}
+        </h2>
         <p className="text-xs text-text-muted">
-          The requested sales order ({id}) does not exist.
+          {orderDetailError || `The requested sales order (${id}) does not exist.`}
         </p>
         <Button variant="primary" onClick={() => navigate('/sales-orders')}>
           Back to Sales Orders
@@ -213,8 +224,9 @@ export default function SalesOrderViewPage() {
     order.status === 'Draft' ||
     order.status === 'Confirmed';
 
-  const isDirect = Boolean(order.orderSource === true || order.isDirectOrder || !order.quotationId);
-  const sourceLabel = order.orderSourceName || (isDirect ? 'Direct' : 'Quotation');
+  const isDirect = order.orderSource === true || order.isDirectOrder === true;
+  const isQuotation = order.orderSource === false || order.isDirectOrder === false || order.quotationId != null;
+  const sourceLabel = order.orderSourceName || (isDirect ? 'Direct' : isQuotation ? 'Quotation' : '');
 
   return (
     <div className="w-full space-y-6 pb-20">
@@ -222,9 +234,11 @@ export default function SalesOrderViewPage() {
         title={
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-mono text-heading">{order.orderConfirmationNo}</span>
-            <Badge variant={isDirect ? 'warning' : 'info'} size="md">
-              {sourceLabel}
-            </Badge>
+            {sourceLabel && (
+              <Badge variant={isDirect ? 'warning' : 'info'} size="md">
+                {sourceLabel}
+              </Badge>
+            )}
             <Badge variant={getOrderStatusBadgeVariant(order.status)} size="md">
               {order.status}
             </Badge>
@@ -443,7 +457,7 @@ export default function SalesOrderViewPage() {
                 <DetailField
                   label="Billing Currency"
                   mono
-                  value={`${order.currency || 'INR'}${order.currencyCode && order.currencyCode !== order.currency ? ` (${order.currencyCode})` : ''}`}
+                  value={`${order.currency || '—'}${order.currencyCode && order.currencyCode !== order.currency ? ` (${order.currencyCode})` : ''}`}
                 />
                 <DetailField
                   label="Contact Person"
@@ -481,7 +495,9 @@ export default function SalesOrderViewPage() {
             subtitle={
               isDirect
                 ? 'Product line items with quantities, rates, and applied taxes'
-                : 'Items linked to quotation revision lines with applied taxes'
+                : isQuotation
+                  ? 'Items linked to quotation revision lines with applied taxes'
+                  : ''
             }
             bodyClassName="p-0"
           >
@@ -544,9 +560,9 @@ export default function SalesOrderViewPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {(order.lineItems || []).map((item, idx) => {
-                    const lineAmount =
-                      (Number(item.quantity) || 0) * (Number(item.rate) || 0) +
-                      (Number(item.otherCharges) || 0);
+                    const lineAmount = item.quantity != null && item.rate != null
+                      ? Number(item.quantity) * Number(item.rate) + (Number(item.otherCharges) || 0)
+                      : item.lineAmount ?? null;
                     return (
                       <tr key={item.id || idx} className="hover:bg-surface/40 transition-colors">
                         <Td className="text-center font-mono text-xs text-text-muted">
@@ -555,7 +571,7 @@ export default function SalesOrderViewPage() {
                         <Td className="text-xs">
                           <div className="font-bold text-heading">{item.productName}</div>
                           <div className="font-mono text-2xs text-primary font-medium">
-                            {item.itemCode || 'ITM'} · {item.variantName}
+                            {[item.itemCode, item.variantName].filter(Boolean).join(' · ') || '—'}
                           </div>
                           {item.technicalDetails && (
                             <div className="text-3xs text-text-muted truncate max-w-sm">
@@ -564,7 +580,7 @@ export default function SalesOrderViewPage() {
                           )}
                         </Td>
                         <Td className="text-center font-mono font-semibold text-xs text-heading">
-                          {item.quantity}
+                          {item.quantity ?? '—'}
                         </Td>
                         <Td className="text-right font-mono text-xs text-heading">
                           {formatCurrency(item.rate, order.currency)}
@@ -702,7 +718,7 @@ export default function SalesOrderViewPage() {
                 )}
               </DetailField>
 
-              <DetailField label="Currency" value={order.currency || 'INR'} />
+              <DetailField label="Currency" value={order.currency || '—'} />
               <DetailField
                 label="Tax Treatment"
                 value={

@@ -24,8 +24,6 @@ export default function QuotationStepper({ status = 'Draft', poReceived = false,
     activeIndex = 4;
   } else if (status === 'Confirmed') {
     activeIndex = 5;
-  } else if (status === 'Lost') {
-    activeIndex = 3;
   }
 
   return (

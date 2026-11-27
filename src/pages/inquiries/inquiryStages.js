@@ -128,7 +128,7 @@ export const INQUIRY_STAGES = [
  * Normalizes status IDs to one of the canonical stages.
  */
 export function normalizeInquiryStage(statusId) {
-  if (!statusId) return 'New';
+  if (!statusId) return '';
   
   // Exact match
   const directMatch = INQUIRY_STAGES.find(
@@ -136,30 +136,20 @@ export function normalizeInquiryStage(statusId) {
   );
   if (directMatch) return directMatch.id;
 
-  // Legacy mappings
-  switch (statusId) {
-    case 'In Progress':
-      return 'Quoting';
-    case 'Quoted':
-      return 'Quoting';
-    case 'Closed':
-      return 'Won';
-    default:
-      return statusId;
-  }
+  return String(statusId);
 }
 
 /**
  * Maps a Kanban visual stage back to a valid API status for PATCH /api/inquiries/{id}/status.
  */
 export function mapStageToApiStatus(stageId) {
-  if (!stageId) return 'New';
+  if (!stageId) return null;
   const lower = String(stageId).toLowerCase();
   if (lower === 'new' || lower === 'inquiry' || lower === 'qualified') return 'New';
   if (lower === 'quoting' || lower === 'quotation' || lower === 'negotiation') return 'Quoting';
   if (lower === 'won' || lower === 'accepted' || lower === 'order confirm' || lower === 'po created') return 'Won';
   if (lower === 'lost' || lower === 'rejected') return 'Lost';
-  return stageId;
+  return null;
 }
 
 /**
@@ -167,6 +157,6 @@ export function mapStageToApiStatus(stageId) {
  */
 export function getInquiryStage(stageId) {
   const normalized = normalizeInquiryStage(stageId);
-  return INQUIRY_STAGES.find((s) => s.id === normalized) || INQUIRY_STAGES[0];
+  return INQUIRY_STAGES.find((s) => s.id === normalized) || null;
 }
 

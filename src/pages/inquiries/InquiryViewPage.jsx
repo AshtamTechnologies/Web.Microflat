@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
-import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   IconActivity,
@@ -22,9 +22,7 @@ import {
   IconEdit,
   IconError,
   IconFile,
-  IconFileCode,
   IconFileText,
-  IconIndianRupee,
   IconInquiry,
   IconDeal,
   IconLayers,
@@ -38,12 +36,9 @@ import {
   IconRefresh,
   IconSend,
   IconShieldCheck,
-  IconSuccess,
-  IconTags,
   IconUpload,
   IconUser,
   IconUserCheck,
-  IconUserPlus,
   IconView,
 } from '../../constants/icons';
 
@@ -61,7 +56,6 @@ import {
   Modal,
   PageHeader,
   RichTextEditor,
-  IconButton,
 } from '../../components/ui';
 import ActivityTimeline from '../../components/ActivityTimeline';
 import { useInquiriesContext } from '../../context/InquiriesContext';
@@ -70,13 +64,6 @@ import { useInquiryDocumentsContext } from '../../context/InquiryDocumentsContex
 import { useDocumentTypesContext } from '../../context/DocumentTypesContext';
 import { useProductCategoriesContext } from '../../context/ProductCategoriesContext';
 import { getCategoryPathName } from '../../utils/treeUtils';
-import {
-  getRegionName,
-  getStatusOption,
-  getPriorityBadgeVariant,
-  formatCurrencyINR,
-} from '../../mocks/inquiries';
-import { formatFileSizeKB } from '../../mocks/inquiryDocuments';
 import AssignInquiryModal from './components/AssignInquiryModal';
 import ChangeStatusModal from './components/ChangeStatusModal';
 import UploadDocumentModal from './components/UploadDocumentModal';
@@ -84,6 +71,13 @@ import DealFormModal from '../deals/DealFormModal';
 import { dealService, isMockApi } from '../../services';
 import { formatDate, formatDateTime } from '../../utils/dateUtils';
 import { getMeetings } from '../../services/meetings/meetingsService';
+import { getInquiryStage } from './inquiryStages';
+
+function getPriorityBadgeVariant(priority) {
+  if (priority === 'High') return 'danger';
+  if (priority === 'Medium') return 'warning';
+  return 'neutral';
+}
 
 const INITIAL_ITEM_WIDTHS = {
   index: 48,
@@ -214,12 +208,20 @@ export default function InquiryViewPage() {
     fetchDocumentsByInquiryId,
     getMissingMandatoryDocumentTypes,
     downloadDocument,
-    deleteDocument,
   } = useInquiryDocumentsContext();
-  const { documentTypes = [], getDocumentTypeById } = useDocumentTypesContext();
+  const { documentTypes = [] } = useDocumentTypesContext();
   const { categories = [] } = useProductCategoriesContext();
 
   const userList = allUsers.length > 0 ? allUsers : users;
+  const resolveDocType = useCallback(
+    (typeId) => {
+      if (typeId == null) return null;
+      return documentTypes.find(
+        (docType) => String(docType.documentTypeId ?? docType.id) === String(typeId)
+      ) || null;
+    },
+    [documentTypes]
+  );
 
   const [liveInquiry, setLiveInquiry] = useState(null);
 
@@ -232,11 +234,14 @@ export default function InquiryViewPage() {
     if (id) {
       const isNumeric = !isNaN(Number(id));
       if (fetchInquiryById && (isNumeric || isMockApi)) {
-        fetchInquiryById(id).then((detail) => {
-          if (isMounted && detail) {
-            setLiveInquiry(detail);
-          }
-        });
+        fetchInquiryById(id)
+          .then((detail) => {
+            if (isMounted && detail) setLiveInquiry(detail);
+          })
+          .catch((err) => {
+            console.error(`Failed to load inquiry ${id}:`, err);
+            if (isMounted) toast.error(err?.message || 'Failed to load inquiry details.');
+          });
       }
       if (fetchDocumentsByInquiryId && (isNumeric || isMockApi)) {
         fetchDocumentsByInquiryId(id);
@@ -365,50 +370,25 @@ export default function InquiryViewPage() {
       : [];
   }, [inquiry, getMissingMandatoryDocumentTypes, documentTypes]);
 
-  // Line items for Product Selection table — always provides structured items even for legacy single-item records
+  // Line items shown here come only from the inquiry detail response.
   const inquiryItems = useMemo(() => {
     if (!inquiry) return [];
-    if (Array.isArray(inquiry.items)) {
-      if (inquiry.items.length === 0) return [];
-      return inquiry.items.map((it, idx) => ({
-        ...it,
-        prItemId: it.prItemId || it.id || idx + 1,
-        itemCode: it.itemCode || it.ItemCode || `MAT-CAT-${String(idx + 1).padStart(3, '0')}`,
-        productName: it.productName || it.itemName || it.ItemName || '—',
-        variantName: it.variantName || it.size || (it.customSize ? `${it.customSize} (Custom)` : '—'),
-        material: it.material || 'Indian Black Granite',
-        finish: it.finish || 'Hand Lapped',
-        standards: it.standards || 'IS-7327-2003',
-        options: Array.isArray(it.options) ? it.options : [],
-        specification: it.specification || it.Specification || it.notes || '—',
-        notes: it.notes || '',
-        quantity: it.quantity !== undefined && it.quantity !== null && it.quantity !== '' ? it.quantity : (it.Quantity || 1),
-        uom: it.uom || it.UOM || 'PCS',
-        categoryName: it.categoryName || (it.categoryId ? getCategoryPathName(it.categoryId, categories) : getCategoryPathName(inquiry.CategoryId, categories)) || '—',
-      }));
-    }
-    if (isMockApi && (inquiry.CategoryId || inquiry.Quantity)) {
-      return [
-        {
-          prItemId: 1,
-          itemCode: inquiry.ItemCode || 'MAT-CAT-001',
-          productName: inquiry.Subject || 'Main Product Requirement',
-          itemName: inquiry.Subject || 'Main Product Requirement',
-          variantName: inquiry.Size || inquiry.variantName || '—',
-          material: inquiry.Material || 'Indian Black Granite',
-          finish: inquiry.Finish || 'Hand Lapped',
-          standards: inquiry.Standards || 'IS-7327-2003',
-          options: Array.isArray(inquiry.Options) ? inquiry.Options : [],
-          specification: inquiry.Specification || '—',
-          notes: '',
-          quantity: inquiry.Quantity !== undefined && inquiry.Quantity !== null && inquiry.Quantity !== '' ? inquiry.Quantity : 1,
-          uom: inquiry.UOM || 'PCS',
-          categoryId: inquiry.CategoryId || '',
-          categoryName: inquiry.CategoryId ? getCategoryPathName(inquiry.CategoryId, categories) : '—',
-        },
-      ];
-    }
-    return [];
+    return (Array.isArray(inquiry.items) ? inquiry.items : []).map((item) => ({
+      ...item,
+      prItemId: item.prItemId ?? item.id ?? null,
+      itemCode: item.itemCode || item.ItemCode || '',
+      productName: item.productName || item.itemName || item.ItemName || '',
+      variantName: item.variantName || item.size || (item.customSize ? `${item.customSize} (Custom)` : ''),
+      material: item.material || '',
+      finish: item.finish || '',
+      standards: item.standards || '',
+      options: Array.isArray(item.options) ? item.options : [],
+      specification: item.specification || item.Specification || item.notes || '',
+      notes: item.notes || '',
+      quantity: item.quantity ?? item.Quantity ?? null,
+      uom: item.uom || item.uomName || item.UOM || '',
+      categoryName: item.categoryName || (item.categoryId ? getCategoryPathName(item.categoryId, categories) : ''),
+    }));
   }, [inquiry, categories]);
 
   const totalItemQty = useMemo(() => {
@@ -470,88 +450,27 @@ export default function InquiryViewPage() {
     }
   };
 
-  const handleDeleteAttachment = async (item) => {
-    if (!item) return;
-    const docId = item.id || item.attachmentId || item.documentId;
-    if (!docId) return;
-    if (window.confirm(`Are you sure you want to delete attachment "${item.fileName || item.documentTitle || 'document'}"?`)) {
-      if (deleteDocument) {
-        await deleteDocument(docId);
-      }
-    }
-  };
-
   const handleDownloadAttachment = async (item) => {
     if (!item) return;
-
-    try {
-      const fileName = item.fileName || 'attachment.pdf';
-      const docId = item.id || item.attachmentId || item.documentId;
-
-      if (docId && downloadDocument) {
-        try {
-          await downloadDocument(docId, fileName);
-          return;
-        } catch (downloadErr) {
-          console.warn('downloadDocument API failed, attempting fallback download:', downloadErr);
-        }
-      }
-
-      const fileUrl = item.fileUrl;
-
-      if (fileUrl) {
-        const a = document.createElement('a');
-        a.href = fileUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } else {
-        const fileContent = [
-          `================================================================`,
-          ` MICROFLAT ERP - ATTACHMENT EXPORT`,
-          `================================================================`,
-          `Document Title   : ${item.documentTitle || item.fileName}`,
-          `File Name        : ${fileName}`,
-          `Revision         : v${item.versionNo || 1} ${item.isCurrent ? '(Current Active)' : '(Archived)'}`,
-          `Document Type    : ${getDocumentTypeById(item.documentTypeId)?.typeName || 'Attachment'}`,
-          `File Size        : ${formatFileSizeKB(item.fileSizeKB || 1024)}`,
-          `Inquiry No       : ${inquiry.InquiryNo}`,
-          `Requirement      : ${inquiry.Subject || 'N/A'}`,
-          `Customer         : ${inquiry.CustomerName}`,
-          `Uploaded By      : ${item.uploadedBy || 'Ian Chesnut'}`,
-          `Uploaded Date    : ${formatDate(item.uploadedOn)}`,
-          `Revision Remarks : ${item.changeRemarks || 'N/A'}`,
-          `================================================================`,
-          `Exported On      : ${formatDateTime(new Date())}`,
-          `Status           : Verified ERP Record Attachment`,
-          `================================================================\n`,
-        ].join('\n');
-
-        const mimeType = fileName.toLowerCase().endsWith('.pdf')
-          ? 'application/pdf'
-          : fileName.toLowerCase().endsWith('.docx')
-            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            : fileName.toLowerCase().endsWith('.dwg')
-              ? 'application/acad'
-              : 'text/plain;charset=utf-8';
-
-        const blob = new Blob([fileContent], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      }
-
-      toast.success(`Downloaded ${fileName}`);
-    } catch (err) {
-      console.error('Download error:', err);
-      toast.error('Failed to download document attachment.');
+    const fileName = item.fileName || '';
+    const docId = item.id ?? item.attachmentId ?? item.documentId;
+    if (docId && downloadDocument) {
+      await downloadDocument(docId, fileName);
+      return;
     }
+
+    const downloadUrl = item.downloadUrl || item.fileUrl;
+    if (!downloadUrl) {
+      toast.error('The API did not return a download URL for this attachment.');
+      return;
+    }
+
+    const anchor = document.createElement('a');
+    anchor.href = downloadUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
   };
 
   const renderFileExtIcon = (ext = '') => {
@@ -581,7 +500,10 @@ export default function InquiryViewPage() {
     );
   }
 
-  const statusInfo = getStatusOption(inquiry.status || inquiry.StatusId || inquiry.Status);
+  const statusValue = inquiry.status || inquiry.StatusId || inquiry.Status || '';
+  const statusInfo = getInquiryStage(statusValue);
+  const canCreateQuotation =
+    statusValue === 'New' || statusValue === 'Quoting';
   const assigneeName = resolveUserName(inquiry.AssignedTo);
   const isAssigned = Boolean(inquiry.AssignedTo);
   const renderDocumentsSection = () => (
@@ -670,21 +592,21 @@ export default function InquiryViewPage() {
 
               <tbody className="divide-y divide-border bg-bg">
                 {inquiryDocuments.map((doc) => {
-                  const docType = getDocumentTypeById(doc.documentTypeId);
-                  const isExpanded = expandedDocIds.has(doc.documentId);
+                  const docType = resolveDocType(doc.documentTypeId);
+                  const isExpanded = expandedDocIds.has(doc.id);
                   const versions = doc.versions || [];
                   const currentVersion = versions.find((v) => v.isCurrent) || versions[0] || {};
-                  const fileName = currentVersion.fileName || doc.fileName || doc.displayName || 'attachment.pdf';
-                  const fileExt = currentVersion.fileExtension || doc.fileExtension || (fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')).toLowerCase() : '.pdf');
+                  const fileName = currentVersion.fileName || doc.fileName || doc.displayName || '';
+                  const fileExt = currentVersion.fileExtension || doc.fileExtension || (fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')).toLowerCase() : '');
 
                   return (
-                    <Fragment key={doc.documentId}>
+                    <Fragment key={doc.id}>
                       <tr className="hover:bg-surface/50 transition-colors group">
                         {/* Expand / Collapse Button */}
                         <Td style={{ width: docWidths.expander }} className="py-2.5 px-2 text-center">
                           <button
                             type="button"
-                            onClick={() => toggleDocExpanded(doc.documentId)}
+                            onClick={() => toggleDocExpanded(doc.id)}
                             className="p-1 rounded-lg text-text-muted hover:text-heading hover:bg-surface transition-colors cursor-pointer inline-flex items-center justify-center"
                             title={isExpanded ? 'Collapse version history' : 'Expand version history'}
                           >
@@ -699,7 +621,7 @@ export default function InquiryViewPage() {
                         {/* Document Type */}
                         <Td style={{ width: docWidths.docType }} className="py-2.5 px-3 whitespace-nowrap">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
-                            {docType?.documentTypeName || docType?.typeName || 'Document'}
+                            {docType?.documentTypeName || docType?.typeName || '—'}
                           </span>
                         </Td>
 
@@ -720,6 +642,9 @@ export default function InquiryViewPage() {
                             onClick={() =>
                               setPreviewItem({
                                 ...currentVersion,
+                                id: currentVersion.id ?? doc.id,
+                                attachmentId: currentVersion.attachmentId ?? doc.id,
+                                downloadUrl: currentVersion.downloadUrl || doc.downloadUrl,
                                 fileName,
                                 fileExtension: fileExt,
                                 documentTitle: doc.documentTitle,
@@ -1095,7 +1020,7 @@ export default function InquiryViewPage() {
               size="md"
               className="capitalize font-semibold"
             >
-              {statusInfo?.name || inquiry.status || inquiry.StatusId || inquiry.Status || 'Status'}
+              {statusInfo?.name || statusValue || '—'}
             </Badge>
 
             {inquiry.Priority && (
@@ -1138,20 +1063,22 @@ export default function InquiryViewPage() {
               {isConvertingDeal ? 'Loading...' : 'Convert to Deal'}
             </Button>
 
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() =>
-                navigate(`/quotations/new?inquiryId=${id}`, {
-                  state: { from: `/inquiries/${id}` },
-                })
-              }
-              className="text-xs"
-            >
-              <IconQuotation size={14} className="mr-1.5" />
-              Create Quotation
-            </Button>
+            {canCreateQuotation && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  navigate(`/quotations/new?inquiryId=${id}`, {
+                    state: { from: `/inquiries/${id}` },
+                  })
+                }
+                className="text-xs"
+              >
+                <IconQuotation size={14} className="mr-1.5" />
+                Create Quotation
+              </Button>
+            )}
 
             <span className="hidden sm:block h-5 w-px bg-border mx-0.5" aria-hidden="true" />
 
@@ -1283,7 +1210,7 @@ export default function InquiryViewPage() {
                   />
                   <DetailField
                     label="Sales Region / Territory"
-                    value={inquiry.regionName || inquiry.RegionName || getRegionName(inquiry.RegionId || inquiry.regionId)}
+                    value={inquiry.regionName || ''}
                     className="sm:col-span-2"
                   />
                   <DetailField
@@ -1291,7 +1218,7 @@ export default function InquiryViewPage() {
                     className="sm:col-span-2"
                   >
                     <span className="font-medium text-heading text-sm">
-                      {inquiry.Source || 'Website'}
+                      {inquiry.Source || ''}
                       {inquiry.Source === 'Distributor' && inquiry.DistributorName ? (
                         <span className="text-text-muted font-normal text-xs block">
                           Distributor: <strong className="text-heading font-medium">{inquiry.DistributorName}</strong>
@@ -1389,7 +1316,7 @@ export default function InquiryViewPage() {
                           Size / Variant: <span className="font-medium text-heading">{item.variantName || '—'}</span>
                         </div>
                         <div className="text-text-muted text-2xs">
-                          Material: {item.material || 'Indian Black Granite'} · {[item.finish || 'Hand Lapped', item.standards || 'IS-7327-2003'].filter(Boolean).join(' · ')}
+                          {[item.material, item.finish, item.standards].filter(Boolean).join(' · ')}
                         </div>
                         {Array.isArray(item.options) && item.options.length > 0 && (
                           <div className="flex flex-wrap gap-1 pt-1">
@@ -1398,7 +1325,7 @@ export default function InquiryViewPage() {
                                 key={oIdx}
                                 className="px-1.5 py-0.5 rounded text-3xs font-medium bg-surface text-text-muted border border-border"
                               >
-                                {opt.replace(' (Standard)', '')}
+                                {(typeof opt === 'string' ? opt : opt?.optionName || '').replace(' (Standard)', '')}
                               </span>
                             ))}
                           </div>
@@ -1468,11 +1395,11 @@ export default function InquiryViewPage() {
                             </div>
                           </Td>
                           <Td style={{ width: itemWidths.materialFinish }} className="text-xs py-2.5">
-                            <div className="font-medium text-text truncate" title={item.material || 'Indian Black Granite'}>
-                              {item.material || 'Indian Black Granite'}
+                            <div className="font-medium text-text truncate" title={item.material || ''}>
+                              {item.material}
                             </div>
                             <div className="text-2xs text-text-muted truncate">
-                              {[item.finish || 'Hand Lapped', item.standards || 'IS-7327-2003'].filter(Boolean).join(' · ')}
+                              {[item.finish, item.standards].filter(Boolean).join(' · ')}
                             </div>
                           </Td>
                           <Td style={{ width: itemWidths.options }} className="text-xs py-2.5">
@@ -1484,7 +1411,7 @@ export default function InquiryViewPage() {
                                     className="inline-flex items-center px-1.5 py-0.5 rounded text-3xs font-medium bg-surface-hover text-text-muted border border-border truncate max-w-[130px]"
                                     title={opt}
                                   >
-                                    {opt.replace(' (Standard)', '')}
+                                    {(typeof opt === 'string' ? opt : opt?.optionName || '').replace(' (Standard)', '')}
                                   </span>
                                 ))}
                               </div>
@@ -1609,7 +1536,7 @@ export default function InquiryViewPage() {
               <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border/50">
                 <DetailField
                   label="Created By"
-                  value={inquiry.CreatedBy || 'Ian Chesnut'}
+                  value={inquiry.createdByName || inquiry.CreatedBy || ''}
                 />
                 <DetailField
                   label="Created On"
@@ -1618,11 +1545,11 @@ export default function InquiryViewPage() {
                 />
                 <DetailField
                   label="Modified By"
-                  value={inquiry.ModifiedBy || 'Ian Chesnut'}
+                  value={inquiry.lastUpdatedByName || inquiry.ModifiedBy || ''}
                 />
                 <DetailField
                   label="Modified On"
-                  value={formatDateTime(inquiry.ModifiedOn)}
+                  value={formatDateTime(inquiry.lastUpdatedOn || inquiry.ModifiedOn)}
                   mono
                 />
               </div>
@@ -1681,17 +1608,17 @@ export default function InquiryViewPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-surface/60 p-3.5 rounded-xl border border-border">
               <div className="flex items-center gap-2 flex-wrap">
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${getDocumentTypeById(previewItem.documentTypeId)?.badgeClass ||
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${resolveDocType(previewItem.documentTypeId)?.badgeClass ||
                     'bg-surface text-text-muted border-border'
                     }`}
                 >
-                  {getDocumentTypeById(previewItem.documentTypeId)?.typeName || 'Attachment'}
+                  {resolveDocType(previewItem.documentTypeId)?.typeName || resolveDocType(previewItem.documentTypeId)?.documentTypeName || '—'}
                 </span>
                 <Badge
                   variant={previewItem.isCurrent ? 'success' : 'neutral'}
                   className="text-2xs font-mono px-2 py-0.5"
                 >
-                  Rev v{previewItem.versionNo} {previewItem.isCurrent ? '(Current)' : ''}
+                  Rev v{previewItem.versionNo ?? '—'} {previewItem.isCurrent ? '(Current)' : ''}
                 </Badge>
                 <span
                   className="font-mono text-heading font-medium text-xs truncate max-w-xs sm:max-w-sm"
@@ -1703,11 +1630,13 @@ export default function InquiryViewPage() {
 
               <div className="flex items-center gap-3 text-text-muted text-xs">
                 <span>
-                  Size: <strong className="text-heading font-mono">{formatFileSizeKB(previewItem.fileSizeKB)}</strong>
+                  Size: <strong className="text-heading font-mono">
+                    {previewItem.fileSizeKB == null ? '—' : `${previewItem.fileSizeKB} KB`}
+                  </strong>
                 </span>
                 <span>
                   Uploaded: <strong className="text-heading font-mono">{formatDate(previewItem.uploadedOn)}</strong> by{' '}
-                  <strong className="text-heading">{previewItem.uploadedBy}</strong>
+                  <strong className="text-heading">{previewItem.uploadedByName || previewItem.uploadedBy || '—'}</strong>
                 </span>
               </div>
             </div>
@@ -1727,7 +1656,7 @@ export default function InquiryViewPage() {
 
               <div className="space-y-1 max-w-md">
                 <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-success/10 text-success border border-success/20">
-                  <IconShieldCheck size={14} /> Verified Document File
+                  <IconShieldCheck size={14} /> Document File
                 </span>
                 <h4 className="text-base font-bold text-heading mt-2">
                   {previewItem.documentTitle || previewItem.fileName}
@@ -1758,7 +1687,7 @@ export default function InquiryViewPage() {
                 <div>
                   <span className="text-text-muted block text-2xs">File Format</span>
                   <span className="font-mono uppercase font-semibold text-primary">
-                    {previewItem.fileExtension?.replace('.', '') || 'FILE'}
+                    {previewItem.fileExtension?.replace('.', '') || '—'}
                   </span>
                 </div>
                 <div>
@@ -1766,7 +1695,7 @@ export default function InquiryViewPage() {
                   <span className="font-medium text-heading">
                     {previewItem.isCurrent
                       ? 'Current Active Version'
-                      : `Archived Revision (v${previewItem.versionNo})`}
+                      : `Archived Revision (v${previewItem.versionNo ?? '—'})`}
                   </span>
                 </div>
               </div>

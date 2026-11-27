@@ -10,8 +10,13 @@ import {
   IconMeeting,
 } from '../../../constants/icons';
 import { Badge, Button, TableActions } from '../../../components/ui';
-import { getPriorityBadgeVariant } from '../../../mocks/inquiries';
 import { formatDate } from '../../../utils/dateUtils';
+
+function getPriorityBadgeVariant(priority) {
+  if (priority === 'High') return 'danger';
+  if (priority === 'Medium') return 'warning';
+  return 'neutral';
+}
 
 /**
  * InquiryKanbanCard — MicroFlat ERP Kanban Card tailored for Inquiry management.
@@ -31,6 +36,9 @@ function InquiryKanbanCard({
   const isUnassigned = !inquiry.AssignedTo || assigneeName === 'Unassigned';
   const displayDate = inquiry.RequiredByDate || inquiry.InquiryDate || inquiry.CreatedOn;
   const activeStage = inquiryStage || inquiry.StatusId;
+  const status = inquiry.status || inquiry.StatusId || '';
+  const canCreateQuotation =
+    status === 'New' || status === 'Quoting';
 
   const overflowActions = [
     ...(linkedQuotation
@@ -44,7 +52,8 @@ function InquiryKanbanCard({
               }),
           },
         ]
-      : [
+      : canCreateQuotation
+      ? [
           {
             label: 'Create Quotation',
             icon: IconQuotation,
@@ -53,7 +62,8 @@ function InquiryKanbanCard({
                 state: { from: '/inquiries' },
               }),
           },
-        ]),
+        ]
+      : []),
     {
       label: 'Schedule Meeting',
       icon: IconMeeting,
@@ -96,7 +106,7 @@ function InquiryKanbanCard({
           variant={getPriorityBadgeVariant(inquiry.Priority)}
           className="text-3xs uppercase font-semibold px-1.5 py-0.5 shrink-0"
         >
-          {inquiry.Priority || 'Low'}
+          {inquiry.Priority || ''}
         </Badge>
       </div>
 
@@ -126,7 +136,7 @@ function InquiryKanbanCard({
             e.stopPropagation();
             navigate(`/quotations/${linkedQuotation.id || linkedQuotation.quotationNo}`);
           }}
-          title={`View Quotation ${linkedQuotation.quotationNo} (${linkedQuotation.status || 'Draft'})`}
+          title={`View Quotation ${linkedQuotation.quotationNo}${linkedQuotation.status ? ` (${linkedQuotation.status})` : ''}`}
         >
           <div className="flex items-center gap-1.5 min-w-0">
             <IconQuotation size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
@@ -134,9 +144,11 @@ function InquiryKanbanCard({
               {linkedQuotation.quotationNo}
             </span>
           </div>
-          <span className="text-3xs uppercase font-semibold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
-            {linkedQuotation.status || 'Draft'}
-          </span>
+          {linkedQuotation.status && (
+            <span className="text-3xs uppercase font-semibold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
+              {linkedQuotation.status}
+            </span>
+          )}
         </div>
       )}
 

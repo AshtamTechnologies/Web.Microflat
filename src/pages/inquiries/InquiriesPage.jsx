@@ -40,28 +40,22 @@ import {
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useUsersContext } from '../../context/UsersContext';
-import {
-  STATUS_OPTIONS,
-  PRIORITY_OPTIONS,
-  getRegionName,
-  getStatusOption,
-  getPriorityBadgeVariant,
-} from '../../mocks/inquiries';
-import { INQUIRY_STAGES, normalizeInquiryStage, mapStageToApiStatus, API_INQUIRY_STATUSES } from './inquiryStages';
+import { INQUIRY_STAGES, normalizeInquiryStage, mapStageToApiStatus, API_INQUIRY_STATUSES, getInquiryStage } from './inquiryStages';
 import InquiryKanbanCard from './components/InquiryKanbanCard';
 import AssignInquiryModal from './components/AssignInquiryModal';
 import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
 
+function getPriorityBadgeVariant(priority) {
+  if (priority === 'High') return 'danger';
+  if (priority === 'Medium') return 'warning';
+  return 'neutral';
+}
+
 const STATUS_FILTER_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
   ...API_INQUIRY_STATUSES.map((s) => ({ value: s.id, label: s.name })),
-];
-
-const PRIORITY_FILTER_OPTIONS = [
-  { value: 'ALL', label: 'All Priorities' },
-  ...PRIORITY_OPTIONS.map((p) => ({ value: p.value, label: p.label })),
 ];
 
 export default function InquiriesPage() {
@@ -77,20 +71,20 @@ export default function InquiriesPage() {
     priorityFilter,
     setPriorityFilter,
     resetFilters,
-    deleteInquiry,
     changeInquiryStatus,
     isLoading,
+    priorityLevels = [],
   } = useInquiriesContext();
 
-  let quotations = [];
-  let refreshQuotations = null;
-  try {
-    const qCtx = useQuotationsContext();
-    quotations = qCtx?.quotations || [];
-    refreshQuotations = qCtx?.refreshQuotations;
-  } catch {
-    quotations = [];
-  }
+  const priorityFilterOptions = useMemo(() => [
+    { value: 'ALL', label: 'All Priorities' },
+    ...priorityLevels.map((priority) => ({
+      value: String(priority.id),
+      label: priority.priorityName || priority.name || '',
+    })),
+  ], [priorityLevels]);
+
+  const { quotations = [], refreshQuotations } = useQuotationsContext();
 
   // Ensure quotations are loaded on page mount/refresh
   useEffect(() => {
@@ -137,18 +131,21 @@ export default function InquiriesPage() {
   // Derive inquiry's active stage, respecting linked quotations & normalized stages
   const resolveInquiryStage = useCallback(
     (inq) => {
-      if (!inq) return 'Inquiry';
+      if (!inq) return '';
       const explicitStatus = inq.StatusId || inq.status;
       const normalized = normalizeInquiryStage(explicitStatus);
       const linkedQuotation = getLinkedQuotation(inq);
 
       if (linkedQuotation) {
-        const qStatus = String(linkedQuotation.status || '').toLowerCase();
+        const qStatus = String(linkedQuotation.status || '').trim().toLowerCase();
         if (qStatus.includes('negotiat')) {
           return 'Negotiation';
         }
-        if (linkedQuotation.poReceived || qStatus.includes('po') || qStatus.includes('confirm')) {
+        if (linkedQuotation.poReceived || qStatus === 'po received') {
           return 'PO created';
+        }
+        if (qStatus === 'confirmed') {
+          return 'Accepted';
         }
         // If the inquiry was in initial stage, advance it to Quotation
         if (
@@ -214,7 +211,6 @@ export default function InquiriesPage() {
 
   // Modals state
   const [assignModalInquiry, setAssignModalInquiry] = useState(null);
-  const [inquiryToDelete, setInquiryToDelete] = useState(null);
 
   // TanStack table state
   const [sorting, setSorting] = useState([]);
@@ -228,7 +224,7 @@ export default function InquiriesPage() {
   // Helper to resolve user names from user IDs
   const resolveUserName = (userId) => {
     if (!userId) return 'Unassigned';
-    const found = userList.find((u) => u.id === userId);
+    const found = userList.find((u) => String(u.id || u.userId) === String(userId));
     return found ? `${found.firstName} ${found.lastName}` : 'Unassigned';
   };
 
@@ -252,15 +248,20 @@ export default function InquiriesPage() {
   const getInquiryOverflowActions = useCallback(
     (inq) => {
       const inqId = inq.id || inq.InquiryId;
+      const status = inq.status || inq.StatusId || '';
+      const canCreateQuotation =
+        status === 'New' || status === 'Quoting';
       return [
-        {
-          label: 'Create Quotation',
-          icon: IconQuotation,
-          onClick: () =>
-            navigate(`/quotations/new?inquiryId=${inqId}`, {
-              state: { from: '/inquiries' },
-            }),
-        },
+        ...(canCreateQuotation
+          ? [{
+              label: 'Create Quotation',
+              icon: IconQuotation,
+              onClick: () =>
+                navigate(`/quotations/new?inquiryId=${inqId}`, {
+                  state: { from: '/inquiries' },
+                }),
+            }]
+          : []),
         {
           label: 'Schedule Meeting',
           icon: IconMeeting,
@@ -350,7 +351,7 @@ export default function InquiriesPage() {
       }),
 
       /* 4. REGION */
-      columnHelper.accessor((row) => row.regionName || row.RegionName || getRegionName(row.RegionId || row.regionId), {
+      columnHelper.accessor((row) => row.regionName || row.RegionName || '', {
         id: 'region',
         header: 'REGION',
         minSize: 120,
@@ -374,7 +375,8 @@ export default function InquiriesPage() {
         minSize: 95,
         size: 105,
         cell: (info) => {
-          const priority = info.getValue() || 'Medium';
+          const priority = info.getValue();
+          if (!priority) return <span className="text-xs text-text-muted">—</span>;
           return (
             <Badge
               variant={getPriorityBadgeVariant(priority)}
@@ -393,17 +395,17 @@ export default function InquiriesPage() {
         minSize: 120,
         size: 130,
         cell: (info) => {
-          const statusId = info.getValue() || 'Inquiry';
-          const statusInfo = getStatusOption(statusId);
+          const statusId = info.getValue();
+          const statusInfo = getInquiryStage(statusId);
           return (
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border ${statusInfo.badgeClass}`}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border ${statusInfo?.badgeClass || 'bg-surface text-text-muted border-border'}`}
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`}
+                className={`w-1.5 h-1.5 rounded-full ${statusInfo?.dotClass || 'bg-text-muted'}`}
                 aria-hidden="true"
               />
-              {statusInfo.name}
+              {statusInfo?.name || statusId || '—'}
             </span>
           );
         },
@@ -568,7 +570,7 @@ export default function InquiriesPage() {
             id="filter-priority"
             placeholder="All Priorities"
             searchPlaceholder="Search priority..."
-            options={PRIORITY_FILTER_OPTIONS}
+            options={priorityFilterOptions}
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
           />
@@ -615,7 +617,8 @@ export default function InquiriesPage() {
           }
           renderMobileCard={(row) => {
             const inq = row.original;
-            const statusInfo = getStatusOption(inq.StatusId);
+            const statusId = inq.status || inq.StatusId || '';
+            const statusInfo = getInquiryStage(statusId);
             const assigneeName = resolveUserName(inq.AssignedTo);
 
             return (
@@ -649,12 +652,12 @@ export default function InquiriesPage() {
                   </div>
 
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border shrink-0 ${statusInfo.badgeClass}`}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold select-none border shrink-0 ${statusInfo?.badgeClass || 'bg-surface text-text-muted border-border'}`}
                   >
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`}
+                      className={`w-1.5 h-1.5 rounded-full ${statusInfo?.dotClass || 'bg-text-muted'}`}
                     />
-                    {statusInfo.name}
+                    {statusInfo?.name || statusId || '—'}
                   </span>
                 </div>
 
@@ -669,7 +672,7 @@ export default function InquiriesPage() {
                   <div className="flex items-center justify-between">
                     <span>Region:</span>
                     <span className="truncate max-w-[180px]">
-                      {getRegionName(inq.RegionId)}
+                      {inq.regionName || ''}
                     </span>
                   </div>
                   <div className="flex items-center justify-between font-mono tabular-nums text-2xs">

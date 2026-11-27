@@ -24,21 +24,23 @@ export default function SendOrderMailModal({ isOpen, onClose, order, onSuccess }
 
   useEffect(() => {
     if (isOpen && order) {
-      setIsSubmitting(false);
-      setTo(order.contactEmail || '');
-      setCc('');
-      setSubject(
-        `Order Confirmation ${order.orderConfirmationNo || ''}${
-          order.clientPoNo ? ` · Against PO ${order.clientPoNo}` : ''
-        } · MicroFlat ERP`
-      );
-      setBody(
-        `Dear ${order.contactPerson || 'Sir/Madam'},\n\nThank you for your purchase order${
-          order.clientPoNo ? ` (${order.clientPoNo})` : ''
-        }. Please find attached our formal Order Confirmation ${
-          order.orderConfirmationNo || ''
-        }${order.quotationNo ? ` against quotation ${order.quotationNo}` : ''}.\n\nBest Regards,\nMicroFlat Sales & Order Processing Team`
-      );
+      queueMicrotask(() => {
+        setIsSubmitting(false);
+        setTo(order.contactEmail || '');
+        setCc('');
+        setSubject(
+          `Order Confirmation ${order.orderConfirmationNo || ''}${
+            order.clientPoNo ? ` · Against PO ${order.clientPoNo}` : ''
+          } · MicroFlat ERP`
+        );
+        setBody(
+          `Dear ${order.contactPerson || 'Sir/Madam'},\n\nThank you for your purchase order${
+            order.clientPoNo ? ` (${order.clientPoNo})` : ''
+          }. Please find attached our formal Order Confirmation ${
+            order.orderConfirmationNo || ''
+          }${order.quotationNo ? ` against quotation ${order.quotationNo}` : ''}.\n\nBest Regards,\nMicroFlat Sales & Order Processing Team`
+        );
+      });
     }
   }, [isOpen, order]);
 

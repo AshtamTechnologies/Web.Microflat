@@ -15,21 +15,24 @@ export default function UploadOrderDocumentModal({ isOpen, onClose, order, onSuc
 
   async function handleUpload() {
     if (!order || isUploading) return;
-    if (!fileData) {
+    if (!fileData?.file) {
       setError('Please select or attach a file to upload.');
       toast.error('Please select a file to upload.');
       return;
     }
 
-    const docTypeName = docTypeObj?.label || fileData.documentTypeName || 'Client PO';
+    const documentTypeId = docTypeObj?.id ?? selectedDocTypeId;
+    if (!documentTypeId) {
+      setError('Please select a document type.');
+      toast.error('Please select a document type.');
+      return;
+    }
+
     try {
       setIsUploading(true);
       const res = await uploadSalesOrderDocument(order.id, {
-        fileName: fileData.fileName || `${docTypeName.replace(/\s+/g, '_')}_${order.orderConfirmationNo}.pdf`,
-        documentType: docTypeName,
-        documentTypeId: docTypeObj?.id || selectedDocTypeId || null,
-        fileSize: fileData.fileSize || '340 KB',
-        file: fileData.file || null,
+        documentTypeId,
+        file: fileData.file,
         remarks,
       });
 
@@ -40,6 +43,10 @@ export default function UploadOrderDocumentModal({ isOpen, onClose, order, onSuc
         onSuccess?.();
         onClose();
       }
+    } catch (err) {
+      const message = err?.message || 'Failed to upload document.';
+      setError(message);
+      toast.error(message);
     } finally {
       setIsUploading(false);
     }

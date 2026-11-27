@@ -236,7 +236,7 @@ export async function uploadOrderConfirmationDocument(id, file, documentTypeId, 
  * @param {number|string} docId
  * @param {string} [fileName]
  */
-export async function downloadOrderConfirmationDocument(docId, fileName = 'order-document.pdf') {
+export async function downloadOrderConfirmationDocument(docId, fileName) {
   try {
     const validId = cleanId(docId);
     const response = await axiosInstance.get(
@@ -247,7 +247,7 @@ export async function downloadOrderConfirmationDocument(docId, fileName = 'order
     const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = blobUrl;
-    link.setAttribute('download', fileName);
+    if (fileName) link.setAttribute('download', fileName);
     document.body.appendChild(link);
     link.click();
     link.remove();

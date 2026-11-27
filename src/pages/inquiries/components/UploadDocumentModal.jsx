@@ -18,7 +18,13 @@ import {
 import { Modal, Button, CancelButton, Input, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiryDocumentsContext } from '../../../context/InquiryDocumentsContext';
 import { useDocumentTypesContext } from '../../../context/DocumentTypesContext';
-import { formatFileSizeKB } from '../../../mocks/inquiryDocuments';
+
+function formatFileSizeKB(kb) {
+  if (kb == null || !Number.isFinite(Number(kb))) return '—';
+  const size = Number(kb);
+  if (size >= 1024) return `${(size / 1024).toFixed(1)} MB`;
+  return `${Math.round(size)} KB`;
+}
 
 function getAllowedExtensionsArray(docType) {
   if (!docType) return [];

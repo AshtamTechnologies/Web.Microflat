@@ -4,7 +4,7 @@
  */
 
 import { Input, SearchableSelect, Textarea } from '../../../components/ui';
-import { NEGOTIATION_MODES, CURRENCY_SYMBOLS, formatCurrency } from '../../../mocks/quotations';
+import { formatCurrency } from '../../../mocks/quotations';
 
 export default function NegotiationStageFields({
   stageNo,
@@ -13,14 +13,15 @@ export default function NegotiationStageFields({
   revisionOptions = [],
   lockedRevisionLabel = '',
   userOptions = [],
+  userOptionsLoading = false,
   currency = 'INR',
   suggestedOffer = null,
   modeOptions: customModeOptions = null,
 }) {
   const modeOptions = customModeOptions && customModeOptions.length > 0
     ? customModeOptions
-    : NEGOTIATION_MODES.map((m) => ({ value: m, label: m }));
-  const currencySym = CURRENCY_SYMBOLS[currency] || '₹';
+    : [];
+  const currencySym = currency || '';
 
   const handleField = (field, value) => {
     onChange((prev) => ({ ...prev, [field]: value }));
@@ -69,13 +70,12 @@ export default function NegotiationStageFields({
 
         <SearchableSelect
           label="Handled By"
-          options={
-            userOptions.length > 0
-              ? userOptions
-              : []
-          }
+          options={userOptions}
           value={stageData.handledBy}
           onChange={(e) => handleField('handledBy', e.target.value)}
+          disabled={userOptionsLoading}
+          placeholder={userOptionsLoading ? 'Loading users...' : 'Select a user...'}
+          emptyText="No active users available"
         />
 
         <Input
@@ -121,7 +121,7 @@ export default function NegotiationStageFields({
       <div id="field-neg-discussion">
         <Textarea
           label="Discussion Summary / Notes"
-          required={Boolean(lockedRevisionLabel)}
+          required
           rows={3}
           placeholder="Details discussed during this negotiation session, client counter-offer rationale, agreed concessions..."
           value={stageData.discussion}

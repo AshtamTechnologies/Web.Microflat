@@ -4,7 +4,6 @@ import {
   Button,
   CancelButton,
   SearchableSelect,
-  Textarea,
   Badge,
 } from '../../../components/ui';
 import { useSalesOrdersContext } from '../../../context/SalesOrdersContext';
@@ -30,14 +29,14 @@ export default function ChangeOrderStatusModal({ isOpen, onClose, order, onSucce
   );
 
   const [newStatus, setNewStatus] = useState(allowedNextStatuses[0] || '');
-  const [remarks, setRemarks] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen && order) {
-      setNewStatus(allowedNextStatuses[0] || '');
-      setRemarks('');
-      setIsSubmitting(false);
+      queueMicrotask(() => {
+        setNewStatus(allowedNextStatuses[0] || '');
+        setIsSubmitting(false);
+      });
     }
   }, [isOpen, order, allowedNextStatuses]);
 
@@ -49,9 +48,8 @@ export default function ChangeOrderStatusModal({ isOpen, onClose, order, onSucce
     if (!order || !effectiveStatus || isSubmitting) return;
     try {
       setIsSubmitting(true);
-      const res = await changeSalesOrderStatus(order.id, effectiveStatus, remarks);
+      const res = await changeSalesOrderStatus(order.id, effectiveStatus);
       if (res) {
-        setRemarks('');
         onSuccess?.();
         onClose();
       }
@@ -71,7 +69,7 @@ export default function ChangeOrderStatusModal({ isOpen, onClose, order, onSucce
         <div className="p-3 bg-surface rounded-xl border border-border flex items-center justify-between text-xs">
           <span className="text-text-muted">Current Status</span>
           <Badge variant={getOrderStatusBadgeVariant(order?.status)} size="sm">
-            {order?.status || 'Draft'}
+            {order?.status || '—'}
           </Badge>
         </div>
 
@@ -87,18 +85,6 @@ export default function ChangeOrderStatusModal({ isOpen, onClose, order, onSucce
               options={statusOptions}
               value={effectiveStatus}
               onChange={(e) => setNewStatus(e.target.value)}
-            />
-
-            <Textarea
-              label="Remarks / Reason (Optional)"
-              placeholder={
-                effectiveStatus === 'Cancelled'
-                  ? 'Reason for cancelling this sales order...'
-                  : 'Confirmation notes or PO verification comments...'
-              }
-              rows={3}
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
             />
           </>
         )}

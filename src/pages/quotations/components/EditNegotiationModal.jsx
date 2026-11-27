@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import { Modal, Button, CancelButton } from '../../../components/ui';
 import { useQuotationsContext } from '../../../context/QuotationsContext';
 import { useUsersContext } from '../../../context/UsersContext';
@@ -7,10 +8,13 @@ import NegotiationStageFields from './NegotiationStageFields';
 
 export default function EditNegotiationModal({ isOpen, onClose, stage, quotation }) {
   const { updateNegotiationStage, lookups } = useQuotationsContext();
-  const { allUsers = [], users = [] } = useUsersContext();
+  const { allUsers = [], users = [], ensureAllActiveUsersLoaded } = useUsersContext();
   const userList = allUsers.length > 0 ? allUsers : users;
+  const activeUserList = userList.filter((u) => u.isActive !== false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const isConfirmed = quotation?.status === 'Confirmed';
+  const isConfirmed = quotation?.poReceived || quotation?.status === 'Confirmed' || quotation?.status === 'PO Received';
   const stageNum = stage?.stageNo ?? stage?.stageId ?? 1;
 
   const getInitialData = useCallback(() => {
@@ -59,6 +63,24 @@ export default function EditNegotiationModal({ isOpen, onClose, stage, quotation
   const [stageData, setStageData] = useState(getInitialData);
 
   useEffect(() => {
+    if (!isOpen) return undefined;
+
+    let isMounted = true;
+    setIsLoadingUsers(true);
+    ensureAllActiveUsersLoaded()
+      .catch((err) => {
+        toast.error(err?.message || 'Failed to load users for negotiation.');
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingUsers(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, ensureAllActiveUsersLoaded]);
+
+  useEffect(() => {
     if (isOpen && stage) {
       setStageData(getInitialData());
     }
@@ -69,7 +91,7 @@ export default function EditNegotiationModal({ isOpen, onClose, stage, quotation
     label: `Revision ${r.revisionNo}`,
   }));
 
-  const userOptions = userList.map((u) => {
+  const userOptions = activeUserList.map((u) => {
     const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email;
     return { value: name, label: name, id: u.id };
   });
@@ -85,11 +107,11 @@ export default function EditNegotiationModal({ isOpen, onClose, stage, quotation
     return null;
   }, [rawModes]);
 
-  function handleSave() {
+  async function handleSave() {
     if (!quotation || !stage || isConfirmed) return;
 
     // Resolve handledBy user ID (match by trimmed name or id)
-    const selectedUser = userList.find((u) => {
+    const selectedUser = activeUserList.find((u) => {
       const name = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || u.email;
       return name.toLowerCase() === String(stageData.handledBy || '').trim().toLowerCase() || String(u.id) === String(stageData.handledBy);
     });
@@ -115,8 +137,15 @@ export default function EditNegotiationModal({ isOpen, onClose, stage, quotation
       revisionNo: Number(stageData.revisionNo) || 0,
     };
 
-    updateNegotiationStage(quotation.id, stage.id || stage.stageId, payload);
-    onClose();
+    try {
+      setIsSaving(true);
+      await updateNegotiationStage(quotation.id, stage.id || stage.stageId, payload);
+      onClose();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update negotiation stage.');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -140,6 +169,7 @@ export default function EditNegotiationModal({ isOpen, onClose, stage, quotation
           onChange={setStageData}
           revisionOptions={revisionOptions}
           userOptions={userOptions}
+          userOptionsLoading={isLoadingUsers}
           modeOptions={modeOptions}
           currency={quotation?.currency || 'INR'}
         />
@@ -149,10 +179,10 @@ export default function EditNegotiationModal({ isOpen, onClose, stage, quotation
           <Button
             variant="primary"
             onClick={handleSave}
-            disabled={isConfirmed}
+            disabled={isConfirmed || isSaving}
             icon={<IconCheck size={15} />}
           >
-            Update Negotiation Stage
+            {isSaving ? 'Saving...' : 'Update Negotiation Stage'}
           </Button>
         </div>
       </div>
