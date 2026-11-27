@@ -28,52 +28,6 @@ export const INQUIRY_STAGES = [
   {
     id: 'Deal',
     name: 'Deal',
-    color: 'violet',
-    badgeVariant: 'role',
-    badgeClass: 'bg-violet-500/10 text-violet-600 border-violet-500/20 dark:bg-violet-500/20 dark:text-violet-300',
-    dotClass: 'bg-violet-500',
-    accentBorder: 'border-t-violet-500',
-  },
-  {
-    id: 'Quoting',
-    name: 'Quoting',
-    color: 'amber',
-    badgeVariant: 'warning',
-    badgeClass: 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-300',
-    dotClass: 'bg-amber-500',
-    accentBorder: 'border-t-amber-500',
-  },
-  {
-    id: 'Won',
-    name: 'Won',
-    color: 'emerald',
-    badgeVariant: 'success',
-    badgeClass: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300',
-    dotClass: 'bg-emerald-500',
-    accentBorder: 'border-t-emerald-500',
-  },
-  {
-    id: 'Lost',
-    name: 'Lost',
-    color: 'rose',
-    badgeVariant: 'danger',
-    badgeClass: 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:bg-rose-500/20 dark:text-rose-300',
-    dotClass: 'bg-rose-500',
-    accentBorder: 'border-t-rose-500',
-  },
-  // Visual pipeline stages mapped to linked Quotation / PO progress
-  {
-    id: 'Inquiry',
-    name: 'Inquiry',
-    color: 'blue',
-    badgeVariant: 'info',
-    badgeClass: 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/20 dark:text-blue-300',
-    dotClass: 'bg-blue-500',
-    accentBorder: 'border-t-blue-500',
-  },
-  {
-    id: 'Qualified',
-    name: 'Qualified',
     color: 'indigo',
     badgeVariant: 'role',
     badgeClass: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20 dark:bg-indigo-500/20 dark:text-indigo-300',
@@ -182,13 +136,6 @@ export function mapStageToApiStatus(stageId) {
     return normalized;
   }
   return null;
-  const lower = String(stageId).toLowerCase();
-  if (lower === 'new' || lower === 'inquiry' || lower === 'qualified') return 'New';
-  if (lower === 'deal') return 'Deal';
-  if (lower === 'quoting' || lower === 'quotation' || lower === 'negotiation') return 'Quoting';
-  if (lower === 'won' || lower === 'accepted' || lower === 'order confirm' || lower === 'po created') return 'Won';
-  if (lower === 'lost' || lower === 'rejected') return 'Lost';
-  return String(stageId);
 }
 
 /**
