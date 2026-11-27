@@ -67,7 +67,7 @@ const columnHelper = createColumnHelper();
 
 export default function SalesOrdersPage() {
   const navigate = useNavigate();
-  const { salesOrders = [], refreshSalesOrders, lookups } = useSalesOrdersContext();
+  const { salesOrders = [], refreshSalesOrders, lookups, isLoading } = useSalesOrdersContext();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -449,6 +449,7 @@ export default function SalesOrdersPage() {
       <DataTable
         table={table}
         columns={columns}
+        isLoading={isLoading}
         totalCount={filteredData.length}
         entityName="sales orders"
         emptyTitle="No sales orders found"

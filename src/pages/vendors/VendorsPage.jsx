@@ -228,25 +228,6 @@ export default function VendorsPage() {
     resetFilters,
   ]);
 
-  // Re-fetch vendors whenever VendorsPage mounts to ensure fresh ERP data
-  useEffect(() => {
-    refreshVendors?.();
-  }, [refreshVendors]);
-
-  // Reset pagination to page 1 only when debounced search or filters change (avoids re-renders during active typing)
-  useEffect(() => {
-    setPageNumber(1);
-  }, [
-    debouncedSearch,
-    statusFilter,
-    approvalFilter,
-    categoryFilter,
-    groupFilter,
-    hasPendingChangeFilter,
-    hasDefaultedFieldsFilter,
-    setPageNumber,
-  ]);
-
   /* ── Column definitions for desktop table ── */
   const columns = useMemo(
     () => [

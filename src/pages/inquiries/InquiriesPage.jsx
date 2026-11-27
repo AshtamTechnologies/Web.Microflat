@@ -37,12 +37,23 @@ import {
   TableActions,
   KanbanBoard,
 } from '../../components/ui';
+import toast from 'react-hot-toast';
 import { useInquiriesContext } from '../../context/InquiriesContext';
 import { useQuotationsContext } from '../../context/QuotationsContext';
 import { useUsersContext } from '../../context/UsersContext';
-import { INQUIRY_STAGES, normalizeInquiryStage, mapStageToApiStatus, API_INQUIRY_STATUSES, getInquiryStage } from './inquiryStages';
+import {
+  INQUIRY_STAGES,
+  normalizeInquiryStage,
+  mapStageToApiStatus,
+  API_INQUIRY_STATUSES,
+  getInquiryStage,
+  canTransitionStage,
+  TRANSITION_DESCRIPTIONS,
+} from './inquiryStages';
 import InquiryKanbanCard from './components/InquiryKanbanCard';
 import AssignInquiryModal from './components/AssignInquiryModal';
+import DealFormModal from '../deals/DealFormModal';
+import { dealService } from '../../services';
 import { formatDate } from '../../utils/dateUtils';
 
 const columnHelper = createColumnHelper();
@@ -72,11 +83,56 @@ export default function InquiriesPage() {
     setPriorityFilter,
     resetFilters,
     changeInquiryStatus,
+    fetchInquiries,
     isLoading,
     priorityLevels = [],
     statuses: lookupStatuses = [],
   } = useInquiriesContext();
 
+  // ── Convert to Deal Modal State ──
+  const [isConvertDealOpen, setIsConvertDealOpen] = useState(false);
+  const [dealPrefillData, setDealPrefillData] = useState(null);
+  const [nextDealDocNumber, setNextDealDocNumber] = useState('');
+  const [dealCurrencies, setDealCurrencies] = useState([]);
+  const [isConvertingDeal, setIsConvertingDeal] = useState(false);
+
+  const handleStartDealConversion = useCallback(async (inq) => {
+    try {
+      setIsConvertingDeal(true);
+      const inqId = inq?.id || inq?.InquiryId;
+      const [prefill, nextNum, lookups] = await Promise.all([
+        dealService.getDealPrefill(inqId),
+        dealService.getNextDealNumber(),
+        dealService.getDealLookups(),
+      ]);
+      setDealPrefillData(prefill);
+      setNextDealDocNumber(nextNum?.documentNumber || '');
+      setDealCurrencies(lookups?.currencies || []);
+      setIsConvertDealOpen(true);
+    } catch (err) {
+      toast.error(err?.message || 'This inquiry cannot be converted to a deal.');
+    } finally {
+      setIsConvertingDeal(false);
+    }
+  }, []);
+
+  const handleSaveDealConversion = useCallback(
+    async (formData) => {
+      try {
+        const created = await dealService.createDeal(formData);
+        setIsConvertDealOpen(false);
+        toast.success(
+          `Deal ${created?.dealNumber || created?.name || ''} created successfully! Inquiry converted to Deal.`
+        );
+        if (fetchInquiries) {
+          await fetchInquiries();
+        }
+      } catch (err) {
+        console.error('Error saving deal from inquiry conversion:', err);
+      }
+    },
+    [fetchInquiries]
+  );
   const statusFilterOptions = useMemo(() => {
     const list = lookupStatuses.length > 0
       ? lookupStatuses.map((s) => ({ value: s, label: s }))
@@ -495,6 +551,52 @@ export default function InquiriesPage() {
     [navigate, userList, getInquiryOverflowActions]
   );
 
+  const handleStageMove = useCallback(
+    async (itemId, newStageId) => {
+      const targetInq = inquiries.find(
+        (i) => String(i.id || i.InquiryId) === String(itemId)
+      );
+      if (!targetInq) return;
+
+      const currentStage = resolveInquiryStage(targetInq);
+      if (currentStage === newStageId) return;
+
+      // 1. Dropping onto "Deal" triggers Deal Conversion modal
+      if (newStageId === 'Deal') {
+        if (currentStage !== 'New') {
+          toast.error(
+            `Cannot convert to Deal: Inquiry is in '${currentStage}' status. Only an inquiry in 'New' status can be converted to a deal.`
+          );
+          return;
+        }
+        await handleStartDealConversion(targetInq);
+        return;
+      }
+
+      // 2. Validate allowed status transition
+      if (!canTransitionStage(currentStage, newStageId)) {
+        const hint =
+          TRANSITION_DESCRIPTIONS[currentStage] || 'Transition not allowed.';
+        toast.error(
+          `Cannot move inquiry from '${currentStage}' to '${newStageId}'. ${hint}`
+        );
+        return;
+      }
+
+      // 3. Allowed API status update
+      const apiStatus = mapStageToApiStatus(newStageId);
+      if (apiStatus) {
+        changeInquiryStatus(itemId, apiStatus);
+      }
+    },
+    [
+      inquiries,
+      resolveInquiryStage,
+      handleStartDealConversion,
+      changeInquiryStatus,
+    ]
+  );
+
   /* ── React Table Instance ── */
   const table = useReactTable({
     data: inquiries,
@@ -765,10 +867,43 @@ export default function InquiriesPage() {
             items={inquiries}
             getItemId={(item) => item.id || item.InquiryId}
             getItemStatus={(item) => resolveInquiryStage(item)}
-            onItemMove={(itemId, newStatusId, oldStatusId, targetItemId, position) => {
-              const apiStatus = mapStageToApiStatus(newStatusId);
-              changeInquiryStatus(itemId, apiStatus, '', targetItemId, position);
+            onItemMove={(itemId, newStatusId) => {
+              handleStageMove(itemId, newStatusId);
             }}
+            renderColumnHeader={({ column, count }) => (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                        column.dotClass || 'bg-primary'
+                      }`}
+                    />
+                    <span className="font-semibold text-xs text-heading uppercase tracking-wider truncate">
+                      {column.name || column.id}
+                    </span>
+                  </div>
+                  <span
+                    className={`text-[10px] font-semibold px-1.5 py-0.2 rounded-full border shrink-0 ${
+                      column.badgeClass ||
+                      'bg-surface text-text-muted border-border font-mono'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </div>
+                {column.shortHint && (
+                  <div>
+                    <span
+                      className="inline-flex items-center text-[10px] leading-tight font-medium px-1.5 py-0.5 rounded bg-surface border border-border/60 text-text-muted/90 select-none truncate max-w-full"
+                      title={column.transitionHint || column.shortHint}
+                    >
+                      {column.shortHint}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
             renderCard={(item) => {
               const linkedQuotation = getLinkedQuotation(item);
               const stage = resolveInquiryStage(item);
@@ -779,8 +914,7 @@ export default function InquiriesPage() {
                   assigneeName={resolveUserName(item.AssignedTo)}
                   onAssignClick={(inq) => setAssignModalInquiry(inq)}
                   onMoveStage={(itemId, newStatusId) => {
-                    const apiStatus = mapStageToApiStatus(newStatusId);
-                    changeInquiryStatus(itemId, apiStatus);
+                    handleStageMove(itemId, newStatusId);
                   }}
                   availableStages={INQUIRY_STAGES}
                   linkedQuotation={linkedQuotation}
@@ -799,6 +933,20 @@ export default function InquiriesPage() {
         onClose={() => setAssignModalInquiry(null)}
         inquiry={assignModalInquiry}
       />
+
+      {/* ── Convert to Deal Modal (Drag-to-Deal or Action) ── */}
+      {isConvertDealOpen && (
+        <DealFormModal
+          isOpen={isConvertDealOpen}
+          onClose={() => setIsConvertDealOpen(false)}
+          mode="CREATE"
+          prefill={dealPrefillData}
+          nextDocNumber={nextDealDocNumber}
+          currencies={dealCurrencies}
+          onSave={handleSaveDealConversion}
+          isSubmitting={isConvertingDeal}
+        />
+      )}
     </div>
   );
 }

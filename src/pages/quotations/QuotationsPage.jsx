@@ -316,6 +316,8 @@ export default function QuotationsPage() {
       {/* Data Table */}
       <DataTable
         table={table}
+        columns={columns}
+        isLoading={isLoading}
         emptyMessage="No quotations found matching your criteria."
       />
     </div>
