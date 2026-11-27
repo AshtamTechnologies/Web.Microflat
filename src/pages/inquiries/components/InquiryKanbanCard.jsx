@@ -11,6 +11,7 @@ import {
 } from '../../../constants/icons';
 import { Badge, Button, TableActions } from '../../../components/ui';
 import { formatDate } from '../../../utils/dateUtils';
+import { getInquiryStage } from '../inquiryStages';
 
 function getPriorityBadgeVariant(priority) {
   if (priority === 'High') return 'danger';
@@ -36,6 +37,7 @@ function InquiryKanbanCard({
   const isUnassigned = !inquiry.AssignedTo || assigneeName === 'Unassigned';
   const displayDate = inquiry.RequiredByDate || inquiry.InquiryDate || inquiry.CreatedOn;
   const activeStage = inquiryStage || inquiry.StatusId;
+  const stageMeta = getInquiryStage(activeStage);
   const status = inquiry.status || inquiry.StatusId || '';
   const isWon = String(status).toLowerCase() === 'won';
   const isEditable = inquiry.isEditable !== false && !isWon;
@@ -90,7 +92,7 @@ function InquiryKanbanCard({
       onClick={() => navigate(`/inquiries/${id}`)}
       className="bg-surface border border-border hover:border-primary/50 rounded-xl p-3.5 shadow-2xs transition-all duration-200 cursor-pointer space-y-2.5 relative group"
     >
-      {/* ── Card Top Row: Grip Handle + Inquiry No + Priority Badge ── */}
+      {/* ── Card Top Row: Grip Handle + Inquiry No + Status & Priority Badges ── */}
       <div className="flex items-center justify-between gap-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
           <span
@@ -104,12 +106,24 @@ function InquiryKanbanCard({
           </span>
         </div>
 
-        <Badge
-          variant={getPriorityBadgeVariant(inquiry.Priority)}
-          className="text-3xs uppercase font-semibold px-1.5 py-0.5 shrink-0"
-        >
-          {inquiry.Priority || ''}
-        </Badge>
+        <div className="flex items-center gap-1 shrink-0">
+          {stageMeta && (
+            <span
+              className={`text-[9.5px] leading-none uppercase font-semibold px-1.5 py-0.5 rounded border ${
+                stageMeta.badgeClass || 'bg-surface text-text-muted border-border'
+              }`}
+            >
+              {stageMeta.name || activeStage}
+            </span>
+          )}
+          <Badge
+            variant={getPriorityBadgeVariant(inquiry.Priority)}
+            size="sm"
+            className="text-[9.5px] leading-none uppercase font-semibold px-1.5 py-0.5 shrink-0"
+          >
+            {inquiry.Priority || ''}
+          </Badge>
+        </div>
       </div>
 
       {/* ── Customer Name & Subject ── */}
@@ -142,12 +156,12 @@ function InquiryKanbanCard({
         >
           <div className="flex items-center gap-1.5 min-w-0">
             <IconQuotation size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
-            <span className="font-mono font-bold text-amber-700 dark:text-amber-300 truncate text-3xs">
+            <span className="font-mono font-bold text-amber-700 dark:text-amber-300 truncate text-[10px]">
               {linkedQuotation.quotationNo}
             </span>
           </div>
           {linkedQuotation.status && (
-            <span className="text-3xs uppercase font-semibold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
+            <span className="text-[9.5px] uppercase font-semibold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
               {linkedQuotation.status}
             </span>
           )}

@@ -157,6 +157,7 @@ export function inquiryAttachmentFromApi(dto) {
  */
 export function inquiryActivityFromApi(dto) {
   if (!dto) return null;
+  const timestamp = dto.on || dto.timestamp || dto.createdOn || dto.activityDate || dto.date || null;
   return {
     id: dto.id ?? null,
     inquiryId: dto.inquiryId ?? null,
@@ -168,8 +169,8 @@ export function inquiryActivityFromApi(dto) {
     userId: dto.userId ?? null,
     userName: dto.userName || '',
     changedBy: dto.userName || '',
-    on: dto.on || null,
-    timestamp: dto.on || null,
+    on: timestamp,
+    timestamp: timestamp,
   };
 }
 

@@ -716,7 +716,7 @@ export default function VendorApprovalPage() {
         table={table}
         columns={columns}
         totalCount={filteredRequests.length}
-        loading={isLoading}
+        isLoading={isLoading}
         entityName={activeTab === 'PENDING' ? 'pending requests' : 'history records'}
         emptyTitle={
           search.trim()
