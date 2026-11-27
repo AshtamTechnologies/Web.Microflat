@@ -81,7 +81,7 @@ function formatDisplayTime(val, include24h = false) {
 /**
  * WheelColumn — Smooth scrollable drum column with cyan selection lines
  */
-function WheelColumn({ items, value, onChange }) {
+function WheelColumn({ items, value, onChange, isItemDisabled }) {
   const containerRef = useRef(null);
   const isProgrammaticScroll = useRef(false);
   const scrollTimeout = useRef(null);
@@ -113,6 +113,13 @@ function WheelColumn({ items, value, onChange }) {
       const top = containerRef.current.scrollTop;
       const rawIndex = Math.round(top / ITEM_HEIGHT);
       const clampedIndex = Math.max(0, Math.min(items.length - 1, rawIndex));
+      if (items[clampedIndex] !== undefined && isItemDisabled?.(items[clampedIndex])) {
+        // Snap back to the current (valid) selection
+        if (selectedIndex >= 0) {
+          containerRef.current.scrollTo({ top: selectedIndex * ITEM_HEIGHT, behavior: 'smooth' });
+        }
+        return;
+      }
       if (items[clampedIndex] !== undefined && String(items[clampedIndex]) !== String(value)) {
         onChange(items[clampedIndex]);
       }
@@ -120,6 +127,7 @@ function WheelColumn({ items, value, onChange }) {
   };
 
   const handleItemClick = (item, index) => {
+    if (isItemDisabled?.(item)) return;
     onChange(item);
     if (containerRef.current) {
       containerRef.current.scrollTo({
@@ -153,14 +161,22 @@ function WheelColumn({ items, value, onChange }) {
           const isSelected = String(item) === String(value);
           const diff = Math.abs(index - selectedIndex);
           const isAdjacent = diff === 1;
+          const itemDisabled = Boolean(isItemDisabled?.(item));
 
           return (
             <div
               key={item}
               onClick={() => handleItemClick(item, index)}
               style={{ height: `${ITEM_HEIGHT}px` }}
-              className={`snap-center flex items-center justify-center cursor-pointer transition-all duration-150 ${
-                isSelected
+              aria-disabled={itemDisabled || undefined}
+              className={`snap-center flex items-center justify-center transition-all duration-150 ${
+                itemDisabled
+                  ? 'cursor-not-allowed text-sm font-normal text-text-muted/30 line-through'
+                  : 'cursor-pointer'
+              } ${
+                itemDisabled
+                  ? ''
+                  : isSelected
                   ? 'text-xl font-medium text-heading'
                   : isAdjacent
                   ? 'text-base font-normal text-text-muted/60 hover:text-text'
@@ -194,6 +210,7 @@ export default function TimePicker({
   size = 'md',
   className = '',
   show24hInDisplay = false,
+  minTime = '', // "HH:mm" (24h). Times earlier than this are disabled.
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState(null);
@@ -323,8 +340,35 @@ export default function TimePicker({
     }
   };
 
+  // ── minTime support: disable wheel entries that would produce a time before minTime ──
+  const minParsed = useMemo(() => parseTimeString(minTime), [minTime]);
+  const minTotal = minParsed ? minParsed.hour24 * 60 + Number(minParsed.minuteStr) : null;
+  const toTotal = (h12, m, p) => {
+    const t = to24HourString(h12, m, p).split(':').map(Number);
+    return t[0] * 60 + t[1];
+  };
+
+  const isHourDisabled = (h) => minTotal !== null && toTotal(h, '59', tempPeriod) < minTotal;
+  const isPeriodDisabled = (p) => minTotal !== null && toTotal(12, '59', p) < minTotal && p === 'AM';
+  const isMinuteDisabled = (m) => minTotal !== null && toTotal(tempHour, m, tempPeriod) < minTotal;
+
+  // If the chosen hour/period leaves the minute before minTime, snap minute to the earliest allowed one
+  const clampMinute = (h, m, p) => {
+    if (minTotal !== null && minParsed && toTotal(h, m, p) < minTotal) return minParsed.minuteStr;
+    return m;
+  };
+  const handleHourChange = (h) => {
+    setTempHour(h);
+    setTempMinute((m) => clampMinute(h, m, tempPeriod));
+  };
+  const handlePeriodChange = (p) => {
+    setTempPeriod(p);
+    setTempMinute((m) => clampMinute(tempHour, m, p));
+  };
+
   const handleConfirm = () => {
     const timeStr = to24HourString(tempHour, tempMinute, tempPeriod);
+    if (minTotal !== null && toTotal(tempHour, tempMinute, tempPeriod) < minTotal) return;
     emitChange(timeStr);
     setIsOpen(false);
     if (onBlur) {
@@ -473,7 +517,8 @@ export default function TimePicker({
               <WheelColumn
                 items={HOURS}
                 value={tempHour}
-                onChange={setTempHour}
+                onChange={handleHourChange}
+                isItemDisabled={isHourDisabled}
               />
 
               {/* Colon Separator in the active center row */}
@@ -486,13 +531,15 @@ export default function TimePicker({
                 items={MINUTES}
                 value={tempMinute}
                 onChange={setTempMinute}
+                isItemDisabled={isMinuteDisabled}
               />
 
               {/* Column 3: Period (AM / PM) */}
               <WheelColumn
                 items={PERIODS}
                 value={tempPeriod}
-                onChange={setTempPeriod}
+                onChange={handlePeriodChange}
+                isItemDisabled={isPeriodDisabled}
               />
             </div>
 

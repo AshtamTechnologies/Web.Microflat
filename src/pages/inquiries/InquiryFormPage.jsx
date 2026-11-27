@@ -32,6 +32,7 @@ import {
   IconInquiry,
   IconLayers,
   IconPackage,
+  IconRefresh,
   IconUpload,
   IconUser,
   IconUserCheck,
@@ -76,6 +77,7 @@ import { calculateFlatnessTolerance } from '../../utils/flatnessFormula';
 import { inquiryService, clientService, geographyService } from '../../services';
 import { getCategoryPathName } from '../../utils/treeUtils';
 import { getTodayISO } from '../../utils/dateUtils';
+import { isAssignableUser } from '../../utils/userFilters';
 
 const CLIENT_TYPE_OPTIONS = [
   { value: 'New', label: 'New Client' },
@@ -301,7 +303,7 @@ export default function InquiryFormPage() {
   } = useInquiriesContext();
 
   const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
-  const { addDocument } = useInquiryDocumentsContext();
+  const { addDocument, fetchDocumentsByInquiryId, getDocumentsByInquiryId } = useInquiryDocumentsContext();
   const { documentTypes: contextDocumentTypes = [] } = useDocumentTypesContext();
 
   const documentTypes = useMemo(() => {
@@ -742,7 +744,7 @@ export default function InquiryFormPage() {
 
   // Helper: calculate flatness tolerance using metrology formula
   const resolveFlatnessTolerance = useCallback((length, width, standard, grade) => {
-    if (!length || !standard || !grade) return '—';
+    if (!length || !standard || !grade) return null;
     try {
       const res = calculateFlatnessTolerance(length, width, standard, grade);
       if (res && res.isSupported && res.valueMicrons !== undefined) {
@@ -751,7 +753,7 @@ export default function InquiryFormPage() {
     } catch {
       // ignore
     }
-    return '—';
+    return null;
   }, []);
 
   const standardOptions = useMemo(() => {
@@ -1006,10 +1008,22 @@ export default function InquiryFormPage() {
         flatness: '',
       }));
     } else if (field === 'grade') {
+      // Recalculate flatness with the new grade using the currently selected variant
+      const gradeProd = mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId));
+      const gradeVars = productVariantsMap[itemFormState.productId] || [];
+      const gradeVariant =
+        gradeVars.find((v) => String(v.productVariantId ?? v.id) === String(itemFormState.variantId)) ||
+        gradeProd?.variants?.find((v) => String(v.productVariantId ?? v.id) === String(itemFormState.variantId)) ||
+        null;
+      const gradeDims = parseDimensionsFromVariant(gradeVariant);
+      const recalculatedFlatness = gradeVariant && value && itemFormState.standards
+        ? resolveFlatnessTolerance(gradeDims.length, gradeDims.width, itemFormState.standards, value)
+        : null;
+
       setItemFormState((prev) => ({
         ...prev,
         grade: value || '',
-        flatness: '',
+        flatness: recalculatedFlatness,
       }));
     } else if (field === 'variantId') {
       const prod = mergedCatalogProducts.find((p) => String(p.id) === String(itemFormState.productId));
@@ -1026,7 +1040,7 @@ export default function InquiryFormPage() {
       const dims = parseDimensionsFromVariant(variant);
       const calculatedFlatness = variant && standard && grade
         ? resolveFlatnessTolerance(dims.length, dims.width, standard, grade)
-        : '';
+        : null;
 
       setItemFormState((prev) => ({
         ...prev,
@@ -1171,22 +1185,67 @@ export default function InquiryFormPage() {
         ? item.id
         : index;
 
+    // Resolve matched catalog product and details for prefilling category, standards, grade, and specs
+    const rawProdId = item.productId ?? null;
+    const matchedProduct = rawProdId
+      ? mergedCatalogProducts.find((p) => String(p.id) === String(rawProdId))
+      : null;
+
+    let resolvedCategoryId = item.categoryId || (matchedProduct?.categoryId ? String(matchedProduct.categoryId) : '');
+    let resolvedCategoryName = item.categoryName || matchedProduct?.categoryName || '';
+
+    let resolvedStd = item.standards || item.standard || item.standardCode || item.manufacturingStandard || '';
+    let resolvedGrade = item.grade || item.gradeCode || '';
+
+    const spec = item.specification || item.notes || '';
+    if (!resolvedStd && spec) {
+      const stdMatch = spec.match(/\b(DIN[- ]?\d+|IS[- ]?\d+|BS[- ]?\d+|ASME|JIS)\b/i);
+      if (stdMatch) resolvedStd = stdMatch[1];
+      else if (matchedProduct?.standardInfo) resolvedStd = matchedProduct.standardInfo;
+    }
+    if (!resolvedGrade && spec) {
+      const grdMatch = spec.match(/\b(Gr(?:ade)?[- ]?[0-3I|IV]+)\b/i);
+      if (grdMatch) resolvedGrade = grdMatch[1];
+    }
+
+    const resolvedVariantId = item.productVariantId ?? item.variantId ?? null;
+    let resolvedDims = item.dimensions || '';
+    let resolvedMaterial = item.material || matchedProduct?.materialName || '';
+    let resolvedFinish = item.finish || matchedProduct?.finishType || '';
+    let resolvedFlatness = item.flatness || '';
+
+    // If variant is available in catalog, enrich technical details if blank
+    if (matchedProduct?.variants && resolvedVariantId) {
+      const v = matchedProduct.variants.find((vObj) => String(vObj.productVariantId ?? vObj.id) === String(resolvedVariantId));
+      if (v) {
+        if (!resolvedDims) resolvedDims = v.dimensions || v.size || v.variantName || '';
+        if (!resolvedMaterial && v.materialName) resolvedMaterial = v.materialName;
+        if (!resolvedFinish && v.finishType) resolvedFinish = v.finishType;
+        if (!resolvedStd && (v.standardCode || v.standardName)) resolvedStd = v.standardCode || v.standardName;
+        if (!resolvedGrade && (v.gradeCode || v.gradeName)) resolvedGrade = v.gradeCode || v.gradeName;
+        if (!resolvedFlatness) {
+          const dims = parseDimensionsFromVariant(v);
+          resolvedFlatness = resolveFlatnessTolerance(dims.length, dims.width, resolvedStd, resolvedGrade) || '';
+        }
+      }
+    }
+
     setEditingItemId(id);
     setItemFieldErrors({});
     setItemFormState({
       prItemId: item.prItemId ?? item.id ?? null,
-      categoryId: item.categoryId || '',
-      categoryName: item.categoryName || '',
+      categoryId: resolvedCategoryId,
+      categoryName: resolvedCategoryName,
       productId: item.productId ?? null,
-      productName: item.productName || item.itemName || '',
-      variantId: item.productVariantId ?? item.variantId ?? null,
+      productName: item.productName || item.itemName || matchedProduct?.productName || '',
+      variantId: resolvedVariantId,
       variantName: item.variantName || '',
-      dimensions: item.dimensions || '',
-      material: item.material || '',
-      finish: item.finish || '',
-      standards: item.standards || '',
-      grade: item.grade || '',
-      flatness: item.flatness || '',
+      dimensions: resolvedDims,
+      material: resolvedMaterial,
+      finish: resolvedFinish,
+      standards: resolvedStd,
+      grade: resolvedGrade,
+      flatness: resolvedFlatness,
       options: Array.isArray(item.options) ? item.options.map((option) => typeof option === 'string' ? option : option.optionName || '') : [],
       selectedOptionIds: Array.isArray(item.options)
         ? item.options.map((option) => Number(typeof option === 'object' ? option.productOptionId ?? option.id : option)).filter((optionId) => Number.isInteger(optionId) && optionId > 0)
@@ -1306,11 +1365,13 @@ export default function InquiryFormPage() {
 
   // Build assignee options from UsersContext (No "Leave unassigned" option)
   const userOptions = useMemo(() => {
-    return userList.map((u) => ({
-      value: u.id,
-      label: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'User',
-    }));
-  }, [userList]);
+    return userList
+      .filter((u) => isAssignableUser(u) || String(u.id) === String(form.AssignedTo))
+      .map((u) => ({
+        value: u.id,
+        label: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'User',
+      }));
+  }, [userList, form.AssignedTo]);
 
   // Initialize form state
   useEffect(() => {
@@ -1319,13 +1380,31 @@ export default function InquiryFormPage() {
         if (initializedIdRef.current !== id) {
           initializedIdRef.current = id;
 
-          const mappedItems = Array.isArray(existingInquiry.items)
-            ? existingInquiry.items.map((it) => ({
+          const rawItems = Array.isArray(existingInquiry.items) && existingInquiry.items.length > 0
+            ? existingInquiry.items
+            : (Array.isArray(existingInquiry.products) ? existingInquiry.products : []);
+
+          const mappedItems = rawItems.map((it) => {
+            let itemStd = it.standards || it.standard || it.standardCode || it.manufacturingStandard || '';
+            let itemGrd = it.grade || it.gradeCode || '';
+            const spec = it.specification || it.notes || '';
+            if (!itemStd && spec) {
+              const stdMatch = spec.match(/\b(DIN[- ]?\d+|IS[- ]?\d+|BS[- ]?\d+|ASME|JIS)\b/i);
+              if (stdMatch) itemStd = stdMatch[1];
+            }
+            if (!itemGrd && spec) {
+              const grdMatch = spec.match(/\b(Gr(?:ade)?[- ]?[0-3I|IV]+)\b/i);
+              if (grdMatch) itemGrd = grdMatch[1];
+            }
+            return {
               ...it,
-              uom: normalizeUom(it.uom || it.uomName),
+              categoryId: it.categoryId || '',
               categoryName: it.categoryName || (it.categoryId ? getCategoryPathName(it.categoryId, categories) : ''),
-            }))
-            : [];
+              standards: itemStd,
+              grade: itemGrd,
+              uom: normalizeUom(it.uom || it.uomName),
+            };
+          });
 
           const loadedRegionId = existingInquiry.RegionId ?? existingInquiry.regionId ?? '';
 
@@ -1335,10 +1414,10 @@ export default function InquiryFormPage() {
             (companyMatchName && (c.companyName || c.clientName || '').trim().toLowerCase() === companyMatchName)
           );
           const loadedClientId = existingInquiry.clientId ?? (matchedClient ? (matchedClient.clientId || matchedClient.id) : '');
-          const loadedClientType = loadedClientId ? 'Existing' : 'New';
+          const loadedClientType = (existingInquiry.isNewClient === false || Boolean(loadedClientId)) ? 'Existing' : 'New';
 
-          const resolvedCountry = existingInquiry.Country || existingInquiry.countryName || '';
-          const resolvedState = existingInquiry.State || existingInquiry.stateName || '';
+          const resolvedCountry = existingInquiry.Country || existingInquiry.countryName || (matchedClient?.countryName || '');
+          const resolvedState = existingInquiry.State || existingInquiry.stateName || (matchedClient?.stateName || '');
 
           const data = {
             clientType: loadedClientType,
@@ -1352,17 +1431,17 @@ export default function InquiryFormPage() {
             DistributorName: existingInquiry.DistributorName || '',
             Priority: existingInquiry.Priority || existingInquiry.priorityName || '',
             priorityLevelId: existingInquiry.priorityLevelId ?? null,
-            CustomerName: existingInquiry.CustomerName || existingInquiry.companyName || '',
-            ContactPerson: existingInquiry.ContactPerson || existingInquiry.contactPersonName || '',
-            Email: existingInquiry.Email || existingInquiry.email || '',
-            Phone: existingInquiry.Phone || existingInquiry.mobileNo || '',
-            AlternativePhone: existingInquiry.AlternativePhone || existingInquiry.alternatePhoneNo || '',
-            AddressLine1: existingInquiry.AddressLine1 || existingInquiry.address1 || '',
-            address1: existingInquiry.address1 || existingInquiry.AddressLine1 || '',
-            AddressLine2: existingInquiry.AddressLine2 || existingInquiry.address2 || '',
-            address2: existingInquiry.address2 || existingInquiry.AddressLine2 || '',
-            City: existingInquiry.City || existingInquiry.city || '',
-            city: existingInquiry.city || existingInquiry.City || '',
+            CustomerName: existingInquiry.CustomerName || existingInquiry.companyName || (matchedClient?.companyName || matchedClient?.clientName || ''),
+            ContactPerson: existingInquiry.ContactPerson || existingInquiry.contactPersonName || (matchedClient?.primaryContactName || matchedClient?.contactPerson || ''),
+            Email: existingInquiry.Email || existingInquiry.email || (matchedClient?.email || matchedClient?.officialEmail || ''),
+            Phone: existingInquiry.Phone || existingInquiry.mobileNo || (matchedClient?.primaryContactPhoneNo || matchedClient?.phone || ''),
+            AlternativePhone: existingInquiry.AlternativePhone || existingInquiry.alternatePhoneNo || (matchedClient?.alternativePhone || ''),
+            AddressLine1: existingInquiry.AddressLine1 || existingInquiry.address1 || (matchedClient?.address1 || ''),
+            address1: existingInquiry.address1 || existingInquiry.AddressLine1 || (matchedClient?.address1 || ''),
+            AddressLine2: existingInquiry.AddressLine2 || existingInquiry.address2 || (matchedClient?.address2 || ''),
+            address2: existingInquiry.address2 || existingInquiry.AddressLine2 || (matchedClient?.address2 || ''),
+            City: existingInquiry.City || existingInquiry.city || (matchedClient?.city || ''),
+            city: existingInquiry.city || existingInquiry.City || (matchedClient?.city || ''),
             State: resolvedState,
             state: resolvedState,
             Country: resolvedCountry,
@@ -1409,6 +1488,30 @@ export default function InquiryFormPage() {
       }
     }
   }, [isEdit, id, existingInquiry, getNextInquiryNo, clients, categories]);
+
+  // Backfill client match once clients are loaded from API if form initially rendered before clients were available
+  useEffect(() => {
+    if (isEdit && clients.length > 0 && form.CustomerName) {
+      const match = clients.find(
+        (c) =>
+          (form.clientId && String(c.clientId || c.id) === String(form.clientId)) ||
+          ((c.companyName || c.clientName || '').trim().toLowerCase() === form.CustomerName.trim().toLowerCase())
+      );
+      if (match) {
+        setForm((prev) => {
+          if (prev.clientId && prev.clientType === 'Existing') return prev;
+          return {
+            ...prev,
+            clientType: 'Existing',
+            clientId: prev.clientId || match.clientId || match.id,
+            ContactPerson: prev.ContactPerson || match.primaryContactName || match.contactPerson || '',
+            Email: prev.Email || match.email || match.officialEmail || '',
+            Phone: prev.Phone || match.primaryContactPhoneNo || match.phone || '',
+          };
+        });
+      }
+    }
+  }, [isEdit, clients, form.CustomerName, form.clientId]);
 
   useEffect(() => {
     if (isEdit || !defaultPriorityLevelId || form.priorityLevelId) return;
@@ -1606,6 +1709,7 @@ export default function InquiryFormPage() {
   // ── Attachment Validation & Addition ──
   function validateFile(file, docType) {
     if (!file) return 'Please select a file.';
+    if (file.size === 0) return 'This file is empty (0 KB). Please select a valid file.';
 
     const fileName = file.name || '';
     const extIndex = fileName.lastIndexOf('.');
@@ -1694,6 +1798,29 @@ export default function InquiryFormPage() {
     return <IconFile size={16} className="text-text-muted shrink-0" />;
   };
 
+  // Existing (already saved) attachments for edit mode
+  const savedAttachments = isEdit && id ? getDocumentsByInquiryId(id) : [];
+
+  useEffect(() => {
+    if (isEdit && id && fetchDocumentsByInquiryId) fetchDocumentsByInquiryId(id);
+  }, [isEdit, id, fetchDocumentsByInquiryId]);
+
+  // Uploads all staged attachments; returns the ones that failed.
+  async function uploadStagedAttachments(inquiryId) {
+    const failed = [];
+    for (const att of form.attachments || []) {
+      const res = await addDocument(inquiryId, {
+        documentTypeId: att.documentTypeId,
+        documentTitle: att.documentTitle,
+        file: att.file,
+        remarks: att.remarks,
+      });
+      if (!res?.ok) failed.push(att);
+    }
+    if ((form.attachments || []).length > 0) await fetchDocumentsByInquiryId(inquiryId);
+    return failed;
+  }
+
   async function handleSubmit(e) {
     if (e) e.preventDefault();
     const fieldErrors = validateAll(form);
@@ -1734,15 +1861,11 @@ export default function InquiryFormPage() {
             addInquiryComment(inquiryId, form.initialComment.trim());
           }
           // Add any newly staged attachments
-          if (form.attachments && form.attachments.length > 0) {
-            for (const att of form.attachments) {
-              await addDocument(inquiryId, {
-                documentTypeId: att.documentTypeId,
-                documentTitle: att.documentTitle,
-                file: att.file,
-                remarks: att.remarks,
-              });
-            }
+          const failed = await uploadStagedAttachments(inquiryId);
+          if (failed.length > 0) {
+            setForm((prev) => ({ ...prev, attachments: failed }));
+            toast.error(`${failed.length} attachment(s) failed to upload. Remove or replace the failed file in the queue, then save again.`);
+            return;
           }
           navigate(`/inquiries/${inquiryId}`, { replace: true });
         }
@@ -1751,15 +1874,9 @@ export default function InquiryFormPage() {
         if (res.ok && res.inquiry) {
           const newInquiryId = res.inquiry.id || res.inquiry.InquiryId;
           // Add attached documents to new inquiry
-          if (form.attachments && form.attachments.length > 0) {
-            for (const att of form.attachments) {
-              await addDocument(newInquiryId, {
-                documentTypeId: att.documentTypeId,
-                documentTitle: att.documentTitle,
-                file: att.file,
-                remarks: att.remarks,
-              });
-            }
+          const failed = await uploadStagedAttachments(newInquiryId);
+          if (failed.length > 0) {
+            toast.error(`Inquiry saved, but ${failed.length} attachment(s) failed. Retry from the inquiry page.`);
           }
           navigate(`/inquiries/${newInquiryId}`, { replace: true });
         }
@@ -1769,6 +1886,22 @@ export default function InquiryFormPage() {
     }
   }
 
+  if (isEdit && isLoadingInquiry) {
+    return (
+      <div className="max-w-4xl mx-auto py-20 px-4 text-center">
+        <Card padding="xl" className="space-y-4 flex flex-col items-center justify-center">
+          <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center animate-spin">
+            <IconRefresh size={24} />
+          </div>
+          <h2 className="text-lg font-bold text-heading">Loading Inquiry Details...</h2>
+          <p className="text-sm text-text-muted">
+            Fetching complete inquiry information from the server.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   if (isEdit && !existingInquiry) {
     return (
       <div className="max-w-4xl mx-auto py-12 px-4 text-center">
@@ -1776,13 +1909,9 @@ export default function InquiryFormPage() {
           <div className="w-12 h-12 rounded-full bg-danger/10 text-danger flex items-center justify-center mx-auto">
             <IconError size={24} />
           </div>
-          <h2 className="text-lg font-bold text-heading">
-            {isLoadingInquiry ? 'Loading Inquiry' : 'Unable to Load Inquiry'}
-          </h2>
+          <h2 className="text-lg font-bold text-heading">Unable to Load Inquiry</h2>
           <p className="text-sm text-text-muted">
-            {isLoadingInquiry
-              ? 'Loading the complete inquiry record from the API.'
-              : inquiryLoadError || `The complete inquiry record with ID "${id}" is unavailable.`}
+            {inquiryLoadError || `The complete inquiry record with ID "${id}" is unavailable.`}
           </p>
           <Button variant="primary" onClick={() => navigate('/inquiries')}>
             Back to Inquiries
@@ -2106,28 +2235,7 @@ export default function InquiryFormPage() {
                   autoComplete="address-level2"
                 />
 
-                {/* 8. State / Province (SearchableSelect) */}
-                <SearchableSelect
-                  id="State"
-                  name="State"
-                  label="State / Province"
-                  placeholder={
-                    selectedCountryObj && loadingStatesMap[selectedCountryObj.id]
-                      ? 'Loading states...'
-                      : stateDropdownOptions.length === 0
-                        ? 'No states available'
-                        : 'Select state...'
-                  }
-                  searchPlaceholder="Search states..."
-                  emptyText="No states found"
-                  options={stateDropdownOptions}
-                  value={form.State || ''}
-                  onChange={handleStateSelect}
-                  error={errors.State}
-                  disabled={stateDropdownOptions.length === 0}
-                />
-
-                {/* 9. Country (SearchableSelect) */}
+                {/* 8. Country (SearchableSelect) */}
                 <SearchableSelect
                   id="Country"
                   name="Country"
@@ -2139,6 +2247,29 @@ export default function InquiryFormPage() {
                   value={form.Country}
                   onChange={handleCountrySelect}
                   error={errors.Country}
+                />
+
+                {/* 9. State / Province (SearchableSelect) */}
+                <SearchableSelect
+                  id="State"
+                  name="State"
+                  label="State / Province"
+                  placeholder={
+                    !selectedCountryObj
+                      ? 'Select country first'
+                      : loadingStatesMap[selectedCountryObj.id]
+                        ? 'Loading states...'
+                        : stateDropdownOptions.length === 0
+                          ? 'No states available'
+                          : 'Select state...'
+                  }
+                  searchPlaceholder="Search states..."
+                  emptyText="No states found"
+                  options={stateDropdownOptions}
+                  value={form.State || ''}
+                  onChange={handleStateSelect}
+                  error={errors.State}
+                  disabled={!selectedCountryObj || stateDropdownOptions.length === 0}
                 />
 
                 {/* 10. Address Line 1 */}
@@ -3017,6 +3148,22 @@ export default function InquiryFormPage() {
                 </div>
               </div>
 
+              {/* Already-saved attachments (edit mode) */}
+              {isEdit && savedAttachments.length > 0 && (
+                <div className="border border-border rounded-xl bg-bg divide-y divide-border/60">
+                  <div className="px-4 py-2.5 bg-surface/60 text-xs font-bold text-heading">
+                    Saved Attachments ({savedAttachments.length})
+                  </div>
+                  {savedAttachments.map((doc) => (
+                    <div key={doc.id || doc.attachmentId} className="px-4 py-2.5 flex items-center gap-2 text-xs">
+                      {renderFileExtIcon(doc.fileName)}
+                      <span className="font-semibold text-heading truncate">{doc.documentTitle || doc.fileName}</span>
+                      <span className="font-mono text-text-muted truncate">{doc.fileName}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* List of Attached Documents */}
               {form.attachments && form.attachments.length > 0 ? (
                 <div className="border border-border rounded-xl overflow-x-auto bg-bg">
@@ -3025,7 +3172,7 @@ export default function InquiryFormPage() {
                       Queued Attachments ({form.attachments.length})
                     </span>
                     <span className="text-2xs text-text-muted">
-                      Will be uploaded upon inquiry creation
+                      {isEdit ? 'Will be uploaded when you save changes' : 'Will be uploaded upon inquiry creation'}
                     </span>
                   </div>
 

@@ -72,6 +72,7 @@ import RegisterClientRequiredModal from '../quotations/components/RegisterClient
 import QuickClientOnboardDrawer from '../quotations/components/QuickClientOnboardDrawer';
 import { dealService, inquiryService, isMockApi } from '../../services';
 import { useClientsContext } from '../../context/ClientsContext';
+import { dealService, inquiryService, isMockApi } from '../../services';
 import { formatDate, formatDateTime } from '../../utils/dateUtils';
 import { getMeetings } from '../../services/meetings/meetingsService';
 import { getInquiryStage } from './inquiryStages';
@@ -312,6 +313,8 @@ export default function InquiryViewPage() {
   const { loadClients, ensureClientsLoaded } = useClientsContext?.() || {};
   const [isConflictClientModalOpen, setIsConflictClientModalOpen] = useState(false);
   const [isQuickClientDrawerOpen, setIsQuickClientDrawerOpen] = useState(false);
+  const [isRegisterClientModalOpen, setIsRegisterClientModalOpen] = useState(false);
+  const [isRegisteringClient, setIsRegisteringClient] = useState(false);
   const [linkedDeal, setLinkedDeal] = useState(null);
   const [loadingLinkedDeal, setLoadingLinkedDeal] = useState(false);
 
@@ -448,8 +451,37 @@ export default function InquiryViewPage() {
       setIsConvertDealOpen(true);
     } catch (err) {
       toast.error(err?.message || 'Failed to prepare deal conversion after client registration.');
+      const msg = err?.message || '';
+      if (
+        msg.toLowerCase().includes('new client') ||
+        msg.toLowerCase().includes('register-client') ||
+        msg.toLowerCase().includes('register the client')
+      ) {
+        setIsRegisterClientModalOpen(true);
+      } else {
+        toast.error(msg || 'This inquiry cannot be converted to a deal.');
+      }
     } finally {
       setIsConvertingDeal(false);
+    }
+  };
+
+  const handleRegisterClient = async () => {
+    try {
+      setIsRegisteringClient(true);
+      const inqId = inquiry?.id || id;
+      await inquiryService.registerClient(inqId);
+      toast.success('Client registered successfully.');
+      setIsRegisterClientModalOpen(false);
+      if (fetchInquiryById) {
+        const updated = await fetchInquiryById(inqId);
+        if (updated) setLiveInquiry(updated);
+      }
+      handleConvertToDealClick();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to register client.');
+    } finally {
+      setIsRegisteringClient(false);
     }
   };
 
@@ -891,7 +923,7 @@ export default function InquiryViewPage() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-3 max-h-[380px] overflow-y-auto overscroll-contain pr-1.5 custom-scrollbar">
+        <div className="space-y-3 max-h-80 overflow-y-auto overscroll-contain pr-1.5 custom-scrollbar">
           {inquiryMeetings.map((m) => {
             const meetingId = m.id || m.meetingId;
             const isCompleted = m.status === 'Completed';
@@ -1764,6 +1796,45 @@ export default function InquiryViewPage() {
         inquiry={inquiry}
         onSuccess={handleQuickClientSuccess}
       />
+      {/* ── Client Registration Required Modal (Bug 8) ── */}
+      {isRegisterClientModalOpen && (
+        <Modal
+          isOpen={isRegisterClientModalOpen}
+          onClose={() => setIsRegisterClientModalOpen(false)}
+          title="Client Registration Required"
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4 py-1">
+            <div className="flex items-start gap-3 p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-800 dark:text-amber-300">
+              <IconBuilding2 className="w-5 h-5 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="text-sm space-y-1">
+                <p className="font-semibold text-heading">
+                  This inquiry is linked to a new client who hasn't been registered yet.
+                </p>
+                <p className="text-text-muted">
+                  Please register the client before converting this inquiry to a deal.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <CancelButton
+                onClick={() => setIsRegisterClientModalOpen(false)}
+                disabled={isRegisteringClient}
+              >
+                Cancel
+              </CancelButton>
+              <Button
+                variant="primary"
+                onClick={handleRegisterClient}
+                loading={isRegisteringClient}
+                icon={IconUserCheck}
+              >
+                Register Client
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* ── Convert to Deal Modal ── */}
       {isConvertDealOpen && (

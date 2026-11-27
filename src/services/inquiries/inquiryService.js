@@ -256,6 +256,21 @@ export async function toggleInquiryActive(id, isActive) {
 }
 
 /**
+ * 10b. Register new client from inquiry.
+ * POST /api/inquiries/{id}/register-client
+ * @param {number|string} id
+ */
+export async function registerClient(id) {
+  try {
+    const validId = cleanId(id);
+    const response = await axiosInstance.post(INQUIRY_ENDPOINTS.REGISTER_CLIENT(validId));
+    return response.data;
+  } catch (err) {
+    throw normalizeApiError(err);
+  }
+}
+
+/**
  * 11. Get inquiry activity trail.
  * GET /api/inquiries/{id}/activities
  * @param {number|string} id
