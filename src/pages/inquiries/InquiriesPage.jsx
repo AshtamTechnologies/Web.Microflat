@@ -74,7 +74,18 @@ export default function InquiriesPage() {
     changeInquiryStatus,
     isLoading,
     priorityLevels = [],
+    statuses: lookupStatuses = [],
   } = useInquiriesContext();
+
+  const statusFilterOptions = useMemo(() => {
+    const list = lookupStatuses.length > 0
+      ? lookupStatuses.map((s) => ({ value: s, label: s }))
+      : API_INQUIRY_STATUSES.map((s) => ({ value: s.id, label: s.name }));
+    return [
+      { value: 'ALL', label: 'All Statuses' },
+      ...list,
+    ];
+  }, [lookupStatuses]);
 
   const priorityFilterOptions = useMemo(() => [
     { value: 'ALL', label: 'All Priorities' },
@@ -134,6 +145,13 @@ export default function InquiriesPage() {
       if (!inq) return '';
       const explicitStatus = inq.StatusId || inq.status;
       const normalized = normalizeInquiryStage(explicitStatus);
+
+      // If inquiry has an explicit terminal or recognized API status, prioritize it
+      const lower = String(explicitStatus || '').trim().toLowerCase();
+      if (lower === 'won' || lower === 'lost' || lower === 'deal') {
+        return normalized;
+      }
+
       const linkedQuotation = getLinkedQuotation(inq);
 
       if (linkedQuotation) {
@@ -457,13 +475,16 @@ export default function InquiriesPage() {
         cell: (info) => {
           const row = info.row.original;
           const rowId = row.id || row.InquiryId;
+          const isWon = String(row.status || row.StatusId || '').toLowerCase() === 'won';
+          const isEditable = row.isEditable !== false && !isWon;
 
           return (
             <TableActions
               onView={() => navigate(`/inquiries/${rowId}`)}
               onEdit={() => navigate(`/inquiries/${rowId}/edit`)}
+              editDisabled={!isEditable}
               viewTooltip="View Inquiry Details"
-              editTooltip="Edit Inquiry"
+              editTooltip={isWon ? 'Inquiry is Won and cannot be edited' : !isEditable ? 'Inquiry is locked' : 'Edit Inquiry'}
               className="justify-end shrink-0"
               overflowActions={getInquiryOverflowActions(row)}
             />
@@ -559,7 +580,7 @@ export default function InquiriesPage() {
             id="filter-status"
             placeholder="All Statuses"
             searchPlaceholder="Search status..."
-            options={STATUS_FILTER_OPTIONS}
+            options={statusFilterOptions}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           />

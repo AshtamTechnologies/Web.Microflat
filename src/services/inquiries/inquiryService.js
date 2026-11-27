@@ -73,8 +73,8 @@ export async function listInquiries(params = {}) {
     const items = Array.isArray(data.items)
       ? data.items.map(inquiryListItemFromApi).filter(Boolean)
       : Array.isArray(data)
-      ? data.map(inquiryListItemFromApi).filter(Boolean)
-      : [];
+        ? data.map(inquiryListItemFromApi).filter(Boolean)
+        : [];
 
     return {
       items,
@@ -122,8 +122,8 @@ export async function getSources() {
   return Array.isArray(lookups.sources)
     ? lookups.sources
     : Array.isArray(lookups.inquirySources)
-    ? lookups.inquirySources
-    : [];
+      ? lookups.inquirySources
+      : [];
 }
 
 /**
@@ -134,8 +134,8 @@ export async function getPriorityLevels() {
   return Array.isArray(lookups.priorityLevels)
     ? lookups.priorityLevels
     : Array.isArray(lookups.priorities)
-    ? lookups.priorities
-    : [];
+      ? lookups.priorities
+      : [];
 }
 
 /**

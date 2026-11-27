@@ -80,37 +80,45 @@ function getPriorityBadgeVariant(priority) {
 }
 
 const INITIAL_ITEM_WIDTHS = {
-  index: 48,
-  itemCode: 130,
-  product: 200,
-  materialFinish: 170,
-  options: 160,
-  quantity: 75,
+  index: 38,
+  itemCode: 105,
+  product: 180,
+  materialFinish: 130,
+  options: 95,
+  quantity: 55,
 };
 
 const MIN_ITEM_WIDTHS = {
-  index: 40,
-  itemCode: 90,
-  product: 130,
-  materialFinish: 120,
-  options: 110,
-  quantity: 60,
+  index: 32,
+  itemCode: 85,
+  product: 120,
+  materialFinish: 90,
+  options: 75,
+  quantity: 45,
 };
 
 const INITIAL_DOC_WIDTHS = {
-  expander: 36,
-  docType: 100,
-  docTitle: 190,
-  revision: 160,
+  docType: 120,
+  docTitle: 180,
+  fileName: 180,
+  remarks: 140,
+  uploadedOn: 130,
   actions: 95,
+  // REVISION CODE PRESERVED (COMMENTED OUT)
+  // expander: 36,
+  // revision: 160,
 };
 
 const MIN_DOC_WIDTHS = {
-  expander: 36,
-  docType: 70,
+  docType: 80,
   docTitle: 110,
-  revision: 90,
-  actions: 75,
+  fileName: 110,
+  remarks: 90,
+  uploadedOn: 90,
+  actions: 80,
+  // REVISION CODE PRESERVED (COMMENTED OUT)
+  // expander: 36,
+  // revision: 90,
 };
 
 const INITIAL_VER_WIDTHS = {
@@ -201,7 +209,7 @@ export default function InquiryViewPage() {
   const location = useLocation();
   const { id } = useParams();
 
-  const { getInquiryById, fetchInquiryById, addInquiryComment } = useInquiriesContext();
+  const { getInquiryById, fetchInquiryById, addInquiryComment, documentTypes: lookupDocumentTypes = [] } = useInquiriesContext();
   const { allUsers = [], users = [] } = useUsersContext();
   const {
     getDocumentsByInquiryId,
@@ -209,21 +217,29 @@ export default function InquiryViewPage() {
     getMissingMandatoryDocumentTypes,
     downloadDocument,
   } = useInquiryDocumentsContext();
-  const { documentTypes = [] } = useDocumentTypesContext();
+  const { documentTypes: contextDocumentTypes = [] } = useDocumentTypesContext();
   const { categories = [] } = useProductCategoriesContext();
+
+  const documentTypes = useMemo(() => {
+    return (Array.isArray(lookupDocumentTypes) && lookupDocumentTypes.length > 0)
+      ? lookupDocumentTypes
+      : contextDocumentTypes;
+  }, [lookupDocumentTypes, contextDocumentTypes]);
+  const effectiveDocTypes = documentTypes;
 
   const userList = allUsers.length > 0 ? allUsers : users;
   const resolveDocType = useCallback(
     (typeId) => {
       if (typeId == null) return null;
-      return documentTypes.find(
+      return effectiveDocTypes.find(
         (docType) => String(docType.documentTypeId ?? docType.id) === String(typeId)
       ) || null;
     },
-    [documentTypes]
+    [effectiveDocTypes]
   );
 
   const [liveInquiry, setLiveInquiry] = useState(null);
+  const [loadingInquiry, setLoadingInquiry] = useState(true);
 
   const inquiry = useMemo(() => {
     return liveInquiry || getInquiryById(id);
@@ -232,6 +248,7 @@ export default function InquiryViewPage() {
   useEffect(() => {
     let isMounted = true;
     if (id) {
+      setLoadingInquiry(true);
       const isNumeric = !isNaN(Number(id));
       if (fetchInquiryById && (isNumeric || isMockApi)) {
         fetchInquiryById(id)
@@ -241,11 +258,18 @@ export default function InquiryViewPage() {
           .catch((err) => {
             console.error(`Failed to load inquiry ${id}:`, err);
             if (isMounted) toast.error(err?.message || 'Failed to load inquiry details.');
+          })
+          .finally(() => {
+            if (isMounted) setLoadingInquiry(false);
           });
+      } else {
+        setLoadingInquiry(false);
       }
       if (fetchDocumentsByInquiryId && (isNumeric || isMockApi)) {
         fetchDocumentsByInquiryId(id);
       }
+    } else {
+      setLoadingInquiry(false);
     }
     return () => {
       isMounted = false;
@@ -280,6 +304,61 @@ export default function InquiryViewPage() {
   const [nextDealDocNumber, setNextDealDocNumber] = useState('');
   const [dealCurrencies, setDealCurrencies] = useState([]);
   const [isConvertingDeal, setIsConvertingDeal] = useState(false);
+  const [linkedDeal, setLinkedDeal] = useState(null);
+  const [loadingLinkedDeal, setLoadingLinkedDeal] = useState(false);
+
+  const isDealStatus = (inquiry?.status || inquiry?.StatusId || inquiry?.Status || '').toLowerCase() === 'deal';
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!id || !isDealStatus) {
+      setLinkedDeal(null);
+      return;
+    }
+
+    async function loadLinkedDeal() {
+      try {
+        setLoadingLinkedDeal(true);
+        const res = await dealService.listDeals({ inquiryId: id, pageSize: 5 });
+        if (isMounted && res?.items?.length > 0) {
+          setLinkedDeal(res.items[0]);
+        }
+      } catch (err) {
+        console.error('Failed to load linked deal for inquiry:', err);
+      } finally {
+        if (isMounted) setLoadingLinkedDeal(false);
+      }
+    }
+
+    loadLinkedDeal();
+    return () => {
+      isMounted = false;
+    };
+  }, [id, isDealStatus]);
+
+  const handleViewDealClick = async () => {
+    if (linkedDeal?.id) {
+      navigate(`/deals/${linkedDeal.id}`);
+      return;
+    }
+    try {
+      setLoadingLinkedDeal(true);
+      const inqId = inquiry?.id || id;
+      const res = await dealService.listDeals({ inquiryId: inqId, pageSize: 5 });
+      const found = res?.items?.[0];
+      if (found?.id) {
+        setLinkedDeal(found);
+        navigate(`/deals/${found.id}`);
+      } else {
+        navigate(`/deals?search=${encodeURIComponent(inquiry?.inquiryNo || '')}`);
+      }
+    } catch (err) {
+      console.error('Failed to resolve deal on click:', err);
+      navigate(`/deals?search=${encodeURIComponent(inquiry?.inquiryNo || '')}`);
+    } finally {
+      setLoadingLinkedDeal(false);
+    }
+  };
 
   const handleConvertToDealClick = async () => {
     try {
@@ -409,10 +488,11 @@ export default function InquiryViewPage() {
   }, []);
 
   // Helper to resolve user name
-  const resolveUserName = (userId) => {
+  const resolveUserName = (userId, fallbackName = '') => {
+    if (fallbackName && String(fallbackName).trim()) return fallbackName;
     if (!userId) return 'Unassigned';
-    const found = userList.find((u) => u.id === userId);
-    return found ? `${found.firstName} ${found.lastName}` : 'Unassigned';
+    const found = userList.find((u) => u.id === userId || u.userId === userId);
+    return found ? `${found.firstName} ${found.lastName}` : (fallbackName || 'Unassigned');
   };
 
   const toggleDocExpanded = (docId) => {
@@ -481,6 +561,24 @@ export default function InquiryViewPage() {
     return <IconFile size={15} className="text-text-muted shrink-0" />;
   };
 
+  if (loadingInquiry && !inquiry) {
+    return (
+      <div className="space-y-6 animate-pulse py-6">
+        <div className="h-10 bg-surface rounded w-1/3" />
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          <div className="xl:col-span-6 space-y-6">
+            <div className="h-64 bg-surface rounded-xl" />
+            <div className="h-48 bg-surface rounded-xl" />
+          </div>
+          <div className="xl:col-span-6 space-y-6">
+            <div className="h-64 bg-surface rounded-xl" />
+            <div className="h-48 bg-surface rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!inquiry) {
     return (
       <div className="max-w-4xl mx-auto py-16 px-4 text-center">
@@ -504,8 +602,10 @@ export default function InquiryViewPage() {
   const statusInfo = getInquiryStage(statusValue);
   const canCreateQuotation =
     statusValue === 'New' || statusValue === 'Quoting';
-  const assigneeName = resolveUserName(inquiry.AssignedTo);
-  const isAssigned = Boolean(inquiry.AssignedTo);
+  const assignedUserId = inquiry.assignedToUserId || inquiry.AssignedTo;
+  const assignedUserNameFallback = inquiry.assignedToName || inquiry.assignedToUserName || '';
+  const assigneeName = resolveUserName(assignedUserId, assignedUserNameFallback);
+  const isAssigned = Boolean(assignedUserId || assignedUserNameFallback);
   const renderDocumentsSection = () => (
     <div className="space-y-4">
       {/* Missing Mandatory Documents Banner */}
@@ -567,257 +667,89 @@ export default function InquiryViewPage() {
             </Button>
           </div>
         ) : (
-          <div className="max-h-[500px] overflow-y-auto overflow-x-auto rounded-xl border border-border overscroll-contain bg-bg">
-            <TableContainer
-              className="border-0 rounded-none overflow-visible"
-              tableStyle={{ width: `${Math.max(docTableWidth, 100)}px`, minWidth: '100%' }}
-              tableClassName="w-full text-xs text-left border-collapse table-fixed"
-            >
-              <colgroup>
-                <col style={{ width: docWidths.expander }} />
-                <col style={{ width: docWidths.docType }} />
-                <col style={{ width: docWidths.docTitle }} />
-                <col style={{ width: docWidths.revision }} />
-                <col style={{ width: docWidths.actions }} />
-              </colgroup>
-              <thead className="sticky top-0 z-10 bg-surface border-b border-border shadow-2xs">
-                <tr className="text-left">
-                  <Th {...getDocResizeProps('expander')} className="py-2.5 px-2 text-center"></Th>
-                  <Th {...getDocResizeProps('docType')} className="py-2.5 px-3 whitespace-nowrap">TYPE</Th>
-                  <Th {...getDocResizeProps('docTitle')} className="py-2.5 px-3">DOCUMENT TITLE</Th>
-                  <Th {...getDocResizeProps('revision')} className="py-2.5 px-3">CURRENT REVISION</Th>
-                  <Th {...getDocResizeProps('actions')} className="py-2.5 px-3 text-right whitespace-nowrap">ACTION</Th>
-                </tr>
-              </thead>
+          <div className="max-h-[280px] overflow-y-auto divide-y divide-border rounded-xl border border-border bg-bg">
+            {inquiryDocuments.map((doc) => {
+              const docType = resolveDocType(doc.documentTypeId);
+              const fileName = doc.fileName || doc.displayName || doc.documentTitle || 'Attachment';
+              const fileExt = doc.fileExtension || (fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')).toLowerCase() : '');
+              const uploadedDate = doc.uploadedOn || doc.createdOn;
 
-              <tbody className="divide-y divide-border bg-bg">
-                {inquiryDocuments.map((doc) => {
-                  const docType = resolveDocType(doc.documentTypeId);
-                  const isExpanded = expandedDocIds.has(doc.id);
-                  const versions = doc.versions || [];
-                  const currentVersion = versions.find((v) => v.isCurrent) || versions[0] || {};
-                  const fileName = currentVersion.fileName || doc.fileName || doc.displayName || '';
-                  const fileExt = currentVersion.fileExtension || doc.fileExtension || (fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')).toLowerCase() : '');
+              return (
+                <div
+                  key={doc.id || doc.attachmentId}
+                  className="p-3 sm:p-3.5 hover:bg-surface/50 transition-colors flex items-center justify-between gap-3 group"
+                >
+                  {/* Left: Icon, Title, Badge & Meta */}
+                  <div
+                    onClick={() => setPreviewItem(doc)}
+                    className="flex items-start gap-3 min-w-0 flex-1 cursor-pointer"
+                  >
+                    <div className="mt-0.5 w-9 h-9 rounded-lg bg-surface border border-border flex items-center justify-center shrink-0 group-hover:border-primary/40 group-hover:bg-primary/5 transition-colors">
+                      {renderFileExtIcon(fileExt)}
+                    </div>
 
-                  return (
-                    <Fragment key={doc.id}>
-                      <tr className="hover:bg-surface/50 transition-colors group">
-                        {/* Expand / Collapse Button */}
-                        <Td style={{ width: docWidths.expander }} className="py-2.5 px-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => toggleDocExpanded(doc.id)}
-                            className="p-1 rounded-lg text-text-muted hover:text-heading hover:bg-surface transition-colors cursor-pointer inline-flex items-center justify-center"
-                            title={isExpanded ? 'Collapse version history' : 'Expand version history'}
-                          >
-                            {isExpanded ? (
-                              <IconChevronDown size={15} className="text-primary" />
-                            ) : (
-                              <IconChevronRight size={15} />
-                            )}
-                          </button>
-                        </Td>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className="font-semibold text-heading text-xs truncate max-w-[200px] sm:max-w-xs group-hover:text-primary transition-colors"
+                          title={doc.documentTitle || fileName}
+                        >
+                          {doc.documentTitle || fileName}
+                        </span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 shrink-0 leading-tight">
+                          {docType?.documentTypeName || docType?.typeName || doc.documentTypeName || 'Document'}
+                        </span>
+                      </div>
 
-                        {/* Document Type */}
-                        <Td style={{ width: docWidths.docType }} className="py-2.5 px-3 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
-                            {docType?.documentTypeName || docType?.typeName || '—'}
-                          </span>
-                        </Td>
+                      <div className="flex items-center gap-2 text-2xs text-text-muted flex-wrap">
+                        <span className="font-mono truncate max-w-[160px] sm:max-w-xs" title={fileName}>
+                          {fileName}
+                        </span>
+                        {uploadedDate && (
+                          <>
+                            <span className="text-border">•</span>
+                            <span>{formatDate(uploadedDate)}</span>
+                          </>
+                        )}
+                        {doc.uploadedByName && (
+                          <>
+                            <span className="text-border">•</span>
+                            <span className="truncate max-w-[110px]">{doc.uploadedByName}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
-                        {/* Document Title */}
-                        <Td style={{ width: docWidths.docTitle }} className="py-2.5 px-3">
-                          <span className="font-semibold text-heading text-xs block truncate w-full min-w-0" title={doc.documentTitle}>
-                            {doc.documentTitle}
-                          </span>
-                          <span className="text-2xs text-text-muted font-mono block mt-0.5">
-                            {versions.length} rev{versions.length > 1 ? 's' : ''}
-                          </span>
-                        </Td>
+                  {/* Right: Quick Action Buttons (View Modal & Download) */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setPreviewItem(doc)}
+                      title="View document details"
+                      className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2 inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <IconView size={13} className="text-text-muted shrink-0" />
+                      <span>View</span>
+                    </Button>
 
-                        {/* Current Version File Name (Click to open preview) */}
-                        <Td style={{ width: docWidths.revision }} className="py-2.5 px-3">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPreviewItem({
-                                ...currentVersion,
-                                id: currentVersion.id ?? doc.id,
-                                attachmentId: currentVersion.attachmentId ?? doc.id,
-                                downloadUrl: currentVersion.downloadUrl || doc.downloadUrl,
-                                fileName,
-                                fileExtension: fileExt,
-                                documentTitle: doc.documentTitle,
-                                documentTypeId: doc.documentTypeId,
-                              })
-                            }
-                            className="flex items-center gap-1.5 group/file hover:text-primary transition-colors cursor-pointer text-left w-full min-w-0 focus:outline-none"
-                            title={`Click to open preview of ${fileName}`}
-                          >
-                            {renderFileExtIcon(fileExt)}
-                            <span
-                              className="font-mono text-xs text-heading font-medium truncate w-full min-w-0 group-hover/file:text-primary group-hover/file:underline"
-                              title={fileName}
-                            >
-                              {fileName}
-                            </span>
-                            <IconView size={13} className="text-text-muted/50 group-hover/file:text-primary shrink-0 opacity-0 group-hover/file:opacity-100 transition-opacity" />
-                          </button>
-                        </Td>
-
-                        {/* Actions */}
-                        <Td style={{ width: docWidths.actions }} className="py-2.5 px-3 text-right whitespace-nowrap">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedDocForVersion(doc);
-                              setUploadModalMode('new_version');
-                              setIsUploadModalOpen(true);
-                            }}
-                            title="Upload new version"
-                            className="text-xs font-semibold text-primary border-primary/30 hover:border-primary hover:bg-primary/10 bg-surface shadow-2xs h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap cursor-pointer"
-                          >
-                            <IconUpload size={12} className="shrink-0 text-primary" />
-                            <span>New Rev</span>
-                          </Button>
-                        </Td>
-                      </tr>
-
-                      {/* Nested Version History Accordion Drawer */}
-                      {isExpanded && (
-                        <tr className="bg-surface/30">
-                          <td colSpan={5} className="p-0 border-b border-border/80">
-                            <div className="p-2.5 sm:p-3 space-y-2 animate-in fade-in duration-100">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-1">
-                                <span className="text-xs font-bold text-heading flex items-center gap-1.5 min-w-0">
-                                  <IconClock size={13} className="text-text-muted shrink-0" />
-                                  <span className="truncate">Version History for &quot;{doc.documentTitle}&quot;</span>
-                                </span>
-                                <span className="text-2xs text-text-muted shrink-0">
-                                  Newest revisions first
-                                </span>
-                              </div>
-
-                              <TableContainer
-                                className="bg-bg border border-border rounded-lg shadow-2xs overflow-x-auto"
-                                tableStyle={{ width: `${Math.max(verTableWidth, 100)}px`, minWidth: '100%' }}
-                                tableClassName="w-full text-xs text-left border-collapse table-fixed"
-                              >
-                                <colgroup>
-                                  <col style={{ width: verWidths.revision }} />
-                                  <col style={{ width: verWidths.fileName }} />
-                                  <col style={{ width: verWidths.remarks }} />
-                                  <col style={{ width: verWidths.actions }} />
-                                </colgroup>
-                                <thead>
-                                  <tr className="bg-surface/60 border-b border-border text-2xs font-semibold text-text-muted">
-                                    <Th {...getVerResizeProps('revision')} className="py-2 px-2.5">REVISION</Th>
-                                    <Th {...getVerResizeProps('fileName')} className="py-2 px-2.5">FILE NAME</Th>
-                                    <Th {...getVerResizeProps('remarks')} className="py-2 px-2.5">CHANGE REMARKS</Th>
-                                    <Th {...getVerResizeProps('actions')} className="py-2 px-2.5 text-right">ACTION</Th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border/60">
-                                  {versions.map((ver) => (
-                                    <tr key={ver.versionId} className="hover:bg-surface/40 transition-colors">
-                                      <Td style={{ width: verWidths.revision }} className="py-2 px-2.5 whitespace-nowrap">
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="font-mono font-bold text-heading text-xs">
-                                            v{ver.versionNo}
-                                          </span>
-                                          {ver.isCurrent && (
-                                            <Badge variant="success" className="text-2xs px-1.5 py-0">
-                                              Current
-                                            </Badge>
-                                          )}
-                                        </div>
-                                      </Td>
-
-                                      <Td style={{ width: verWidths.fileName }} className="py-2 px-2.5 font-mono text-heading">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setPreviewItem({
-                                              ...ver,
-                                              documentTitle: doc.documentTitle,
-                                              documentTypeId: doc.documentTypeId,
-                                            })
-                                          }
-                                          className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer text-left group/verfile focus:outline-none w-full min-w-0"
-                                          title={`Click to view ${ver.fileName}`}
-                                        >
-                                          {renderFileExtIcon(ver.fileExtension)}
-                                          <span
-                                            className="truncate w-full min-w-0 group-hover/verfile:underline text-xs"
-                                            title={ver.fileName}
-                                          >
-                                            {ver.fileName}
-                                          </span>
-                                          <IconView size={12} className="text-text-muted/50 group-hover/verfile:text-primary shrink-0 opacity-0 group-hover/verfile:opacity-100 transition-opacity" />
-                                        </button>
-                                      </Td>
-
-                                      <Td style={{ width: verWidths.remarks }} className="py-2 px-2.5 text-text overflow-hidden">
-                                        <span className="block truncate w-full min-w-0 text-xs" title={ver.changeRemarks || '—'}>
-                                          {ver.changeRemarks || '—'}
-                                        </span>
-                                      </Td>
-
-                                      <Td
-                                        style={{ width: verWidths.actions, minWidth: MIN_VER_WIDTHS.actions }}
-                                        className="py-2 px-2.5 text-right whitespace-nowrap overflow-hidden"
-                                      >
-                                        <div className="flex items-center justify-end gap-1 shrink-0">
-                                          <Button
-                                            type="button"
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() =>
-                                              setPreviewItem({
-                                                ...ver,
-                                                documentTitle: doc.documentTitle,
-                                                documentTypeId: doc.documentTypeId,
-                                              })
-                                            }
-                                            title="View attachment"
-                                            className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2 inline-flex items-center gap-1 cursor-pointer"
-                                          >
-                                            <IconView size={12} className="text-text-muted shrink-0" />
-                                            <span>View</span>
-                                          </Button>
-                                          <Button
-                                            type="button"
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() =>
-                                              handleDownloadAttachment({
-                                                ...ver,
-                                                documentTitle: doc.documentTitle,
-                                                documentTypeId: doc.documentTypeId,
-                                              })
-                                            }
-                                            title="Download attachment"
-                                            className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-1.5 inline-flex items-center cursor-pointer"
-                                          >
-                                            <IconDownload size={13} className="text-text-muted shrink-0" />
-                                          </Button>
-                                        </div>
-                                      </Td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </TableContainer>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </TableContainer>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleDownloadAttachment(doc)}
+                      title="Download attachment"
+                      className="text-xs font-semibold text-text hover:text-primary hover:border-primary/40 bg-surface border border-border shadow-2xs h-7 px-2 inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <IconDownload size={13} className="text-primary shrink-0" />
+                      <span>Download</span>
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </Card>
@@ -1051,17 +983,31 @@ export default function InquiryViewPage() {
               Schedule Meeting
             </Button>
 
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={handleConvertToDealClick}
-              disabled={isConvertingDeal}
-              className="text-xs"
-            >
-              <IconDeal size={14} className="mr-1.5" />
-              {isConvertingDeal ? 'Loading...' : 'Convert to Deal'}
-            </Button>
+            {isDealStatus ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleViewDealClick}
+                disabled={loadingLinkedDeal}
+                className="text-xs text-primary border-primary/30 hover:bg-primary/5"
+              >
+                <IconDeal size={14} className="mr-1.5" />
+                {loadingLinkedDeal ? 'Opening Deal...' : 'View Deal'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleConvertToDealClick}
+                disabled={isConvertingDeal}
+                className="text-xs"
+              >
+                <IconDeal size={14} className="mr-1.5" />
+                {isConvertingDeal ? 'Loading...' : 'Convert to Deal'}
+              </Button>
+            )}
 
             {canCreateQuotation && (
               <Button
@@ -1108,8 +1054,14 @@ export default function InquiryViewPage() {
               type="button"
               variant="primary"
               size="sm"
-              disabled={inquiry?.isEditable === false}
-              title={inquiry?.isEditable === false ? `Inquiry is locked in status ${inquiry?.status || inquiry?.StatusId}` : 'Edit Inquiry'}
+              disabled={inquiry?.isEditable === false || String(inquiry?.status || '').toLowerCase() === 'won'}
+              title={
+                String(inquiry?.status || '').toLowerCase() === 'won'
+                  ? 'Inquiry is Won and cannot be edited'
+                  : inquiry?.isEditable === false
+                  ? `Inquiry is locked in status ${inquiry?.status || inquiry?.StatusId}`
+                  : 'Edit Inquiry'
+              }
               onClick={() => navigate(`/inquiries/${id}/edit`)}
               className="text-xs shadow-2xs"
             >
@@ -1137,9 +1089,6 @@ export default function InquiryViewPage() {
                   <span className="inline-flex items-center font-mono font-bold text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg">
                     {inquiry.InquiryNo}
                   </span>
-                  <Badge variant="neutral" size="sm" className="font-medium text-2xs">
-                    System Generated
-                  </Badge>
                 </div>
               )}
             </div>
@@ -1601,115 +1550,95 @@ export default function InquiryViewPage() {
           isOpen={Boolean(previewItem)}
           onClose={() => setPreviewItem(null)}
           title={previewItem.documentTitle || previewItem.fileName}
-          maxWidth="max-w-3xl"
+          maxWidth="max-w-md"
         >
           <div className="space-y-4">
             {/* Meta bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-surface/60 p-3.5 rounded-xl border border-border">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs bg-surface/60 p-3 rounded-xl border border-border">
               <div className="flex items-center gap-2 flex-wrap">
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${resolveDocType(previewItem.documentTypeId)?.badgeClass ||
-                    'bg-surface text-text-muted border-border'
-                    }`}
-                >
-                  {resolveDocType(previewItem.documentTypeId)?.typeName || resolveDocType(previewItem.documentTypeId)?.documentTypeName || '—'}
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-3xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                  {resolveDocType(previewItem.documentTypeId)?.documentTypeName ||
+                    resolveDocType(previewItem.documentTypeId)?.typeName ||
+                    previewItem.documentTypeName ||
+                    'Document'}
                 </span>
-                <Badge
-                  variant={previewItem.isCurrent ? 'success' : 'neutral'}
-                  className="text-2xs font-mono px-2 py-0.5"
-                >
-                  Rev v{previewItem.versionNo ?? '—'} {previewItem.isCurrent ? '(Current)' : ''}
-                </Badge>
                 <span
-                  className="font-mono text-heading font-medium text-xs truncate max-w-xs sm:max-w-sm"
+                  className="font-mono text-heading font-medium text-xs truncate max-w-[200px]"
                   title={previewItem.fileName}
                 >
                   {previewItem.fileName}
                 </span>
               </div>
 
-              <div className="flex items-center gap-3 text-text-muted text-xs">
+              <div className="text-text-muted text-2xs">
                 <span>
-                  Size: <strong className="text-heading font-mono">
-                    {previewItem.fileSizeKB == null ? '—' : `${previewItem.fileSizeKB} KB`}
-                  </strong>
-                </span>
-                <span>
-                  Uploaded: <strong className="text-heading font-mono">{formatDate(previewItem.uploadedOn)}</strong> by{' '}
-                  <strong className="text-heading">{previewItem.uploadedByName || previewItem.uploadedBy || '—'}</strong>
+                  Uploaded: <strong className="text-heading font-mono">{formatDate(previewItem.uploadedOn || previewItem.createdOn)}</strong>
+                  {previewItem.uploadedByName && (
+                    <> by <strong className="text-heading">{previewItem.uploadedByName}</strong></>
+                  )}
                 </span>
               </div>
             </div>
 
-            {/* Document Preview Display Box */}
-            <div className="bg-bg rounded-2xl border border-border p-6 flex flex-col items-center justify-center min-h-[320px] shadow-inner text-center space-y-4 relative overflow-hidden">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto border border-primary/20 shadow-xs">
-                {previewItem.fileExtension?.toLowerCase() === '.pdf' ? (
-                  <IconFileText size={32} className="text-danger" />
-                ) : previewItem.fileExtension?.toLowerCase() === '.dwg' ||
-                  previewItem.fileExtension?.toLowerCase() === '.dxf' ? (
-                  <IconLayers size={32} className="text-primary" />
-                ) : (
-                  <IconDocumentTypes size={32} className="text-primary" />
-                )}
+            {/* Document Details Display Card */}
+            <div className="bg-bg rounded-xl border border-border p-4 flex flex-col items-center justify-center text-center space-y-3 relative overflow-hidden">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mx-auto border border-primary/20 shadow-xs">
+                {renderFileExtIcon(previewItem.fileExtension || (previewItem.fileName?.includes('.') ? previewItem.fileName.slice(previewItem.fileName.lastIndexOf('.')).toLowerCase() : ''))}
               </div>
 
-              <div className="space-y-1 max-w-md">
-                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-success/10 text-success border border-success/20">
-                  <IconShieldCheck size={14} /> Document File
-                </span>
-                <h4 className="text-base font-bold text-heading mt-2">
+              <div className="space-y-0.5 max-w-sm">
+                <h4 className="text-xs font-bold text-heading">
                   {previewItem.documentTitle || previewItem.fileName}
                 </h4>
-                <p className="text-xs text-text-muted font-mono break-all">
+                <p className="text-2xs text-text-muted font-mono break-all">
                   {previewItem.fileName}
                 </p>
               </div>
 
-              {/* Change Remarks */}
-              {previewItem.changeRemarks && (
-                <div className="w-full max-w-lg bg-surface/50 rounded-xl p-3 border border-border text-left space-y-1 text-xs">
-                  <span className="text-2xs font-semibold text-text-muted block">Revision Remarks:</span>
-                  <p className="text-heading italic">{previewItem.changeRemarks}</p>
+              {/* Remarks */}
+              {previewItem.remarks && (
+                <div className="w-full bg-surface/50 rounded-lg p-2.5 border border-border text-left space-y-1 text-2xs">
+                  <span className="font-semibold text-text-muted block">Remarks:</span>
+                  <p className="text-heading italic">{previewItem.remarks}</p>
                 </div>
               )}
 
               {/* Document Information Sheet */}
-              <div className="w-full max-w-lg bg-surface/30 rounded-xl p-3.5 border border-border text-left grid grid-cols-2 gap-2 text-xs">
+              <div className="w-full bg-surface/30 rounded-lg p-3 border border-border text-left grid grid-cols-2 gap-2 text-2xs">
                 <div>
-                  <span className="text-text-muted block text-2xs">Inquiry No</span>
-                  <span className="font-mono font-medium text-heading">{inquiry.InquiryNo}</span>
+                  <span className="text-text-muted block">Inquiry No</span>
+                  <span className="font-mono font-medium text-heading">{inquiry.InquiryNo || inquiry.inquiryNo}</span>
                 </div>
                 <div>
-                  <span className="text-text-muted block text-2xs">Customer</span>
-                  <span className="font-medium text-heading truncate block">{inquiry.CustomerName}</span>
+                  <span className="text-text-muted block">Customer</span>
+                  <span className="font-medium text-heading truncate block">{inquiry.CustomerName || inquiry.companyName || '—'}</span>
                 </div>
                 <div>
-                  <span className="text-text-muted block text-2xs">File Format</span>
-                  <span className="font-mono uppercase font-semibold text-primary">
-                    {previewItem.fileExtension?.replace('.', '') || '—'}
+                  <span className="text-text-muted block">Document Type</span>
+                  <span className="font-semibold text-heading truncate block">
+                    {resolveDocType(previewItem.documentTypeId)?.documentTypeName ||
+                      resolveDocType(previewItem.documentTypeId)?.typeName ||
+                      previewItem.documentTypeName ||
+                      '—'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-text-muted block text-2xs">Version Status</span>
-                  <span className="font-medium text-heading">
-                    {previewItem.isCurrent
-                      ? 'Current Active Version'
-                      : `Archived Revision (v${previewItem.versionNo ?? '—'})`}
+                  <span className="text-text-muted block">File Format</span>
+                  <span className="font-mono uppercase font-semibold text-primary">
+                    {previewItem.fileExtension?.replace('.', '') || (previewItem.fileName?.includes('.') ? previewItem.fileName.split('.').pop() : 'FILE')}
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-border">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
               <CancelButton
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 onClick={() => setPreviewItem(null)}
-              >
-                Close Preview
-              </CancelButton>
+                label="Close"
+              />
 
               <Button
                 type="button"

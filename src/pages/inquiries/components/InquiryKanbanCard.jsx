@@ -37,6 +37,8 @@ function InquiryKanbanCard({
   const displayDate = inquiry.RequiredByDate || inquiry.InquiryDate || inquiry.CreatedOn;
   const activeStage = inquiryStage || inquiry.StatusId;
   const status = inquiry.status || inquiry.StatusId || '';
+  const isWon = String(status).toLowerCase() === 'won';
+  const isEditable = inquiry.isEditable !== false && !isWon;
   const canCreateQuotation =
     status === 'New' || status === 'Quoting';
 
@@ -187,12 +189,13 @@ function InquiryKanbanCard({
           type="button"
           variant="ghost"
           size="icon"
-          title="Edit Inquiry"
+          title={isWon ? 'Inquiry is Won and cannot be edited' : !isEditable ? 'Inquiry is locked' : 'Edit Inquiry'}
+          disabled={!isEditable}
           onClick={(e) => {
             e.stopPropagation();
-            navigate(`/inquiries/${id}/edit`);
+            if (isEditable) navigate(`/inquiries/${id}/edit`);
           }}
-          className="h-7 w-7 text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer"
+          className={`h-7 w-7 ${!isEditable ? 'opacity-40 cursor-not-allowed text-text-muted' : 'text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer'}`}
         >
           <IconEdit size={13} />
         </Button>
@@ -245,12 +248,13 @@ function InquiryKanbanCard({
             type="button"
             variant="ghost"
             size="icon"
-            title="Edit Inquiry"
+            title={isWon ? 'Inquiry is Won and cannot be edited' : !isEditable ? 'Inquiry is locked' : 'Edit Inquiry'}
+            disabled={!isEditable}
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/inquiries/${id}/edit`);
+              if (isEditable) navigate(`/inquiries/${id}/edit`);
             }}
-            className="h-7 w-7 text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer"
+            className={`h-7 w-7 ${!isEditable ? 'opacity-40 cursor-not-allowed text-text-muted' : 'text-text-muted hover:text-primary hover:bg-surface-muted cursor-pointer'}`}
           >
             <IconEdit size={13} />
           </Button>

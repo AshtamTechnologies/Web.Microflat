@@ -435,15 +435,18 @@ export async function getApprovalSetting(id) {
 /**
  * Creates approval setting for a module (Admin only).
  * POST /api/approval-settings
- * @param {{ moduleId: number, isApprovalRequired: boolean, approverRoleId?: number }} data
+ * @param {{ moduleId: number, isApprovalRequired: boolean, approverType?: number, approverRoleId?: number, approverUserId?: number }} data
  */
 export async function createApprovalSetting(data) {
   try {
     const isApprovalRequired = Boolean(data.isApprovalRequired);
+    const approverType = data.approverType ? Number(data.approverType) : 1;
     const payload = {
       moduleId: Number(data.moduleId),
       isApprovalRequired,
-      approverRoleId: isApprovalRequired && data.approverRoleId ? Number(data.approverRoleId) : null,
+      approverType: isApprovalRequired ? approverType : 1,
+      approverRoleId: isApprovalRequired && approverType === 1 && data.approverRoleId ? Number(data.approverRoleId) : null,
+      approverUserId: isApprovalRequired && approverType === 2 && data.approverUserId ? Number(data.approverUserId) : null,
     };
     const response = await axiosInstance.post(APPROVAL_ENDPOINTS.SETTINGS, payload);
     return response.data;
@@ -456,15 +459,18 @@ export async function createApprovalSetting(data) {
  * Updates approval setting for a module (Admin only).
  * PUT /api/approval-settings/{id}
  * @param {number|string} id
- * @param {{ isApprovalRequired: boolean, approverRoleId?: number }} data
+ * @param {{ isApprovalRequired: boolean, approverType?: number, approverRoleId?: number, approverUserId?: number }} data
  */
 export async function updateApprovalSetting(id, data) {
   try {
     const validId = cleanId(id);
     const isApprovalRequired = Boolean(data.isApprovalRequired);
+    const approverType = data.approverType ? Number(data.approverType) : 1;
     const payload = {
       isApprovalRequired,
-      approverRoleId: isApprovalRequired && data.approverRoleId ? Number(data.approverRoleId) : null,
+      approverType: isApprovalRequired ? approverType : 1,
+      approverRoleId: isApprovalRequired && approverType === 1 && data.approverRoleId ? Number(data.approverRoleId) : null,
+      approverUserId: isApprovalRequired && approverType === 2 && data.approverUserId ? Number(data.approverUserId) : null,
     };
     const response = await axiosInstance.put(APPROVAL_ENDPOINTS.SETTINGS_BY_ID(validId), payload);
     return response.data;

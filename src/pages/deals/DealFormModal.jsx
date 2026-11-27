@@ -2,7 +2,8 @@
  * src/pages/deals/DealFormModal.jsx — Modal for creating (Convert to Deal) or editing a deal.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import toast from 'react-hot-toast';
 import {
   Modal,
   Button,
@@ -11,7 +12,7 @@ import {
   Textarea,
   SearchableSelect,
 } from '../../components/ui';
-import { dealService } from '../../services';
+import { dealService, inquiryService } from '../../services';
 
 export default function DealFormModal({
   isOpen,
@@ -21,6 +22,7 @@ export default function DealFormModal({
   prefill = null,
   nextDocNumber = '',
   currencies = [],
+  inquiries = null,
   onSave,
   isSubmitting = false,
 }) {
@@ -41,40 +43,65 @@ export default function DealFormModal({
 
   const [contacts, setContacts] = useState([]);
   const [errors, setErrors] = useState({});
+  const [docNumber, setDocNumber] = useState(nextDocNumber);
+  const [candidateInquiries, setCandidateInquiries] = useState([]);
+  const [loadingInquiries, setLoadingInquiries] = useState(false);
+  const [loadingPrefill, setLoadingPrefill] = useState(false);
+
+  useEffect(() => {
+    setDocNumber(nextDocNumber);
+  }, [nextDocNumber]);
 
   useEffect(() => {
     if (!isOpen) return;
 
     if (isCreate) {
-      const client = prefill?.client || {};
-      const rawContacts = Array.isArray(client.contacts)
-        ? client.contacts
-        : Array.isArray(prefill?.contacts)
-          ? prefill.contacts
-          : [];
+      if (prefill?.inquiryId) {
+        const client = prefill?.client || {};
+        const rawContacts = Array.isArray(client.contacts)
+          ? client.contacts
+          : Array.isArray(prefill?.contacts)
+            ? prefill.contacts
+            : [];
 
-      const activeContacts = rawContacts
-        .filter((c) => c && c.isActive !== false)
-        .map((c) => ({
-          clientContactId: c.clientContactId ?? c.id,
-          fullName: c.fullName ?? c.contactPersonName ?? 'Contact',
-          email: c.email ?? c.contactEmail ?? '',
-        }));
+        const activeContacts = rawContacts
+          .filter((c) => c && c.isActive !== false)
+          .map((c) => ({
+            clientContactId: c.clientContactId ?? c.id,
+            fullName: c.fullName ?? c.contactPersonName ?? 'Contact',
+            email: c.email ?? c.contactEmail ?? '',
+          }));
 
-      setContacts(activeContacts);
+        setContacts(activeContacts);
 
-      setFormData({
-        inquiryId: prefill?.inquiryId || '',
-        inquiryNo: prefill?.inquiryNo || '',
-        clientName: client.clientName || prefill?.clientName || '',
-        clientCode: client.clientCode || prefill?.clientCode || '',
-        dealDate: new Date().toISOString().slice(0, 10),
-        currencyId: prefill?.currencyId || 1,
-        expectedValue: '',
-        negotiatedValue: '',
-        clientContactId: prefill?.clientContactId || (activeContacts[0]?.clientContactId ? String(activeContacts[0].clientContactId) : ''),
-        remarks: '',
-      });
+        setFormData({
+          inquiryId: prefill.inquiryId,
+          inquiryNo: prefill.inquiryNo || '',
+          clientName: client.clientName || prefill.clientName || '',
+          clientCode: client.clientCode || prefill.clientCode || '',
+          dealDate: new Date().toISOString().slice(0, 10),
+          currencyId: prefill.currencyId || 1,
+          expectedValue: '',
+          negotiatedValue: '',
+          clientContactId: prefill.clientContactId || (activeContacts[0]?.clientContactId ? String(activeContacts[0].clientContactId) : ''),
+          remarks: '',
+        });
+      } else {
+        // Reset form for fresh conversion selection
+        setFormData({
+          inquiryId: '',
+          inquiryNo: '',
+          clientName: '',
+          clientCode: '',
+          dealDate: new Date().toISOString().slice(0, 10),
+          currencyId: 1,
+          expectedValue: '',
+          negotiatedValue: '',
+          clientContactId: '',
+          remarks: '',
+        });
+        setContacts([]);
+      }
     } else if (initialDeal) {
       setFormData({
         inquiryId: initialDeal.inquiryId || '',
@@ -135,6 +162,116 @@ export default function DealFormModal({
     setErrors({});
   }, [isOpen, isCreate, prefill, initialDeal]);
 
+  // Load candidate inquiries for Convert from Deals Page when prefill is not provided
+  useEffect(() => {
+    if (!isOpen || !isCreate || prefill?.inquiryId) return;
+    if (Array.isArray(inquiries)) {
+      setCandidateInquiries(inquiries);
+      return;
+    }
+
+    let isMounted = true;
+    async function loadInquiries() {
+      try {
+        setLoadingInquiries(true);
+        const [res, nextNum] = await Promise.all([
+          inquiryService.listInquiries({ pageSize: 100, isActive: true }),
+          !docNumber ? dealService.getNextDealNumber() : Promise.resolve(null),
+        ]);
+        if (!isMounted) return;
+        if (nextNum?.documentNumber) {
+          setDocNumber(nextNum.documentNumber);
+        }
+        const items = res?.items || [];
+        const eligible = items.filter((inq) => {
+          const st = (inq.status || '').toLowerCase();
+          return st !== 'deal' && st !== 'lost';
+        });
+        setCandidateInquiries(eligible);
+      } catch (err) {
+        console.error('Failed to load candidate inquiries for deal modal:', err);
+      } finally {
+        if (isMounted) setLoadingInquiries(false);
+      }
+    }
+
+    loadInquiries();
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, isCreate, prefill?.inquiryId, inquiries, docNumber]);
+
+  const availableInquiries = Array.isArray(inquiries) ? inquiries : candidateInquiries;
+  const inquiryOptions = useMemo(() => [
+    { value: '', label: loadingInquiries ? 'Loading eligible inquiries...' : '-- Select an Inquiry to Convert --' },
+    ...availableInquiries.map((inq) => {
+      const inqNo = inq.inquiryNo || inq.InquiryNo || `INQ-${inq.id}`;
+      const client = inq.clientName || inq.CustomerName || inq.companyName || 'Client';
+      return {
+        value: String(inq.id || inq.inquiryId || inq.InquiryId),
+        label: `${inqNo} · ${client}`,
+      };
+    }),
+  ], [availableInquiries, loadingInquiries]);
+
+  const handleInquiryChange = async (selectedInquiryId) => {
+    if (!selectedInquiryId) {
+      setFormData((prev) => ({
+        ...prev,
+        inquiryId: '',
+        inquiryNo: '',
+        clientName: '',
+        clientCode: '',
+        clientContactId: '',
+      }));
+      setContacts([]);
+      return;
+    }
+
+    try {
+      setLoadingPrefill(true);
+      setErrors((prev) => ({ ...prev, inquiryId: null }));
+      const [pre, nextNum] = await Promise.all([
+        dealService.getDealPrefill(selectedInquiryId),
+        !docNumber ? dealService.getNextDealNumber() : Promise.resolve(null),
+      ]);
+
+      if (nextNum?.documentNumber) {
+        setDocNumber(nextNum.documentNumber);
+      }
+
+      const client = pre?.client || {};
+      const rawContacts = Array.isArray(client.contacts)
+        ? client.contacts
+        : Array.isArray(pre?.contacts)
+          ? pre.contacts
+          : [];
+
+      const activeContacts = rawContacts
+        .filter((c) => c && c.isActive !== false)
+        .map((c) => ({
+          clientContactId: c.clientContactId ?? c.id,
+          fullName: c.fullName ?? c.contactPersonName ?? 'Contact',
+          email: c.email ?? c.contactEmail ?? '',
+        }));
+
+      setContacts(activeContacts);
+      setFormData((prev) => ({
+        ...prev,
+        inquiryId: selectedInquiryId,
+        inquiryNo: pre?.inquiryNo || '',
+        clientName: client.clientName || pre?.clientName || '',
+        clientCode: client.clientCode || pre?.clientCode || '',
+        currencyId: pre?.currencyId || prev.currencyId || 1,
+        clientContactId: pre?.clientContactId || (activeContacts[0]?.clientContactId ? String(activeContacts[0].clientContactId) : ''),
+      }));
+    } catch (err) {
+      toast.error(err?.message || 'Failed to load details for selected inquiry.');
+    } finally {
+      setLoadingPrefill(false);
+    }
+  };
+
   const currencyOptions = (currencies || []).map((c) => ({
     value: String(c.id),
     label: `${c.currencyCode} (${c.currencySymbol || c.currencyName})`,
@@ -151,6 +288,10 @@ export default function DealFormModal({
   const handleSubmit = (e) => {
     e.preventDefault();
     const newErrors = {};
+
+    if (isCreate && !formData.inquiryId) {
+      newErrors.inquiryId = 'Please select an inquiry to convert.';
+    }
 
     if (
       formData.expectedValue === '' ||
@@ -187,26 +328,60 @@ export default function DealFormModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Deal preview banner for Create */}
-        {isCreate && nextDocNumber && (
+        {isCreate && (docNumber || nextDocNumber) && (
           <div className="flex items-center justify-between p-3 rounded-lg bg-surface border border-border text-xs">
             <span className="text-text-muted">Generated Deal Number:</span>
-            <span className="font-mono font-semibold text-primary">{nextDocNumber}</span>
+            <span className="font-mono font-semibold text-primary">{docNumber || nextDocNumber}</span>
+          </div>
+        )}
+
+        {/* Inquiry Selector when converting from Deals page (without fixed prefill) */}
+        {isCreate && !prefill?.inquiryId && (
+          <div>
+            <label className="block text-xs font-medium text-heading mb-1.5">
+              Select Inquiry to Convert <span className="text-danger">*</span>
+            </label>
+            <SearchableSelect
+              id="select-inquiry-to-convert"
+              options={inquiryOptions}
+              value={String(formData.inquiryId || '')}
+              onChange={(e) => handleInquiryChange(e.target.value)}
+              placeholder={
+                loadingInquiries
+                  ? 'Loading eligible inquiries...'
+                  : candidateInquiries.length === 0
+                    ? 'No pending inquiries available'
+                    : '-- Choose an inquiry to convert --'
+              }
+              searchPlaceholder="Search by inquiry no, client..."
+              disabled={loadingInquiries || loadingPrefill}
+            />
+            {errors.inquiryId && (
+              <p className="mt-1 text-2xs text-danger">{errors.inquiryId}</p>
+            )}
+            {loadingPrefill && (
+              <p className="mt-1 text-2xs text-primary animate-pulse">
+                Fetching inquiry commercial details...
+              </p>
+            )}
           </div>
         )}
 
         {/* Read-Only Client & Inquiry Information */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-surface/50 border border-border/70 text-xs">
-          <div>
-            <span className="text-text-muted block text-2xs uppercase tracking-wide font-medium">Inquiry Number</span>
-            <span className="font-mono font-semibold text-heading">{formData.inquiryNo || '—'}</span>
+        {(formData.inquiryId || formData.inquiryNo || formData.clientName) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-surface/50 border border-border/70 text-xs">
+            <div>
+              <span className="text-text-muted block text-2xs uppercase tracking-wide font-medium">Inquiry Number</span>
+              <span className="font-mono font-semibold text-heading">{formData.inquiryNo || '—'}</span>
+            </div>
+            <div>
+              <span className="text-text-muted block text-2xs uppercase tracking-wide font-medium">Client / Customer</span>
+              <span className="font-medium text-heading">
+                {formData.clientName || '—'} {formData.clientCode ? `(${formData.clientCode})` : ''}
+              </span>
+            </div>
           </div>
-          <div>
-            <span className="text-text-muted block text-2xs uppercase tracking-wide font-medium">Client / Customer</span>
-            <span className="font-medium text-heading">
-              {formData.clientName} {formData.clientCode ? `(${formData.clientCode})` : ''}
-            </span>
-          </div>
-        </div>
+        )}
 
         {/* Commercial Values */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">

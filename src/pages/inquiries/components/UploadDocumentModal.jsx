@@ -18,6 +18,7 @@ import {
 import { Modal, Button, CancelButton, Input, SearchableSelect, Textarea } from '../../../components/ui';
 import { useInquiryDocumentsContext } from '../../../context/InquiryDocumentsContext';
 import { useDocumentTypesContext } from '../../../context/DocumentTypesContext';
+import { useInquiriesContext } from '../../../context/InquiriesContext';
 
 function formatFileSizeKB(kb) {
   if (kb == null || !Number.isFinite(Number(kb))) return '—';
@@ -54,6 +55,17 @@ export default function UploadDocumentModal({
 }) {
   const { addDocument, addDocumentVersion } = useInquiryDocumentsContext();
   const { documentTypes = [], getDocumentTypeById } = useDocumentTypesContext();
+  let lookupDocumentTypes = [];
+  try {
+    const inqCtx = useInquiriesContext();
+    lookupDocumentTypes = inqCtx?.documentTypes || [];
+  } catch {
+    lookupDocumentTypes = [];
+  }
+
+  const effectiveDocTypes = (Array.isArray(lookupDocumentTypes) && lookupDocumentTypes.length > 0)
+    ? lookupDocumentTypes
+    : documentTypes;
 
   const isNewVersion = mode === 'new_version' && Boolean(targetDocument);
 
@@ -69,11 +81,23 @@ export default function UploadDocumentModal({
 
   const fileInputRef = useRef(null);
 
-  // Active document type metadata from context
+  // Active document type metadata from context or inquiry lookups
   const activeDocType = useMemo(() => {
     const typeId = isNewVersion ? targetDocument?.documentTypeId : documentTypeId;
-    return typeId ? getDocumentTypeById(typeId) : null;
-  }, [isNewVersion, targetDocument, documentTypeId, getDocumentTypeById]);
+    if (!typeId) return null;
+    const fromLookup = effectiveDocTypes.find(
+      (dt) => String(dt.id ?? dt.documentTypeId) === String(typeId)
+    );
+    if (fromLookup) {
+      return {
+        ...fromLookup,
+        typeName: fromLookup.documentTypeName || fromLookup.typeName || fromLookup.name || '',
+        maxSizeMB: fromLookup.maxFileSizeMB || fromLookup.maxSizeMB || 10,
+        allowedExtensions: fromLookup.allowedExtensionList || fromLookup.allowedExtensions || [],
+      };
+    }
+    return getDocumentTypeById ? getDocumentTypeById(typeId) : null;
+  }, [isNewVersion, targetDocument, documentTypeId, effectiveDocTypes, getDocumentTypeById]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -100,15 +124,16 @@ export default function UploadDocumentModal({
 
   // Document type options for Select
   const typeOptions = useMemo(() => {
-    return documentTypes.filter((dt) => dt.isActive !== false).map((dt) => {
+    return effectiveDocTypes.filter((dt) => dt.isActive !== false).map((dt) => {
       const id = dt.documentTypeId || dt.id;
       const exts = formatAllowedExtensions(dt, ', ');
+      const name = dt.documentTypeName || dt.typeName || dt.name || 'Document';
       return {
         value: id,
-        label: `${dt.typeName}${dt.isMandatory ? ' (Required)' : ''} [${exts}]`,
+        label: `${name}${dt.isMandatory ? ' (Required)' : ''}${exts ? ` [${exts}]` : ''}`,
       };
     });
-  }, [documentTypes]);
+  }, [effectiveDocTypes]);
 
   // Validate selected file against active DocumentType
   function validateSelectedFile(file, docType) {
@@ -224,6 +249,7 @@ export default function UploadDocumentModal({
 
     setSubmitting(true);
     try {
+      /* REVISION CODE PRESERVED (COMMENTED OUT)
       if (isNewVersion && targetDocument) {
         const res = await addDocumentVersion(
           inquiryId,
@@ -239,16 +265,17 @@ export default function UploadDocumentModal({
           onClose();
         }
       } else {
-        const res = await addDocument(inquiryId, {
-          documentTypeId,
-          documentTitle,
-          file: selectedFile,
-          remarks,
-        });
-        if (res.ok) {
-          onClose();
-        }
+      */
+      const res = await addDocument(inquiryId, {
+        documentTypeId,
+        documentTitle,
+        file: selectedFile,
+        remarks,
+      });
+      if (res.ok) {
+        onClose();
       }
+      /* } */
     } finally {
       setSubmitting(false);
     }
@@ -364,10 +391,10 @@ export default function UploadDocumentModal({
               isDragging
                 ? 'border-primary bg-primary/10'
                 : fileError
-                ? 'border-danger/60 bg-danger/5'
-                : selectedFile
-                ? 'border-primary/50 bg-primary/5'
-                : 'border-border hover:border-primary/50 hover:bg-surface/50 bg-bg',
+                  ? 'border-danger/60 bg-danger/5'
+                  : selectedFile
+                    ? 'border-primary/50 bg-primary/5'
+                    : 'border-border hover:border-primary/50 hover:bg-surface/50 bg-bg',
             ].join(' ')}
           >
             {selectedFile ? (
@@ -428,7 +455,7 @@ export default function UploadDocumentModal({
 
         {/* Remarks / Change Notes */}
         <Textarea
-            id="upload-remarks"
+          id="upload-remarks"
           label={isNewVersion ? 'Version Change Remarks (Optional)' : 'Remarks / Notes (Optional)'}
           rows={2}
           value={remarks}
