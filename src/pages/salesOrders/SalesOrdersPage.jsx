@@ -18,6 +18,8 @@ import {
   IconAdd,
   IconDownload,
   IconSalesOrder,
+  IconView,
+  IconEdit,
 } from '../../constants/icons';
 import {
   PageHeader,
@@ -28,6 +30,7 @@ import {
   Badge,
   SearchableSelect,
   DatePicker,
+  IconButton,
 } from '../../components/ui';
 import { useSalesOrdersContext } from '../../context/SalesOrdersContext';
 import {
@@ -292,47 +295,61 @@ export default function SalesOrdersPage() {
       columnHelper.display({
         id: 'actions',
         header: 'ACTIONS',
-        size: 110,
+        size: 120,
         enableResizing: false,
         cell: ({ row }) => {
           const order = row.original;
+          const isDraft = (order.status || order.orderStatus || '').toLowerCase() === 'draft';
           return (
-            <TableActions
-              onView={() => navigate(`/sales-orders/${order.id}`)}
-              onEdit={
-                order.isEditable
-                  ? () => navigate(`/sales-orders/${order.id}/edit`)
-                  : undefined
-              }
-              viewTitle="View Sales Order"
-              editTitle="Edit Draft Sales Order"
-              extraActions={
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    triggerPdfDownload(
-                      `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
-                      {
-                        title: 'Order Confirmation',
-                        documentType: 'Sales Order Confirmation',
-                        fileName: `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
-                        quotationNo: order.quotationNo,
-                        clientName: order.clientName,
-                        poNumber: order.clientPoNo,
-                        expectedDeliveryDate: order.expectedDeliveryDate,
-                        totalAmount: `${order.currency} ${order.grandTotal}`,
-                        remarks: `Status: ${order.status} | Source: ${order.orderSourceName}`,
-                      }
-                    );
-                  }}
-                  className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface transition-colors cursor-pointer"
-                  title="Download Order Confirmation PDF"
-                >
-                  <IconDownload size={15} />
-                </button>
-              }
-            />
+            <div className="flex items-center justify-end gap-1 w-full">
+              <IconButton
+                icon={IconDownload}
+                size="sm"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  triggerPdfDownload(
+                    `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                    {
+                      title: 'Order Confirmation',
+                      documentType: 'Sales Order Confirmation',
+                      fileName: `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                      quotationNo: order.quotationNo,
+                      clientName: order.clientName,
+                      poNumber: order.clientPoNo,
+                      expectedDeliveryDate: order.expectedDeliveryDate,
+                      totalAmount: `${order.currency} ${order.grandTotal}`,
+                      remarks: `Status: ${order.status} | Source: ${order.orderSourceName}`,
+                    }
+                  );
+                }}
+                title="Download Order Confirmation PDF"
+                aria-label="Download Order Confirmation PDF"
+                className="hover:text-primary hover:bg-surface"
+              />
+              <IconButton
+                icon={IconView}
+                size="sm"
+                variant="ghost"
+                onClick={() => navigate(`/sales-orders/${order.id}`)}
+                title="View Sales Order"
+                aria-label="View Sales Order"
+                className="hover:text-primary hover:bg-surface"
+              />
+              {isDraft ? (
+                <IconButton
+                  icon={IconEdit}
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => navigate(`/sales-orders/${order.id}/edit`)}
+                  title="Edit Draft Sales Order"
+                  aria-label="Edit Draft Sales Order"
+                  className="hover:text-primary hover:bg-surface"
+                />
+              ) : (
+                <span className="w-8 h-8 shrink-0 inline-block" aria-hidden="true" />
+              )}
+            </div>
           );
         },
       }),
@@ -522,17 +539,52 @@ export default function SalesOrdersPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end pt-2 border-t border-border/60">
-                <TableActions
-                  onView={() => navigate(`/sales-orders/${order.id}`)}
-                  onEdit={
-                    order.isEditable
-                      ? () => navigate(`/sales-orders/${order.id}/edit`)
-                      : undefined
-                  }
-                  viewTitle="View Sales Order"
-                  editTitle="Edit Draft Sales Order"
+              <div className="flex items-center justify-end gap-1 pt-2 border-t border-border/60">
+                <IconButton
+                  icon={IconDownload}
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    triggerPdfDownload(
+                      `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                      {
+                        title: 'Order Confirmation',
+                        documentType: 'Sales Order Confirmation',
+                        fileName: `${order.orderConfirmationNo || 'Order-Confirmation'}.pdf`,
+                        quotationNo: order.quotationNo,
+                        clientName: order.clientName,
+                        poNumber: order.clientPoNo,
+                        expectedDeliveryDate: order.expectedDeliveryDate,
+                        totalAmount: `${order.currency} ${order.grandTotal}`,
+                        remarks: `Status: ${order.status} | Source: ${order.orderSourceName}`,
+                      }
+                    );
+                  }}
+                  title="Download Order Confirmation PDF"
+                  aria-label="Download Order Confirmation PDF"
+                  className="hover:text-primary hover:bg-surface"
                 />
+                <IconButton
+                  icon={IconView}
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => navigate(`/sales-orders/${order.id}`)}
+                  title="View Sales Order"
+                  aria-label="View Sales Order"
+                  className="hover:text-primary hover:bg-surface"
+                />
+                {(order.status || order.orderStatus || '').toLowerCase() === 'draft' && (
+                  <IconButton
+                    icon={IconEdit}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => navigate(`/sales-orders/${order.id}/edit`)}
+                    title="Edit Draft Sales Order"
+                    aria-label="Edit Draft Sales Order"
+                    className="hover:text-primary hover:bg-surface"
+                  />
+                )}
               </div>
             </div>
           );

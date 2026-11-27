@@ -72,7 +72,8 @@ export function useInquiryDocuments() {
           remarks,
         });
 
-        setDocuments((prev) => [uploaded, ...prev]);
+        // Refresh documents for this inquiry to ensure fresh state from server
+        await fetchDocumentsByInquiryId(inquiryId);
         toast.success('Document uploaded successfully.');
         return { ok: true, document: uploaded };
       } catch (err) {
@@ -82,7 +83,7 @@ export function useInquiryDocuments() {
         return { ok: false, error: errMsg };
       }
     },
-    []
+    [fetchDocumentsByInquiryId]
   );
 
   /* ── Add New Document Version ── */

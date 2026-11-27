@@ -296,12 +296,20 @@ export default function InquiryFormPage() {
     addInquiryComment,
     sources = [],
     priorityLevels = [],
+    documentTypes: lookupDocumentTypes = [],
     defaultPriorityLevelId = null,
   } = useInquiriesContext();
 
   const { allUsers = [], users = [], ensureUsersLoaded } = useUsersContext();
   const { addDocument } = useInquiryDocumentsContext();
-  const { documentTypes = [] } = useDocumentTypesContext();
+  const { documentTypes: contextDocumentTypes = [] } = useDocumentTypesContext();
+
+  const documentTypes = useMemo(() => {
+    return (Array.isArray(lookupDocumentTypes) && lookupDocumentTypes.length > 0)
+      ? lookupDocumentTypes
+      : contextDocumentTypes;
+  }, [lookupDocumentTypes, contextDocumentTypes]);
+  const effectiveDocTypes = documentTypes;
 
   const resolveDocType = (typeId) => {
     return documentTypes.find(
@@ -1418,17 +1426,17 @@ export default function InquiryFormPage() {
 
   // Document type options for Select (active document types only)
   const docTypeOptions = useMemo(() => {
-    return documentTypes
+    return effectiveDocTypes
       .filter((dt) => dt.isActive !== false)
       .map((dt) => {
         const docId = dt.documentTypeId ?? dt.id;
         const exts = formatAllowedExtensions(dt, ', ');
         return {
           value: docId,
-          label: `${dt.documentTypeName || dt.typeName}${dt.isMandatory ? ' (Required)' : ''}${exts ? ` [${exts}]` : ''}`,
+          label: `${dt.documentTypeName || dt.typeName || dt.name || ''}${dt.isMandatory ? ' (Required)' : ''}${exts ? ` [${exts}]` : ''}`,
         };
       });
-  }, [documentTypes]);
+  }, [effectiveDocTypes]);
 
   const [countries, setCountries] = useState([]);
   const [statesCache, setStatesCache] = useState({});
@@ -2343,15 +2351,18 @@ export default function InquiryFormPage() {
                               <Td className="text-xs">
                                 {Array.isArray(item.options) && item.options.length > 0 ? (
                                   <div className="flex flex-wrap gap-1 max-w-full">
-                                    {item.options.map((opt, oIdx) => (
-                                      <span
-                                        key={oIdx}
-                                        className="inline-flex items-center px-1.5 py-0.5 rounded text-3xs font-medium bg-surface-hover text-text-muted border border-border truncate max-w-[130px]"
-                                        title={opt}
-                                      >
-                                        {opt.replace(' (Standard)', '')}
-                                      </span>
-                                    ))}
+                                    {item.options.map((opt, oIdx) => {
+                                      const optText = typeof opt === 'string' ? opt : opt?.optionName || '';
+                                      return (
+                                        <span
+                                          key={oIdx}
+                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-3xs font-medium bg-surface-hover text-text-muted border border-border truncate max-w-[130px]"
+                                          title={optText}
+                                        >
+                                          {optText.replace(' (Standard)', '')}
+                                        </span>
+                                      );
+                                    })}
                                   </div>
                                 ) : (
                                   <span className="text-text-muted/60 text-2xs italic">None</span>
@@ -2432,14 +2443,17 @@ export default function InquiryFormPage() {
                             </div>
                             {Array.isArray(item.options) && item.options.length > 0 && (
                               <div className="flex flex-wrap gap-1 pt-1">
-                                {item.options.map((opt, oIdx) => (
-                                  <span
-                                    key={oIdx}
-                                    className="px-1.5 py-0.5 rounded text-3xs font-medium bg-surface text-text-muted border border-border"
-                                  >
-                                    {opt.replace(' (Standard)', '')}
-                                  </span>
-                                ))}
+                                {item.options.map((opt, oIdx) => {
+                                  const optText = typeof opt === 'string' ? opt : opt?.optionName || '';
+                                  return (
+                                    <span
+                                      key={oIdx}
+                                      className="px-1.5 py-0.5 rounded text-3xs font-medium bg-surface text-text-muted border border-border"
+                                    >
+                                      {optText.replace(' (Standard)', '')}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             )}
                             {item.specification && (
@@ -2651,36 +2665,44 @@ export default function InquiryFormPage() {
               )}
 
               {/* Catalog Options */}
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-heading uppercase tracking-wider">
                     Catalog Options
                   </label>
-                  <span className="text-2xs text-text-muted">Select all applicable accessories / machining</span>
+                  {availableDrawerOptions.length > 0 && (
+                    <span className="text-2xs text-text-muted">Select all applicable accessories / machining</span>
+                  )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-xl border border-border bg-surface/30">
-                  {availableDrawerOptions.map((opt) => {
-                    const optName = typeof opt === 'object' && opt !== null ? opt.name : opt;
-                    const optId = typeof opt === 'object' && opt !== null ? (opt.id || optName) : optName;
-                    const isChecked = (itemFormState.options || []).includes(optName);
-                    return (
-                      <label
-                        key={optId}
-                        className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer text-xs select-none ${isChecked
+                {availableDrawerOptions.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-xl border border-border bg-surface/30">
+                    {availableDrawerOptions.map((opt) => {
+                      const optName = typeof opt === 'object' && opt !== null ? opt.name : opt;
+                      const optId = typeof opt === 'object' && opt !== null ? (opt.id || optName) : optName;
+                      const isChecked = (itemFormState.options || []).includes(optName);
+                      return (
+                        <label
+                          key={optId}
+                          className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer text-xs select-none ${isChecked
                             ? 'border-primary/50 bg-primary/5 text-heading font-medium'
                             : 'border-border/60 hover:bg-surface/80 text-text-muted'
-                          }`}
-                      >
-                        <Checkbox
-                          checked={isChecked}
-                          onChange={() => handleToggleOption(opt)}
-                          aria-label={optName}
-                        />
-                        <span className="truncate">{optName}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                            }`}
+                        >
+                          <Checkbox
+                            checked={isChecked}
+                            onChange={() => handleToggleOption(opt)}
+                            aria-label={optName}
+                          />
+                          <span className="truncate">{optName}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl border border-dashed border-border bg-surface/20 text-center text-xs text-text-muted">
+                    No optional accessories or machining options configured for this product.
+                  </div>
+                )}
               </div>
 
               {/* Specification Textarea */}

@@ -35,9 +35,11 @@ export function useInquiries(usersList = []) {
   const [isLoading, setIsLoading] = useState(!isMockApi);
   const [error, setError] = useState(null);
 
-  // Lookups: Sources and Priority Levels
+  // Lookups: Sources, Priority Levels, Document Types, and Statuses
   const [sources, setSources] = useState([]);
   const [priorityLevels, setPriorityLevels] = useState([]);
+  const [documentTypes, setDocumentTypes] = useState([]);
+  const [statuses, setStatuses] = useState([]);
   const [defaultPriorityLevelId, setDefaultPriorityLevelId] = useState(null);
 
   /* ── 300ms Search Debounce ── */
@@ -48,7 +50,7 @@ export function useInquiries(usersList = []) {
     return () => clearTimeout(timer);
   }, [search]);
 
-  /* ── Load Reference Lookups (Sources & Priority Levels) ── */
+  /* ── Load Reference Lookups (Sources, Priority Levels, Document Types, Statuses) ── */
   useEffect(() => {
     let isMounted = true;
     async function loadLookups() {
@@ -65,8 +67,16 @@ export function useInquiries(usersList = []) {
             : Array.isArray(lookups.priorities)
             ? lookups.priorities
             : [];
+          const docTypesList = Array.isArray(lookups.documentTypes)
+            ? lookups.documentTypes
+            : [];
+          const statusesList = Array.isArray(lookups.statuses)
+            ? lookups.statuses
+            : [];
           setSources(sourcesList);
           setPriorityLevels(prioritiesList);
+          setDocumentTypes(docTypesList);
+          setStatuses(statusesList);
           setDefaultPriorityLevelId(lookups.defaultPriorityLevelId ?? null);
         }
       } catch (err) {
@@ -374,6 +384,8 @@ export function useInquiries(usersList = []) {
     error,
     sources,
     priorityLevels,
+    documentTypes,
+    statuses,
     defaultPriorityLevelId,
     resetFilters,
     fetchInquiries,

@@ -35,6 +35,7 @@ import { productService } from '../../../services';
 import { useStandardsContext } from '../../../context/StandardsContext';
 import { useAuthContext } from '../../../context/AuthContext';
 import { calculateFlatnessTolerance } from '../../../utils/flatnessFormula';
+import { ApprovalStatus } from '../../../constants/approvalStatus';
 
 /**
  * Matches strictly the primary working surface Flatness (e.g. "Flatness (µm)" or "Flatness").
@@ -1343,22 +1344,20 @@ export default function ProductVariantsTab({
                 <button
                   type="button"
                   onClick={() => handleScopeChange('STANDARD_GRADE')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                    specsScope === 'STANDARD_GRADE'
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'STANDARD_GRADE'
                       ? 'bg-primary text-white shadow-xs'
                       : 'text-text-muted hover:text-heading'
-                  }`}
+                    }`}
                 >
                   Standard + Grade
                 </button>
                 <button
                   type="button"
                   onClick={() => handleScopeChange('COMMON')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                    specsScope === 'COMMON'
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${specsScope === 'COMMON'
                       ? 'bg-primary text-white shadow-xs'
                       : 'text-text-muted hover:text-heading'
-                  }`}
+                    }`}
                 >
                   Common Figures
                 </button>
@@ -1412,8 +1411,8 @@ export default function ProductVariantsTab({
                       !selectedStandardId
                         ? 'Select a standard first'
                         : availableGradesForStandard.length === 0
-                        ? 'No grades configured'
-                        : 'Select Grade'
+                          ? 'No grades configured'
+                          : 'Select Grade'
                     }
                     disabled={isSavingSpecs || isSpecsReadOnly || !selectedStandardId}
                     size="sm"
@@ -1466,9 +1465,8 @@ export default function ProductVariantsTab({
                       <span>Parameter</span>
                       <span
                         className="cursor-help text-text-muted hover:text-heading"
-                        title={`Each parameter can only be added once per ${
-                          specsScope === 'STANDARD_GRADE' ? 'Standard + Grade set' : 'specification set'
-                        }.`}
+                        title={`Each parameter can only be added once per ${specsScope === 'STANDARD_GRADE' ? 'Standard + Grade set' : 'specification set'
+                          }.`}
                       >
                         <IconInfo size={13} />
                       </span>
@@ -1545,8 +1543,8 @@ export default function ProductVariantsTab({
                             onChange={(val) => {
                               const rawId =
                                 val && typeof val === 'object' && 'target' in val
-                                ? val.target.value
-                                : val;
+                                  ? val.target.value
+                                  : val;
                               handleChangeSpecParam(sIdx, rawId);
                             }}
                             options={rowParamOptions}
@@ -1595,9 +1593,8 @@ export default function ProductVariantsTab({
                             }}
                             placeholder="e.g. 6.1"
                             disabled={isSavingSpecs || Boolean(spec.valueText && String(spec.valueText).trim())}
-                            className={`font-mono flex-1 min-w-0 ${
-                              Boolean(spec.valueText && String(spec.valueText).trim()) ? 'opacity-40 cursor-not-allowed' : ''
-                            }`}
+                            className={`font-mono flex-1 min-w-0 ${Boolean(spec.valueText && String(spec.valueText).trim()) ? 'opacity-40 cursor-not-allowed' : ''
+                              }`}
                           />
                         )}
                       </td>
